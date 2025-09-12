@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db878d85e85b5994c9ce019821c6bebc, type: 3}
+  m_Name: Ifrit
+  m_EditorClassIdentifier: 
+  summonName: "\u708E\u306E\u970A\u7363\n\u30A4\u30D5\u30EA\u30FC\u30C8"
+  description: "\u706B\u708E\u3092\u53F8\u308B\u53EC\u559A\u7363\u3002\r\n\u6050\u308D\u3057\u3044\u602A\u529B\u3068\u5727\u5012\u7684\u306A\u706B\u529B\u3092\u6709\u3059\u308B\u3002\r\n\u52C7\u6562\u306A\u6226\u58EB\u306B\u306F\u60DC\u3057\u307F\u306A\u304F\u529B\u3092\u4E0E\u3048\u308B\u3002"
+  passiveSkill: "\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A<color=#FF4444><size=140%>\u30D5\u30EC\u30A4\u30E0\u30AA\u30FC\u30E9</size></color>\n\u653B\u6483\u30AB\u30FC\u30C9\u306E\u653B\u6483\u88DC\u6B63\u3092+1\u30DD\u30A4\u30F3\u30C8\n\u3055\u3089\u306B\u708E\u5C5E\u6027\u30AB\u30FC\u30C9\u306A\u3089+2\u30DD\u30A4\u30F3\u30C8"
+  activeSkill: "\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A\u30E1\u30AE\u30C9\u30D5\u30EC\u30A4\u30E0\n\u708E\u5C5E\u602720\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B"
+  characterSprite: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
+  backgroundSprite: {fileID: 21300000, guid: 077cba232feba22458309e1441ddb64e, type: 3}
+  foregroundSprite: {fileID: 0}
+  summonIcon: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
+  summonSE: {fileID: 8300000, guid: aad6e996fbd838f459f2812ce4f1a20c, type: 3}
+  nameStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 1
+    topColor: {r: 0.7169812, g: 0.15895337, b: 0.15895337, a: 1}
+    bottomColor: {r: 0.6415094, g: 0, b: 0, a: 1}
+    outlineColor: {r: 0.990566, g: 0.990566, b: 0.990566, a: 1}
+    outlineThickness: 0.2
+    faceDilate: 0.2
+  descriptionStyle:
+    fontColor: {r: 0.1656568, g: 1, b: 0, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  passiveSkillStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  activeSkillStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  specialSkillName: "\u30E1\u30AE\u30C9\u30D5\u30EC\u30A4\u30E0"
+  specialSkillDescription: "\u5730\u7344\u306E\u696D\u706B\u304C\u6575\u3092\u5305\u3080\u3002\n\u708E\u5C5E\u6027\u306E20\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B\u3002"
+  popupSkillNameStyle:
+    fontColor: {r: 1, g: 0, b: 0, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0.2
+    faceDilate: 0.2
+  popupSkillDescStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  specialSkillCutInSprite: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
+  specialSkillSE: {fileID: 8300000, guid: aad6e996fbd838f459f2812ce4f1a20c, type: 3}
