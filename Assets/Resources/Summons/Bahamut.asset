@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db878d85e85b5994c9ce019821c6bebc, type: 3}
+  m_Name: Bahamut
+  m_EditorClassIdentifier: 
+  summonName: "\u7834\u58CA\u306E\u9F8D\n\u30D0\u30CF\u30E0\u30FC\u30C8"
+  description: "\u5727\u5012\u7684\u306A\u7834\u58CA\u529B\u3092\u6301\u3064\u7ADC\u3002\r\n\u51F6\u66B4\u306A\u7834\u58CA\u885D\u52D5\u3092\u79D8\u3081\u3066\u304A\u308A\u3001\n\u529B\u3092\u8CAF\u3081\u308C\u3070\u8CAF\u3081\u308B\u307B\u3069\u5F37\u529B\u306B\u306A\u308B\u5149\u7DDA\u300C\u30E1\u30AC\u30D5\u30EC\u30A2\u300D\u304C\u5FC5\u6BBA\u6280\u3060\u3002"
+  passiveSkill: "\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A<color=#3155A6><size=140%>\u30E1\u30AC\u30D5\u30EC\u30A2</size></color>\n\u30B2\u30FC\u30E0\u304C50\u30BF\u30FC\u30F3\u4EE5\u4E0A\u7D9A\u3044\u305F\u3068\u304D\u3001\u4E00\u5EA6\u3060\u3051\u7121\u5C5E\u602750\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B\u3002\r"
+  activeSkill: "\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A<color=#3155A6><size=140%>\u30AE\u30AC\u30D5\u30EC\u30A2</size></color>\r\n\u30B2\u30FC\u30E0\u306E\u7D4C\u904E\u30BF\u30FC\u30F3\u6570\u306E\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B\u3002"
+  characterSprite: {fileID: 21300000, guid: d590882e2ec7f1b4fb7ee977de41e3cd, type: 3}
+  backgroundSprite: {fileID: 21300000, guid: 8c62d4759a56acb47aff37526f47b52c, type: 3}
+  foregroundSprite: {fileID: 0}
+  summonIcon: {fileID: 21300000, guid: d590882e2ec7f1b4fb7ee977de41e3cd, type: 3}
+  summonSE: {fileID: 8300000, guid: 2bc1fc5ab85e0044ca2cdaacfdcee313, type: 3}
+  nameStyle:
+    fontColor: {r: 0.7169812, g: 0.7169812, b: 0.7169812, a: 1}
+    useGradient: 1
+    topColor: {r: 0.4245283, g: 0.4245283, b: 0.4245283, a: 1}
+    bottomColor: {r: 0.8018868, g: 0.8018868, b: 0.8018868, a: 1}
+    outlineColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineThickness: 0.2
+    faceDilate: 0.2
+  descriptionStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  passiveSkillStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  activeSkillStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  specialSkillName: "\u30AE\u30AC\u30D5\u30EC\u30A2"
+  specialSkillDescription: "\u8EAB\u306B\u5BBF\u308B\u7834\u58CA\u885D\u52D5\u304C\u8352\u308C\u72C2\u3044\u3001\u307B\u3068\u3070\u3057\u308B\u3002\n\u30B2\u30FC\u30E0\u306E\u7D4C\u904E\u30BF\u30FC\u30F3\u6570\u306E\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B\u3002"
+  popupSkillNameStyle:
+    fontColor: {r: 0.4716981, g: 0.4716981, b: 0.4716981, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0.2
+    faceDilate: 0.2
+  popupSkillDescStyle:
+    fontColor: {r: 1, g: 1, b: 1, a: 1}
+    useGradient: 0
+    topColor: {r: 1, g: 1, b: 1, a: 1}
+    bottomColor: {r: 1, g: 1, b: 1, a: 1}
+    outlineColor: {r: 0, g: 0, b: 0, a: 1}
+    outlineThickness: 0
+    faceDilate: 0
+  specialSkillCutInSprite: {fileID: 21300000, guid: d590882e2ec7f1b4fb7ee977de41e3cd, type: 3}
+  specialSkillSE: {fileID: 8300000, guid: 2bc1fc5ab85e0044ca2cdaacfdcee313, type: 3}

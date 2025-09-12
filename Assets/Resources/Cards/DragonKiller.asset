@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
+  m_Name: DragonKiller
+  m_EditorClassIdentifier: 
+  cardName: "\u30C9\u30E9\u30B4\u30F3\u30AD\u30E9\u30FC\t"
+  cardType: 0
+  cardImage: {fileID: 21300000, guid: 4a53ef634ca3a4d48b29cc63c219946f, type: 3}
+  description: "\u7ADC\u306B\u5F37\u3044 "
+  attackPower: 15
+  defensePower: 0
+  element: 0
+  hitRate: 100
+  mpCost: 0
+  maxUses: 1
+  recoveryAmount: 0
+  healsHP: 0
+  healsMP: 0
+  healsGP: 0
+  usableInAttackPhase: 1
+  usableInDefensePhase: 0
+  isPrimaryAttack: 1
+  isAdditionalAttack: 0
+  isPrimaryDefense: 0
+  isCounterAttack: 0
+  isRecovery: 0
+  isSpecialEffect: 0
+  canBeUsedMultipleTimes: 0
+  canBeUsedWithPrimaryAttack: 0
+  canApplyStatusEffect: 0
+  statusEffectChance: 0
