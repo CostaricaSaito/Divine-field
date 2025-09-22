@@ -17,7 +17,7 @@ MonoBehaviour:
   cardImage: {fileID: 21300000, guid: 5fce4411558505f4bad5026eea69a7b2, type: 3}
   description: "\u8EFD\u304F\u3066\u632F\u308A\u3084\u3059\u3044 "
   attackPower: 0
-  defensePower: 10
+  defensePower: 15
   element: 0
   hitRate: 100
   mpCost: 0
@@ -38,3 +38,5 @@ MonoBehaviour:
   canBeUsedWithPrimaryAttack: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  elementIcon: {fileID: 0}
+  cardValue: 0

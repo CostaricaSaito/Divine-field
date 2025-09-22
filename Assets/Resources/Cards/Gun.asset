@@ -10,33 +10,33 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
-  m_Name: Appletea
+  m_Name: Gun
   m_EditorClassIdentifier: 
-  cardName: "\u30A2\u30A4\u30B9\u30A2\u30C3\u30D7\u30EB\u30C6\u30A3\u30FC"
-  cardType: 3
-  cardImage: {fileID: 21300000, guid: 7969c35f18a409c4c86073cd5fcaeeab, type: 3}
-  description: "HP5\u56DE\u5FA9"
-  attackPower: 0
+  cardName: "\u62F3\u9283"
+  cardType: 0
+  cardImage: {fileID: 21300000, guid: 5cf4997082a23e24eb1c579a90ee4dbb, type: 3}
+  description: "9mm\u30D1\u30E9\u30D9\u30E9\u30E0"
+  attackPower: 3
   defensePower: 0
   element: 0
   hitRate: 100
   mpCost: 0
   maxUses: 0
-  recoveryAmount: 5
-  healsHP: 1
+  recoveryAmount: 0
+  healsHP: 0
   healsMP: 0
   healsGP: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
   isPrimaryAttack: 0
-  isAdditionalAttack: 0
+  isAdditionalAttack: 1
   isPrimaryDefense: 0
   isCounterAttack: 0
-  isRecovery: 1
+  isRecovery: 0
   isSpecialEffect: 0
   canBeUsedMultipleTimes: 0
-  canBeUsedWithPrimaryAttack: 0
+  canBeUsedWithPrimaryAttack: 1
   canApplyStatusEffect: 0
   statusEffectChance: 0
-  elementIcon: {fileID: 0}
-  cardValue: 0
+  elementIcon: {fileID: 21300000, guid: 99632894a2a6f9f409d3402853ee3d15, type: 3}
+  cardValue: 5

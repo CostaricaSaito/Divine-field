@@ -4,13 +4,15 @@ using TMPro;
 
 public class CardUI : MonoBehaviour
 {
-    public Image cardImage;          // © UI‚ÌImageiInspector‚ÅƒZƒbƒgj
-    public TMP_Text cardNameText;    // © ƒJ[ƒh–¼•\¦
-    public Button button;            // © ƒ{ƒ^ƒ“ƒNƒŠƒbƒN—p
+    public Image cardImage;          // ã‚«ãƒ¼ãƒ‰ UIã®Imageï¼ˆInspectorã§ã‚»ãƒƒãƒˆï¼‰
+    public TMP_Text cardNameText;    // ã‚«ãƒ¼ãƒ‰åè¡¨ç¤º
+    public Button button;            // ãƒœã‚¿ãƒ³ã‚¯ãƒªãƒƒã‚¯ç”¨
+    public Image highlightBorder;    // ãƒã‚¤ãƒ©ã‚¤ãƒˆç”¨ã®é’è‰²æ 
 
     private CardData cardData;
     private Sprite backSprite;
     private bool isFaceUp = false;
+    private bool isHighlighted = false;
 
     public void Setup(CardData data, Sprite back)
     {
@@ -18,15 +20,18 @@ public class CardUI : MonoBehaviour
         backSprite = back;
         isFaceUp = false;
 
-        ShowBack();                  // © — –Ê‚ğ•\¦I
+        ShowBack();                  // è£é¢ã‚’è¡¨ç¤º
         if (button) button.interactable = false;
 
-        // ƒNƒŠƒbƒN“o˜^‚ğ’Pˆê“üŒû‚É
+        // ã‚¯ãƒªãƒƒã‚¯ç™»éŒ²ã‚’ãƒªã‚»ãƒƒãƒˆ
         if (button)
         {
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(OnClick);  // © C³ƒ|ƒCƒ“ƒgI
+            button.onClick.AddListener(OnClick);  // ã‚¯ãƒªãƒƒã‚¯ã‚¤ãƒ™ãƒ³ãƒˆ
         }
+        
+        // ãƒã‚¤ãƒ©ã‚¤ãƒˆã‚’åˆæœŸåŒ–
+        SetHighlight(false);
     }
 
     public void Reveal()
@@ -49,17 +54,35 @@ public class CardUI : MonoBehaviour
     {
         if (!button || !button.interactable || cardData == null) return;
 
-        // š ’Pˆê“üŒû‚ÖiCardData ‚Å‚Í‚È‚­ CardUI ‚ğ“n‚·j
-        //    BattleManager ‘¤‚ÌV‚µ‚¢ API ‚É‡‚í‚¹‚é
+        // ã‚«ãƒ¼ãƒ‰é¸æŠå‡¦ç†ï¼ˆCardData ã§ã¯ãªã CardUI ã‚’æ¸¡ã™ï¼‰
+        //   BattleManager ã®æ–°ã—ã„ API ã«åˆã‚ã›ã‚‹
         if (BattleManager.I != null)
         {
             BattleManager.I.SetSelectedCard(this);
         }
         else
         {
-            Debug.LogWarning("[CardUI] BattleManager ƒCƒ“ƒXƒ^ƒ“ƒX‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ");
+            Debug.LogWarning("[CardUI] BattleManager ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
         }
     }
 
     public CardData GetCardData() => cardData;
+    
+    /// <summary>
+    /// ãƒã‚¤ãƒ©ã‚¤ãƒˆè¡¨ç¤ºã‚’è¨­å®š
+    /// </summary>
+    /// <param name="highlight">ãƒã‚¤ãƒ©ã‚¤ãƒˆã™ã‚‹ã‹ã©ã†ã‹</param>
+    public void SetHighlight(bool highlight)
+    {
+        isHighlighted = highlight;
+        if (highlightBorder != null)
+        {
+            highlightBorder.gameObject.SetActive(highlight);
+        }
+    }
+    
+    /// <summary>
+    /// ç¾åœ¨ãƒã‚¤ãƒ©ã‚¤ãƒˆã•ã‚Œã¦ã„ã‚‹ã‹ã©ã†ã‹
+    /// </summary>
+    public bool IsHighlighted => isHighlighted;
 }

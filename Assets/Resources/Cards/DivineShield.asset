@@ -21,7 +21,7 @@ MonoBehaviour:
   element: 0
   hitRate: 100
   mpCost: 0
-  maxUses: 1
+  maxUses: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
@@ -38,3 +38,5 @@ MonoBehaviour:
   canBeUsedWithPrimaryAttack: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  elementIcon: {fileID: 0}
+  cardValue: 0

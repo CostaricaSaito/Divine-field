@@ -2,55 +2,77 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-
+using System.Linq;
 
 public enum Side { Player, Enemy }
 
 /// <summary>
-/// バトル画面の見た目だけ担当：
-/// ・ステータス表示更新
-/// ・手札の操作可否(グレー/有効)
-/// ・Useボタンのラベル/色
-/// ・敵の使用カード(右上)の掲示
-/// ・ダメージ/ミスのポップアップ
-/// ※クリックの意味判定は BattleManager 側。ここは「押せる/見える」だけ。
-/// ※ボタン onClick はいじらない（副作用防止）。
+/// バトル画面のUI表示・管理を担当するマネージャークラス
+/// 
+/// 【主な機能】
+/// - ステータス表示の更新
+/// - カード詳細の表示・非表示
+/// - ボタンの状態管理（使用/許可/祈り）
+/// - ポップアップの表示（ダメージ、ミス）
+/// - 手札の操作制御（選択/キャンセル）
+/// 
+/// 【責任範囲】
+/// - UI要素の表示・非表示
+/// - UI要素の状態変更
+/// - カード選択の管理
+/// - アニメーションの制御
+/// 
+/// 【他のクラスとの関係】
+/// - BattleManager: UI更新の指示を受ける
+/// - CardSheetDisplay: カード詳細の表示
+/// - DamagePopup: ダメージ表示
+/// 
+/// 【注意事項】
+/// - シングルトンパターンは含まない（必要に応じて使用可否を検討）
+/// - エラーの処理は外部に委ねる
+/// - マルチスレッドでの更新は行わない
 /// </summary>
 public class BattleUIManager : MonoBehaviour
 {
     public static BattleUIManager I;
 
-    //==== 参照 ====
-    [Header("UI 参照")]
+    //==== フィールド =====
+    [Header("UI 要素")]
     [SerializeField] private BattleStatusUI statusUI;
     [SerializeField] private Button useButton;
-    [SerializeField] private TMP_Text useButtonLabelTMP;   // 任意
-    [SerializeField] private Text useButtonLabelUGUI;      // 任意
-    [SerializeField] private Image useButtonImage;         // 任意（未指定なら useButton.targetGraphic を使用）
+    [SerializeField] private TMP_Text useButtonLabelTMP;
+    [SerializeField] private Text useButtonLabelUGUI;
+    [SerializeField] private Image useButtonImage;
 
     [Header("ポップアップ")]
     [SerializeField] private GameObject damagePopupPrefab;
     [SerializeField] private Canvas uiCanvas;
 
-    [Header("Use ボタン色")]
-    [SerializeField] private Color useButtonNormalColor = new Color(0.2f, 0.5f, 1f, 1f); // 使用：青
-    [SerializeField] private Color useButtonDangerColor = new Color(0.9f, 0.2f, 0.25f, 1f); // 許す：赤
-    [SerializeField] private Color useButtonPrayColor = new Color(1f, 0.95f, 0.6f, 1f);  // 祈祷：薄黄
+    [Header("カード詳細表示")]
+    [SerializeField] private GameObject cardSheetPrefab;
+    [SerializeField] private Transform playerCardDisplayPanel;
+    [SerializeField] private Transform enemyCardDisplayPanel;
 
-    [Header("カード詳細表示（使用時）")]
-    [SerializeField] private CardDisplayController playerCardDisplayController;
-    [SerializeField] private CardDisplayController enemyCardDisplayController;
+    [Header("Use ボタン設定")]
+    [SerializeField] private Color useButtonNormalColor = new Color(0.2f, 0.5f, 1f, 1f);
+    [SerializeField] private Color useButtonDangerColor = new Color(0.9f, 0.2f, 0.25f, 1f);
+    [SerializeField] private Color useButtonPrayColor = new Color(1f, 0.95f, 0.6f, 1f);
 
+    [Header("カード管理")]
+    [SerializeField] private CardLayoutManager cardLayoutManager;
+    [SerializeField] private CardSelectionManager cardSelectionManager;
 
-    // ボタン表示モード（色切替に使用）
+    // プライベート変数
+    private readonly List<GameObject> activeCardSheets = new();
     private enum UseButtonMode { Use, Allow, Pray }
 
+    //==== 初期化 =====
     void Awake()
     {
         if (I != null && I != this) { Destroy(gameObject); return; }
         I = this;
 
-        // ラベルが未設定なら拾う（初回だけ）
+        // ボタンコンポーネントの自動取得
         if (useButton != null)
         {
             if (useButtonLabelTMP == null) useButtonLabelTMP = useButton.GetComponentInChildren<TMP_Text>(true);
@@ -59,17 +81,67 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
-
-
-    //======== 公開API：表示 ========
-
-    /// ステータスUI更新
+    //==== パブリックAPI：ステータス表示 =====
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
     {
         statusUI?.UpdateStatus(player, enemy);
     }
 
-    /// Useボタンの文言（色は自動）
+    //==== パブリックAPI：カード詳細表示 =====
+    public void ShowCardDetail(CardData card, Side side)
+    {
+        if (card == null)
+        {
+            Debug.LogWarning("[BattleUIManager] ShowCardDetail: card is null");
+            return;
+        }
+
+        // 既に選択されているカードの場合は選択解除
+        if (cardSelectionManager.IsCardSelected(card))
+        {
+            // カード選択をキャンセル
+            Debug.Log($"[BattleUIManager] カード選択をキャンセル: {card.cardName}");
+            CancelCardSelection(card);
+            return;
+        }
+
+        // カード選択を追加（制限チェックは内部で実行）
+        if (cardSelectionManager.AddCardSelection(card))
+        {
+            // カード表示
+            DisplayCard(card, side);
+        }
+    }
+
+    public void HideAllCardDetails()
+    {
+        foreach (var go in activeCardSheets)
+        {
+            if (go != null) Destroy(go);
+        }
+        activeCardSheets.Clear();
+        cardSelectionManager.ClearAllSelections();
+        UpdateHandCardHighlights();
+        BattleManager.I?.ClearSelectedCards();
+    }
+
+    //==== パブリックAPI：カード選択管理 =====
+    public List<CardData> GetSelectedCards()
+    {
+        return cardSelectionManager.GetSelectedCards();
+    }
+
+    public List<CardData> GetSelectedAttackCards()
+    {
+        return cardSelectionManager.GetSelectedAttackCards();
+    }
+
+    public List<CardData> GetSelectedDefenseCards()
+    {
+        return cardSelectionManager.GetSelectedDefenseCards();
+    }
+
+    //==== パブリックAPI：ボタン管理 =====
     public void SetUseButtonLabel(string text)
     {
         if (useButton == null) return;
@@ -77,132 +149,233 @@ public class BattleUIManager : MonoBehaviour
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
 
-        var mode = text == "許す" ? UseButtonMode.Allow
-                 : text == "祈祷" ? UseButtonMode.Pray
+        var mode = text == "許可" ? UseButtonMode.Allow
+                 : text == "祈り" ? UseButtonMode.Pray
                  : UseButtonMode.Use;
         ApplyUseButtonMode(mode);
 
-        // 基本は押せる（押せるかどうかの最終判断は BM 側が Guard）
         useButton.interactable = true;
     }
 
-    /// Useボタンの on/off（BM から利用）
     public void SetUseButtonInteractable(bool interactable)
     {
         if (useButton != null) useButton.interactable = interactable;
     }
 
-    //======== 公開API：手札の操作可否 ========
-
-    /// AttackSelect：攻撃で使える札だけ有効。他はグレー。
-    public void RefreshAttackInteractivity(List<CardData> hand)
+    //==== パブリックAPI：手札管理 =====
+    public void SetHandInteractivity(List<CardData> hand, bool interactable)
     {
-        bool playerAttacks =
-            (BattleManager.I?.CurrentState == GameState.AttackSelect) &&
-            (BattleManager.I?.CurrentTurnOwner == PlayerType.Player);
-
-        foreach (var c in hand)
-        {
-            if (c?.cardUI == null) continue;
-            bool can = playerAttacks && CardRules.IsUsableInAttackPhase(c);
-            SetCardInteractable(c, can);
-        }
-
-        if (playerAttacks)
-        {
-            SetUseButtonLabel("使用");
-        }
+        if (hand == null) return;
+        foreach (var c in hand) SetCardInteractable(c, interactable);
     }
 
-    /// DefenseSelect：allowed のみ有効。未選択スタートのためボタンは「許す」。
-    public void RefreshDefenseInteractivity(List<CardData> allowed)
+    public void SetCardInteractable(CardData card, bool interactable)
     {
-        bool playerDefends =
-            (BattleManager.I?.CurrentState == GameState.DefenseSelect) &&
-            (BattleManager.I?.CurrentTurnOwner == PlayerType.Enemy);
+        if (card?.cardUI == null) return;
 
-        var hand = BattleManager.I.playerHand; // プレイヤーの手札
-        var allowedSet = new HashSet<CardData>(allowed ?? hand);
+        var btn = card.cardUI.button;
+        if (btn != null) btn.interactable = interactable;
 
-        foreach (var c in hand)
-        {
-            if (c?.cardUI == null) continue;
-            bool can = playerDefends && allowedSet.Contains(c);
-            SetCardInteractable(c, can); // リスナーは触らない
-        }
-
-        if (playerDefends)
-        {
-            SetUseButtonLabel("許す"); // 0防御も選べる
-        }
+        var cg = card.cardUI.GetComponent<CanvasGroup>();
+        if (cg == null) cg = card.cardUI.gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = interactable ? 1f : 0.5f;
+        cg.blocksRaycasts = interactable;
     }
 
-    /// 祈祷モード：ボタンは「祈祷」、手札は全グレー
+    public void UpdateHandInteractivity(List<CardData> hand, List<CardData> allowedCards = null)
+    {
+        if (hand == null) return;
+        
+        var allowedSet = new HashSet<CardData>(allowedCards ?? new List<CardData>());
+        
+        foreach (var card in hand)
+        {
+            if (card?.cardUI == null) continue;
+            bool canUse = allowedCards == null || allowedSet.Contains(card);
+            SetCardInteractable(card, canUse);
+        }
+    }
+    
     public void SetPrayModeUI(List<CardData> hand)
     {
-        SetUseButtonLabel("祈祷");
-        if (hand == null) hand = BattleManager.I.playerHand;
+        SetUseButtonLabel("祈り");
         SetHandInteractivity(hand, false);
     }
-
-    /// 手札すべてを一括で無効化
-    public void DisableAllPlayerHandInteractivity()
+    
+    public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
     {
-        SetHandInteractivity(BattleManager.I.playerHand, false);
+        UpdateHandInteractivity(hand, attackableCards);
+        SetUseButtonLabel("使用");
+    }
+    
+    public void RefreshDefenseInteractivity(List<CardData> hand, List<CardData> defenseCards)
+    {
+        UpdateHandInteractivity(hand, defenseCards);
+        SetUseButtonLabel("許可");
     }
 
-    //======== 公開API：カード詳細表示（使用時のみ） ========
-
-    public void ShowCardDetail(CardData card, Side side)
-    {
-        if (side == Side.Player)
-            playerCardDisplayController?.ShowCard(card);
-        else
-            enemyCardDisplayController?.ShowCard(card);
-    }
-
-    public void HideCardDetail(Side side)
-    {
-        if (side == Side.Player)
-            playerCardDisplayController?.HideCard();
-        else
-            enemyCardDisplayController?.HideCard();
-    }
-
-    public void HideAllCardDetails()
-    {
-        playerCardDisplayController?.HideCard();
-        enemyCardDisplayController?.HideCard();
-    }
- 
-    //======== 公開API：ポップアップ ========
-
+    //==== パブリックAPI：ポップアップ =====
     public void ShowDamagePopup(int amount, PlayerStatus target)
     {
+        Debug.Log($"[BattleUIManager] ダメージポップアップ表示: {amount}ダメージ 対象 {target?.DisplayName ?? "null"}");
+        
         var popup = SpawnPopupFor(target);
-        if (popup == null) return;
+        if (popup == null) 
+        {
+            Debug.LogWarning("[BattleUIManager] ポップアップの生成に失敗しました");
+            return;
+        }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
-            damageText.Setup($"{amount} ダメージ！", hitPlayer ? Color.cyan : Color.red);
+            string displayText = amount > 0 ? $"{amount} ダメージ！" : "ダメージなし！";
+            Color displayColor = amount > 0 ? (hitPlayer ? Color.cyan : Color.red) : Color.yellow;
+            damageText.Setup(displayText, displayColor);
+            Debug.Log($"[BattleUIManager] ダメージポップアップ設定完了: {amount}ダメージ");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleUIManager] DamagePopupコンポーネントが見つかりません");
         }
     }
 
     public void ShowMissPopup(PlayerStatus target)
     {
+        Debug.Log($"[BattleUIManager] ミスポップアップ表示 対象 {target?.DisplayName ?? "null"}");
+        
         var popup = SpawnPopupFor(target);
-        if (popup == null) return;
+        if (popup == null) 
+        {
+            Debug.LogWarning("[BattleUIManager] ミスポップアップの生成に失敗しました");
+            return;
+        }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
             damageText.Setup("ミス！", Color.yellow);
+            Debug.Log("[BattleUIManager] ミスポップアップ設定完了");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleUIManager] DamagePopupコンポーネントが見つかりません");
         }
     }
 
-        private void ApplyUseButtonMode(UseButtonMode mode)
+    //==== プライベートメソッド：カード選択管理 =====
+    private void CancelCardSelection(CardData card)
+    {
+        bool removed = cardSelectionManager.CancelCardSelection(card);
+        Debug.Log($"[BattleUIManager] カード選択をキャンセル: {card.cardName} (削除成功: {removed}, selectedCards数: {cardSelectionManager.GetSelectedCardCount()})");
+        
+        // 表示されているカードシートを削除
+        RemoveCardFromDisplay(card);
+        
+        // 手札のハイライト更新
+        UpdateHandCardHighlights();
+        
+        // カードレイアウトの更新
+        cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+        cardLayoutManager.SetSelectedCards(cardSelectionManager.GetSelectedCards());
+        cardLayoutManager.HandleCardCancellation();
+        
+        // BattleManagerの更新
+        UpdateBattleManagerAfterCancel();
+    }
+
+    public void ClearAllSelections()
+    {
+        cardSelectionManager.ClearAllSelections();
+        UpdateHandCardHighlights();
+        BattleManager.I?.ClearSelectedCards();
+    }
+
+    private void UpdateHandCardHighlights()
+    {
+        var handCards = FindObjectsOfType<CardUI>();
+        
+        foreach (var cardUI in handCards)
+        {
+            if (cardUI == null) continue;
+            
+            var cardData = cardUI.GetCardData();
+            if (cardData == null) continue;
+            
+            bool isSelected = cardSelectionManager.IsCardSelected(cardData);
+            cardUI.SetHighlight(isSelected);
+        }
+    }
+
+    //==== プライベートメソッド：カード表示 =====
+    private void DisplayCard(CardData card, Side side)
+    {
+        Transform parent = (side == Side.Player) ? playerCardDisplayPanel : enemyCardDisplayPanel;
+
+        if (cardSheetPrefab != null && parent != null)
+        {
+            var go = Instantiate(cardSheetPrefab, parent);
+            if (!parent.gameObject.activeSelf) parent.gameObject.SetActive(true);
+            if (!go.activeSelf) go.SetActive(true);
+
+            var display = go.GetComponent<CardSheetDisplay>();
+            if (display != null)
+            {
+                display.Setup(card);
+            }
+            
+            activeCardSheets.Add(go);
+            
+            // レイアウトマネージャーの更新
+            cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+            cardLayoutManager.SetSelectedCards(cardSelectionManager.GetSelectedCards());
+            
+            // カード位置の設定
+            cardLayoutManager.SetupCardPosition(go, parent);
+            UpdateHandCardHighlights();
+            return;
+        }
+
+        // フォールバック処理
+        HandleCardDisplayFallback(card, side);
+    }
+
+
+
+
+    //==== プライベートメソッド：アニメーション =====
+    private System.Collections.IEnumerator StackCardAnimation(GameObject cardObj, float targetX, float targetY)
+    {
+        var rt = cardObj.transform as RectTransform;
+        if (rt == null) yield break;
+        
+        Vector3 startPos = new Vector3(0, 0, 0);
+        Vector3 endPos = new Vector3(targetX, targetY, 0);
+        Vector3 startScale = Vector3.one;
+        Vector3 endScale = Vector3.one * 0.9f; // cardScaleの固定値
+        
+        float duration = 0.3f;
+        float elapsed = 0f;
+        
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            t = Mathf.SmoothStep(0f, 1f, t);
+            
+            rt.anchoredPosition = Vector3.Lerp(startPos, endPos, t);
+            rt.localScale = Vector3.Lerp(startScale, endScale, t);
+            
+            yield return null;
+        }
+        
+        rt.anchoredPosition = endPos;
+        rt.localScale = endScale;
+    }
+
+    //==== プライベートメソッド：ボタン管理 =====
+    private void ApplyUseButtonMode(UseButtonMode mode)
     {
         if (useButton == null) return;
         var img = useButtonImage ?? (useButton.targetGraphic as Image);
@@ -213,31 +386,14 @@ public class BattleUIManager : MonoBehaviour
                  : useButtonNormalColor;
     }
 
-    private void SetCardInteractable(CardData c, bool interactable)
-    {
-        if (c?.cardUI == null) return;
-
-        var btn = c.cardUI.button;
-        if (btn != null) btn.interactable = interactable;
-
-        // グレーアウト表現
-        var cg = c.cardUI.GetComponent<CanvasGroup>();
-        if (cg == null) cg = c.cardUI.gameObject.AddComponent<CanvasGroup>();
-        cg.alpha = interactable ? 1f : 0.5f;
-        cg.blocksRaycasts = interactable;
-    }
-
-    private void SetHandInteractivity(List<CardData> hand, bool interactable)
-    {
-        if (hand == null) return;
-        foreach (var c in hand) SetCardInteractable(c, interactable);
-    }
-
+    //==== プライベートメソッド：ポップアップ =====
     private GameObject SpawnPopupFor(PlayerStatus target)
     {
+        Debug.Log($"[BattleUIManager] ポップアップ生成 - damagePopupPrefab: {damagePopupPrefab != null}, uiCanvas: {uiCanvas != null}");
+        
         if (damagePopupPrefab == null || uiCanvas == null)
         {
-            Debug.LogWarning("[BattleUIManager] DamagePopup / Canvas 未設定");
+            Debug.LogWarning("[BattleUIManager] DamagePopup / Canvas が設定されていません");
             return null;
         }
 
@@ -247,6 +403,7 @@ public class BattleUIManager : MonoBehaviour
         {
             rt.anchoredPosition = GetPopupAnchor(target);
             rt.localScale = Vector3.one;
+            Debug.Log($"[BattleUIManager] ポップアップ位置設定 - 位置: {rt.anchoredPosition}");
         }
         return go;
     }
@@ -255,5 +412,91 @@ public class BattleUIManager : MonoBehaviour
     {
         bool isPlayer = (target == BattleManager.I.GetPlayerStatus());
         return isPlayer ? new Vector2(-300, -200) : new Vector2(300, 200);
+    }
+
+    //==== プライベートメソッド：ヘルパー =====
+    private void RemoveCardFromDisplay(CardData card)
+    {
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var cardObj = activeCardSheets[i];
+            if (cardObj == null) continue;
+            
+            var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
+            if (cardDisplay != null && cardDisplay.GetCardData() == card)
+            {
+                Destroy(cardObj);
+                activeCardSheets.RemoveAt(i);
+                break;
+            }
+        }
+    }
+
+    private void UpdateBattleManagerAfterCancel()
+    {
+        if (cardSelectionManager.HasNoSelectedCards())
+        {
+            BattleManager.I?.ClearSelectedCards();
+        }
+        else if (BattleManager.I != null)
+        {
+            if (BattleManager.I.CurrentState == GameState.AttackSelect)
+            {
+                var selectedAttackCards = GetSelectedAttackCards();
+                if (selectedAttackCards.Count == 0)
+                {
+                    BattleManager.I.ClearSelectedCards();
+                }
+                else
+                {
+                    BattleManager.I.UpdateTotalATKDEFDisplay();
+                }
+            }
+            else if (BattleManager.I.CurrentState == GameState.DefenseSelect)
+            {
+                BattleManager.I.UpdateTotalATKDEFDisplay();
+                UpdateDefenseButtonLabel();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 防御フェーズのボタンラベルを更新
+    /// </summary>
+    public void UpdateDefenseButtonLabel()
+    {
+        if (BattleManager.I?.CurrentState != GameState.DefenseSelect) return;
+
+        var selectedDefenseCards = GetSelectedDefenseCards();
+        if (selectedDefenseCards.Count > 0)
+        {
+            SetUseButtonLabel("使用");
+        }
+        else
+        {
+            SetUseButtonLabel("許可");
+        }
+    }
+
+    private void HandleCardDisplayFallback(CardData card, Side side)
+    {
+        if (cardSheetPrefab == null)
+        {
+            Debug.LogWarning("[BattleUIManager] cardSheetPrefab が設定されていません。CardDisplayController へのフォールバック処理を実行します。");
+        }
+        if ((side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel) == null)
+        {
+            Debug.LogWarning("[BattleUIManager] CardDisplayPanel が設定されていません。CardDisplayController へのフォールバック処理を実行します。side=" + side);
+        }
+
+        var controller = FindObjectOfType<CardDisplayController>(true);
+        if (controller != null)
+        {
+            controller.ShowCard(card);
+        }
+        else
+        {
+            Debug.LogError("[BattleUIManager] すべての表示方法が利用できません。cardSheetPrefab / panel が設定されていない、CardDisplayController も見つかりません。");
+        }
     }
 }
