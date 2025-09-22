@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 
 /// <summary>
 /// カード選択の管理を行うクラス
@@ -64,7 +63,7 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public List<CardData> GetSelectedCards()
     {
-        return new List<CardData>(selectedCards);
+        return selectedCards; // 直接返す（読み取り専用として使用）
     }
 
     /// <summary>
@@ -72,7 +71,15 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public List<CardData> GetSelectedAttackCards()
     {
-        return selectedCards.Where(card => IsAttackCard(card)).ToList();
+        var attackCards = new List<CardData>();
+        foreach (var card in selectedCards)
+        {
+            if (IsAttackCard(card))
+            {
+                attackCards.Add(card);
+            }
+        }
+        return attackCards;
     }
 
     /// <summary>
@@ -80,7 +87,15 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public List<CardData> GetSelectedDefenseCards()
     {
-        return selectedCards.Where(card => IsDefenseCard(card)).ToList();
+        var defenseCards = new List<CardData>();
+        foreach (var card in selectedCards)
+        {
+            if (IsDefenseCard(card))
+            {
+                defenseCards.Add(card);
+            }
+        }
+        return defenseCards;
     }
 
     /// <summary>
@@ -154,9 +169,16 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     private bool HasAttackCards()
     {
-        bool hasAttack = selectedCards.Any(card => IsAttackCard(card));
-        Debug.Log($"[CardSelectionManager] HasAttackCards: {hasAttack} (選択カード: {string.Join(", ", selectedCards.Select(c => $"{c.cardName}(isPrimaryAttack:{c.isPrimaryAttack}, isAdditionalAttack:{c.isAdditionalAttack})"))})");
-        return hasAttack;
+        foreach (var card in selectedCards)
+        {
+            if (IsAttackCard(card))
+            {
+                Debug.Log($"[CardSelectionManager] HasAttackCards: true");
+                return true;
+            }
+        }
+        Debug.Log($"[CardSelectionManager] HasAttackCards: false");
+        return false;
     }
 
     /// <summary>
@@ -164,9 +186,16 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     private bool HasRecoveryCard()
     {
-        bool hasRecovery = selectedCards.Any(card => card.isRecovery);
-        Debug.Log($"[CardSelectionManager] HasRecoveryCard: {hasRecovery}");
-        return hasRecovery;
+        foreach (var card in selectedCards)
+        {
+            if (card.isRecovery)
+            {
+                Debug.Log($"[CardSelectionManager] HasRecoveryCard: true");
+                return true;
+            }
+        }
+        Debug.Log($"[CardSelectionManager] HasRecoveryCard: false");
+        return false;
     }
 
     /// <summary>
@@ -174,10 +203,12 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     private void CancelRecoveryCards()
     {
-        var recoveryCards = selectedCards.Where(card => card.isRecovery).ToList();
-        foreach (var card in recoveryCards)
+        for (int i = selectedCards.Count - 1; i >= 0; i--)
         {
-            CancelCardSelection(card);
+            if (selectedCards[i].isRecovery)
+            {
+                selectedCards.RemoveAt(i);
+            }
         }
     }
 
