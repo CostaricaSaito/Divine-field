@@ -1,0 +1,94 @@
+[33mcommit 3a4934d3701d8dc3928645806f9a88509017323b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: CostaricaSaito <againstthecurrent1008@gmail.com>
+Date:   Mon Sep 22 22:09:15 2025 +0900
+
+    9/22
+
+Assets/AddressableAssetsData/AddressableAssetSettings.asset
+Assets/AddressableAssetsData/AssetGroups/Default Local Group.asset
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/GUN.png"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/GUN.png.meta"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/SCARE.png"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/SCARE.png.meta"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/Waku2.png"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/Waku2.png.meta"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/game icon_weapon_15.png"
+"Assets/Images/03_\343\202\253\343\203\274\343\203\211/game icon_weapon_15.png.meta"
+Assets/Resources/Cards/Appletea.asset
+Assets/Resources/Cards/CrossBow.asset
+Assets/Resources/Cards/CrossBow.asset.meta
+Assets/Resources/Cards/DivineShield.asset
+Assets/Resources/Cards/DivineSword.asset
+Assets/Resources/Cards/DuelSword.asset
+Assets/Resources/Cards/Gun.asset
+Assets/Resources/Cards/Gun.asset.meta
+Assets/Resources/Cards/IronGlove.asset
+Assets/Resources/Cards/IronMail.asset
+Assets/Resources/Prefab/CardSheetPrefab.prefab
+Assets/Resources/Prefab/CardUI.prefab
+Assets/SE.meta
+Assets/SE/Fire.mp3
+Assets/SE/Fire.mp3.meta
+Assets/SE/Thunder-Synthetic01-1.mp3
+Assets/SE/Thunder-Synthetic01-1.mp3.meta
+Assets/SE/power14.wav
+Assets/SE/power14.wav.meta
+"Assets/SE/\343\202\253\343\203\274\343\202\275\343\203\253\347\247\273\345\213\2251.mp3"
+"Assets/SE/\343\202\253\343\203\274\343\202\275\343\203\253\347\247\273\345\213\2251.mp3.meta"
+"Assets/SE/\343\202\267\343\203\243\343\202\255\343\203\274\343\203\2633.mp3"
+"Assets/SE/\343\202\267\343\203\243\343\202\255\343\203\274\343\203\2633.mp3.meta"
+"Assets/SE/\343\203\211\343\203\251\343\202\264\343\203\263\343\201\214\347\201\253\343\202\222\345\220\220\343\201\217.mp3"
+"Assets/SE/\343\203\211\343\203\251\343\202\264\343\203\263\343\201\214\347\201\253\343\202\222\345\220\220\343\201\217.mp3.meta"
+"Assets/SE/\343\203\220\343\203\210\343\203\253\351\226\213\345\247\213.mp3"
+"Assets/SE/\343\203\220\343\203\210\343\203\253\351\226\213\345\247\213.mp3.meta"
+"Assets/SE/\343\203\220\343\203\210\343\203\253\351\226\213\345\247\2132.mp3"
+"Assets/SE/\343\203\220\343\203\210\343\203\253\351\226\213\345\247\2132.mp3.meta"
+"Assets/SE/\343\203\254\343\202\242\343\202\253\343\203\274\343\203\211.mp3"
+"Assets/SE/\343\203\254\343\202\242\343\202\253\343\203\274\343\203\211.mp3.meta"
+"Assets/SE/\345\211\243\343\201\247\346\226\254\343\202\2131.mp3"
+"Assets/SE/\345\211\243\343\201\247\346\226\254\343\202\2131.mp3.meta"
+"Assets/SE/\345\244\247\347\210\206\347\231\2722.mp3"
+"Assets/SE/\345\244\247\347\210\206\347\231\2722.mp3.meta"
+"Assets/SE/\345\265\220\343\201\256\346\265\267.mp3"
+"Assets/SE/\345\265\220\343\201\256\346\265\267.mp3.meta"
+"Assets/SE/\346\231\256\351\200\232\343\202\253\343\203\274\343\203\211.mp3"
+"Assets/SE/\346\231\256\351\200\232\343\202\253\343\203\274\343\203\211.mp3.meta"
+"Assets/SE/\346\260\267\351\255\224\346\263\2253.mp3"
+"Assets/SE/\346\260\267\351\255\224\346\263\2253.mp3.meta"
+"Assets/SE/\346\261\272\345\256\232\343\203\234\343\202\277\343\203\263\343\202\222\346\212\274\343\201\23113.mp3"
+"Assets/SE/\346\261\272\345\256\232\343\203\234\343\202\277\343\203\263\343\202\222\346\212\274\343\201\23113.mp3.meta"
+"Assets/SE/\346\265\267\345\262\2701.mp3"
+"Assets/SE/\346\265\267\345\262\2701.mp3.meta"
+"Assets/SE/\351\253\230\351\200\237\346\226\254\346\222\2032.mp3"
+"Assets/SE/\351\253\230\351\200\237\346\226\254\346\222\2032.mp3.meta"
+"Assets/SE/\351\263\251\346\231\202\350\250\2101.mp3"
+"Assets/SE/\351\263\251\346\231\202\350\250\2101.mp3.meta"
+Assets/Scenes/Battle.unity
+Assets/Scripts/Battle/BattleManager.cs
+Assets/Scripts/Battle/BattleProcessor.cs
+Assets/Scripts/Battle/BattleUIManager.cs
+Assets/Scripts/Battle/CardDealer.cs
+Assets/Scripts/Battle/CardDisplay.cs
+Assets/Scripts/Battle/CardLayoutManager.cs
+Assets/Scripts/Battle/CardLayoutManager.cs.meta
+Assets/Scripts/Battle/CardRule.cs
+Assets/Scripts/Battle/CardSelectionManager.cs
+Assets/Scripts/Battle/CardSelectionManager.cs.meta
+Assets/Scripts/Battle/CardSheetDisplay.cs
+Assets/Scripts/Battle/CardSheetTemplateView.cs
+Assets/Scripts/Battle/CardSheetTemplateView.cs.meta
+Assets/Scripts/Battle/CardUI.cs
+Assets/Scripts/Battle/HandRefillService.cs
+Assets/Scripts/Battle/SoundEffectPlayer.cs
+Assets/Scripts/ButtonDisabler.cs
+Assets/Scripts/ButtonSEPlayer.cs
+Assets/Scripts/ButtonSEPlayer.cs.meta
+Assets/Scripts/Card/SpecialCardEffectBase.cs
+Assets/Scripts/Card/SpecialCardEffectBase.cs.meta
+Assets/Scripts/Card/SpecialEffect/01_MagicalExplosion.cs
+Assets/Scripts/Card/SpecialEffect/01_MagicalExplosion.cs.meta
+Assets/Scripts/Effect/LightGrow.cs
+Assets/Scripts/Effect/LightGrow.cs.meta
+Assets/Scripts/EnemyStatus.cs
+Assets/Scripts/EnemyStatus.cs.meta
+Assets/TextMesh Pro/Fonts/DFSoge9 SDF.asset
