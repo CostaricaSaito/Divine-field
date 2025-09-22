@@ -17,8 +17,18 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: d84574dd1811ed642871682b9e9b708f
   m_SerializeEntries:
+  - m_GUID: 55f0d3ecb812e0644be5318bf88edb3c
+    m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305913.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6b74a883f2d94c49aa0e0d0a1aea784
-    m_Address: NormalCard
+    m_Address: "Assets/SE/\u666E\u901A\u30AB\u30FC\u30C9.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be91d7ef2d59a634d98115e59b0de84f
+    m_Address: "Assets/SE/\u9CE9\u6642\u8A081.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

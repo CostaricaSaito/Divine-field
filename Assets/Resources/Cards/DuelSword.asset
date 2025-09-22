@@ -38,3 +38,5 @@ MonoBehaviour:
   canBeUsedWithPrimaryAttack: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  elementIcon: {fileID: 0}
+  cardValue: 0

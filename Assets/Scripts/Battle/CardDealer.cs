@@ -3,9 +3,32 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
+/// <summary>
+/// カードの配布とUI管理を担当するクラス
+/// 
+/// 【役割】
+/// - カードの配布（プレイヤー・敵）
+/// - カードUIの生成・管理
+/// - カードの表示・非表示制御
+/// - カード配布時の演出（SE、アニメーション）
+/// 
+/// 【責任範囲】
+/// - 手札の初期化
+/// - カードUIの生成・破棄
+/// - カードの表示状態管理
+/// - 配布演出の制御
+/// 
+/// 【他のクラスとの関係】
+/// - BattleController: カード配布の要求
+/// - CardUI: 個別カードのUI管理
+/// - BattleUIManager: カード表示の制御
+/// - HandRefillService: 手札補充の連携
+/// </summary>
 public class CardDealer : MonoBehaviour
 {
-    // ���������Q��
+    //========================
+    // 依存関係
+    //========================
     private PlayerStatus playerStatus;
     private PlayerStatus enemyStatus;
     private Transform handPanel;
@@ -15,12 +38,33 @@ public class CardDealer : MonoBehaviour
     private AudioClip cardDealSE;
     private AudioClip cardRevealSE;
 
-    // �}�X�^�[�f�[�^�iScriptableObject�̐��`�Q�j
-    [SerializeField] private CardData[] allCards; // �����̓ǂݍ��ݍς݃v�[��
+    // 外部からアクセス可能なプロパティ
+    public Sprite CardBackSprite => cardBackSprite;
 
-    // ����z�����v���C���[��D��UI
-    private readonly List<CardUI> activeCardUIs = new();
+    //========================
+    // カードデータ
+    //========================
+    [SerializeField] private CardData[] allCards; // 全カードの読み込み済み配列
 
+    //========================
+    // UI管理
+    //========================
+    private readonly List<CardUI> activeCardUIs = new(); // 生成済みプレイヤー手札UI
+
+    /// <summary>
+    /// 初期化処理
+    /// 
+    /// 【処理内容】
+    /// 各システムへの参照を設定し、カード配布の準備を行う
+    /// </summary>
+    /// <param name="playerStatus">プレイヤーのステータス</param>
+    /// <param name="enemyStatus">敵のステータス</param>
+    /// <param name="handPanel">手札UIの親パネル</param>
+    /// <param name="cardUIPrefab">カードUIのプレハブ</param>
+    /// <param name="cardBackSprite">カードの裏面画像</param>
+    /// <param name="audioSource">音響ソース</param>
+    /// <param name="cardDealSE">カード配布SE</param>
+    /// <param name="cardRevealSE">カード表示SE</param>
     public void Initialize(
         PlayerStatus playerStatus,
         PlayerStatus enemyStatus,
@@ -40,54 +84,72 @@ public class CardDealer : MonoBehaviour
         this.cardDealSE = cardDealSE;
         this.cardRevealSE = cardRevealSE;
 
-        // �}�X�^�[�ǂݍ��݁iResources/ Cards �z���j
+        // カードデータの読み込み（Resources/ Cards フォルダ）
         allCards = Resources.LoadAll<CardData>("Cards");
         if (allCards == null || allCards.Length == 0)
-            Debug.LogError("[CardDealer] Cards �t�H���_���� CardData ��ǂݍ��߂܂���ł���");
+            Debug.LogError("[CardDealer] Cards フォルダから CardData を読み込めませんでした");
         else
-            Debug.Log($"[CardDealer] �ǂݍ��񂾃J�[�h��: {allCards.Length}");
+            Debug.Log($"[CardDealer] 読み込まれたカード数: {allCards.Length}");
     }
 
-    /// <summary>�v���C���[/CPU�փJ�[�h��z��i�v���C���[UI�����t���j</summary>
+    /// <summary>
+    /// プレイヤー/CPUにカードを配布する（プレイヤーUIを生成）
+    /// 
+    /// 【処理内容】
+    /// 1. 既存UIのクリア
+    /// 2. 指定枚数分のカードを配布
+    /// 3. プレイヤー用UIの生成
+    /// 4. 配布演出（SE、アニメーション）
+    /// 5. カードの表示
+    /// </summary>
+    /// <param name="playerHand">プレイヤーの手札</param>
+    /// <param name="cpuHand">CPUの手札</param>
+    /// <param name="count">配布枚数</param>
+    /// <returns>配布完了まで待機</returns>
     public IEnumerator DealCards(List<CardData> playerHand, List<CardData> cpuHand, int count)
     {
-        // ����UI�N���A
+        // 既存UIクリア
         ClearPlayerHandUI();
         activeCardUIs.Clear();
         playerHand.Clear();
         cpuHand.Clear();
 
-        // �z�z���[�v
+        // 配布ループ
         for (int i = 0; i < count; i++)
         {
-            // �� �����^�C�������i�e�����Ɨ����� cardUI �����Ă�悤�Ɂj
+            // カードインスタンスの生成（各プレイヤー用に独立した cardUI を生成するように）
             var playerCardInstance = DrawRandomCardInstance();
             var enemyCardInstance = DrawRandomCardInstance();
 
             playerHand.Add(playerCardInstance);
             cpuHand.Add(enemyCardInstance);
 
-            // �v���C���[�p UI ����
+            // プレイヤー用 UI 生成
             var ui = CreateCardUIForHand(playerCardInstance);
             if (ui != null) activeCardUIs.Add(ui);
 
-            // SE
+            // SE再生
             if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
 
             yield return new WaitForSeconds(0.15f);
         }
 
-        // �\�������o
+        // 表示演出
         yield return new WaitForSeconds(0.5f);
         foreach (var ui in activeCardUIs) ui?.Reveal();
         if (audioSource && cardRevealSE) audioSource.PlayOneShot(cardRevealSE);
 
-        // �i�C�ӁjAttackSelect �̃O���[���𑦔��f
-        BattleUIManager.I?.RefreshAttackInteractivity(BattleManager.I.playerHand);
+        // （任意）AttackSelect のオーバーレイを無効化
+        BattleUIManager.I?.RefreshAttackInteractivity(BattleManager.I.playerHand, CardRules.GetAttackChoices(BattleManager.I.playerHand));
     }
 
-    //================ �����w���p =================
+    //====================================================
+    // Private: 内部処理
+    //====================================================
 
+    /// <summary>
+    /// プレイヤー手札UIをクリアする
+    /// </summary>
     private void ClearPlayerHandUI()
     {
         if (handPanel == null) return;
@@ -95,7 +157,10 @@ public class CardDealer : MonoBehaviour
             Destroy(handPanel.GetChild(i).gameObject);
     }
 
-    /// <summary>�}�X�^�[����1�������ă����^�C��������Ԃ�</summary>
+    /// <summary>
+    /// カードデータから1枚ランダムに選んでカードインスタンスを返す
+    /// </summary>
+    /// <returns>生成されたカードインスタンス</returns>
     private CardData DrawRandomCardInstance()
     {
         if (allCards == null || allCards.Length == 0) return null;
@@ -104,29 +169,51 @@ public class CardDealer : MonoBehaviour
         if (template == null) return null;
 
         var instance = ScriptableObject.Instantiate(template);
-        instance.name = template.name; // �f�o�b�O���₷��
-        instance.cardUI = null;          // �d�v�F���L��Ԃ̍��Ղ�����
+        instance.name = template.name; // デバッグしやすく
+        instance.cardUI = null;          // 重要：後でUIを生成する際の重複を防ぐ
         return instance;
     }
 
+    /// <summary>
+    /// ランダムカードを取得する（外部用）
+    /// </summary>
+    /// <returns>生成されたカードインスタンス</returns>
     public CardData DrawRandomCard()
     {
-        if (allCards == null || allCards.Length == 0) return null;
+        if (allCards == null || allCards.Length == 0)
+        {
+            Debug.LogWarning("[CardDealer] allCardsがnullまたは空です");
+            return null;
+        }
+        
         var src = allCards[Random.Range(0, allCards.Length)];
-        if (src == null) return null;
+        if (src == null)
+        {
+            Debug.LogWarning("[CardDealer] 選択されたカードテンプレートがnullです");
+            return null;
+        }
 
         var instance = ScriptableObject.Instantiate(src);
-        instance.cardUI = null; // UI�͌�ŕR�t��
+        if (instance == null)
+        {
+            Debug.LogWarning("[CardDealer] カードインスタンスの生成に失敗しました");
+            return null;
+        }
+        
+        instance.cardUI = null; // UIは後で生成
         return instance;
     }
 
-
-    /// <summary>�v���C���[��D�� UI ��1���������ăo�C���h</summary>
+    /// <summary>
+    /// プレイヤー手札用 UI を1枚生成してオブジェクト化
+    /// </summary>
+    /// <param name="instance">カードインスタンス</param>
+    /// <returns>生成されたCardUI</returns>
     private CardUI CreateCardUIForHand(CardData instance)
     {
         if (instance == null || cardUIPrefab == null || handPanel == null)
         {
-            Debug.LogWarning("[CardDealer] CreateCardUIForHand: ����/�Q�ƕs��");
+            Debug.LogWarning("[CardDealer] CreateCardUIForHand: パラメータ/参照不足");
             return null;
         }
 
@@ -134,17 +221,16 @@ public class CardDealer : MonoBehaviour
         var ui = go.GetComponent<CardUI>();
         if (ui == null)
         {
-            Debug.LogError("[CardDealer] cardUIPrefab �� CardUI ���t���Ă��܂���");
+            Debug.LogError("[CardDealer] cardUIPrefab に CardUI が付いていません");
             return null;
         }
 
-        // ���Ȃ��� CardUI �� API ���ɍ��킹��iSetup / SetCard / Bind �̂����ꂩ�j
-        // �����ł� Setup(CardData, Sprite) ��z��
+        // 適切な CardUI の API に合わせる（Setup / SetCard / Bind のいずれか）
+        // 現在は Setup(CardData, Sprite) を想定
         ui.Setup(instance, cardBackSprite);
 
-        // ���݃����N�i���̃C���X�^���X��p��UI�j
+        // 現在紐付け（このインスタンスを指すUI）
         instance.cardUI = ui;
         return ui;
     }
-
 }

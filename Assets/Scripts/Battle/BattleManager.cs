@@ -3,16 +3,41 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using TMPro;
 
+/// <summary>
+/// バトル全体の管理を担当するクラス
+/// 
+/// 【役割】
+/// - バトルの開始・終了制御
+/// - ゲーム状態の管理
+/// - ターン進行の制御
+/// - プレイヤー入力の処理
+/// - 各システム間の連携
+/// 
+/// 【責任範囲】
+/// - バトルフローの全体制御
+/// - 状態遷移の管理
+/// - プレイヤー・敵のステータス管理
+/// - 手札の管理
+/// - カード選択の処理
+/// 
+/// 【他のクラスとの関係】
+/// - BattleUIManager: UI表示の制御
+/// - BattleProcessor: 戦闘処理の実行
+/// - CardDealer: カード配布の管理
+/// - HandRefillService: 手札補充の管理
+/// - EnemyAI: 敵の行動決定
+/// </summary>
 public class BattleManager : MonoBehaviour
 {
     public static BattleManager I;
 
-    [Header("初期アサイン")]
+    [Header("バトルUI")]
     public BattleStatusUI statusUI;
     public CutInController cutInController;
 
-    [Header("効果音(従来)")]
+    [Header("音響(効果音)")]
     public AudioSource audioSource;
     public AudioClip cardDealSE;
     public AudioClip cardRevealSE;
@@ -26,14 +51,18 @@ public class BattleManager : MonoBehaviour
     public CardDealer cardDealer;
     public BattleProcessor battleProcessor;
 
-    [Header("UI/操作")]
+    [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
+    
+    [Header("TotalATKDEF表示")]
+    public GameObject totalATKDEFButton; // TotalATKDEFボタン（デフォルト非表示）
+    public TMP_Text atkdefText; // ATKDEFtextテキストボックス
 
-    // --- 追加: 分割した責務 ---
-    [SerializeField] private HandRefillService handRefill; // シーンに配置して参照
+    // --- 追加: 依存関係の管理 ---
+    [SerializeField] private HandRefillService handRefill; // 手札補充用の参照
     private EnemyAI enemyAI = new EnemyAI();
 
-    // ランタイム
+    // バトルデータ
     private PlayerStatus playerStatus, enemyStatus;
     public List<CardData> playerHand = new();
     public List<CardData> cpuHand = new();
@@ -58,19 +87,18 @@ public class BattleManager : MonoBehaviour
 
     private void Awake()
     {
-        if (I != null && I != this) { Destroy(gameObject); return; }
         I = this;
     }
 
     void Start()
     {
-        // ステータス
+        // ステータス初期化
         playerStatus = new PlayerStatus();
         enemyStatus = new PlayerStatus();
         playerStatus.InitializeAsPlayer();
         enemyStatus.InitializeAsEnemy();
 
-        // 召喚獣（省略：既存ロジックそのまま）
+        // 召喚データ（プレイヤー：選択済み、敵：ランダム）
         if (SummonSelectionManager.I != null)
         {
             playerStatus.summonData = SummonSelectionManager.I.GetSelectedSummonData();
@@ -84,15 +112,19 @@ public class BattleManager : MonoBehaviour
 
         summonSkillButton.SetStatus(playerStatus, enemyStatus);
 
-        // 依存初期化
+        // システム初期化
         cardDealer.Initialize(playerStatus, enemyStatus, handPanel, cardUIPrefab, cardBackSprite,
                               audioSource, cardDealSE, cardRevealSE);
-        battleProcessor.Initialize(playerStatus, enemyStatus, statusUI, this, cardDealer);
+        battleProcessor.Initialize(playerStatus, enemyStatus, statusUI, cardDealer);
 
         if (handRefill != null)
             handRefill.Initialize(handPanel, cardUIPrefab, cardBackSprite, audioSource, cardDealSE, cardDealer);
 
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        
+        // ゲーム開始時はTotalATKDEFを非表示にする
+        UpdateTotalATKDEFDisplay();
+        
         StartCoroutine(BattleStartSequence());
     }
 
@@ -104,7 +136,7 @@ public class BattleManager : MonoBehaviour
         _phaseCts?.Cancel(); _phaseCts?.Dispose();
         _phaseCts = new CancellationTokenSource();
 
-        Debug.Log($"【State】{CurrentState} → {newState}（Turn: {CurrentTurnOwner}）");
+        Debug.Log($"[State]{CurrentState} → {newState}(Turn: {CurrentTurnOwner})");
         CurrentState = newState;
         HandleStateChange();
     }
@@ -145,7 +177,7 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    //================ フェーズ ================
+    //================ バトル開始 ================
     IEnumerator BattleStartSequence()
     {
         yield return StartCoroutine(cardDealer.DealCards(playerHand, cpuHand, 10));
@@ -164,59 +196,80 @@ public class BattleManager : MonoBehaviour
     private void OnTurnStart()
     {
         if (CurrentTurnOwner == PlayerType.Player)
-            SoundEffectPlayer.I?.Play("SE/決定ボタンを押す13");
+        {
+            
+                SoundEffectPlayer.I.Play("Assets/SE/決定ボタンを押す13.mp3");
+
+        }
 
         if (CurrentTurnOwner == PlayerType.Player) playerStatus.OnTurnStart();
         else enemyStatus.OnTurnStart();
 
-        // ★ ターン開始時にカード詳細表示をクリア
+        // ターン開始時にカード詳細表示を非表示
         BattleUIManager.I?.HideAllCardDetails();
+        // TotalATKDEFも非表示にする
+        UpdateTotalATKDEFDisplay();
 
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-        SetGameState(GameState.AttackSelect);
+        if (CurrentTurnOwner == PlayerType.Player)
+        {
+            SetGameState(GameState.AttackSelect);
+        }
+        else
+        {
+            _ = RunEnemyTurnAsync();
+        }
     }
 
     private void EnterAttackSelect()
     {
-        var attackables = CardRules.GetAttackChoices(playerHand);
-        if (Attacker == PlayerType.Player &&
-            (attackables.Count == 0 || attackables.TrueForAll(c => c.cardType == CardType.Magic)))
+        if (Attacker == PlayerType.Player)
         {
-            BattleUIManager.I?.SetPrayModeUI(playerHand);
+            var attackables = CardRules.GetAttackChoices(playerHand);
+            if (attackables.Count == 0 || attackables.TrueForAll(c => c.cardType == CardType.Magic))
+            {
+                BattleUIManager.I?.SetPrayModeUI(playerHand);
+            }
+            else
+            {
+                BattleUIManager.I?.SetUseButtonLabel("使用");
+                BattleUIManager.I?.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
+            }
         }
-        else
-        {
-            BattleUIManager.I?.SetUseButtonLabel("使用");
-            BattleUIManager.I?.RefreshAttackInteractivity(playerHand);
-        }
-
-        if (CurrentTurnOwner == PlayerType.Enemy)
-            _ = RunEnemyTurnAsync();
     }
 
     private async Task RunDefenseSelectAsync()
     {
-        var ct = _phaseCts?.Token ?? default;
+        // 攻撃カード確定後のインターバルと効果音
+        await Task.Delay(1000);
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+        Debug.Log("[BattleManager] 攻撃カード確定、防御カード選択開始");
 
         if (Defender == PlayerType.Enemy)
         {
-            // 敵が防御（プレイヤー攻撃）
+            // 敵の防御選択（AI）
             selectedDefenseCard = enemyAI.SelectDefenseCard(cpuHand);
 
-            try { await Task.Delay(1000, ct); } catch { return; }
-            if (!ct.IsCancellationRequested) SetGameState(GameState.DefenseConfirm);
+            // 相手の防御カード選択完了時の効果音
+            if (selectedDefenseCard != null)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+                Debug.Log($"[BattleManager] 相手の防御カード選択完了: {selectedDefenseCard.cardName}");
+            }
+
+            // ③防御カード選択後の0.5秒インターバル
+            await Task.Delay(500);
+            Debug.Log("[BattleManager] 防御カード選択完了、0.5秒待機");
+            
+            SetGameState(GameState.DefenseConfirm);
         }
         else
         {
-            // プレイヤー防御
-            BattleUIManager.I?.SetUseButtonLabel("許す");
-            BattleUIManager.I?.RefreshDefenseInteractivity(CardRules.GetDefenseChoices(playerHand));
-
-            defenseCardTCS = new TaskCompletionSource<CardData>();
-            using (ct.Register(() => defenseCardTCS.TrySetCanceled())) { }
-
-            try { selectedDefenseCard = await defenseCardTCS.Task; } catch { return; }
-            if (!ct.IsCancellationRequested) SetGameState(GameState.DefenseConfirm);
+            // プレイヤー選択（複数選択対応）
+            BattleUIManager.I?.SetUseButtonLabel("許す"); // 初期状態は「許す」
+            BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
+            
+            // プレイヤーが防御カードを選択するまで待機
+            // OnUseButtonPressedでHandleDefenseUseが呼ばれるまで待つ
         }
     }
 
@@ -224,49 +277,78 @@ public class BattleManager : MonoBehaviour
     {
         if (currentAttackCard == null)
         {
-            Debug.LogWarning("攻撃カード未設定のためスキップ");
+            Debug.LogWarning("攻撃カードが設定されていません");
             SetGameState(GameState.AttackSelect);
             return;
         }
 
-        // プレイヤーが防御でカードを使った場合：裏スロット作成
-        if (Defender == PlayerType.Player && selectedDefenseCard?.cardUI != null)
+        // プレイヤーの複数防御カード選択の場合は、StartDefenseCardSequenceで処理済み
+        if (Defender == PlayerType.Player)
         {
-            int idx = selectedDefenseCard.cardUI.transform.GetSiblingIndex();
-            handRefill?.RecordPlayerUseSlot(idx);
-        }
-        // 敵が防御でカードを使った場合：枚数カウント
-        if (Defender == PlayerType.Enemy && selectedDefenseCard != null)
-        {
-            handRefill?.RecordEnemyUse();
+            Debug.Log("[BattleManager] プレイヤーの防御カード選択は既にStartDefenseCardSequenceで処理済み");
+            return;
         }
 
-        // ★ 防御カードはこのタイミングで表示
-        if (selectedDefenseCard != null)
+        // 敵の単一防御カードの処理
+        var defenseCardToDisplay = selectedDefenseCard;
+        if (defenseCardToDisplay != null)
         {
-            BattleUIManager.I?.ShowCardDetail(selectedDefenseCard,
-                (Defender == PlayerType.Player) ? Side.Player : Side.Enemy);
+            var side = (Defender == PlayerType.Player) ? Side.Player : Side.Enemy;
+            
+            // プレイヤーの防御カードの場合、選択状態をクリアしてから表示
+            if (Defender == PlayerType.Player)
+            {
+                BattleUIManager.I?.ClearAllSelections();
+                BattleUIManager.I?.HideAllCardDetails();
+            }
+            
+            BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, side);
+            
+            // 防御カード表示時の効果音
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            
+            Debug.Log($"[BattleManager] 防御カード表示: {defenseCardToDisplay.cardName}");
+            
+            // 0.5秒待機
+            await Task.Delay(500);
+            Debug.Log("[BattleManager] 防御カード表示完了、0.5秒待機");
         }
 
         var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
-        var def = (Attacker == PlayerType.Player) ? enemyStatus : playerStatus;
-        var defHand = (Attacker == PlayerType.Player) ? cpuHand : playerHand;
+        var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
+        var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
 
-        await battleProcessor.ResolveCombatAsync(currentAttackCard, selectedDefenseCard, atk, def, defHand);
+        // 攻撃カードを取得（複数選択対応）
+        List<CardData> attackCards = GetAttackCardsForCombat();
 
-        // ★ 解決後はクリア
-        BattleUIManager.I?.HideAllCardDetails();
+        await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
 
-        currentAttackCard = null;
-        selectedDefenseCard = null;
-        defenseCardTCS = null;
+        if (_phaseCts.Token.IsCancellationRequested) return;
 
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-
-        if (IsDead(playerStatus) || IsDead(enemyStatus))
+        // 防御カード使用処理（裏向きにする）
+        if (defenseCardToDisplay != null)
         {
-            SetGameState(GameState.BattleEnd);
-            return;
+            battleProcessor.UseCard(defenseCardToDisplay, defHand);
+            
+            // HandRefillServiceに使用を記録
+            if (handRefill != null)
+            {
+                if (Defender == PlayerType.Player && defenseCardToDisplay.cardUI != null)
+                {
+                    int idx = defenseCardToDisplay.cardUI.transform.GetSiblingIndex();
+                    handRefill.RecordPlayerUseSlot(idx);
+                    Debug.Log($"[BattleManager] プレイヤー防御カード使用記録: {defenseCardToDisplay.cardName} (スロット {idx})");
+                }
+                else if (Defender == PlayerType.Enemy)
+                {
+                    handRefill.RecordEnemyUse();
+                    Debug.Log($"[BattleManager] 敵防御カード使用記録: {defenseCardToDisplay.cardName}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[BattleManager] handRefillがnullです");
+            }
         }
 
         SetGameState(GameState.TurnEnd);
@@ -274,24 +356,31 @@ public class BattleManager : MonoBehaviour
 
     private async Task RunTurnEndAsync()
     {
-        var ct = _phaseCts?.Token ?? default;
-
         if (handRefill != null)
-            await handRefill.RefillAtTurnEndAsync(playerHand, cpuHand, ct);
+        {
+            await handRefill.RefillAtTurnEndAsync(playerHand, cpuHand, _phaseCts.Token);
+        }
 
-        if (ct.IsCancellationRequested) return;
+        if (_phaseCts.Token.IsCancellationRequested) return;
 
-        // ★ ターン跨ぎ前にクリア
-        BattleUIManager.I?.HideAllCardDetails();
+        // ⑥相手の攻撃ターン前の0.5秒インターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleManager] 相手の攻撃ターン前、0.5秒待機");
 
         ToggleTurnOwner();
         SetGameState(GameState.TurnStart);
     }
 
-    //================ 敵ターン ================
+    //================ 敵のターン ================
     private async Task RunEnemyTurnAsync()
     {
-        var ct = _phaseCts?.Token ?? default;
+        // 相手の攻撃フェーズ開始時の効果音
+        SoundEffectPlayer.I?.Play("Assets/SE/鳩時計1.mp3");
+        Debug.Log("[BattleManager] 相手の攻撃フェーズ開始");
+        
+        // 鳩時計効果音後のインターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleManager] 鳩時計効果音後、0.5秒待機");
 
         var attack = enemyAI.SelectAttackCard(cpuHand);
         if (attack == null)
@@ -305,13 +394,18 @@ public class BattleManager : MonoBehaviour
 
         currentAttackCard = attack;
 
-        // ★ 敵の攻撃カードを表示
+        // 敵の攻撃カードを表示
         BattleUIManager.I?.ShowCardDetail(attack, Side.Enemy);
+        
+        // 相手のカード決定時の効果音
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+        Debug.Log($"[BattleManager] 相手のカード決定: {attack.cardName}");
 
-        if (!ct.IsCancellationRequested)
-            SetGameState(GameState.DefenseSelect);
+        await Task.Delay(1000);
+        SetGameState(GameState.DefenseSelect);
     }
 
+    //================ カード選択 ================
     public void SetSelectedCard(CardUI ui)
     {
         if (ui == null) return;
@@ -326,6 +420,10 @@ public class BattleManager : MonoBehaviour
             }
             selectedCard = card;
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            // カード選択音を再生
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            // TotalATKDEF表示を更新
+            UpdateTotalATKDEFDisplay();
             return;
         }
 
@@ -338,7 +436,12 @@ public class BattleManager : MonoBehaviour
             }
             selectedDefenseCard = card;
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-            BattleUIManager.I?.SetUseButtonLabel("使用");
+            // カード選択音を再生
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            // TotalATKDEF表示を更新
+            UpdateTotalATKDEFDisplay();
+            // 防御フェーズのボタンラベルを更新
+            BattleUIManager.I?.UpdateDefenseButtonLabel();
             return;
         }
 
@@ -350,73 +453,431 @@ public class BattleManager : MonoBehaviour
         switch (CurrentState)
         {
             case GameState.AttackSelect:
-                _ = HandleAttackConfirmAsync();
+                if (Attacker == PlayerType.Player)
+                    HandleAttackUse();
                 break;
 
             case GameState.DefenseSelect:
-                if (Defender == PlayerType.Player && defenseCardTCS != null && !defenseCardTCS.Task.IsCompleted)
-                    defenseCardTCS.TrySetResult(selectedDefenseCard); // null=許す
+                if (Defender == PlayerType.Player)
+                    HandleDefenseUse();
                 break;
         }
     }
 
-    private async Task HandleAttackConfirmAsync()
+    private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex)
     {
-        if (CurrentState != GameState.AttackSelect || Attacker != PlayerType.Player) return;
-        if (selectedCard == null) { Debug.LogWarning("攻撃カードが選択されていません"); return; }
+        await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
 
-        var card = selectedCard;
+        if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
 
-        // 即時（回復など）
-        if (CardRules.IsImmediateAction(card))
+        selectedCard = null;
+        BattleUIManager.I?.HideAllCardDetails();
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        // TotalATKDEF表示を更新
+        UpdateTotalATKDEFDisplay();
+
+        SetGameState(GameState.TurnEnd);
+    }
+
+    //================ カード使用処理 ================
+    private void HandleAttackUse()
+    {
+        // BattleUIManagerから選択中の攻撃カードを取得
+        var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
+        if (selectedAttackCards == null || selectedAttackCards.Count == 0)
         {
-            int idx = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
-
-            battleProcessor.UseCard(card, playerHand);
-
-            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-
-            await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
-
-            if (idx >= 0) handRefill?.RecordPlayerUseSlot(idx);
-
-            selectedCard = null;
-
-            BattleUIManager.I?.HideAllCardDetails();
-            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-
-            SetGameState(GameState.TurnEnd);
+            Debug.LogWarning("攻撃カードが選択されていません");
             return;
         }
 
-        // 通常攻撃
-        int slot = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+        // 即時効果（回復など）の場合は通常処理
+        if (selectedAttackCards.Count == 1 && CardRules.IsImmediateAction(selectedAttackCards[0]))
+        {
+            var card = selectedAttackCards[0];
+            int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+            battleProcessor.UseCard(card, playerHand);
+            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            
+            // 選択状態をクリア
+            selectedCard = null;
+            BattleUIManager.I?.ClearAllSelections();
+            UpdateTotalATKDEFDisplay();
+            
+            _ = ResolveImmediateEffectAsync(card, slotIndex);
+            return;
+        }
 
-        currentAttackCard = card;
-        battleProcessor.UseCard(card, playerHand);
-
-        if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
-
-        BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-
-        selectedCard = null;
-
-        SetGameState(GameState.AttackConfirm);
+        // 攻撃カードの演出フロー開始
+        _ = StartCardSequence(selectedAttackCards, "攻撃", Side.Player);
     }
 
-    //================ ヘルパ ================
+    private void HandleDefenseUse()
+    {
+        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (selectedDefenseCards == null || selectedDefenseCards.Count == 0)
+        {
+            // 防御カードを1枚も使わない場合（「許す」）
+            Debug.Log("[BattleManager] 防御カードを使用せずにダメージを受ける（許す）");
+            HandleNoDefenseCard();
+            return;
+        }
+
+        // 防御カードの演出フロー開始
+        _ = StartCardSequence(selectedDefenseCards, "防御", Side.Player);
+    }
+
+    /// <summary>
+    /// 防御カードを1枚も使わない場合の処理（「許す」）
+    /// </summary>
+    private async void HandleNoDefenseCard()
+    {
+        // 選択状態をクリア
+        BattleUIManager.I?.ClearAllSelections();
+        UpdateTotalATKDEFDisplay();
+
+        // 戦闘解決処理（防御カードなし）
+        var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
+        var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
+        var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
+
+        // 攻撃カードを取得（複数選択対応）
+        List<CardData> attackCards = GetAttackCardsForCombat();
+
+        // 防御カードなしで戦闘解決
+        await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand);
+
+        if (_phaseCts.Token.IsCancellationRequested) return;
+
+        // 防御カード確定後の処理
+        SetGameState(GameState.TurnEnd);
+    }
+
+
+    /// <summary>
+    /// カード処理（攻撃・防御共通）
+    /// </summary>
+    private void ProcessCards(List<CardData> cards, string cardType)
+    {
+        if (cards.Count > 1)
+        {
+            Debug.Log($"[BattleManager] 複数{cardType}カード選択中: {cards.Count}枚。全てのカードを処理します。");
+            ProcessMultipleCards(cards, cardType);
+        }
+        else
+        {
+            Debug.Log($"[BattleManager] 単一{cardType}カード選択中。カードを処理します。");
+            ProcessSingleCard(cards[0], cardType);
+        }
+    }
+
+    /// <summary>
+    /// 複数カードの処理（攻撃・防御共通）
+    /// </summary>
+    private void ProcessMultipleCards(List<CardData> cards, string cardType)
+    {
+        // 攻撃カードの場合は最初のカードをcurrentAttackCardに設定
+        if (cardType == "攻撃" && cards.Count > 0)
+        {
+            currentAttackCard = cards[0];
+        }
+        
+        foreach (var card in cards)
+        {
+            if (card?.cardUI == null) continue;
+            
+            int slotIndex = card.cardUI.transform.GetSiblingIndex();
+            battleProcessor.UseCard(card, playerHand);
+            handRefill?.RecordPlayerUseSlot(slotIndex);
+            Debug.Log($"[BattleManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
+        }
+    }
+
+    /// <summary>
+    /// 単一カードの処理（攻撃・防御共通）
+    /// </summary>
+    private void ProcessSingleCard(CardData card, string cardType)
+    {
+        if (cardType == "防御")
+        {
+            selectedDefenseCard = card;
+        }
+        else
+        {
+            selectedCard = card;
+            currentAttackCard = card; // 攻撃カードの場合はcurrentAttackCardも設定
+        }
+        
+        int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+        battleProcessor.UseCard(card, playerHand);
+        handRefill?.RecordPlayerUseSlot(slotIndex);
+        Debug.Log($"[BattleManager] 単一{cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
+    }
+
+    /// <summary>
+    /// カード演出シーケンス（攻撃・防御共通）
+    /// ①表示ゾーンクリア → ②カード順次表示（0.5秒インターバル）
+    /// </summary>
+    private async Task StartCardSequence(List<CardData> selectedCards, string cardType, Side side)
+    {
+        Debug.Log($"[BattleManager] {cardType}カード演出開始: {selectedCards.Count}枚");
+
+        // ①表示ゾーンをクリア
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+        Debug.Log("[BattleManager] 表示ゾーンをクリアしました");
+
+        // クリア後のインターバル（まっさらな状態を維持）
+        await Task.Delay(300);
+        Debug.Log("[BattleManager] クリア後インターバル完了");
+
+        // ②カードを順次表示（0.5秒インターバル）
+        for (int i = 0; i < selectedCards.Count; i++)
+        {
+            var card = selectedCards[i];
+            BattleUIManager.I?.ShowCardDetail(card, side);
+            
+            // カード表示効果音を再生（Addressables使用）
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            
+            Debug.Log($"[BattleManager] {cardType}カード表示: {card.cardName} ({i + 1}/{selectedCards.Count})");
+            
+            if (i < selectedCards.Count - 1) // 最後のカード以外は待機
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        // カードの処理
+        ProcessCards(selectedCards, cardType);
+
+        // 選択状態をクリア（ProcessCardsで既に設定済み）
+        BattleUIManager.I?.ClearAllSelections();
+        UpdateTotalATKDEFDisplay();
+
+        // 戦闘解決処理
+        var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
+        var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
+        var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
+
+        // 攻撃カードを取得（複数選択対応）
+        List<CardData> attackCards = GetAttackCardsForCombat();
+
+        // 戦闘解決を呼び出し
+        if (cardType == "攻撃")
+        {
+            // 攻撃カードの場合、防御カードは単一またはnull
+            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+        }
+        else
+        {
+            // 防御カードの場合、複数防御カード対応
+            await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand);
+        }
+
+        if (_phaseCts.Token.IsCancellationRequested) return;
+
+        // カード確定後の処理
+        SetGameState(GameState.TurnEnd);
+    }
+
+    private List<CardData> GetAttackCardsForCombat()
+    {
+        if (Attacker == PlayerType.Player)
+        {
+            Debug.Log("[BattleManager] プレイヤーの攻撃カードを取得中...");
+            var attackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
+            if (attackCards.Count == 0 && currentAttackCard != null)
+            {
+                Debug.Log($"[BattleManager] フォールバック: 単一カード {currentAttackCard.cardName} を使用");
+                attackCards = new List<CardData> { currentAttackCard };
+            }
+            Debug.Log($"[BattleManager] 最終的な攻撃カード数: {attackCards.Count}");
+            return attackCards;
+        }
+        else
+        {
+            Debug.Log($"[BattleManager] 敵の攻撃カード: {currentAttackCard?.cardName ?? "なし"}");
+            return new List<CardData> { currentAttackCard };
+        }
+    }
+
+    //================ 手番管理 ================
     public void ToggleTurnOwner()
     {
         CurrentTurnOwner = (CurrentTurnOwner == PlayerType.Player) ? PlayerType.Enemy : PlayerType.Player;
+        Debug.Log($"[Turn] 手番変更: {CurrentTurnOwner}");
     }
 
+    //================ カード選択クリア ================
+    public void ClearSelectedCards()
+    {
+        selectedCard = null;
+        selectedDefenseCard = null;
+        UpdateTotalATKDEFDisplay();
+    }
+
+    //================ TotalATKDEF表示 ================
+    public void UpdateTotalATKDEFDisplay()
+    {
+        if (totalATKDEFButton == null) 
+        {
+            Debug.LogWarning("[BattleManager] totalATKDEFButtonが設定されていません");
+            return;
+        }
+
+        // ボタンを非表示にする条件をチェック
+        bool shouldHide = ShouldHideTotalATKDEF();
+        totalATKDEFButton.SetActive(!shouldHide);
+        
+        Debug.Log($"[BattleManager] TotalATKDEF表示更新: 非表示={shouldHide}, 状態={CurrentState}, 選択カード={selectedCard?.cardName ?? "なし"}");
+
+        if (shouldHide) return;
+
+        // ATKDEFtextテキストボックスを更新
+        if (atkdefText != null)
+        {
+            string displayText = GetTotalATKDEFText();
+            atkdefText.text = displayText;
+            Debug.Log($"[BattleManager] TotalATKDEFテキスト更新: {displayText}");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleManager] ATKDEFtextが設定されていません");
+        }
+    }
+
+    private bool ShouldHideTotalATKDEF()
+    {
+        // 攻撃フェーズの場合
+        if (CurrentState == GameState.AttackSelect)
+        {
+            // BattleUIManagerの選択中カードをチェック
+            var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
+            if (selectedAttackCards != null && selectedAttackCards.Count > 0)
+            {
+                // 複数カード選択時は合計攻撃力が0以下の場合は非表示
+                int totalAttack = CalculateTotalAttackPower(selectedAttackCards);
+                if (totalAttack <= 0) return true;
+                
+                // 表示する
+                return false;
+            }
+            
+            // 単一カード選択の場合
+            if (selectedCard == null) return true;
+            
+            // 回復カードや特殊カード（即時効果）の場合は非表示
+            if (CardRules.IsImmediateAction(selectedCard)) return true;
+            
+            // 攻撃力が0以下の場合は非表示
+            if (selectedCard.attackPower <= 0) return true;
+            
+            // 表示する
+            return false;
+        }
+
+        // 防御フェーズの場合
+        if (CurrentState == GameState.DefenseSelect)
+        {
+            // BattleUIManagerの選択中カードをチェック
+            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
+            {
+                // 複数カード選択時は合計防御力が0以下の場合は非表示
+                int totalDefense = CalculateTotalDefensePower(selectedDefenseCards);
+                if (totalDefense <= 0) return true;
+                
+                // 表示する
+                return false;
+            }
+            
+            // 防御カードが選択されていない場合は非表示
+            return true;
+        }
+
+        // その他の状態では非表示
+        return true;
+    }
+
+    private string GetTotalATKDEFText()
+    {
+        if (CurrentState == GameState.AttackSelect)
+        {
+            // 攻撃フェーズ：選択中の攻撃カードの合計攻撃力を計算
+            var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
+            if (selectedAttackCards != null && selectedAttackCards.Count > 0)
+            {
+                int totalAttack = CalculateTotalAttackPower(selectedAttackCards);
+                return $"ATK {totalAttack}";
+            }
+            else if (selectedCard != null)
+            {
+                return $"ATK {selectedCard.attackPower}";
+            }
+        }
+        else if (CurrentState == GameState.DefenseSelect)
+        {
+            // 防御フェーズ：選択中の防御カードの合計防御力を表示
+            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
+            {
+                int totalDefense = CalculateTotalDefensePower(selectedDefenseCards);
+                return $"DEF {totalDefense}";
+            }
+            else if (selectedDefenseCard != null)
+            {
+                return $"DEF {selectedDefenseCard.defensePower}";
+            }
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// カードリストの合計攻撃力・防御力を計算（統一メソッド）
+    /// </summary>
+    private int CalculateTotalPower(List<CardData> cards, bool isAttack)
+    {
+        int total = 0;
+        foreach (var card in cards)
+        {
+            if (card != null)
+            {
+                total += isAttack ? card.attackPower : card.defensePower;
+            }
+        }
+        return total;
+    }
+
+    // 後方互換性のためのラッパーメソッド
+    private int CalculateTotalAttackPower(List<CardData> attackCards)
+    {
+        return CalculateTotalPower(attackCards, true);
+    }
+
+    private int CalculateTotalDefensePower(List<CardData> defenseCards)
+    {
+        return CalculateTotalPower(defenseCards, false);
+    }
+
+    //================ ユーティリティ ================
     private SummonData GetRandomEnemySummon()
     {
-        var list = SummonSelectionManager.I.GetAllSummonData();
+        var list = SummonSelectionManager.I?.GetAllSummonData();
+        if (list == null || list.Length == 0) return null;
+
         var enemyCandidates = new List<SummonData>(list);
-        enemyCandidates.RemoveAt(SummonSelectionManager.I.SelectedIndex);
-        return enemyCandidates[UnityEngine.Random.Range(0, enemyCandidates.Count)];
+        if (SummonSelectionManager.I != null)
+        {
+            enemyCandidates.RemoveAt(SummonSelectionManager.I.SelectedIndex);
+        }
+
+        return enemyCandidates[Random.Range(0, enemyCandidates.Count)];
     }
 
-    private bool IsDead(PlayerStatus s) => s != null && s.currentHP <= 0;
+    private void OnDestroy()
+    {
+        _phaseCts?.Cancel();
+        _phaseCts?.Dispose();
+    }
 }

@@ -2,13 +2,13 @@ using System.Collections.Generic;
 
 public static class CardRules
 {
-    // UŒ‚ƒtƒF[ƒY‚Åg‚¦‚é‚©
+    // ï¿½Uï¿½ï¿½ï¿½tï¿½Fï¿½[ï¿½Yï¿½Ågï¿½ï¿½ï¿½é‚©
     public static bool IsUsableInAttackPhase(CardData c)
     {
         if (c == null) return false;
         if (c.usableInAttackPhase) return true;
         if (c.isPrimaryAttack || c.isAdditionalAttack || c.isCounterAttack) return true;
-        if (c.isRecovery) return true;        // ‰ñ•œ‚ÍUŒ‚ƒ^[ƒ“OK‚Ìd—l
+        if (c.isRecovery) return true;        // ï¿½ñ•œ‚ÍUï¿½ï¿½ï¿½^ï¿½[ï¿½ï¿½OKï¿½Ìdï¿½l
         if (c.isSpecialEffect) return true;
 
         switch (c.cardType)
@@ -22,7 +22,7 @@ public static class CardRules
         }
     }
 
-    // –hŒäƒtƒF[ƒY‚Åg‚¦‚é‚©
+    // ï¿½hï¿½ï¿½tï¿½Fï¿½[ï¿½Yï¿½Ågï¿½ï¿½ï¿½é‚©
     public static bool IsUsableInDefensePhase(CardData c)
     {
         if (c == null) return false;
@@ -31,11 +31,32 @@ public static class CardRules
         return c.cardType == CardType.Defense;
     }
 
-    // ‘¦s“®i–hŒäƒtƒF[ƒY‚ğ‹²‚Ü‚È‚¢j
+    // ï¿½ï¿½ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½iï¿½hï¿½ï¿½tï¿½Fï¿½[ï¿½Yï¿½ï¿½ï¿½ï¿½ï¿½Ü‚È‚ï¿½ï¿½j
     public static bool IsImmediateAction(CardData c)
     {
         if (c == null) return false;
         return (c.cardType == CardType.Recovery || c.isRecovery);
+    }
+
+    // æ”»æ’ƒã‚«ãƒ¼ãƒ‰ã‹ã©ã†ã‹
+    public static bool IsAttackCard(CardData c)
+    {
+        if (c == null) return false;
+        return IsUsableInAttackPhase(c) && !IsUsableInDefensePhase(c);
+    }
+
+    // é˜²å¾¡ã‚«ãƒ¼ãƒ‰ã‹ã©ã†ã‹
+    public static bool IsDefenseCard(CardData c)
+    {
+        if (c == null) return false;
+        return IsUsableInDefensePhase(c) && !IsUsableInAttackPhase(c);
+    }
+
+    // å›å¾©ã‚«ãƒ¼ãƒ‰ã‹ã©ã†ã‹
+    public static bool IsRecoveryCard(CardData c)
+    {
+        if (c == null) return false;
+        return IsImmediateAction(c);
     }
 
     public static List<CardData> GetAttackChoices(List<CardData> hand) => hand.FindAll(IsUsableInAttackPhase);

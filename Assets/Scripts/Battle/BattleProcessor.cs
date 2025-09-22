@@ -1,14 +1,40 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
+using System.Linq;
 
+/// <summary>
+/// バトルの戦闘処理を担当するクラス
+/// 
+/// 【役割】
+/// - カードの使用処理（手札からの削除、UI破棄）
+/// - 戦闘解決（ダメージ計算、命中判定）
+/// - 即時効果の処理（回復、特殊効果等）
+/// - 戦闘結果の通知
+/// 
+/// 【責任範囲】
+/// - カード使用時の手札・UI管理
+/// - 攻撃・防御のダメージ計算
+/// - 命中率の判定
+/// - 戦闘アニメーション・効果音の制御
+/// 
+/// 【他のクラスとの関係】
+/// - BattleManager: 戦闘処理の実行要求
+/// - BattleUIManager: 戦闘結果の表示
+/// - CardDealer: カードUIの管理
+/// 
+/// 【注意事項】
+/// - 状態管理は行わない（BattleStateMachineに委譲）
+/// - UI表示は指示のみ（BattleUIManagerに委譲）
+/// - ビジネスロジックの判定は行わない
+/// </summary>
 public class BattleProcessor : MonoBehaviour
 {
     //========================
-    // �V���O���g��
+    // シングルトン管理
     //========================
 
-    public static BattleProcessor I; // �� �V���O���g���C���X�^���X
+    public static BattleProcessor I; // シングルトンインスタンス
     void Awake()
     {
         if (I != null && I != this) { Destroy(gameObject); return; }
@@ -16,178 +42,380 @@ public class BattleProcessor : MonoBehaviour
     }
 
     //========================
-    // References (set by Initialize)
+    // 依存関係（Initializeで設定）
     //========================
 
-    [Header("�o�g���X�e�[�^�X")]
+    [Header("ステータス参照")]
     public PlayerStatus playerStatus;
     public PlayerStatus enemyStatus;
 
-    [Header("���ʉ�")]
+    [Header("音響")]
     public AudioSource audioSource;
     public AudioClip damageSE;
 
-    private CardDealer cardDealer;�@ // UI���o�p�i�G�J�[�h�̈ꎞ�\���Ȃǁj
-    private BattleManager battleManager;
+    private CardDealer cardDealer; // UI管理用（カードの一時表示等）
 
-    // �U���V�[�P���X�����ʒm�iBattleManager���w�ǂ���j
-    public event System.Action OnAttackSequenceCompleted;
+    //========================
+    // 初期化
+    //========================
 
-    // �����������i�X�e�[�^�X��Q�Ƃ��󂯎��j
+    /// <summary>
+    /// 初期化処理
+    /// 
+    /// 【処理内容】
+    /// 各システムへの参照を設定し、戦闘処理の準備を行う
+    /// </summary>
+    /// <param name="playerStatus">プレイヤーのステータス</param>
+    /// <param name="enemyStatus">敵のステータス</param>
+    /// <param name="statusUI">ステータスUI</param>
+    /// <param name="cardDealer">カードディーラー</param>
     public void Initialize(
         PlayerStatus playerStatus,
         PlayerStatus enemyStatus,
-        BattleStatusUI statusUI, // ���g�p�F�݊����ێ��̂��ߎ󂯎�肾��
-        BattleManager battleManager,
-        CardDealer cardDealer,
-        Canvas uiCanvas = null) // ���g�p�FUI��BattleUIManager�ŊǗ�
+        BattleStatusUI statusUI,
+        CardDealer cardDealer)
     {
         this.playerStatus = playerStatus;
         this.enemyStatus = enemyStatus;
-        this.battleManager = battleManager;
         this.cardDealer = cardDealer;
     }
 
-
-    //====================================================
-    // Public: ���ʃ��[�X�P�[�X
-    //====================================================
-
-    // �J�[�h�g�p�����i��D����폜�E���o�E���ʓK�p�j���������ʂ��̂��́i�U��/�񕜁j�͊eResolve�n�ōs���B
-    public void UseCard(CardData card, List<CardData> hand)
-    {
-        if (card == null || hand == null || !hand.Contains(card))
-        {
-            Debug.LogWarning("[BattleProcessor] �J�[�h�������A�܂��͎�D�ɑ��݂��܂���");
-            return;
-        }
-
-        Debug.Log($"[BattleProcessor]�J�[�h�g�p: {card.cardName}");
-        DestroyCardUI(card);
-        hand.Remove(card);
-
-        hand.Remove(card);
-
-    }
-
-
-    // �������ʁi�h��𔺂�Ȃ���/���ȃo�t�ȂǍs�ׁj����������B�Ăяo������ UseCard ���ς܂��Ă���Ăԑz��B
-    public async Task ResolveImmediateEffectAsync(CardData card, PlayerStatus user, PlayerStatus opponent)
-    {
-        if (card == null || user == null) return;
-
-        // ��F�񕜌n�iCardData�̃t���O�ɏ]���j
-        if (card.cardType == CardType.Recovery || card.isRecovery)
-        {
-            int amt = Mathf.Max(0, card.recoveryAmount);
-
-            if (card.healsHP && amt > 0)
-            {
-                user.currentHP = Mathf.Min(user.currentHP + amt, user.maxHP);
-                // TODO: HP�񕜃|�b�v�A�b�v��SE�i�C�Ӂj
-            }
-            if (card.healsMP && amt > 0)
-            {
-                user.currentMP = Mathf.Min(user.currentMP + amt, user.maxMP);
-                // TODO: MP�񕜃|�b�v�A�b�v��SE�i�C�Ӂj
-            }
-            if (card.healsGP && amt > 0)
-            {
-                user.currentGP = Mathf.Min(user.currentGP + amt, user.maxGP);
-                // TODO: GP�񕜃|�b�v�A�b�v��SE�i�C�Ӂj
-            }
-        }
-
-        // �����Ōy�����o�̑҂����Ԃ���ꂽ���ꍇ
-        await Task.Yield(); // �����m�[�E�F�C�g�i�����A�j��������Ȃ� Task.Delay �ɍ����ւ��j
-    }
-
-
-    // �J�[�h���ʂ̓K�p�i���݂͍U���̂ݏ����j
-    private void ApplyCardEffect(CardData card)
-    {
-        switch (card.cardType)
-        {
-            case CardType.Attack:
-                {
-                    if (enemyStatus == null || enemyStatus.IsDead()) return;
-
-                    int roll = Random.Range(0, 100);
-                    if (roll >= card.hitRate)
-                    {
-                        Debug.Log($"[Battle] MISS {card.cardName}�i������ {card.hitRate}%, Roll: {roll}�j");
-                        return;
-                    }
-
-                    break;
-                }
-        }
-    }
-
+    //========================
+    // カード使用処理
+    //========================
 
     /// <summary>
-    /// �U�� vs �h�� �������i�������y�����_���[�W����Ԉُ큨UI�j�B
-    /// defenderHand �ɂ́g�h�䑤�̎�D�h��n���i�h��J�[�h�̏���/UI�j���Ɏg�p�j�B
+    /// カードを使用する（裏向きにする）
+    /// 
+    /// 【処理内容】
+    /// 1. カードを裏向きにする
+    /// 2. カードUIを無効化
+    /// 3. 使用ログの出力
+    /// 
+    /// 【使用例】
+    /// battleProcessor.UseCard(attackCard, playerHand);
     /// </summary>
-    public async Task ResolveCombatAsync(
-        CardData attackCard,
-        CardData defenseCard,
-        PlayerStatus attacker,
-        PlayerStatus defender,
-        List<CardData> defenderHand)
+    /// <param name="card">使用するカード</param>
+    /// <param name="hand">手札リスト</param>
+    public void UseCard(CardData card, List<CardData> hand)
     {
-        if (attackCard == null || attacker == null || defender == null)
+        if (card == null || hand == null)
         {
-            Debug.LogWarning("[BattleProcessor] ResolveCombatAsync: �������s��/����");
+            Debug.LogWarning("[BattleProcessor] カードまたは手札がnullです");
             return;
         }
 
-        // --- ��������i0-99��Roll�ŁAroll >= �������Ȃ�~�X�j---
-        int roll = Random.Range(0, 100);
-        if (roll >= Mathf.Clamp(attackCard.hitRate, 0, 100))
+        // カードを裏向きにする
+        if (card.cardUI != null)
         {
-            Debug.Log($"[Battle] MISS {attackCard.cardName}�i������ {attackCard.hitRate}%, Roll: {roll}�j");
-            BattleUIManager.I?.ShowMissPopup(defender);
-            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-            await Task.Delay(500);
-            OnAttackSequenceCompleted?.Invoke();
-            return;
+            card.cardUI.Setup(null, cardDealer?.CardBackSprite);
+            card.cardUI.button.interactable = false;
         }
 
-        // --- �h��J�[�h�̌y���l ---
-        int def = (defenseCard != null) ? Mathf.Max(0, defenseCard.defensePower) : 0;
-
-        // �h��J�[�h������i�h�䑤�̎�D����j
-        if (defenseCard != null && defenderHand != null && defenderHand.Contains(defenseCard))
-        {
-            DestroyCardUI(defenseCard);
-            defenderHand.Remove(defenseCard);
-        }
-
-        // --- �_���[�W�v�Z ---
-        int raw = Mathf.Max(0, attackCard.attackPower);
-        int final = Mathf.Max(0, raw - def);
-
-        // --- �_���[�W�K�p ---
-        defender.TakeDamage(final);
-        PlayDamageSE();
-        BattleUIManager.I?.ShowDamagePopup(final, defender);
-
-        // --- ��Ԉُ�i�U���J�[�h���̐ݒ�ɉ����āj---
-        TryApplyStatusEffect(attackCard, defender);
-
-        // --- UI�X�V�E�����ʒm ---
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-        OnAttackSequenceCompleted?.Invoke();
-
-        await Task.Delay(800); // �]�C
+        Debug.Log($"[BattleProcessor] カード使用: {card.cardName}");
     }
-           
 
-    //====================================================
-    // Private helpers
-    //====================================================
+    //========================
+    // 即時効果処理
+    //========================
 
+    /// <summary>
+    /// 即時効果を解決する
+    /// 
+    /// 【処理内容】
+    /// 1. 回復効果の適用
+    /// 2. 状態異常の適用
+    /// 3. 特殊効果の処理
+    /// 4. ステータス更新
+    /// 
+    /// 【使用例】
+    /// await battleProcessor.ResolveImmediateEffectAsync(healCard, playerStatus, enemyStatus);
+    /// </summary>
+    /// <param name="card">使用したカード</param>
+    /// <param name="user">使用者</param>
+    /// <param name="target">対象</param>
+    /// <returns>処理完了まで待機</returns>
+    public Task ResolveImmediateEffectAsync(CardData card, PlayerStatus user, PlayerStatus target)
+    {
+        if (card == null || user == null)
+        {
+            Debug.LogWarning("[BattleProcessor] カードまたは使用者がnullです");
+            return Task.CompletedTask;
+        }
+
+        Debug.Log($"[BattleProcessor] 即時効果解決開始: {card.cardName}");
+
+        // 回復効果の適用
+        if (card.recoveryAmount > 0)
+        {
+            ApplyRecovery(user, card.recoveryAmount);
+        }
+
+        // 状態異常の適用（将来的に実装）
+        if (card.canApplyStatusEffect && target != null)
+        {
+            // TODO: 状態異常処理を実装
+            Debug.Log($"[BattleProcessor] 状態異常適用予定: {card.cardName}");
+        }
+
+        // 特殊効果の処理（将来的に拡張）
+        ProcessSpecialEffects(card, user, target);
+
+        // ステータス更新
+        UpdateStatusDisplay();
+
+        Debug.Log($"[BattleProcessor] 即時効果解決完了: {card.cardName}");
+        return Task.CompletedTask;
+    }
+
+    //========================
+    // 戦闘解決処理
+    //========================
+
+    /// <summary>
+    /// 戦闘を解決する（複数カード対応）
+    /// 
+    /// 【処理内容】
+    /// 1. 攻撃力・防御力の計算
+    /// 2. 命中判定
+    /// 3. ダメージ計算（状態異常考慮）
+    /// 4. ダメージ適用
+    /// 5. 戦闘結果の表示
+    /// 
+    /// 【使用例】
+    /// await battleProcessor.ResolveCombatAsync(attackCards, defenseCard, attacker, defender, defenderHand);
+    /// </summary>
+    /// <param name="attackCards">攻撃カードリスト（複数選択対応）</param>
+    /// <param name="defenseCard">防御カード</param>
+    /// <param name="attacker">攻撃者</param>
+    /// <param name="defender">防御者</param>
+    /// <param name="defenderHand">防御者の手札</param>
+    /// <returns>戦闘解決完了まで待機</returns>
+    public async Task ResolveCombatAsync(List<CardData> attackCards, CardData defenseCard, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
+        {
+            Debug.LogWarning("[BattleProcessor] 戦闘解決に必要なパラメータがnullです");
+            return;
+        }
+
+        // 攻撃カード名をログ出力
+        string attackCardNames = string.Join(" + ", attackCards.Select(c => c.cardName));
+        Debug.Log($"[BattleProcessor] ===== 戦闘解決開始 =====");
+        Debug.Log($"[BattleProcessor] 攻撃: {attackCardNames}");
+        Debug.Log($"[BattleProcessor] 防御: {defenseCard?.cardName ?? "なし"}");
+        Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName} vs 防御者: {defender.DisplayName}");
+
+        // 攻撃力・防御力の計算
+        int attackPower = CalculateTotalAttackPower(attackCards, attacker);
+        int defensePower = CalculateTotalDefensePower(defenseCard, defender);
+        
+        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}");
+
+        // 命中判定（最初の攻撃カードを使用）
+        bool hit = CheckHit(attackCards[0], defenseCard);
+        if (!hit)
+        {
+            Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
+            PlayDamageSE();
+            // ミスポップアップを表示
+            BattleUIManager.I?.ShowMissPopup(defender);
+            return;
+        }
+
+        // ダメージ計算
+        int baseDamage = attackPower - defensePower;
+        int finalDamage = baseDamage; // 状態異常による修正は将来的に実装
+        finalDamage = Mathf.Max(0, finalDamage); // 負のダメージは0に
+
+        Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
+        Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
+        Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
+
+        // ⑤ダメージポップアップ前の0.5秒インターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleProcessor] ダメージポップアップ前、0.5秒待機");
+
+        // ダメージ適用
+        if (finalDamage > 0)
+        {
+            ApplyDamage(defender, finalDamage);
+            Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
+            // ダメージポップアップを表示
+            BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
+        }
+        else
+        {
+            Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
+            // ダメージ0の場合もポップアップを表示
+            BattleUIManager.I?.ShowDamagePopup(0, defender);
+        }
+
+        // 戦闘結果の表示
+        PlayDamageSE();
+        UpdateStatusDisplay();
+
+        // 戦闘終了判定
+        if (IsDead(attacker) || IsDead(defender))
+        {
+            Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
+        }
+
+        // ダメージポップアップ表示後のインターバル（相手の防御カード選択開始まで）
+        await Task.Delay(500);
+        Debug.Log("[BattleProcessor] ダメージポップアップ表示後、0.5秒待機");
+
+        Debug.Log($"[BattleProcessor] 戦闘解決完了");
+    }
+
+    //========================
+    // 内部処理メソッド
+    //========================
+
+    /// <summary>
+    /// 複数カードの合計攻撃力を計算する
+    /// </summary>
+    private int CalculateTotalAttackPower(List<CardData> attackCards, PlayerStatus attacker)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null) 
+        {
+            Debug.LogWarning("[BattleProcessor] 攻撃力計算: 無効なパラメータ");
+            return 0;
+        }
+        
+        Debug.Log($"[BattleProcessor] ===== 攻撃力計算開始 =====");
+        Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName}");
+        Debug.Log($"[BattleProcessor] 攻撃カード数: {attackCards.Count}");
+        
+        int totalAttackPower = 0;
+        for (int i = 0; i < attackCards.Count; i++)
+        {
+            var card = attackCards[i];
+            if (card != null)
+            {
+                totalAttackPower += card.attackPower;
+                Debug.Log($"[BattleProcessor] [{i+1}] {card.cardName}: ATK {card.attackPower} (累計: {totalAttackPower})");
+            }
+            else
+            {
+                Debug.LogWarning($"[BattleProcessor] [{i+1}] カードがnullです");
+            }
+        }
+        
+        Debug.Log($"[BattleProcessor] ===== 最終攻撃力: {totalAttackPower} =====");
+        return totalAttackPower;
+    }
+    
+    /// <summary>
+    /// 攻撃力を計算する（単一カード用）
+    /// </summary>
+    private int CalculateAttackPower(CardData card, PlayerStatus attacker)
+    {
+        if (card == null || attacker == null) return 0;
+        return card.attackPower;
+    }
+
+    /// <summary>
+    /// 防御力を計算する（複数カード対応）
+    /// </summary>
+    private int CalculateTotalDefensePower(CardData card, PlayerStatus defender)
+    {
+        if (card == null || defender == null) return 0;
+        return card.defensePower;
+    }
+
+    /// <summary>
+    /// 防御力を計算する（複数カード対応）
+    /// </summary>
+    private int CalculateTotalDefensePower(List<CardData> cards, PlayerStatus defender)
+    {
+        if (cards == null || cards.Count == 0 || defender == null) return 0;
+        
+        int totalDefense = 0;
+        foreach (var card in cards)
+        {
+            if (card != null)
+            {
+                totalDefense += card.defensePower;
+            }
+        }
+        
+        Debug.Log($"[BattleProcessor] ===== 防御力計算開始 =====");
+        Debug.Log($"[BattleProcessor] 防御者: {defender.DisplayName}");
+        Debug.Log($"[BattleProcessor] 防御カード数: {cards.Count}");
+        
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var card = cards[i];
+            if (card != null)
+            {
+                Debug.Log($"[BattleProcessor] [{i + 1}] {card.cardName}: DEF {card.defensePower} (累計: {totalDefense})");
+            }
+        }
+        
+        Debug.Log($"[BattleProcessor] ===== 最終防御力: {totalDefense} =====");
+        return totalDefense;
+    }
+
+    /// <summary>
+    /// 命中判定を行う
+    /// </summary>
+    private bool CheckHit(CardData attackCard, CardData defenseCard)
+    {
+        if (attackCard == null) return false;
+
+        int hitRate = attackCard.hitRate;
+        
+        // 現在のカードはすべて命中率100%のため、防御カードによる命中率減少は無効化
+        // if (defenseCard != null)
+        // {
+        //     // 防御カードがある場合は命中率を下げる（将来的に拡張）
+        //     hitRate = Mathf.Max(0, hitRate - 10);
+        // }
+
+        int roll = Random.Range(0, 100);
+        bool result = roll < hitRate;
+        
+        Debug.Log($"[BattleProcessor] 命中判定: 命中率{hitRate}%, 乱数{roll}, 結果{(result ? "命中" : "ミス")}");
+        return result;
+    }
+
+    /// <summary>
+    /// ダメージを適用する
+    /// </summary>
+    private void ApplyDamage(PlayerStatus target, int damage)
+    {
+        if (target == null) return;
+
+        target.currentHP = Mathf.Max(0, target.currentHP - damage);
+        Debug.Log($"[BattleProcessor] ダメージ適用: {damage} → {target.DisplayName} (HP: {target.currentHP})");
+    }
+
+    /// <summary>
+    /// 回復を適用する
+    /// </summary>
+    private void ApplyRecovery(PlayerStatus target, int amount)
+    {
+        if (target == null) return;
+
+        int oldHP = target.currentHP;
+        target.currentHP = Mathf.Min(target.maxHP, target.currentHP + amount);
+        int actualRecovery = target.currentHP - oldHP;
+
+        Debug.Log($"[BattleProcessor] 回復適用: {actualRecovery} → {target.DisplayName} (HP: {target.currentHP})");
+    }
+
+    /// <summary>
+    /// 特殊効果を処理する（将来的に拡張）
+    /// </summary>
+    private void ProcessSpecialEffects(CardData card, PlayerStatus user, PlayerStatus target)
+    {
+        // 将来的に特殊効果の処理をここに追加
+    }
+
+    /// <summary>
+    /// カードUIを破棄する
+    /// </summary>
     private void DestroyCardUI(CardData card)
     {
         if (card?.cardUI != null)
@@ -197,24 +425,112 @@ public class BattleProcessor : MonoBehaviour
         }
     }
 
-    private void PlayDamageSE()
+    /// <summary>
+    /// ステータス表示を更新する
+    /// </summary>
+    private void UpdateStatusDisplay()
     {
-        if (audioSource != null && damageSE != null)
-            audioSource.PlayOneShot(damageSE);
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
-    // �J�[�h�ɐݒ肳�ꂽ�m���ŏ�Ԉُ��t�^���鏈��
-    private void TryApplyStatusEffect(CardData card, PlayerStatus defender)
+    /// <summary>
+    /// ダメージSEを再生する
+    /// </summary>
+    private void PlayDamageSE()
     {
-        if (card == null || defender == null) return;
-        if (!card.canApplyStatusEffect || card.statusEffectChance <= 0) return;
-
-        int roll = Random.Range(0, 100);
-        if (roll < card.statusEffectChance && enemyStatus != null)
+        if (audioSource && damageSE)
         {
-            enemyStatus.AddStatusEffect(StatusEffectType.Weaken);
-            Debug.Log($"[BattleProcessor] ��Ԉُ�t�^�����i{card.statusEffectChance}% / Roll:{roll}�j");
+            audioSource.PlayOneShot(damageSE);
         }
     }
 
+    /// <summary>
+    /// 死亡判定
+    /// </summary>
+    private bool IsDead(PlayerStatus status)
+    {
+        return status != null && status.currentHP <= 0;
+    }
+
+    /// <summary>
+    /// 戦闘を解決する（複数防御カード対応）
+    /// </summary>
+    /// <param name="attackCards">攻撃カードリスト</param>
+    /// <param name="defenseCards">防御カードリスト</param>
+    /// <param name="attacker">攻撃者</param>
+    /// <param name="defender">防御者</param>
+    /// <param name="defenderHand">防御者の手札</param>
+    /// <returns>戦闘解決完了まで待機</returns>
+    public async Task ResolveCombatAsync(List<CardData> attackCards, List<CardData> defenseCards, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
+        {
+            Debug.LogWarning("[BattleProcessor] 戦闘解決に必要なパラメータがnullです");
+            return;
+        }
+
+        // 攻撃カード名をログ出力
+        string attackCardNames = string.Join(" + ", attackCards.Select(c => c.cardName));
+        string defenseCardNames = defenseCards != null && defenseCards.Count > 0 ? string.Join(" + ", defenseCards.Select(c => c.cardName)) : "なし";
+        Debug.Log($"[BattleProcessor] ===== 戦闘解決開始（複数防御カード対応） =====");
+        Debug.Log($"[BattleProcessor] 攻撃: {attackCardNames}");
+        Debug.Log($"[BattleProcessor] 防御: {defenseCardNames}");
+        Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName} vs 防御者: {defender.DisplayName}");
+
+        // 攻撃力・防御力の計算
+        int attackPower = CalculateTotalAttackPower(attackCards, attacker);
+        int defensePower = CalculateTotalDefensePower(defenseCards, defender);
+        
+        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}");
+
+        // 命中判定（最初の攻撃カードを使用）
+        bool hit = CheckHit(attackCards[0], defenseCards?.FirstOrDefault());
+        if (!hit)
+        {
+            Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
+            PlayDamageSE();
+            // ミスポップアップを表示
+            BattleUIManager.I?.ShowMissPopup(defender);
+            return;
+        }
+
+        // ダメージ計算
+        int baseDamage = attackPower - defensePower;
+        int finalDamage = baseDamage; // 状態異常による修正は将来的に実装
+        finalDamage = Mathf.Max(0, finalDamage); // 負のダメージは0に
+
+        Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
+        Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
+        Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
+
+        // ⑤ダメージポップアップ前の0.5秒インターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleProcessor] ダメージポップアップ前、0.5秒待機");
+
+        // ダメージ適用
+        if (finalDamage > 0)
+        {
+            ApplyDamage(defender, finalDamage);
+            Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
+            // ダメージポップアップを表示
+            BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
+        }
+        else
+        {
+            Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
+            // ダメージ0の場合もポップアップを表示
+            BattleUIManager.I?.ShowDamagePopup(0, defender);
+        }
+
+        // 戦闘結果の表示
+        PlayDamageSE();
+        UpdateStatusDisplay();
+
+        // ダメージポップアップ表示後のインターバル（相手の防御カード選択開始まで）
+        await Task.Delay(500);
+        Debug.Log("[BattleProcessor] ダメージポップアップ表示後、0.5秒待機");
+
+        Debug.Log($"[BattleProcessor] 戦闘解決完了");
+        return;
+    }
 }

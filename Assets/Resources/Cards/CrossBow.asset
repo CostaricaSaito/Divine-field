@@ -10,31 +10,33 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
-  m_Name: UltimateMirror
+  m_Name: CrossBow
   m_EditorClassIdentifier: 
-  cardName: "\u30A2\u30BF\u30C3\u30AF"
+  cardName: "\u30DC\u30A6"
   cardType: 0
-  cardImage: {fileID: 21300000, guid: f3ecedcdf9b57204e9de0f993539d072, type: 3}
-  description: "\u5168\u3066\u3092\u8DF3\u306D\u8FD4\u3059"
-  attackPower: 2
+  cardImage: {fileID: 21300000, guid: e33bfdc2d064d874099bb9685208af56, type: 3}
+  description: "\u3086\u307F\u3002"
+  attackPower: 5
   defensePower: 0
   element: 0
   hitRate: 100
   mpCost: 0
-  maxUses: 1
+  maxUses: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  usableInAttackPhase: 0
-  usableInDefensePhase: 1
+  usableInAttackPhase: 1
+  usableInDefensePhase: 0
   isPrimaryAttack: 0
   isAdditionalAttack: 1
   isPrimaryDefense: 0
   isCounterAttack: 0
   isRecovery: 0
-  isSpecialEffect: 1
+  isSpecialEffect: 0
   canBeUsedMultipleTimes: 0
-  canBeUsedWithPrimaryAttack: 0
-  canApplyStatusEffect: 1
+  canBeUsedWithPrimaryAttack: 1
+  canApplyStatusEffect: 0
   statusEffectChance: 0
+  elementIcon: {fileID: 21300000, guid: 99632894a2a6f9f409d3402853ee3d15, type: 3}
+  cardValue: 5

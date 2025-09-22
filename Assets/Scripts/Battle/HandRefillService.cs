@@ -3,10 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-// èD‚ÌuÁ”ï¨— ’u‚«¨TurnEnd‚ÅV‹K•â[v‚Ü‚Å‚ğˆêŠ‡ŠÇ—
+// è£å‘ãã®ã€Œä½¿ç”¨æ¸ˆã¿ã€ã‚«ãƒ¼ãƒ‰ã‚’TurnEndã§æ–°ã‚«ãƒ¼ãƒ‰ã«ç½®ãæ›ãˆã¾ã§ä¸€æ‹¬ç®¡ç†
 public class HandRefillService : MonoBehaviour
 {
-    [Header("ˆË‘¶i•K{j")]
+    [Header("ä¾å­˜é–¢ä¿‚ï¼ˆå¿…é ˆï¼‰")]
     [SerializeField] private Transform handPanel;
     [SerializeField] private GameObject cardUIPrefab;
     [SerializeField] private Sprite cardBackSprite;
@@ -14,14 +14,14 @@ public class HandRefillService : MonoBehaviour
     [SerializeField] private AudioClip cardDealSE;
     [SerializeField] private CardDealer cardDealer;
 
-    // — ƒXƒƒbƒgiƒvƒŒƒCƒ„[‚Ì‚İUI•\¦‚ ‚èj
+    // è£å‘ãã‚¹ãƒ­ãƒƒãƒˆï¼ˆãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã®UIè¡¨ç¤ºç”¨ï¼‰
     private struct BackSlot { public int index; public CardUI ui; }
     private readonly List<BackSlot> _playerBackSlotsThisTurn = new();
 
-    // “G‚ÍUI–³‚µ¨–‡”‚¾‚¯Šo‚¦‚Ä‚¨‚¯‚ÎOK
+    // æ•µã¯UIè¡¨ç¤ºã—ãªã„ã®ã§ä½¿ç”¨å›æ•°ã ã‘è¨˜éŒ²
     private int _enemyUsedCountThisTurn = 0;
 
-    // ---- İ’èiƒV[ƒ“‚©‚çƒAƒTƒCƒ“j ----
+    // ---- è¨­å®šï¼ˆã‚¤ãƒ³ã‚¹ãƒšã‚¯ã‚¿ãƒ¼ã‹ã‚‰ã€ã¾ãŸã¯æ‰‹å‹•ï¼‰ ----
     public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, AudioSource src, AudioClip deal, CardDealer dealer)
     {
         this.handPanel = handPanel;
@@ -35,32 +35,36 @@ public class HandRefillService : MonoBehaviour
     private void Awake()
     {
         if (cardDealer == null) Debug.LogError("[HandRefillService] cardDealer is null");
-        // cŠù‘¶ƒ`ƒFƒbƒN‚Í‚»‚Ì‚Ü‚Ü
+        // åˆæœŸåŒ–ãƒã‚§ãƒƒã‚¯ã¯ã“ã®ã¾ã¾
     }
 
-    // UŒ‚/‰ñ•œ‚È‚Ç‚Åg‚Á‚½ƒJ[ƒh‚ÌƒXƒƒbƒgˆÊ’u‚Éu— vƒJ[ƒh‚ğì¬
+    // æ”»æ’ƒ/å›å¾©ãªã©ã§ä½¿ã£ãŸã‚«ãƒ¼ãƒ‰ã®ã‚¹ãƒ­ãƒƒãƒˆä½ç½®ã‚’è¨˜éŒ²ï¼ˆæ—¢å­˜ã®UIã‚’å†åˆ©ç”¨ï¼‰
     public void RecordPlayerUseSlot(int siblingIndex)
     {
-        if (siblingIndex < 0 || handPanel == null || cardUIPrefab == null) return;
+        if (siblingIndex < 0 || handPanel == null) return;
 
-        var go = GameObject.Instantiate(cardUIPrefab, handPanel);
-        var ui = go.GetComponent<CardUI>();
-        if (ui != null)
+        // æ—¢å­˜ã®UIã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã‚’å–å¾—
+        var existingUI = handPanel.GetChild(siblingIndex)?.GetComponent<CardUI>();
+        if (existingUI != null)
         {
-            ui.Setup(null, cardBackSprite);   // ’†g‚ÍŒã‚Å·‚µ‘Ö‚¦‚é‚Ì‚Ånull‚Å‚àOK
-            ui.button.interactable = false;   // Ÿƒ^[ƒ“‚Ü‚Å‘€ì•s‰Â
+            // æ—¢å­˜ã®UIã‚’è£å‘ãã«ã™ã‚‹
+            existingUI.Setup(null, cardBackSprite);
+            existingUI.button.interactable = false;
+            _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = existingUI });
         }
-        go.transform.SetSiblingIndex(siblingIndex);
-        _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = ui });
+        else
+        {
+            Debug.LogWarning($"[HandRefillService] ã‚¹ãƒ­ãƒƒãƒˆ {siblingIndex} ã®UIãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
+        }
     }
 
-    // “G‚ªƒJ[ƒh‚ğg‚Á‚½‰ñ”‚ğ‹L˜^iUŒ‚/–hŒä‚Ç‚¿‚ç‚Å‚àj
+    // æ•µã®ã‚«ãƒ¼ãƒ‰ä½¿ç”¨å›æ•°ã‚’è¨˜éŒ²ï¼ˆæ”»æ’ƒ/é˜²å¾¡ã©ã¡ã‚‰ã§ã‚‚ï¼‰
     public void RecordEnemyUse() => _enemyUsedCountThisTurn++;
 
-    // TurnEndF— ƒXƒƒbƒg‚ğVƒJ[ƒh‚É·‚µ‘Ö‚¦i1–‡‚¸‚Â‰¹¨ƒŠƒr[ƒ‹jA“G‚à–‡”‚¾‚¯•â[
+    // TurnEndï¼šè£å‘ãã‚¹ãƒ­ãƒƒãƒˆã‚’æ–°ã‚«ãƒ¼ãƒ‰ã«ç½®ãæ›ãˆï¼ˆ1æšãšã¤é †æ¬¡å‡¦ç†ï¼‰ã€æ•µã¯æ‰‹æœ­ã«è¿½åŠ 
     public async Task RefillAtTurnEndAsync(List<CardData> playerHand, List<CardData> enemyHand, CancellationToken ct)
     {
-        // ƒvƒŒƒCƒ„[F— ¨VƒJ[ƒh
+        // ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ï¼šè£å‘ãã‚¹ãƒ­ãƒƒãƒˆã‚’æ–°ã‚«ãƒ¼ãƒ‰ã«ç½®ãæ›ãˆ
         for (int i = 0; i < _playerBackSlotsThisTurn.Count; i++)
         {
             if (ct.IsCancellationRequested) return;
@@ -69,37 +73,45 @@ public class HandRefillService : MonoBehaviour
             if (slot.ui == null) continue;
 
             var newCard = DrawRandomCard();
-            if (newCard == null) continue;
+            if (newCard == null)
+            {
+                // ã‚«ãƒ¼ãƒ‰ãŒå–å¾—ã§ããªã„å ´åˆã¯ã€ã‚¹ãƒ­ãƒƒãƒˆã‚’ç„¡åŠ¹åŒ–
+                Debug.LogWarning($"[HandRefillService] ã‚«ãƒ¼ãƒ‰ã®å–å¾—ã«å¤±æ•—ã—ã¾ã—ãŸ (ã‚¹ãƒ­ãƒƒãƒˆ {i})");
+                slot.ui.gameObject.SetActive(false);
+                continue;
+            }
 
+            // æ‰‹æœ­ã«æ–°ã—ã„ã‚«ãƒ¼ãƒ‰ã‚’è¿½åŠ 
             playerHand.Add(newCard);
 
-            slot.ui.Setup(newCard, cardBackSprite); // — ‚ÅƒZƒbƒg
-            slot.ui.button.interactable = false;
+            // è£å‘ãã®UIã«æ–°ã—ã„ã‚«ãƒ¼ãƒ‰ã‚’ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—
+            slot.ui.Setup(newCard, cardBackSprite);
+            slot.ui.button.interactable = true; // æ–°ã—ã„ã‚«ãƒ¼ãƒ‰ã¯ä½¿ç”¨å¯èƒ½ã«ã™ã‚‹
 
             await Task.Delay(150, ct);
             if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
 
-            slot.ui.Reveal();       // •\‚É‚·‚é
+            slot.ui.Reveal();       // è¡¨å‘ãã«
             newCard.cardUI = slot.ui;
 
             await Task.Delay(100, ct);
         }
         _playerBackSlotsThisTurn.Clear();
 
-        // “GFUI–³‚µ‚Å–‡”‚¾‚¯•â[
+        // æ•µï¼šUIè¡¨ç¤ºã›ãšã«æ‰‹æœ­ã«è¿½åŠ 
         for (int i = 0; i < _enemyUsedCountThisTurn; i++)
         {
             var c = DrawRandomCard();
             if (c != null) enemyHand.Add(c);
-            await Task.Delay(50, ct); // ‚Ù‚ñ‚Ì‹Í‚©‚ÈƒEƒFƒCƒg
+            await Task.Delay(50, ct); // çŸ­ã„é–“éš”ã®ã‚¨ãƒ•ã‚§ã‚¯ãƒˆ
         }
         _enemyUsedCountThisTurn = 0;
     }
 
-    // CardDealer ‚©‚çƒJ[ƒh‚ğ1–‡ˆø‚­iCardDealer‚É public API ‚ğ—pˆÓ‚µ‚Ä‚­‚¾‚³‚¢j
+    // CardDealer ã‹ã‚‰ã‚«ãƒ¼ãƒ‰ã‚’1æšå–å¾—ï¼ˆCardDealer ã® public API ã‚’ç”¨æ„ã—ã¦ãã ã•ã„ï¼‰
     private CardData DrawRandomCard()
     {
-        // ”½Ë‚Í‚â‚ß‚éBŒöŠJAPI‚ğ’¼ŒÄ‚Ñ
+        // æš«å®šå®Ÿè£…ã€‚CardDealer ã® public API ã‚’ç”¨æ„ã—ã¦ãã ã•ã„
         return (cardDealer != null) ? cardDealer.DrawRandomCard() : null;
     }
 }
