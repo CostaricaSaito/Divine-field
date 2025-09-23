@@ -214,6 +214,15 @@ public class BattleUIManager : MonoBehaviour
         SetUseButtonLabel("許可");
     }
 
+    /// <summary>
+    /// Intro時点でのカード表示（グレーアウトなし）
+    /// </summary>
+    public void SetIntroModeUI(List<CardData> hand)
+    {
+        SetUseButtonLabel("使用");
+        SetHandInteractivity(hand, true); // すべてのカードを有効にする（グレーアウトなし）
+    }
+
     //==== パブリックAPI：ポップアップ =====
     public void ShowDamagePopup(int amount, PlayerStatus target)
     {
@@ -234,6 +243,35 @@ public class BattleUIManager : MonoBehaviour
             Color displayColor = amount > 0 ? (hitPlayer ? Color.cyan : Color.red) : Color.yellow;
             damageText.Setup(displayText, displayColor);
             Debug.Log($"[BattleUIManager] ダメージポップアップ設定完了: {amount}ダメージ");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleUIManager] DamagePopupコンポーネントが見つかりません");
+        }
+    }
+
+    /// <summary>
+    /// 回復ポップアップを表示
+    /// </summary>
+    public void ShowHealPopup(int amount, string statType, PlayerStatus target)
+    {
+        Debug.Log($"[BattleUIManager] 回復ポップアップ表示: {statType}{amount}回復 対象 {target?.DisplayName ?? "null"}");
+        
+        var popup = SpawnPopupFor(target);
+        if (popup == null) 
+        {
+            Debug.LogWarning("[BattleUIManager] ポップアップの生成に失敗しました");
+            return;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
+            string displayText = $"{statType}{amount}回復！";
+            Color displayColor = Color.green; // 回復は緑色
+            damageText.Setup(displayText, displayColor);
+            Debug.Log($"[BattleUIManager] 回復ポップアップ設定完了: {statType}{amount}回復");
         }
         else
         {
@@ -268,7 +306,7 @@ public class BattleUIManager : MonoBehaviour
     private void CancelCardSelection(CardData card)
     {
         bool removed = cardSelectionManager.CancelCardSelection(card);
-        Debug.Log($"[BattleUIManager] カード選択をキャンセル: {card.cardName} (削除成功: {removed}, selectedCards数: {cardSelectionManager.GetSelectedCardCount()})");
+        Debug.Log($"[BattleUIManager] カード選択をキャンセル: {card.cardName} (削除成功: {removed}, selectedCards数: {cardSelectionManager.SelectedCardCount})");
         
         // 表示されているカードシートを削除
         RemoveCardFromDisplay(card);
