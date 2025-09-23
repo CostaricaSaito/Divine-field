@@ -148,7 +148,7 @@ public class BattleProcessor : MonoBehaviour
         // 回復効果の適用
         if (card.recoveryAmount > 0)
         {
-            ApplyRecovery(user, card.recoveryAmount);
+            ApplyRecovery(card, user);
         }
 
         // 状態異常の適用（将来的に実装）
@@ -394,15 +394,59 @@ public class BattleProcessor : MonoBehaviour
     /// <summary>
     /// 回復を適用する
     /// </summary>
-    private void ApplyRecovery(PlayerStatus target, int amount)
+    private void ApplyRecovery(CardData card, PlayerStatus target)
     {
-        if (target == null) return;
+        if (card == null || target == null) return;
 
-        int oldHP = target.currentHP;
-        target.currentHP = Mathf.Min(target.maxHP, target.currentHP + amount);
-        int actualRecovery = target.currentHP - oldHP;
+        int amount = card.recoveryAmount;
 
-        Debug.Log($"[BattleProcessor] 回復適用: {actualRecovery} → {target.DisplayName} (HP: {target.currentHP})");
+        // HP回復
+        if (card.healsHP)
+        {
+            int oldHP = target.currentHP;
+            target.currentHP = Mathf.Min(target.maxHP, target.currentHP + amount);
+            int actualRecovery = target.currentHP - oldHP;
+            
+            if (actualRecovery > 0)
+            {
+                Debug.Log($"[BattleProcessor] HP回復適用: {actualRecovery} → {target.DisplayName} (HP: {target.currentHP})");
+                BattleUIManager.I?.ShowHealPopup(actualRecovery, "HP", target);
+                // HP回復効果音を再生
+                SoundEffectPlayer.I?.Play("Assets/SE/power09(DFHP回復).wav");
+            }
+        }
+
+        // MP回復
+        if (card.healsMP)
+        {
+            int oldMP = target.currentMP;
+            target.currentMP = Mathf.Min(target.maxMP, target.currentMP + amount);
+            int actualRecovery = target.currentMP - oldMP;
+            
+            if (actualRecovery > 0)
+            {
+                Debug.Log($"[BattleProcessor] MP回復適用: {actualRecovery} → {target.DisplayName} (MP: {target.currentMP})");
+                BattleUIManager.I?.ShowHealPopup(actualRecovery, "MP", target);
+                // MP回復効果音を再生
+                SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す25.mp3");
+            }
+        }
+
+        // GP回復
+        if (card.healsGP)
+        {
+            int oldGP = target.currentGP;
+            target.currentGP = Mathf.Min(target.maxGP, target.currentGP + amount);
+            int actualRecovery = target.currentGP - oldGP;
+            
+            if (actualRecovery > 0)
+            {
+                Debug.Log($"[BattleProcessor] GP回復適用: {actualRecovery} → {target.DisplayName} (GP: {target.currentGP})");
+                BattleUIManager.I?.ShowHealPopup(actualRecovery, "GP", target);
+                // GP回復効果音を再生
+                SoundEffectPlayer.I?.Play("Assets/SE/レジスターで精算.mp3");
+            }
+        }
     }
 
     /// <summary>

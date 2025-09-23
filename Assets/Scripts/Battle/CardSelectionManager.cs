@@ -104,14 +104,6 @@ public class CardSelectionManager : MonoBehaviour
     public int SelectedCardCount => selectedCards.Count;
 
     /// <summary>
-    /// 選択されたカード数を取得（メソッド版）
-    /// </summary>
-    public int GetSelectedCardCount()
-    {
-        return selectedCards.Count;
-    }
-
-    /// <summary>
     /// 選択されたカードがないかチェック
     /// </summary>
     public bool HasNoSelectedCards()
@@ -142,25 +134,42 @@ public class CardSelectionManager : MonoBehaviour
             return false;
         }
 
-        // 回復カードと攻撃カードの競合チェック
-        if (newCard.isRecovery)
+        // カードの競合チェック
+        bool hasConflict = false;
+        if (newCard.isRecovery && HasRecoveryCard())
         {
-            if (HasAttackCards())
-            {
-                Debug.Log("[CardSelectionManager] 回復カードを選択するため、既存のカードをキャンセルします");
-                ClearAllSelections();
-            }
+            Debug.Log("[CardSelectionManager] 回復カードを選択するため、既存の回復カードをキャンセルします");
+            hasConflict = true;
         }
-        else if (IsAttackCard(newCard))
+        else if (newCard.isRecovery && HasAttackCards())
         {
-            if (HasRecoveryCard())
-            {
-                Debug.Log("[CardSelectionManager] 攻撃カードを選択するため、回復カードをキャンセルします");
-                CancelRecoveryCards();
-            }
+            Debug.Log("[CardSelectionManager] 回復カードを選択するため、既存のカードをキャンセルします");
+            hasConflict = true;
+        }
+        else if (IsAttackCard(newCard) && HasRecoveryCard())
+        {
+            Debug.Log("[CardSelectionManager] 攻撃カードを選択するため、既存のカードをキャンセルします");
+            hasConflict = true;
+        }
+        else if (newCard.isPrimaryAttack && HasPrimaryAttackCards())
+        {
+            Debug.Log("[CardSelectionManager] 通常攻撃カードを選択するため、既存の通常攻撃カードをキャンセルします");
+            hasConflict = true;
         }
 
-        Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} -> 競合なし");
+        // 競合がある場合は既存のカードをキャンセル
+        if (hasConflict)
+        {
+            ClearAllSelections();
+            // UI表示もクリアする
+            BattleUIManager.I?.HideAllCardDetails();
+            Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} -> 競合あり、既存カードをキャンセル");
+        }
+        else
+        {
+            Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} -> 競合なし");
+        }
+
         return true;
     }
 
@@ -173,11 +182,13 @@ public class CardSelectionManager : MonoBehaviour
         {
             if (IsAttackCard(card))
             {
-                Debug.Log($"[CardSelectionManager] HasAttackCards: true");
+                if (Debug.isDebugBuild)
+                    Debug.Log($"[CardSelectionManager] HasAttackCards: true");
                 return true;
             }
         }
-        Debug.Log($"[CardSelectionManager] HasAttackCards: false");
+        if (Debug.isDebugBuild)
+            Debug.Log($"[CardSelectionManager] HasAttackCards: false");
         return false;
     }
 
@@ -190,34 +201,41 @@ public class CardSelectionManager : MonoBehaviour
         {
             if (card.isRecovery)
             {
-                Debug.Log($"[CardSelectionManager] HasRecoveryCard: true");
+                if (Debug.isDebugBuild)
+                    Debug.Log($"[CardSelectionManager] HasRecoveryCard: true");
                 return true;
             }
         }
-        Debug.Log($"[CardSelectionManager] HasRecoveryCard: false");
+        if (Debug.isDebugBuild)
+            Debug.Log($"[CardSelectionManager] HasRecoveryCard: false");
         return false;
     }
 
     /// <summary>
-    /// 回復カードをキャンセル
+    /// 通常攻撃カードが選択されているかチェック
     /// </summary>
-    private void CancelRecoveryCards()
+    private bool HasPrimaryAttackCards()
     {
-        for (int i = selectedCards.Count - 1; i >= 0; i--)
+        foreach (var card in selectedCards)
         {
-            if (selectedCards[i].isRecovery)
+            if (card.isPrimaryAttack)
             {
-                selectedCards.RemoveAt(i);
+                if (Debug.isDebugBuild)
+                    Debug.Log($"[CardSelectionManager] HasPrimaryAttackCards: true");
+                return true;
             }
         }
+        if (Debug.isDebugBuild)
+            Debug.Log($"[CardSelectionManager] HasPrimaryAttackCards: false");
+        return false;
     }
 
     /// <summary>
-    /// 攻撃カードかどうかを判定
+    /// 攻撃カードかどうかを判定（回復カードも含む）
     /// </summary>
     private bool IsAttackCard(CardData card)
     {
-        return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack;
+        return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
     }
 
     /// <summary>

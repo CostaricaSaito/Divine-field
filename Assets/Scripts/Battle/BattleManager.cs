@@ -33,6 +33,13 @@ public class BattleManager : MonoBehaviour
 {
     public static BattleManager I;
 
+    // グレーアウト制御フラグ
+    private bool shouldGrayOutCards = false;
+    
+    // 演出中のカードリスト（TotalATKDEF表示用）
+    private List<CardData> currentSequenceCards = new List<CardData>();
+    private string currentSequenceType = "";
+
     [Header("バトルUI")]
     public BattleStatusUI statusUI;
     public CutInController cutInController;
@@ -190,6 +197,10 @@ public class BattleManager : MonoBehaviour
             cutInController.PlayCutIn();
             yield return new WaitUntil(() => done);
         }
+        
+        // Intro時点ではカードをグレーアウトしない
+        BattleUIManager.I?.SetIntroModeUI(playerHand);
+        
         SetGameState(GameState.TurnStart);
     }
 
@@ -210,6 +221,12 @@ public class BattleManager : MonoBehaviour
         // TotalATKDEFも非表示にする
         UpdateTotalATKDEFDisplay();
 
+        // TurnStart時点ではグレーアウトしない
+        BattleUIManager.I?.SetIntroModeUI(playerHand);
+        
+        // グレーアウト制御フラグを設定（AttackSelectではグレーアウトを有効にする）
+        shouldGrayOutCards = true;
+
         if (CurrentTurnOwner == PlayerType.Player)
         {
             SetGameState(GameState.AttackSelect);
@@ -224,6 +241,7 @@ public class BattleManager : MonoBehaviour
     {
         if (Attacker == PlayerType.Player)
         {
+            // ターンプレイヤー（攻撃側）の処理
             var attackables = CardRules.GetAttackChoices(playerHand);
             if (attackables.Count == 0 || attackables.TrueForAll(c => c.cardType == CardType.Magic))
             {
@@ -232,7 +250,31 @@ public class BattleManager : MonoBehaviour
             else
             {
                 BattleUIManager.I?.SetUseButtonLabel("使用");
-                BattleUIManager.I?.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
+                
+                // グレーアウト制御フラグをチェック
+                if (shouldGrayOutCards)
+                {
+                    BattleUIManager.I?.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
+                }
+                else
+                {
+                    BattleUIManager.I?.SetIntroModeUI(playerHand);
+                }
+            }
+        }
+        else
+        {
+            // 非ターンプレイヤー（防御側）の処理
+            BattleUIManager.I?.SetUseButtonLabel("使用");
+            
+            // グレーアウト制御フラグをチェック
+            if (shouldGrayOutCards)
+            {
+                BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
+            }
+            else
+            {
+                BattleUIManager.I?.SetIntroModeUI(playerHand);
             }
         }
     }
@@ -367,6 +409,9 @@ public class BattleManager : MonoBehaviour
         await Task.Delay(500);
         Debug.Log("[BattleManager] 相手の攻撃ターン前、0.5秒待機");
 
+        // 2ターン目以降はグレーアウトを有効にする
+        shouldGrayOutCards = true;
+
         ToggleTurnOwner();
         SetGameState(GameState.TurnStart);
     }
@@ -466,6 +511,10 @@ public class BattleManager : MonoBehaviour
 
     private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex)
     {
+        // カード表示後、ポップアップ表示前に0.5秒のインターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleManager] 回復カード表示後、0.5秒インターバル完了");
+
         await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
 
         if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
@@ -476,6 +525,11 @@ public class BattleManager : MonoBehaviour
         // TotalATKDEF表示を更新
         UpdateTotalATKDEFDisplay();
 
+        // ポップアップ表示後、ターン終了前に0.5秒のインターバル
+        await Task.Delay(500);
+        Debug.Log("[BattleManager] 回復ポップアップ表示後、0.5秒インターバル完了");
+
+        // 回復カード（即時効果）の場合は防御フェーズをスキップして直接ターン終了
         SetGameState(GameState.TurnEnd);
     }
 
@@ -621,6 +675,10 @@ public class BattleManager : MonoBehaviour
     {
         Debug.Log($"[BattleManager] {cardType}カード演出開始: {selectedCards.Count}枚");
 
+        // 演出中のカードリストを初期化
+        currentSequenceCards.Clear();
+        currentSequenceType = cardType;
+
         // ①表示ゾーンをクリア
         BattleUIManager.I?.ClearAllSelections();
         BattleUIManager.I?.HideAllCardDetails();
@@ -636,15 +694,19 @@ public class BattleManager : MonoBehaviour
             var card = selectedCards[i];
             BattleUIManager.I?.ShowCardDetail(card, side);
             
+            // 演出中のカードリストに追加
+            currentSequenceCards.Add(card);
+            
+            // TotalATKDEF表示を更新
+            UpdateTotalATKDEFDisplay();
+            
             // カード表示効果音を再生（Addressables使用）
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             
             Debug.Log($"[BattleManager] {cardType}カード表示: {card.cardName} ({i + 1}/{selectedCards.Count})");
             
-            if (i < selectedCards.Count - 1) // 最後のカード以外は待機
-            {
-                await Task.Delay(500);
-            }
+            // すべてのカード表示後に0.5秒待機（最後のカードも選択枠を表示）
+            await Task.Delay(500);
         }
 
         // カードの処理
@@ -659,8 +721,8 @@ public class BattleManager : MonoBehaviour
         var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
         var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
 
-        // 攻撃カードを取得（複数選択対応）
-        List<CardData> attackCards = GetAttackCardsForCombat();
+        // 攻撃カードを取得（selectedCardsパラメータを直接使用）
+        List<CardData> attackCards = GetAttackCardsForCombat(selectedCards);
 
         // 戦闘解決を呼び出し
         if (cardType == "攻撃")
@@ -676,23 +738,45 @@ public class BattleManager : MonoBehaviour
 
         if (_phaseCts.Token.IsCancellationRequested) return;
 
+        // ダメージ処理完了後、演出中のカードリストをクリア
+        currentSequenceCards.Clear();
+        currentSequenceType = "";
+        UpdateTotalATKDEFDisplay();
+
         // カード確定後の処理
         SetGameState(GameState.TurnEnd);
     }
 
-    private List<CardData> GetAttackCardsForCombat()
+    private List<CardData> GetAttackCardsForCombat(List<CardData> selectedCards = null)
     {
         if (Attacker == PlayerType.Player)
         {
             Debug.Log("[BattleManager] プレイヤーの攻撃カードを取得中...");
-            var attackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
-            if (attackCards.Count == 0 && currentAttackCard != null)
+            
+            // selectedCardsパラメータが提供されている場合はそれを使用
+            if (selectedCards != null)
+            {
+                var attackCards = new List<CardData>();
+                foreach (var card in selectedCards)
+                {
+                    if (card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack)
+                    {
+                        attackCards.Add(card);
+                    }
+                }
+                Debug.Log($"[BattleManager] selectedCardsから取得した攻撃カード数: {attackCards.Count}");
+                return attackCards;
+            }
+            
+            // フォールバック: UIから取得
+            var uiAttackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
+            if (uiAttackCards.Count == 0 && currentAttackCard != null)
             {
                 Debug.Log($"[BattleManager] フォールバック: 単一カード {currentAttackCard.cardName} を使用");
-                attackCards = new List<CardData> { currentAttackCard };
+                uiAttackCards = new List<CardData> { currentAttackCard };
             }
-            Debug.Log($"[BattleManager] 最終的な攻撃カード数: {attackCards.Count}");
-            return attackCards;
+            Debug.Log($"[BattleManager] UIから取得した攻撃カード数: {uiAttackCards.Count}");
+            return uiAttackCards;
         }
         else
         {
@@ -748,6 +832,23 @@ public class BattleManager : MonoBehaviour
 
     private bool ShouldHideTotalATKDEF()
     {
+        // 演出中のカードがある場合
+        if (currentSequenceCards.Count > 0)
+        {
+            if (currentSequenceType == "攻撃")
+            {
+                int totalAttack = CalculateTotalAttackPower(currentSequenceCards);
+                if (totalAttack <= 0) return true;
+                return false;
+            }
+            else if (currentSequenceType == "防御")
+            {
+                int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
+                if (totalDefense <= 0) return true;
+                return false;
+            }
+        }
+
         // 攻撃フェーズの場合
         if (CurrentState == GameState.AttackSelect)
         {
@@ -801,6 +902,21 @@ public class BattleManager : MonoBehaviour
 
     private string GetTotalATKDEFText()
     {
+        // 演出中のカードがある場合
+        if (currentSequenceCards.Count > 0)
+        {
+            if (currentSequenceType == "攻撃")
+            {
+                int totalAttack = CalculateTotalAttackPower(currentSequenceCards);
+                return $"ATK {totalAttack}";
+            }
+            else if (currentSequenceType == "防御")
+            {
+                int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
+                return $"DEF {totalDefense}";
+            }
+        }
+
         if (CurrentState == GameState.AttackSelect)
         {
             // 攻撃フェーズ：選択中の攻撃カードの合計攻撃力を計算

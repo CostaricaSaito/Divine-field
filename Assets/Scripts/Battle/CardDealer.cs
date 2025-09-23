@@ -138,9 +138,6 @@ public class CardDealer : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         foreach (var ui in activeCardUIs) ui?.Reveal();
         if (audioSource && cardRevealSE) audioSource.PlayOneShot(cardRevealSE);
-
-        // （任意）AttackSelect のオーバーレイを無効化
-        BattleUIManager.I?.RefreshAttackInteractivity(BattleManager.I.playerHand, CardRules.GetAttackChoices(BattleManager.I.playerHand));
     }
 
     //====================================================
