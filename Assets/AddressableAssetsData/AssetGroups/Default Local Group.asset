@@ -17,6 +17,16 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: d84574dd1811ed642871682b9e9b708f
   m_SerializeEntries:
+  - m_GUID: 2b87382277447574da47aa6b4e9c957a
+    m_Address: "Assets/SE/\u30EC\u30B8\u30B9\u30BF\u30FC\u3067\u7CBE\u7B97.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 354770bc8a7ab9244a51464e421ef9cf
+    m_Address: "Assets/SE/power09(DFHP\u56DE\u5FA9).wav"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 55f0d3ecb812e0644be5318bf88edb3c
     m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305913.mp3"
     m_ReadOnly: 0
@@ -34,6 +44,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c03e4fa71424b114b83c47a4dde8272a
     m_Address: "Assets/Images/03_\u30AB\u30FC\u30C9/4.png"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2ef6f1ea546778489985dacf71a551e
+    m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305925.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
