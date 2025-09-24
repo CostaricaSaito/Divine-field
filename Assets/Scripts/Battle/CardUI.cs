@@ -85,4 +85,9 @@ public class CardUI : MonoBehaviour
     /// 現在ハイライトされているかどうか
     /// </summary>
     public bool IsHighlighted => isHighlighted;
+
+    /// <summary>
+    /// カードが裏向きかどうか
+    /// </summary>
+    public bool IsFaceDown() => !isFaceUp;
 }

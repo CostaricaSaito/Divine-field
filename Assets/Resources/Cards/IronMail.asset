@@ -39,4 +39,4 @@ MonoBehaviour:
   canApplyStatusEffect: 0
   statusEffectChance: 0
   elementIcon: {fileID: 0}
-  cardValue: 0
+  cardValue: 4

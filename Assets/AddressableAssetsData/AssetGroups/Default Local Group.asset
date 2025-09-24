@@ -27,6 +27,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 407d317f600f7734fbc9fbb6e3c25db1
+    m_Address: "UI/\u304A\u91D1"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 55f0d3ecb812e0644be5318bf88edb3c
     m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305913.mp3"
     m_ReadOnly: 0
@@ -47,8 +52,23 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1f261739591e40468c7409decae4b08
+    m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u30593.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c2ef6f1ea546778489985dacf71a551e
     m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305925.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3a089e442521454bbf222c0e453e199
+    m_Address: "Assets/SE/\u300C\u304A\u91D1\u3092\u5165\u308C\u3066\u306D\u300D.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d5e70e458340e8a4cad5ff97fc345fc6
+    m_Address: "Assets/SE/\u30AD\u30E3\u30F3\u30BB\u30EB4.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

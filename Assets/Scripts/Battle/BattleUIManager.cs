@@ -62,9 +62,24 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private CardLayoutManager cardLayoutManager;
     [SerializeField] private CardSelectionManager cardSelectionManager;
 
+    [Header("経済アクション")]
+    [SerializeField] private Button buyButton;
+    [SerializeField] private Button sellButton;
+    [SerializeField] private Button exchangeButton;
+    [SerializeField] private TMP_Text buyCooldownText;
+    [SerializeField] private TMP_Text sellCooldownText;
+    [SerializeField] private TMP_Text exchangeCooldownText;
+
+    [Header("確認ポップアップ")]
+    [SerializeField] private GameObject confirmPopupPrefab;
+    [SerializeField] private Canvas popupCanvas;
+
     // プライベート変数
     private readonly List<GameObject> activeCardSheets = new();
     private enum UseButtonMode { Use, Allow, Pray }
+    
+    // ポップアップ状態管理
+    private bool isBuyPopupOpen = false;
 
     //==== 初期化 =====
     void Awake()
@@ -84,7 +99,13 @@ public class BattleUIManager : MonoBehaviour
     //==== パブリックAPI：ステータス表示 =====
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
     {
-        statusUI?.UpdateStatus(player, enemy);
+        // 手札の枚数を取得
+        int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
+        int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
+        
+        Debug.Log($"[BattleUIManager] 手札枚数 - プレイヤー: {playerHandCount}, 敵: {enemyHandCount}");
+        
+        statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount);
     }
 
     //==== パブリックAPI：カード詳細表示 =====
@@ -536,5 +557,203 @@ public class BattleUIManager : MonoBehaviour
         {
             Debug.LogError("[BattleUIManager] すべての表示方法が利用できません。cardSheetPrefab / panel が設定されていない、CardDisplayController も見つかりません。");
         }
+    }
+
+    //==== 経済アクション =====
+    
+    /// <summary>
+    /// 経済アクションボタンの状態を更新
+    /// </summary>
+    public void UpdateEconomicActionButtons()
+    {
+        if (EconomicAction.I == null) return;
+
+        // 買うボタン
+        if (buyButton != null)
+        {
+            bool canBuy = EconomicAction.I.CanBuy();
+            buyButton.interactable = canBuy;
+            if (buyCooldownText != null)
+                buyCooldownText.text = canBuy ? "" : EconomicAction.I.GetBuyCooldown().ToString();
+            buyButton.image.color = canBuy ? Color.white : Color.gray;
+        }
+
+        // 売るボタン
+        if (sellButton != null)
+        {
+            bool canSell = EconomicAction.I.CanSell();
+            sellButton.interactable = canSell;
+            if (sellCooldownText != null)
+                sellCooldownText.text = canSell ? "" : EconomicAction.I.GetSellCooldown().ToString();
+            sellButton.image.color = canSell ? Color.white : Color.gray;
+        }
+
+        // 両替ボタン
+        if (exchangeButton != null)
+        {
+            bool canExchange = EconomicAction.I.CanExchange();
+            exchangeButton.interactable = canExchange;
+            if (exchangeCooldownText != null)
+                exchangeCooldownText.text = canExchange ? "" : EconomicAction.I.GetExchangeCooldown().ToString();
+            exchangeButton.image.color = canExchange ? Color.white : Color.gray;
+        }
+
+        Debug.Log($"[BattleUIManager] 経済アクションボタン更新完了");
+    }
+
+    /// <summary>
+    /// 買うボタンが押された時の処理
+    /// </summary>
+    public void OnBuyButtonPressed()
+    {
+        if (EconomicAction.I == null || !EconomicAction.I.CanBuy())
+        {
+            Debug.LogWarning("[BattleUIManager] 買うアクションは使用できません");
+            return;
+        }
+
+        // ポップアップが既に開いている場合は無視
+        if (isBuyPopupOpen)
+        {
+            Debug.Log("[BattleUIManager] 買うポップアップが既に開いているため、無視します");
+            return;
+        }
+
+        // 既にカードが選択されている場合はキャンセル
+        if (cardSelectionManager != null && cardSelectionManager.SelectedCardCount > 0)
+        {
+            Debug.Log("[BattleUIManager] 既にカードが選択されているため、買うアクションをキャンセルします");
+            cardSelectionManager.ClearAllSelections();
+            BattleUIManager.I?.HideAllCardDetails();
+            return;
+        }
+
+        // 購入ボタン押下時の音効果
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
+
+        Debug.Log("[BattleUIManager] 買うアクション確認ポップアップ表示");
+        ShowBuyConfirmPopup();
+    }
+
+    /// <summary>
+    /// 売るボタンが押された時の処理
+    /// </summary>
+    public void OnSellButtonPressed()
+    {
+        if (EconomicAction.I == null || !EconomicAction.I.CanSell())
+        {
+            Debug.LogWarning("[BattleUIManager] 売るアクションは使用できません");
+            return;
+        }
+
+        Debug.Log("[BattleUIManager] 売るアクション実行");
+        BattleManager.I?.ExecuteSellAction();
+    }
+
+    /// <summary>
+    /// 両替ボタンが押された時の処理
+    /// </summary>
+    public void OnExchangeButtonPressed()
+    {
+        if (EconomicAction.I == null || !EconomicAction.I.CanExchange())
+        {
+            Debug.LogWarning("[BattleUIManager] 両替アクションは使用できません");
+            return;
+        }
+
+        Debug.Log("[BattleUIManager] 両替アクション実行");
+        BattleManager.I?.ExecuteExchangeAction();
+    }
+
+    /// <summary>
+    /// 買うアクションの確認ポップアップを表示
+    /// </summary>
+    private void ShowBuyConfirmPopup()
+    {
+        if (confirmPopupPrefab == null)
+        {
+            Debug.LogError("[BattleUIManager] 確認ポップアップのPrefabが設定されていません");
+            return;
+        }
+
+        var canvas = popupCanvas != null ? popupCanvas : uiCanvas;
+        if (canvas == null)
+        {
+            Debug.LogError("[BattleUIManager] ポップアップ用のCanvasが設定されていません");
+            return;
+        }
+
+        // ポップアップを生成
+        var popup = Instantiate(confirmPopupPrefab, canvas.transform);
+        popup.name = "BuyConfirmPopup";
+
+        // ポップアップのコンポーネントを取得
+        var confirmPopup = popup.GetComponent<BuyConfirmPopup>();
+        if (confirmPopup == null)
+        {
+            Debug.LogError("[BattleUIManager] BuyConfirmPopupコンポーネントが見つかりません");
+            Destroy(popup);
+            return;
+        }
+
+        // ポップアップ状態を設定
+        isBuyPopupOpen = true;
+
+        // コールバックを設定
+        confirmPopup.Setup(
+            onConfirm: () => {
+                Debug.Log("[BattleUIManager] 買うアクション承諾");
+                isBuyPopupOpen = false; // ポップアップ状態をリセット
+                BattleManager.I?.ExecuteBuyAction();
+                Destroy(popup);
+            },
+            onCancel: () => {
+                Debug.Log("[BattleUIManager] 買うアクションキャンセル");
+                isBuyPopupOpen = false; // ポップアップ状態をリセット
+                Destroy(popup);
+            }
+        );
+
+        Debug.Log("[BattleUIManager] 買うアクション確認ポップアップ表示完了");
+    }
+
+    /// <summary>
+    /// プレイヤーのカード表示エリアの中心位置を取得
+    /// </summary>
+    public Vector3 GetPlayerCardDisplayCenter()
+    {
+        if (playerCardDisplayPanel != null)
+        {
+            return playerCardDisplayPanel.position;
+        }
+        return Vector3.zero;
+    }
+
+    /// <summary>
+    /// 敵のカード表示エリアの中心位置を取得
+    /// </summary>
+    public Vector3 GetEnemyCardDisplayCenter()
+    {
+        if (enemyCardDisplayPanel != null)
+        {
+            return enemyCardDisplayPanel.position;
+        }
+        return Vector3.zero;
+    }
+
+    /// <summary>
+    /// プレイヤーのカード表示エリアのTransformを取得
+    /// </summary>
+    public Transform GetPlayerCardDisplayPanel()
+    {
+        return playerCardDisplayPanel;
+    }
+
+    /// <summary>
+    /// 敵のカード表示エリアのTransformを取得
+    /// </summary>
+    public Transform GetEnemyCardDisplayPanel()
+    {
+        return enemyCardDisplayPanel;
     }
 }

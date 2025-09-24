@@ -128,6 +128,12 @@ public class CardDealer : MonoBehaviour
             var ui = CreateCardUIForHand(playerCardInstance);
             if (ui != null) activeCardUIs.Add(ui);
 
+            // 手札枚数をリアルタイム更新
+            BattleUIManager.I?.UpdateStatus(
+                BattleManager.I?.GetPlayerStatus(), 
+                BattleManager.I?.GetEnemyStatus()
+            );
+
             // SE再生
             if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
 
@@ -206,7 +212,7 @@ public class CardDealer : MonoBehaviour
     /// </summary>
     /// <param name="instance">カードインスタンス</param>
     /// <returns>生成されたCardUI</returns>
-    private CardUI CreateCardUIForHand(CardData instance)
+    public CardUI CreateCardUIForHand(CardData instance)
     {
         if (instance == null || cardUIPrefab == null || handPanel == null)
         {
