@@ -60,6 +60,7 @@ public class BattleManager : MonoBehaviour
 
     [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
+    public CardPurchaseAnimation cardPurchaseAnimation;
     
     [Header("TotalATKDEF表示")]
     public GameObject totalATKDEFButton; // TotalATKDEFボタン（デフォルト非表示）
@@ -73,6 +74,9 @@ public class BattleManager : MonoBehaviour
     private PlayerStatus playerStatus, enemyStatus;
     public List<CardData> playerHand = new();
     public List<CardData> cpuHand = new();
+    
+    // 経済アクション用
+    private CardData targetBuyCard; // 購入対象カード
 
     public GameState CurrentState { get; private set; } = GameState.Intro;
     public PlayerType CurrentTurnOwner { get; private set; } = PlayerType.Player;
@@ -127,8 +131,6 @@ public class BattleManager : MonoBehaviour
         if (handRefill != null)
             handRefill.Initialize(handPanel, cardUIPrefab, cardBackSprite, audioSource, cardDealSE, cardDealer);
 
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-        
         // ゲーム開始時はTotalATKDEFを非表示にする
         UpdateTotalATKDEFDisplay();
         
@@ -189,6 +191,9 @@ public class BattleManager : MonoBehaviour
     {
         yield return StartCoroutine(cardDealer.DealCards(playerHand, cpuHand, 10));
 
+        // 手札が配られた後にステータスを更新
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
         yield return new WaitForSeconds(cutInDelay);
         bool done = false;
         if (cutInController != null)
@@ -215,6 +220,9 @@ public class BattleManager : MonoBehaviour
 
         if (CurrentTurnOwner == PlayerType.Player) playerStatus.OnTurnStart();
         else enemyStatus.OnTurnStart();
+
+        // 経済アクションのクールダウンを更新
+        EconomicAction.I?.OnTurnStart();
 
         // ターン開始時にカード詳細表示を非表示
         BattleUIManager.I?.HideAllCardDetails();
@@ -260,6 +268,9 @@ public class BattleManager : MonoBehaviour
                 {
                     BattleUIManager.I?.SetIntroModeUI(playerHand);
                 }
+                
+                // 経済アクションボタンの状態を更新
+                BattleUIManager.I?.UpdateEconomicActionButtons();
             }
         }
         else
@@ -291,10 +302,9 @@ public class BattleManager : MonoBehaviour
             // 敵の防御選択（AI）
             selectedDefenseCard = enemyAI.SelectDefenseCard(cpuHand);
 
-            // 相手の防御カード選択完了時の効果音
+            // 相手の防御カード選択完了
             if (selectedDefenseCard != null)
             {
-                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
                 Debug.Log($"[BattleManager] 相手の防御カード選択完了: {selectedDefenseCard.cardName}");
             }
 
@@ -321,6 +331,15 @@ public class BattleManager : MonoBehaviour
         {
             Debug.LogWarning("攻撃カードが設定されていません");
             SetGameState(GameState.AttackSelect);
+            return;
+        }
+
+        // 経済アクションの場合は特別処理
+        if (CurrentState == GameState.DefenseConfirm && currentAttackCard.cardName == "経済アクション")
+        {
+            Debug.Log("[BattleManager] 経済アクションの防御フェーズ処理");
+            await ProcessEconomicAction();
+            SetGameState(GameState.TurnEnd);
             return;
         }
 
@@ -404,6 +423,12 @@ public class BattleManager : MonoBehaviour
         }
 
         if (_phaseCts.Token.IsCancellationRequested) return;
+
+        // 経済アクション後のドロー処理
+        await ProcessEconomicActionDrawAsync();
+
+        // 裏向きカードを表向きにする処理
+        await RevealFaceDownCardsAsync();
 
         // ⑥相手の攻撃ターン前の0.5秒インターバル
         await Task.Delay(500);
@@ -644,6 +669,9 @@ public class BattleManager : MonoBehaviour
             handRefill?.RecordPlayerUseSlot(slotIndex);
             Debug.Log($"[BattleManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
         }
+        
+        // カード使用後にステータス更新
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
     /// <summary>
@@ -665,6 +693,9 @@ public class BattleManager : MonoBehaviour
         battleProcessor.UseCard(card, playerHand);
         handRefill?.RecordPlayerUseSlot(slotIndex);
         Debug.Log($"[BattleManager] 単一{cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
+        
+        // カード使用後にステータス更新
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
     /// <summary>
@@ -989,6 +1020,251 @@ public class BattleManager : MonoBehaviour
         }
 
         return enemyCandidates[Random.Range(0, enemyCandidates.Count)];
+    }
+
+    //==== 経済アクション =====
+    
+    /// <summary>
+    /// 「買う」アクションを実行
+    /// </summary>
+    public async void ExecuteBuyAction()
+    {
+        if (CurrentState != GameState.AttackSelect)
+        {
+            Debug.LogWarning("[BattleManager] 攻撃フェーズ以外では買うアクションは使用できません");
+            return;
+        }
+
+        if (EconomicAction.I == null || !EconomicAction.I.CanBuy())
+        {
+            Debug.LogWarning("[BattleManager] 買うアクションはクールダウン中です");
+            return;
+        }
+
+        Debug.Log("[BattleManager] 買うアクション開始");
+
+        // 相手の手札からランダムに1枚選択
+        if (cpuHand.Count == 0)
+        {
+            Debug.LogWarning("[BattleManager] 相手の手札が空のため、買うアクションは実行できません");
+            return;
+        }
+
+        targetBuyCard = cpuHand[Random.Range(0, cpuHand.Count)];
+        Debug.Log($"[BattleManager] 購入対象カード: {targetBuyCard.cardName} (価値: {targetBuyCard.cardValue})");
+
+        // 0.5秒インターバル（承諾後の待機）
+        await Task.Delay(500);
+
+        // 相手のカード表示ゾーンに表示
+        BattleUIManager.I?.ShowCardDetail(targetBuyCard, Side.Enemy);
+
+        // 経済アクション用のダミー攻撃カードを設定
+        var dummyCard = new CardData();
+        dummyCard.cardName = "経済アクション";
+        dummyCard.cardType = CardType.Attack;
+        currentAttackCard = dummyCard;
+
+        // クールダウンを設定
+        EconomicAction.I.SetBuyCooldown();
+
+        // 防御フェーズに移行（跳ね返し対応）
+        SetGameState(GameState.DefenseSelect);
+    }
+
+    /// <summary>
+    /// 「売る」アクションを実行（後で実装）
+    /// </summary>
+    public void ExecuteSellAction()
+    {
+        Debug.Log("[BattleManager] 売るアクションは未実装です");
+    }
+
+    /// <summary>
+    /// 「両替」アクションを実行（後で実装）
+    /// </summary>
+    public void ExecuteExchangeAction()
+    {
+        Debug.Log("[BattleManager] 両替アクションは未実装です");
+    }
+
+    /// <summary>
+    /// 経済アクションの処理（支払い、カード取得）
+    /// </summary>
+    private async Task ProcessEconomicAction()
+    {
+        if (targetBuyCard == null)
+        {
+            Debug.LogWarning("[BattleManager] 購入対象カードが設定されていません");
+            return;
+        }
+
+        int cost = targetBuyCard.cardValue;
+        Debug.Log($"[BattleManager] 経済アクション処理開始 - コスト: {cost}GP");
+
+        // 支払い処理
+        ProcessPayment(cost);
+
+        // 購入アニメーション実行
+        if (cardPurchaseAnimation != null && BattleUIManager.I != null)
+        {
+            await cardPurchaseAnimation.PlayPurchaseAnimation(
+                targetBuyCard, 
+                cost, 
+                BattleUIManager.I.GetEnemyCardDisplayPanel(), 
+                BattleUIManager.I.GetPlayerCardDisplayPanel()
+            );
+        }
+
+        // カード取得処理（裏向きのまま手札に追加）
+        ProcessCardAcquisition();
+
+        // ステータス更新
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+        Debug.Log("[BattleManager] 購入処理完了");
+    }
+
+    /// <summary>
+    /// 支払い処理（GP → MP → HPの順）
+    /// </summary>
+    private void ProcessPayment(int cost)
+    {
+        int remainingCost = cost;
+        Debug.Log($"[BattleManager] 支払い開始 - 必要額: {remainingCost}");
+
+        // GPから支払い
+        if (remainingCost > 0 && playerStatus.currentGP > 0)
+        {
+            int gpPayment = Mathf.Min(remainingCost, playerStatus.currentGP);
+            playerStatus.currentGP -= gpPayment;
+            remainingCost -= gpPayment;
+            Debug.Log($"[BattleManager] GP支払い: {gpPayment} (残りGP: {playerStatus.currentGP}, 残り必要額: {remainingCost})");
+        }
+
+        // MPから支払い
+        if (remainingCost > 0 && playerStatus.currentMP > 0)
+        {
+            int mpPayment = Mathf.Min(remainingCost, playerStatus.currentMP);
+            playerStatus.currentMP -= mpPayment;
+            remainingCost -= mpPayment;
+            Debug.Log($"[BattleManager] MP支払い: {mpPayment} (残りMP: {playerStatus.currentMP}, 残り必要額: {remainingCost})");
+        }
+
+        // HPから支払い（HPは0未満にならない）
+        if (remainingCost > 0 && playerStatus.currentHP > 0)
+        {
+            int hpPayment = Mathf.Min(remainingCost, playerStatus.currentHP);
+            playerStatus.currentHP -= hpPayment;
+            remainingCost -= hpPayment;
+            Debug.Log($"[BattleManager] HP支払い: {hpPayment} (残りHP: {playerStatus.currentHP}, 残り必要額: {remainingCost})");
+        }
+
+        // 相手にGPを支払う
+        enemyStatus.currentGP += cost;
+        Debug.Log($"[BattleManager] 相手にGP支払い: {cost} (相手のGP: {enemyStatus.currentGP})");
+
+        // 購入・売却ではGP回復のポップアップは表示しない
+    }
+
+    /// <summary>
+    /// カード取得処理（裏向きのまま手札に追加して表向きにする）
+    /// </summary>
+    private void ProcessCardAcquisition()
+    {
+        if (targetBuyCard == null) return;
+
+        // 相手の手札から削除
+        cpuHand.Remove(targetBuyCard);
+        Debug.Log($"[BattleManager] 相手の手札から削除: {targetBuyCard.cardName}");
+
+        // 自分の手札に追加
+        playerHand.Add(targetBuyCard);
+        Debug.Log($"[BattleManager] 自分の手札に追加: {targetBuyCard.cardName}");
+
+        // カードUIを生成（裏向きのまま）
+        if (cardDealer != null)
+        {
+            var ui = cardDealer.CreateCardUIForHand(targetBuyCard);
+            if (ui != null)
+            {
+                // 即座に表向きにする
+                ui.Reveal();
+                
+                // 効果音を再生
+                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            }
+        }
+
+        targetBuyCard = null; // 処理完了
+    }
+
+    /// <summary>
+    /// カードドロー処理
+    /// </summary>
+    private async Task ProcessCardDrawAsync()
+    {
+        Debug.Log("[BattleManager] カードドロー処理開始");
+        
+        // HandRefillServiceを使用してドロー
+        if (handRefill != null)
+        {
+            await handRefill.DrawCardAsync(playerHand);
+            Debug.Log($"[BattleManager] ドロー完了 - 手札枚数: {playerHand.Count}");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleManager] HandRefillServiceが設定されていません");
+        }
+    }
+
+    /// <summary>
+    /// 経済アクション後のドロー処理（TurnEndフェーズで実行）
+    /// </summary>
+    private async Task ProcessEconomicActionDrawAsync()
+    {
+        // 経済アクションが実行されたかどうかをチェック（ダミー攻撃カードで判定）
+        if (currentAttackCard != null && currentAttackCard.cardName == "経済アクション")
+        {
+            // 0.5秒インターバル
+            await Task.Delay(500);
+            
+            // ドロー処理
+            await ProcessCardDrawAsync();
+            
+            // ステータス更新
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        }
+    }
+
+    /// <summary>
+    /// 裏向きカードを表向きにする処理
+    /// </summary>
+    private async Task RevealFaceDownCardsAsync()
+    {
+        if (handPanel == null)
+        {
+            Debug.LogWarning("[BattleManager] handPanelが設定されていません");
+            return;
+        }
+
+        // 手札のUIを取得して裏向きのカードを表向きにする
+        for (int i = 0; i < handPanel.childCount; i++)
+        {
+            var child = handPanel.GetChild(i);
+            var cardUI = child.GetComponent<CardUI>();
+            
+            if (cardUI != null && cardUI.IsFaceDown())
+            {
+                cardUI.Reveal();
+                
+                // 効果音を再生（Addressables使用）
+                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+                
+                // カードごとに短い間隔を空ける
+                await Task.Delay(300);
+            }
+        }
     }
 
     private void OnDestroy()

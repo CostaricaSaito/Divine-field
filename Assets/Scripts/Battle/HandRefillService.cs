@@ -114,4 +114,43 @@ public class HandRefillService : MonoBehaviour
         // 暫定実装。CardDealer の public API を用意してください
         return (cardDealer != null) ? cardDealer.DrawRandomCard() : null;
     }
+
+    /// <summary>
+    /// カードを1枚ドローして手札に追加
+    /// </summary>
+    public async Task DrawCardAsync(List<CardData> hand)
+    {
+        if (hand == null || cardDealer == null)
+        {
+            Debug.LogWarning("[HandRefillService] DrawCardAsync: パラメータがnullです");
+            return;
+        }
+
+        var newCard = DrawRandomCard();
+        if (newCard == null)
+        {
+            Debug.LogWarning("[HandRefillService] DrawCardAsync: カードの取得に失敗しました");
+            return;
+        }
+
+        // 手札に追加
+        hand.Add(newCard);
+        Debug.Log($"[HandRefillService] カードドロー: {newCard.cardName}");
+
+        // カードUIを生成
+        var ui = cardDealer.CreateCardUIForHand(newCard);
+        if (ui != null)
+        {
+            Debug.Log($"[HandRefillService] カードUI生成完了: {newCard.cardName}");
+        }
+
+        // 効果音再生
+        if (audioSource != null && cardDealSE != null)
+        {
+            audioSource.PlayOneShot(cardDealSE);
+        }
+
+        // 短い待機時間
+        await Task.Delay(200);
+    }
 }
