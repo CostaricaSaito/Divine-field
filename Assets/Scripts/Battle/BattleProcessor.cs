@@ -253,6 +253,7 @@ public class BattleProcessor : MonoBehaviour
 
         // 戦闘結果の表示
         PlayDamageSE();
+        // HP/MP/GPと手札枚数を更新（手札枚数は変わらないため、常に現在の値を参照）
         UpdateStatusDisplay();
 
         // 戦闘終了判定
@@ -568,6 +569,7 @@ public class BattleProcessor : MonoBehaviour
 
         // 戦闘結果の表示
         PlayDamageSE();
+        // HP/MP/GPと手札枚数を更新（手札枚数は変わらないため、常に現在の値を参照）
         UpdateStatusDisplay();
 
         // ダメージポップアップ表示後のインターバル（相手の防御カード選択開始まで）

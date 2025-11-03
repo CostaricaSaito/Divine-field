@@ -99,7 +99,7 @@ public class BattleUIManager : MonoBehaviour
     //==== パブリックAPI：ステータス表示 =====
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
     {
-        // 手札の枚数を取得
+        // 手札の枚数を取得（常に現在の手札枚数を参照）
         int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
         int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
         
@@ -207,12 +207,32 @@ public class BattleUIManager : MonoBehaviour
     {
         if (hand == null) return;
         
-        var allowedSet = new HashSet<CardData>(allowedCards ?? new List<CardData>());
+        // allowedCardsがnullの場合は全てのカードを使用可能にする
+        if (allowedCards == null)
+        {
+            foreach (var card in hand)
+            {
+                if (card?.cardUI == null) continue;
+                SetCardInteractable(card, true);
+            }
+            return;
+        }
+        
+        // 参照比較ではなく、カードのcardUIを基準に比較する
+        var allowedCardUIs = new HashSet<CardUI>();
+        foreach (var allowedCard in allowedCards)
+        {
+            if (allowedCard?.cardUI != null)
+            {
+                allowedCardUIs.Add(allowedCard.cardUI);
+            }
+        }
         
         foreach (var card in hand)
         {
             if (card?.cardUI == null) continue;
-            bool canUse = allowedCards == null || allowedSet.Contains(card);
+            // cardUIを基準に比較（新しいカードが置き換えられても、cardUIが同じなら一致する）
+            bool canUse = allowedCardUIs.Contains(card.cardUI);
             SetCardInteractable(card, canUse);
         }
     }

@@ -389,9 +389,7 @@ public class BattleManager : MonoBehaviour
         // 防御カード使用処理（裏向きにする）
         if (defenseCardToDisplay != null)
         {
-            battleProcessor.UseCard(defenseCardToDisplay, defHand);
-            
-            // HandRefillServiceに使用を記録
+            // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
             if (handRefill != null)
             {
                 if (Defender == PlayerType.Player && defenseCardToDisplay.cardUI != null)
@@ -402,7 +400,7 @@ public class BattleManager : MonoBehaviour
                 }
                 else if (Defender == PlayerType.Enemy)
                 {
-                    handRefill.RecordEnemyUse();
+                    handRefill.RecordEnemyUse(defenseCardToDisplay);
                     Debug.Log($"[BattleManager] 敵防御カード使用記録: {defenseCardToDisplay.cardName}");
                 }
             }
@@ -410,6 +408,8 @@ public class BattleManager : MonoBehaviour
             {
                 Debug.LogWarning("[BattleManager] handRefillがnullです");
             }
+            
+            battleProcessor.UseCard(defenseCardToDisplay, defHand);
         }
 
         SetGameState(GameState.TurnEnd);
@@ -429,6 +429,13 @@ public class BattleManager : MonoBehaviour
 
         // 裏向きカードを表向きにする処理
         await RevealFaceDownCardsAsync();
+
+        // 手札枚数が正しく更新された後にステータスを更新
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+        // ターン切り替えのインターバル中はグレーアウトしない（全てのカードを表示）
+        // グレーアウト状態の更新は次のターン開始時にEnterAttackSelectで行う
+        BattleUIManager.I?.SetIntroModeUI(playerHand);
 
         // ⑥相手の攻撃ターン前の0.5秒インターバル
         await Task.Delay(500);
@@ -460,7 +467,7 @@ public class BattleManager : MonoBehaviour
         }
 
         battleProcessor.UseCard(attack, cpuHand);
-        handRefill?.RecordEnemyUse();
+        handRefill?.RecordEnemyUse(attack);
 
         currentAttackCard = attack;
 
@@ -540,9 +547,10 @@ public class BattleManager : MonoBehaviour
         await Task.Delay(500);
         Debug.Log("[BattleManager] 回復カード表示後、0.5秒インターバル完了");
 
-        await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
-
+        // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
         if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
+        
+        await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
 
         selectedCard = null;
         BattleUIManager.I?.HideAllCardDetails();
@@ -665,13 +673,15 @@ public class BattleManager : MonoBehaviour
             if (card?.cardUI == null) continue;
             
             int slotIndex = card.cardUI.transform.GetSiblingIndex();
-            battleProcessor.UseCard(card, playerHand);
+            // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
             handRefill?.RecordPlayerUseSlot(slotIndex);
+            battleProcessor.UseCard(card, playerHand);
             Debug.Log($"[BattleManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
         }
         
-        // カード使用後にステータス更新
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        // カード使用後はステータス更新しない
+        // 手札枚数は変わらないため、HP/MP/GPの更新はResolveCombatAsync内で行う
+        // BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
     /// <summary>
@@ -690,12 +700,14 @@ public class BattleManager : MonoBehaviour
         }
         
         int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+        // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
+        if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
         battleProcessor.UseCard(card, playerHand);
-        handRefill?.RecordPlayerUseSlot(slotIndex);
         Debug.Log($"[BattleManager] 単一{cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
         
-        // カード使用後にステータス更新
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        // カード使用後はステータス更新しない
+        // 手札枚数は変わらないため、HP/MP/GPの更新はResolveCombatAsync内で行う
+        // BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
     /// <summary>

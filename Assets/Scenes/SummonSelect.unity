@@ -212,6 +212,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetImage: {fileID: 4833563}
   speed: 0.2
+  intensity: 0.3
 --- !u!1 &162235929
 GameObject:
   m_ObjectHideFlags: 0
@@ -931,7 +932,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.42745098}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -1113,7 +1114,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21054f7a16f1e804095d94446135d545, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clickSE: {fileID: 8300000, guid: 25fdab993677b854b84d20659553a7f2, type: 3}
 --- !u!1 &595118946
 GameObject:
   m_ObjectHideFlags: 0
@@ -1879,7 +1879,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21054f7a16f1e804095d94446135d545, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clickSE: {fileID: 8300000, guid: 590b25ec6393bb640a8e364af9e852d0, type: 3}
 --- !u!1 &1567829790
 GameObject:
   m_ObjectHideFlags: 0
@@ -1925,206 +1924,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   summonDataList:
-  - summonName: "\u708E\u306E\u970A\u7363\\n\u30A4\u30D5\u30EA\u30FC\u30C8"
-    description: "\u706B\u708E\u3092\u53F8\u308B\u53EC\u559A\u7363\u3002 \\n\u6050\u308D\u3057\u3044\u602A\u529B\u3068\u5727\u5012\u7684\u306A\u706B\u529B\u3092\u6709\u3059\u308B\u3002
-      \\n\u52C7\u6562\u306A\u6226\u58EB\u306B\u306F\u60DC\u3057\u307F\u306A\u304F\u529B\u3092\u4E0E\u3048\u308B\u3002"
-    passiveSkill: "\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A<color=#FF4500><size=130%>\u30D5\u30EC\u30A4\u30E0\u30AA\u30FC\u30E9</size></color>\\n\u653B\u6483\u30AB\u30FC\u30C9\u306E\u653B\u6483\u88DC\u6B63\u3092+1\u30DD\u30A4\u30F3\u30C8\\n\u3055\u3089\u306B\u708E\u5C5E\u6027\u30AB\u30FC\u30C9\u306A\u3089+2\u30DD\u30A4\u30F3\u30C8 "
-    activeSkill: "\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A<color=#FF4500><size=130%>\u30E1\u30AE\u30C9\u30D5\u30EC\u30A4\u30E0</size></color>\\n\u708E\u5C5E\u602720\u30C0\u30E1\u30FC\u30B8\u3092\u4E0E\u3048\u308B "
-    characterSprite: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
-    backgroundSprite: {fileID: 21300000, guid: 077cba232feba22458309e1441ddb64e, type: 3}
-    summonSE: {fileID: 8300000, guid: aad6e996fbd838f459f2812ce4f1a20c, type: 3}
-    nameStyle:
-      fontColor: {r: 0.5882353, g: 0, b: 0.08064842, a: 1}
-      useGradient: 1
-      topColor: {r: 1, g: 0, b: 0, a: 1}
-      bottomColor: {r: 0.5188679, g: 0, b: 0, a: 1}
-      outlineColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineThickness: 0.1
-      faceDilate: 0.1
-    descriptionStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    passiveSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    activeSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-  - summonName: "\u6C34\u306E\u7CBE\u970A\\n\u30EA\u30F4\u30A1\u30A4\u30A2\u30B5\u30F3"
-    description: "\u5927\u6D77\u539F\u3092\u652F\u914D\u3059\u308B\u53EC\u559A\u7363\u3002\\n\u6C34\u306F\u6FC0\u6D41\u3068\u306A\u3063\u3066\u653B\u6483\u304B\u3089\u8EAB\u3092\u5B88\u308A\u3001\\n\u6696\u304B\u306A\u6D41\u308C\u3067\u50B7\u3092\u7652\u3084\u3059\u3002"
-    passiveSkill: "\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A<color=#00BFFF><size=130%>\u30A6\u30A9\u30FC\u30BF\u30FC\u30D0\u30EA\u30A2</size></color>\\n\u3059\u3079\u3066\u306E\u5C5E\u6027\u653B\u6483\u306E\u88AB\u30C0\u30E1\u30FC\u30B8\u3092-1\u30DD\u30A4\u30F3\u30C8\\n\u307E\u305F\u3001\u6C34\u5C5E\u6027\u653B\u6483\u306B\u3088\u308B\u547D\u4E2D\u4F4E\u4E0B\u3092\u53D7\u3051\u306A\u3044 "
-    activeSkill: "\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A<color=#00BFFF><size=130%>\u5927\u6D77\u306E\u6075\u307F</size></color>\\nHP\u3068MP\u309220\u30DD\u30A4\u30F3\u30C8\u56DE\u5FA9\u3057\u3001\\n\u3059\u3079\u3066\u306E\u72B6\u614B\u7570\u5E38\u3092\u56DE\u5FA9\u3059 "
-    characterSprite: {fileID: 21300000, guid: facb334afb0e2124db1ab7121bc70256, type: 3}
-    backgroundSprite: {fileID: 21300000, guid: ba97bad97db82b546ae45a54e47b4461, type: 3}
-    summonSE: {fileID: 8300000, guid: ab28d954e36fcd140a086450939f19b2, type: 3}
-    nameStyle:
-      fontColor: {r: 0.3820755, g: 0.57553196, b: 1, a: 1}
-      useGradient: 1
-      topColor: {r: 0, g: 0.033346355, b: 0.4528302, a: 1}
-      bottomColor: {r: 0, g: 0.6202079, b: 0.8396226, a: 1}
-      outlineColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineThickness: 0.1
-      faceDilate: 0.1
-    descriptionStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    passiveSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    activeSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-  - summonName: "\u66B4\u98A8\u306E\u5973\u5E1D\\n\u30AC\u30EB\u30FC\u30C0"
-    description: "\u8352\u308C\u72C2\u3046\u98A8\u3092\u5DFB\u304D\u8D77\u3053\u3059\u53EC\u559A\u7363\u3002\\n\u5727\u5012\u7684\u306A\u901F\u5EA6\u3067\u5E38\u306B\u76F8\u624B\u306E\u5148\u624B\u3092\u53D6\u308A\u3001
-      \\n\u5E38\u306B\u76F8\u624B\u306E\u30DA\u30FC\u30B9\u3092\u4E0A\u56DE\u308B\u9023\u7D9A\u653B\u6483\u3092\u52A0\u3048\u308B\u3002"
-    passiveSkill: "<b>\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A</b><size=150%><color=#28a745>\u8FFD\u3044\u98A8</color></size>\\n3\u30BF\u30FC\u30F3\u3054\u3068\u306B\u30AB\u30FC\u30C9\u30922\u679A\u30C9\u30ED\u30FC\u3059\u308B\u3002 "
-    activeSkill: "<b>\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A</b><size=150%><color=#28a745>\u30A2\u30BB\u30F3\u30C0\u30F3\u30C8\u30B7\u30A7\u30A4\u30C9</color></size>\\n\u30AB\u30FC\u30C9\u30923\u679A\u30C9\u30ED\u30FC\u3059\u308B\u3002 "
-    characterSprite: {fileID: 21300000, guid: da733353f8a13874099ebc175a148207, type: 3}
-    backgroundSprite: {fileID: 21300000, guid: 666edbae3f828e64d9a9994b2ec25971, type: 3}
-    summonSE: {fileID: 8300000, guid: f2e91ac562d3a8a4983c8b7bcc8e8924, type: 3}
-    nameStyle:
-      fontColor: {r: 0, g: 0.6226415, b: 0.068780124, a: 1}
-      useGradient: 1
-      topColor: {r: 0, g: 0.509434, b: 0.042783037, a: 1}
-      bottomColor: {r: 0, g: 0.8301887, b: 0.09340529, a: 1}
-      outlineColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineThickness: 0.1
-      faceDilate: 0.1
-    descriptionStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    passiveSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    activeSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-  - summonName: "\u5263\u738B\\n\u30AA\u30FC\u30C7\u30A3\u30F3"
-    description: "\u8A87\u308A\u9AD8\u304D\u5263\u306E\u738B\u3002 \u52A0\u8B77\u3092\u53D7\u3051\u305F\u8005\u306F\u5263\u8056\u3068\u547C\u3070\u308C\u3001\u5263\u621F\u306E\u9054\u4EBA\u3068\u306A\u308B\u3002
-      \u307E\u305F\u3001\u30AA\u30FC\u30C7\u30A3\u30F3\u306E\u6301\u3064\u65AC\u9244\u5263\u306F\u3001\u3059\u3079\u3066\u3092\u4E00\u6483\u3067\u4E21\u65AD\u3059\u308B\u3002"
-    passiveSkill: "<b>\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A</b><size=150%><color=#A9A9A9>\u795E\u92FC\u306E\u65AC\u308C\u5473</color></size>\\n\u5200\u5263\u7CFB\u306E\u653B\u6483\u30AB\u30FC\u30C9\u306E\u653B\u6483\u88DC\u6B63\u3092+2\u30DD\u30A4\u30F3\u30C8 "
-    activeSkill: "\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A<b><size=150%><color=#CCCCCC>\u65AC\u9244\u5263</color></size></b>\\n\u6B21\u306E\u653B\u6483\u306F\u76F8\u624B\u306E\u9632\u5FA1\u30AB\u30FC\u30C9\u3092\u7121\u8996\u3059\u308B "
-    characterSprite: {fileID: 21300000, guid: 4d210cdb1d4dcea4ea85165a0f2e6daa, type: 3}
-    backgroundSprite: {fileID: 21300000, guid: fae96d9efa770fe4dae0fdd04283f8aa, type: 3}
-    summonSE: {fileID: 8300000, guid: 82e77e45d7e4d864c893e68e84011fd9, type: 3}
-    nameStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 1
-      topColor: {r: 0.5566038, g: 0.5566038, b: 0.5566038, a: 1}
-      bottomColor: {r: 0.8018868, g: 0.8018868, b: 0.8018868, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0.2
-      faceDilate: 0.2
-    descriptionStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    passiveSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    activeSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-  - summonName: "\u6012\u308C\u308B\u96F7\u5E1D\\n\u30A4\u30F3\u30C9\u30E9"
-    description: "\u96F7\u9706\u3092\u81EA\u7531\u306B\u64CD\u308B\u53EC\u559A\u7363\u3002
-      \\n\u5F37\u5927\u306A\u96FB\u6483\u3067\u76F8\u624B\u306E\u795E\u5668\u3092\u7834\u58CA\u3057\u3001
-      \\n\u305D\u306E\u5A01\u5727\u529B\u306F\u4ED6\u306E\u8FFD\u968F\u3092\u8A31\u3055\u306A\u3044\u3002"
-    passiveSkill: "<b>\u30D1\u30C3\u30B7\u30D6\u30B9\u30AD\u30EB\uFF1A</b><size=150%><color=#FFD700>\u96FB\u78C1\u6CE2\u52D5</color></size>\\n3\u30BF\u30FC\u30F3\u3054\u3068\u306B\u76F8\u624B\u306E\u624B\u672D\u30921\u679A\u7834\u58CA\u3059\u308B\u3002 "
-    activeSkill: "<b>\u9855\u73FE\u30B9\u30AD\u30EB\uFF1A</b><size=150%><color=#FFD700>\u88C1\u304D\u306E\u96F7</color></size>\\n\u76F8\u624B\u306E\u624B\u672D\u30923\u679A\u7834\u58CA\u3059\u308B\u3002 "
-    characterSprite: {fileID: 21300000, guid: 44afccd4b9dbdee4a8d4ad99fe9454a9, type: 3}
-    backgroundSprite: {fileID: 21300000, guid: 17b57e2979b16c241872c33405896e47, type: 3}
-    summonSE: {fileID: 8300000, guid: 85e5df9bca362f34fa150ea541ea5773, type: 3}
-    nameStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 1
-      topColor: {r: 0.7830189, g: 0.6730551, b: 0, a: 1}
-      bottomColor: {r: 1, g: 0.90590763, b: 0.16509432, a: 1}
-      outlineColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineThickness: 0.1
-      faceDilate: 0.1
-    descriptionStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    passiveSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
-    activeSkillStyle:
-      fontColor: {r: 1, g: 1, b: 1, a: 1}
-      useGradient: 0
-      topColor: {r: 1, g: 1, b: 1, a: 1}
-      bottomColor: {r: 1, g: 1, b: 1, a: 1}
-      outlineColor: {r: 0, g: 0, b: 0, a: 1}
-      outlineThickness: 0
-      faceDilate: 0
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   summonImage: {fileID: 2005532754}
   backgroundImage: {fileID: 483333293}
   nameText: {fileID: 1672920378}
@@ -2345,8 +2149,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u6FC0\u6D41\u306E\u652F\u914D\u8005\n\u30EA\u30F4\u30A1\u30A4\u30A2\u30B5\u30F3"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: eca3c821daec9d3459fae5b8dc514304, type: 2}
-  m_sharedMaterial: {fileID: 7087761681815373981, guid: eca3c821daec9d3459fae5b8dc514304, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
+  m_sharedMaterial: {fileID: 2570324923874611504, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2621,7 +2425,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21054f7a16f1e804095d94446135d545, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clickSE: {fileID: 8300000, guid: 590b25ec6393bb640a8e364af9e852d0, type: 3}
 --- !u!1 &1786457558
 GameObject:
   m_ObjectHideFlags: 0
@@ -2957,8 +2760,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 2, y: 263.55}
-  m_SizeDelta: {x: 771.074, y: 1079.5035}
+  m_AnchoredPosition: {x: -2, y: 222.79}
+  m_SizeDelta: {x: 1084, y: 1517.5802}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2005532754
 MonoBehaviour:
@@ -2980,7 +2783,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 629f02ad6ec97ab4d9b09b5f0b15f551, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1
