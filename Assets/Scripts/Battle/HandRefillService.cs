@@ -15,11 +15,11 @@ public class HandRefillService : MonoBehaviour
     [SerializeField] private CardDealer cardDealer;
 
     // 裏向きスロット（プレイヤーのUI表示用）
-    private struct BackSlot { public int index; public CardUI ui; }
+    private struct BackSlot { public int index; public CardUI ui; public CardData usedCard; }
     private readonly List<BackSlot> _playerBackSlotsThisTurn = new();
 
-    // 敵はUI表示しないので使用回数だけ記録
-    private int _enemyUsedCountThisTurn = 0;
+    // 敵の使用済みカードを記録（プレイヤーと同様に置き換えのため）
+    private readonly List<CardData> _enemyUsedCardsThisTurn = new();
 
     // ---- 設定（インスペクターから、または手動） ----
     public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, AudioSource src, AudioClip deal, CardDealer dealer)
@@ -47,10 +47,13 @@ public class HandRefillService : MonoBehaviour
         var existingUI = handPanel.GetChild(siblingIndex)?.GetComponent<CardUI>();
         if (existingUI != null)
         {
+            // 使用済みカードを取得（Setupを呼ぶ前に取得する必要がある）
+            CardData usedCard = existingUI.GetCardData();
+            
             // 既存のUIを裏向きにする
             existingUI.Setup(null, cardBackSprite);
             existingUI.button.interactable = false;
-            _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = existingUI });
+            _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = existingUI, usedCard = usedCard });
         }
         else
         {
@@ -58,10 +61,16 @@ public class HandRefillService : MonoBehaviour
         }
     }
 
-    // 敵のカード使用回数を記録（攻撃/防御どちらでも）
-    public void RecordEnemyUse() => _enemyUsedCountThisTurn++;
+    // 敵のカード使用を記録（使用済みカードを記録）
+    public void RecordEnemyUse(CardData usedCard)
+    {
+        if (usedCard != null)
+        {
+            _enemyUsedCardsThisTurn.Add(usedCard);
+        }
+    }
 
-    // TurnEnd：裏向きスロットを新カードに置き換え（1枚ずつ順次処理）、敵は手札に追加
+    // TurnEnd：裏向きスロットを新カードに置き換え（1枚ずつ順次処理）、敵も使用済みカードを新しいカードで置き換え
     public async Task RefillAtTurnEndAsync(List<CardData> playerHand, List<CardData> enemyHand, CancellationToken ct)
     {
         // プレイヤー：裏向きスロットを新カードに置き換え
@@ -81,31 +90,92 @@ public class HandRefillService : MonoBehaviour
                 continue;
             }
 
-            // 手札に新しいカードを追加
-            playerHand.Add(newCard);
+            // 通常のカード使用時は手札枚数は変動しない
+            // 使用済みカードを新しいカードで置き換える（削除も追加もしない）
+            if (slot.usedCard != null && playerHand != null)
+            {
+                int index = playerHand.IndexOf(slot.usedCard);
+                if (index >= 0)
+                {
+                    // 使用済みカードを新しいカードで置き換え（手札枚数は変わらない）
+                    playerHand[index] = newCard;
+                    Debug.Log($"[HandRefillService] 使用済みカードを新しいカードで置き換え: {slot.usedCard?.cardName ?? "null"} → {newCard?.cardName ?? "null"} (インデックス: {index})");
+                }
+                else
+                {
+                    // 使用済みカードが見つからない場合（エラー）
+                    // 手札枚数を変えないため、追加しない
+                    Debug.LogError($"[HandRefillService] 使用済みカードが見つかりません: {slot.usedCard?.cardName ?? "null"} (手札枚数: {playerHand.Count})");
+                }
+            }
+            else
+            {
+                // 使用済みカードが記録されていない場合（エラー）
+                // 手札枚数を変えないため、追加しない
+                Debug.LogError($"[HandRefillService] 使用済みカードが記録されていません (手札枚数: {playerHand?.Count ?? 0})");
+            }
+
+            // 新しいカードのcardUIを先に設定（Setupの前に設定する必要がある）
+            newCard.cardUI = slot.ui;
 
             // 裏向きのUIに新しいカードをセットアップ
+            // これにより、CardUIのcardDataが新しいカードに更新される
             slot.ui.Setup(newCard, cardBackSprite);
+            
+            // 念のため、CardUIのcardDataが新しいカードを参照していることを確認
+            if (slot.ui.GetCardData() != newCard)
+            {
+                Debug.LogWarning($"[HandRefillService] CardUIのcardDataが新しいカードと一致しません。再設定します。");
+                slot.ui.Setup(newCard, cardBackSprite);
+            }
+            
             slot.ui.button.interactable = true; // 新しいカードは使用可能にする
 
             await Task.Delay(150, ct);
             if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
 
             slot.ui.Reveal();       // 表向きに
-            newCard.cardUI = slot.ui;
 
             await Task.Delay(100, ct);
         }
         _playerBackSlotsThisTurn.Clear();
 
-        // 敵：UI表示せずに手札に追加
-        for (int i = 0; i < _enemyUsedCountThisTurn; i++)
+        // 敵：通常のカード使用時は手札枚数は変動しない
+        // 使用済みカードを新しいカードで置き換える（削除も追加もしない）
+        for (int i = 0; i < _enemyUsedCardsThisTurn.Count; i++)
         {
-            var c = DrawRandomCard();
-            if (c != null) enemyHand.Add(c);
+            if (ct.IsCancellationRequested) return;
+
+            var usedCard = _enemyUsedCardsThisTurn[i];
+            if (usedCard == null) continue;
+
+            var newCard = DrawRandomCard();
+            if (newCard == null)
+            {
+                Debug.LogWarning($"[HandRefillService] 敵のカード取得に失敗しました (使用済みカード: {usedCard?.cardName ?? "null"})");
+                continue;
+            }
+
+            if (enemyHand != null)
+            {
+                int index = enemyHand.IndexOf(usedCard);
+                if (index >= 0)
+                {
+                    // 使用済みカードを新しいカードで置き換え（手札枚数は変わらない）
+                    enemyHand[index] = newCard;
+                    Debug.Log($"[HandRefillService] 敵の使用済みカードを新しいカードで置き換え: {usedCard?.cardName ?? "null"} → {newCard?.cardName ?? "null"} (インデックス: {index})");
+                }
+                else
+                {
+                    // 使用済みカードが見つからない場合（エラー）
+                    // 手札枚数を変えないため、追加しない
+                    Debug.LogError($"[HandRefillService] 敵の使用済みカードが見つかりません: {usedCard?.cardName ?? "null"} (手札枚数: {enemyHand.Count})");
+                }
+            }
+
             await Task.Delay(50, ct); // 短い間隔のエフェクト
         }
-        _enemyUsedCountThisTurn = 0;
+        _enemyUsedCardsThisTurn.Clear();
     }
 
     // CardDealer からカードを1枚取得（CardDealer の public API を用意してください）
