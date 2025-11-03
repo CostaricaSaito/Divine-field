@@ -299,18 +299,8 @@ public class BattleManager : MonoBehaviour
 
         if (Defender == PlayerType.Enemy)
         {
-            // 敵の防御選択（AI）
-            selectedDefenseCard = enemyAI.SelectDefenseCard(cpuHand);
-
-            // 相手の防御カード選択完了
-            if (selectedDefenseCard != null)
-            {
-                Debug.Log($"[BattleManager] 相手の防御カード選択完了: {selectedDefenseCard.cardName}");
-            }
-
-            // ③防御カード選択後の0.5秒インターバル
-            await Task.Delay(500);
-            Debug.Log("[BattleManager] 防御カード選択完了、0.5秒待機");
+            // EnemyAIで防御選択を実行
+            selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
             
             SetGameState(GameState.DefenseConfirm);
         }
@@ -451,23 +441,14 @@ public class BattleManager : MonoBehaviour
     //================ 敵のターン ================
     private async Task RunEnemyTurnAsync()
     {
-        // 相手の攻撃フェーズ開始時の効果音
-        SoundEffectPlayer.I?.Play("Assets/SE/鳩時計1.mp3");
-        Debug.Log("[BattleManager] 相手の攻撃フェーズ開始");
+        // EnemyAIで攻撃ターンを実行
+        var attack = await enemyAI.ExecuteAttackTurnAsync(cpuHand, battleProcessor, handRefill);
         
-        // 鳩時計効果音後のインターバル
-        await Task.Delay(500);
-        Debug.Log("[BattleManager] 鳩時計効果音後、0.5秒待機");
-
-        var attack = enemyAI.SelectAttackCard(cpuHand);
         if (attack == null)
         {
             SetGameState(GameState.TurnEnd);
             return;
         }
-
-        battleProcessor.UseCard(attack, cpuHand);
-        handRefill?.RecordEnemyUse(attack);
 
         currentAttackCard = attack;
 
@@ -547,8 +528,8 @@ public class BattleManager : MonoBehaviour
         await Task.Delay(500);
         Debug.Log("[BattleManager] 回復カード表示後、0.5秒インターバル完了");
 
-        // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
-        if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
+        // RecordPlayerUseSlotは既にHandleAttackUseで呼ばれている（UseCardの前）
+        // ここでは呼ばない（二重呼び出しを防ぐ）
         
         await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
 
@@ -582,6 +563,10 @@ public class BattleManager : MonoBehaviour
         {
             var card = selectedAttackCards[0];
             int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+            
+            // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
+            if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
+            
             battleProcessor.UseCard(card, playerHand);
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
             

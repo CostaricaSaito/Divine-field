@@ -28,7 +28,7 @@ public class PlayerStatus
 
     public int currentHP = 50;
     public int currentMP = 50;
-    public int currentGP = 50;
+    public int currentGP = 10;
 
     public SummonData summonData;
 

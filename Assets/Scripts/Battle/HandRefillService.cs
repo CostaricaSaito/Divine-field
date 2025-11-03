@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -41,7 +42,11 @@ public class HandRefillService : MonoBehaviour
     // 攻撃/回復などで使ったカードのスロット位置を記録（既存のUIを再利用）
     public void RecordPlayerUseSlot(int siblingIndex)
     {
-        if (siblingIndex < 0 || handPanel == null) return;
+        if (siblingIndex < 0 || handPanel == null)
+        {
+            Debug.LogWarning($"[HandRefillService] RecordPlayerUseSlot: 無効なパラメータ (siblingIndex: {siblingIndex}, handPanel: {handPanel != null})");
+            return;
+        }
 
         // 既存のUIオブジェクトを取得
         var existingUI = handPanel.GetChild(siblingIndex)?.GetComponent<CardUI>();
@@ -49,6 +54,14 @@ public class HandRefillService : MonoBehaviour
         {
             // 使用済みカードを取得（Setupを呼ぶ前に取得する必要がある）
             CardData usedCard = existingUI.GetCardData();
+            
+            if (usedCard == null)
+            {
+                Debug.LogWarning($"[HandRefillService] RecordPlayerUseSlot: スロット {siblingIndex} のカードデータがnullです（既に使用済みの可能性があります）");
+                return;
+            }
+            
+            Debug.Log($"[HandRefillService] RecordPlayerUseSlot: カード記録 - {usedCard.cardName} (スロット: {siblingIndex})");
             
             // 既存のUIを裏向きにする
             existingUI.Setup(null, cardBackSprite);
