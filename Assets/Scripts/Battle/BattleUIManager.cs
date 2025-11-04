@@ -362,6 +362,9 @@ public class BattleUIManager : MonoBehaviour
         
         // BattleManagerの更新
         UpdateBattleManagerAfterCancel();
+        
+        // TotalATKDEF表示を更新（選択が空の場合は非表示になる）
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
     }
 
     public void ClearAllSelections()
