@@ -24,18 +24,17 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
 
-        Debug.Log($"[CardSelectionManager] カード選択試行: {card.cardName} (isRecovery: {card.isRecovery}, isAttack: {IsAttackCard(card)})");
+        // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
+        CheckCardConflicts(card);
 
-        // 競合チェック
-        if (!CheckCardConflicts(card))
+        // 同じカードが既に選択されている場合は追加しない
+        if (selectedCards.Contains(card))
         {
             return false;
         }
 
         // カード選択を追加
         selectedCards.Add(card);
-        Debug.Log($"[CardSelectionManager] カード選択追加: {card.cardName} (selectedCards数: {selectedCards.Count})");
-
         return true;
     }
 
