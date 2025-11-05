@@ -198,7 +198,7 @@ public class BattleManager : MonoBehaviour
         {
             Debug.LogWarning("[BattleManager] BattleUIManager.Iがnullです");
         }
-        sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas);
+        sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas, handRefill);
 
         if (cardStatsDisplay != null)
         {
