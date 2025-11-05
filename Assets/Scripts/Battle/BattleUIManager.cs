@@ -71,7 +71,8 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private TMP_Text exchangeCooldownText;
 
     [Header("確認ポップアップ")]
-    [SerializeField] private GameObject confirmPopupPrefab;
+    [SerializeField] private GameObject confirmPopupPrefab; // BuyConfirmPopup用
+    [SerializeField] private GameObject sellConfirmPopupPrefab; // SellConfirmPopup用
     [SerializeField] private Canvas popupCanvas;
 
     // プライベート変数
@@ -779,4 +780,14 @@ public class BattleUIManager : MonoBehaviour
     {
         return enemyCardDisplayPanel;
     }
+
+    /// <summary>
+    /// SellConfirmPopupのPrefabを取得（BattleManagerから使用）
+    /// </summary>
+    public GameObject GetSellConfirmPopupPrefab() => sellConfirmPopupPrefab;
+
+    /// <summary>
+    /// ポップアップ用のCanvasを取得（BattleManagerから使用）
+    /// </summary>
+    public Canvas GetPopupCanvas() => popupCanvas != null ? popupCanvas : uiCanvas;
 }
