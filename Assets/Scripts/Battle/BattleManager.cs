@@ -27,7 +27,10 @@ using TMPro;
 /// - BattleProcessor: 戦闘処理の実行
 /// - CardDealer: カード配布の管理
 /// - HandRefillService: 手札補充の管理
+/// - CardSequenceManager: カード演出シーケンスの管理
+/// - CardStatsDisplay: TotalATKDEF表示の管理
 /// - EnemyAI: 敵の行動決定
+/// - BuyFeature: 経済アクション（買う）の処理
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -58,12 +61,12 @@ public class BattleManager : MonoBehaviour
     public SummonSkillButton summonSkillButton;
     public CardPurchaseAnimation cardPurchaseAnimation;
     
-    // --- 追加: 依存関係の管理 ---
-    [SerializeField] private HandRefillService handRefill; // 手札補充用の参照
+    [SerializeField] private HandRefillService handRefill;
     [SerializeField] private CardStatsDisplay cardStatsDisplay;
     [SerializeField] private CardSequenceManager cardSequenceManager;
     private EnemyAI enemyAI = new EnemyAI();
     private BuyFeature buyFeature = new BuyFeature();
+    private SellFeature sellFeature = new SellFeature();
 
     // バトルデータ
     private PlayerStatus playerStatus, enemyStatus;
@@ -112,7 +115,6 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     public CardData GetSelectedDefenseCard() => selectedDefenseCard;
 
-    private TaskCompletionSource<CardData> defenseCardTCS;
     private CancellationTokenSource _phaseCts;
 
     [SerializeField] private float cutInDelay = 0.5f;
@@ -181,6 +183,22 @@ public class BattleManager : MonoBehaviour
 
         // BuyFeatureの初期化
         buyFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, cardPurchaseAnimation);
+
+        // SellFeatureの初期化
+        GameObject sellPopupPrefab = null;
+        Canvas popupCanvas = null;
+        if (BattleUIManager.I != null)
+        {
+            sellPopupPrefab = BattleUIManager.I.GetSellConfirmPopupPrefab();
+            popupCanvas = BattleUIManager.I.GetPopupCanvas();
+            Debug.Log($"[BattleManager] sellPopupPrefab取得: {(sellPopupPrefab != null ? sellPopupPrefab.name : "null")}");
+            Debug.Log($"[BattleManager] popupCanvas取得: {(popupCanvas != null ? popupCanvas.name : "null")}");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleManager] BattleUIManager.Iがnullです");
+        }
+        sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas);
 
         if (cardStatsDisplay != null)
         {
@@ -377,18 +395,27 @@ public class BattleManager : MonoBehaviour
         }
 
         // 経済アクションの場合は特別処理
-        if (CurrentState == GameState.DefenseConfirm && currentAttackCard.cardName == "経済アクション")
+        if (CurrentState == GameState.DefenseConfirm && currentAttackCard != null)
         {
-            Debug.Log("[BattleManager] 経済アクションの防御フェーズ処理");
-            await buyFeature.ProcessEconomicActionAsync();
-            SetGameState(GameState.TurnEnd);
-            return;
+            if (currentAttackCard.cardName == "経済アクション")
+            {
+                Debug.Log("[BattleManager] 経済アクション（購入）の防御フェーズ処理");
+                await buyFeature.ProcessEconomicActionAsync();
+                SetGameState(GameState.TurnEnd);
+                return;
+            }
+            else if (currentAttackCard.cardName == "経済アクション（売却）")
+            {
+                Debug.Log("[BattleManager] 経済アクション（売却）の防御フェーズ処理");
+                await sellFeature.ProcessEconomicActionAsync();
+                SetGameState(GameState.TurnEnd);
+                return;
+            }
         }
 
-        // プレイヤーの複数防御カード選択の場合は、StartDefenseCardSequenceで処理済み
+        // プレイヤーの防御カード選択はCardSequenceManagerで処理済み（HandleDefenseUse経由）
         if (Defender == PlayerType.Player)
         {
-            Debug.Log("[BattleManager] プレイヤーの防御カード選択は既にStartDefenseCardSequenceで処理済み");
             return;
         }
 
@@ -396,16 +423,8 @@ public class BattleManager : MonoBehaviour
         var defenseCardToDisplay = selectedDefenseCard;
         if (defenseCardToDisplay != null)
         {
-            var side = (Defender == PlayerType.Player) ? Side.Player : Side.Enemy;
-            
-            // プレイヤーの防御カードの場合、選択状態をクリアしてから表示
-            if (Defender == PlayerType.Player)
-            {
-                BattleUIManager.I?.ClearAllSelections();
-                BattleUIManager.I?.HideAllCardDetails();
-            }
-            
-            BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, side);
+            // 敵の防御カードを表示
+            BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, Side.Enemy);
             
             // 防御カード表示時の効果音
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
@@ -427,29 +446,11 @@ public class BattleManager : MonoBehaviour
 
         if (_phaseCts.Token.IsCancellationRequested) return;
 
-        // 防御カード使用処理（裏向きにする）
+        // 敵の防御カード使用処理（裏向きにする）
         if (defenseCardToDisplay != null)
         {
             // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
-            if (handRefill != null)
-            {
-                if (Defender == PlayerType.Player && defenseCardToDisplay.cardUI != null)
-                {
-                    int idx = defenseCardToDisplay.cardUI.transform.GetSiblingIndex();
-                    handRefill.RecordPlayerUseSlot(idx);
-                    Debug.Log($"[BattleManager] プレイヤー防御カード使用記録: {defenseCardToDisplay.cardName} (スロット {idx})");
-                }
-                else if (Defender == PlayerType.Enemy)
-                {
-                    handRefill.RecordEnemyUse(defenseCardToDisplay);
-                    Debug.Log($"[BattleManager] 敵防御カード使用記録: {defenseCardToDisplay.cardName}");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("[BattleManager] handRefillがnullです");
-            }
-            
+            handRefill?.RecordEnemyUse(defenseCardToDisplay);
             battleProcessor.UseCard(defenseCardToDisplay, defHand);
         }
 
@@ -478,9 +479,8 @@ public class BattleManager : MonoBehaviour
         // グレーアウト状態の更新は次のターン開始時にEnterAttackSelectで行う
         BattleUIManager.I?.SetIntroModeUI(playerHand);
 
-        // ⑥相手の攻撃ターン前の0.5秒インターバル
+        // 相手の攻撃ターン前のインターバル
         await Task.Delay(500);
-        Debug.Log("[BattleManager] 相手の攻撃ターン前、0.5秒待機");
 
         // 2ターン目以降はグレーアウトを有効にする
         shouldGrayOutCards = true;
@@ -489,7 +489,6 @@ public class BattleManager : MonoBehaviour
         SetGameState(GameState.TurnStart);
     }
 
-    //================ 敵のターン ================
     private async Task RunEnemyTurnAsync()
     {
         // EnemyAIで攻撃ターンを実行
@@ -517,7 +516,6 @@ public class BattleManager : MonoBehaviour
         SetGameState(GameState.DefenseSelect);
     }
 
-    //================ カード選択 ================
     public void SetSelectedCard(CardUI ui)
     {
         if (ui == null) return;
@@ -526,6 +524,13 @@ public class BattleManager : MonoBehaviour
 
         if (CurrentState == GameState.AttackSelect && Attacker == PlayerType.Player)
         {
+            // 売却モードが有効な場合は、売却処理に委譲
+            if (sellFeature != null && sellFeature.IsSellModeActive())
+            {
+                sellFeature.OnCardSelected(card);
+                return;
+            }
+
             if (!CardRules.IsUsableInAttackPhase(card))
             {
                 Debug.LogWarning($"このカードは攻撃フェーズでは使えません: {card.cardName} ({card.cardType})");
@@ -602,7 +607,6 @@ public class BattleManager : MonoBehaviour
         SetGameState(GameState.TurnEnd);
     }
 
-    //================ カード使用処理 ================
     private void HandleAttackUse()
     {
         var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
@@ -633,7 +637,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // 攻撃カードの演出フロー開始
+        // 攻撃カードの演出フローをCardSequenceManagerに委譲
         if (cardSequenceManager != null)
         {
             _ = cardSequenceManager.StartCardSequenceAsync(selectedAttackCards, "攻撃", Side.Player, _phaseCts.Token);
@@ -655,7 +659,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // 防御カードの演出フロー開始
+        // 防御カードの演出フローをCardSequenceManagerに委譲
         if (cardSequenceManager != null)
         {
             _ = cardSequenceManager.StartCardSequenceAsync(selectedDefenseCards, "防御", Side.Player, _phaseCts.Token);
@@ -715,14 +719,12 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    //================ 手番管理 ================
     public void ToggleTurnOwner()
     {
         CurrentTurnOwner = (CurrentTurnOwner == PlayerType.Player) ? PlayerType.Enemy : PlayerType.Player;
         Debug.Log($"[Turn] 手番変更: {CurrentTurnOwner}");
     }
 
-    //================ カード選択クリア ================
     public void ClearSelectedCards()
     {
         selectedCard = null;
@@ -735,7 +737,6 @@ public class BattleManager : MonoBehaviour
         cardStatsDisplay?.UpdateDisplay();
     }
 
-    //================ ユーティリティ ================
     private SummonData GetRandomEnemySummon()
     {
         var list = SummonSelectionManager.I?.GetAllSummonData();
@@ -750,10 +751,8 @@ public class BattleManager : MonoBehaviour
         return enemyCandidates[Random.Range(0, enemyCandidates.Count)];
     }
 
-    //==== 経済アクション =====
-    
     /// <summary>
-    /// 「買う」アクションを実行
+    /// 「買う」アクションを実行（BuyFeatureに委譲）
     /// </summary>
     public async void ExecuteBuyAction()
     {
@@ -761,11 +760,16 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 「売る」アクションを実行（後で実装）
+    /// 「売る」アクションを実行
     /// </summary>
     public void ExecuteSellAction()
     {
-        Debug.Log("[BattleManager] 売るアクションは未実装です");
+        _ = ExecuteSellActionAsync();
+    }
+
+    private async Task ExecuteSellActionAsync()
+    {
+        await sellFeature.ExecuteSellActionAsync();
     }
 
     /// <summary>
