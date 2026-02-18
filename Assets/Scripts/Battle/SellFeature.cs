@@ -22,6 +22,7 @@ public class SellFeature
     private bool isSellModeActive = false;
     private bool isProcessingConfirm = false;
     private CardData targetSellCard;
+    private CardSellAnimation cardSellAnimation;
 
     public void Initialize(
         BattleManager battleManager,
@@ -32,6 +33,7 @@ public class SellFeature
         CardDealer cardDealer,
         GameObject sellConfirmPopupPrefab,
         Canvas popupCanvas,
+        CardSellAnimation cardSellAnimation = null,
         HandRefillService handRefillService = null)
     {
         this.battleManager = battleManager;
@@ -42,6 +44,7 @@ public class SellFeature
         this.cardDealer = cardDealer;
         this.sellConfirmPopupPrefab = sellConfirmPopupPrefab;
         this.popupCanvas = popupCanvas;
+        this.cardSellAnimation = cardSellAnimation;
     }
 
     public async Task<bool> ExecuteSellActionAsync()
@@ -64,6 +67,10 @@ public class SellFeature
         ShowSellConfirmPopup();
         isSellModeActive = true;
         CardSelectionManager.I?.ClearAllSelections();
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+
+        // 売却モード時は全てのカードを有効化（グレーアウト解除）
+        BattleUIManager.I?.SetIntroModeUI(playerHand);
 
         await Task.CompletedTask;
         return true;
@@ -73,13 +80,38 @@ public class SellFeature
     {
         if (targetSellCard == null) return;
 
-        isProcessingConfirm = false;
-        ProcessGPTheft();
-        await ProcessCardTransferAsync();
-        UpdateHandUI();
-        
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-        targetSellCard = null;
+        try
+        {
+            isProcessingConfirm = true;
+            BattleManager.I?.UpdateTotalATKDEFDisplay();
+
+            // 売却アニメーション実行
+            if (cardSellAnimation != null && BattleUIManager.I != null)
+            {
+                int sellAmount = targetSellCard.cardValue;
+                GameObject cardSheetPrefab = BattleUIManager.I.GetCardSheetPrefab();
+                
+                await cardSellAnimation.PlaySellAnimation(
+                    targetSellCard,
+                    sellAmount,
+                    BattleUIManager.I.GetPlayerCardDisplayPanel(),
+                    BattleUIManager.I.GetEnemyCardDisplayPanel(),
+                    cardSheetPrefab
+                );
+            }
+
+            ProcessGPTheft();
+            await ProcessCardTransferAsync();
+            UpdateHandUI();
+            
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            targetSellCard = null;
+        }
+        finally
+        {
+            isProcessingConfirm = false;
+            BattleManager.I?.UpdateTotalATKDEFDisplay();
+        }
     }
 
     private void ProcessGPTheft()
@@ -212,6 +244,8 @@ public class SellFeature
 
         targetSellCard = card;
         currentPopup?.SetSelectedCard(card);
+        SoundEffectPlayer.I?.Play("Assets/SE/カーソル移動1.mp3");
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
     }
 
     private void ShowSellConfirmPopup()
@@ -256,9 +290,13 @@ public class SellFeature
         if (targetSellCard == null) return;
 
         EconomicAction.I?.SetSellCooldown();
+        // クールダウン設定後にUIを即座に更新
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        
         isProcessingConfirm = true;
         ClosePopup();
         isSellModeActive = false;
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
 
         // 経済アクション用のダミー攻撃カードを設定
         var dummyCard = ScriptableObject.CreateInstance<CardData>();
@@ -278,6 +316,15 @@ public class SellFeature
         CardSelectionManager.I?.ClearAllSelections();
         battleManager.SetCurrentAttackCard(null);
         battleManager.SetGameState(GameState.AttackSelect);
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+
+        // 攻撃フェーズの状態に戻す（攻撃可能なカード以外はグレーアウト）
+        if (BattleUIManager.I != null && battleManager != null && playerHand != null)
+        {
+            var attackables = CardRules.GetAttackChoices(playerHand);
+            BattleUIManager.I.RefreshAttackInteractivity(playerHand, attackables);
+        }
+
         BattleUIManager.I?.UpdateEconomicActionButtons();
     }
 
@@ -293,5 +340,6 @@ public class SellFeature
 
     public CardData GetTargetSellCard() => targetSellCard;
     public bool IsSellModeActive() => isSellModeActive;
+    public bool IsSellProcessActive() => isSellModeActive || isProcessingConfirm;
 }
 

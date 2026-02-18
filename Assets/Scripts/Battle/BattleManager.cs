@@ -60,6 +60,7 @@ public class BattleManager : MonoBehaviour
     [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
     public CardPurchaseAnimation cardPurchaseAnimation;
+    [SerializeField] private CardSellAnimation cardSellAnimation;
     
     [SerializeField] private HandRefillService handRefill;
     [SerializeField] private CardStatsDisplay cardStatsDisplay;
@@ -198,7 +199,7 @@ public class BattleManager : MonoBehaviour
         {
             Debug.LogWarning("[BattleManager] BattleUIManager.Iがnullです");
         }
-        sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas, handRefill);
+        sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas, cardSellAnimation, handRefill);
 
         if (cardStatsDisplay != null)
         {
@@ -292,8 +293,13 @@ public class BattleManager : MonoBehaviour
         if (CurrentTurnOwner == PlayerType.Player) playerStatus.OnTurnStart();
         else enemyStatus.OnTurnStart();
 
-        // 経済アクションのクールダウンを更新
-        EconomicAction.I?.OnTurnStart();
+        // 経済アクションのクールダウンを更新（プレイヤーのターン開始時のみ）
+        if (CurrentTurnOwner == PlayerType.Player)
+        {
+            EconomicAction.I?.OnTurnStart();
+            // クールダウン更新後にUIを更新
+            BattleUIManager.I?.UpdateEconomicActionButtons();
+        }
 
         BattleUIManager.I?.HideAllCardDetails();
         cardStatsDisplay?.UpdateDisplay();
@@ -735,6 +741,21 @@ public class BattleManager : MonoBehaviour
     public void UpdateTotalATKDEFDisplay()
     {
         cardStatsDisplay?.UpdateDisplay();
+    }
+
+    public bool IsSellProcessActive()
+    {
+        return sellFeature != null && sellFeature.IsSellProcessActive();
+    }
+
+    public bool IsBuyProcessActive()
+    {
+        return buyFeature != null && buyFeature.IsBuyProcessActive();
+    }
+
+    public bool IsEconomicActionInProgress()
+    {
+        return IsSellProcessActive() || IsBuyProcessActive();
     }
 
     private SummonData GetRandomEnemySummon()

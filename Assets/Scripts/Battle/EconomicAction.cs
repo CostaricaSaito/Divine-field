@@ -30,6 +30,7 @@ public class EconomicAction : MonoBehaviour
 
     /// <summary>
     /// ターン開始時の処理（クールダウンを1ターン減らす）
+    /// プレイヤーのターン開始時のみ呼ばれる
     /// </summary>
     public void OnTurnStart()
     {

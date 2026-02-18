@@ -670,6 +670,8 @@ public class BattleUIManager : MonoBehaviour
             return;
         }
 
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
+
         Debug.Log("[BattleUIManager] 売るアクション実行");
         BattleManager.I?.ExecuteSellAction();
     }
@@ -785,6 +787,11 @@ public class BattleUIManager : MonoBehaviour
     /// SellConfirmPopupのPrefabを取得（BattleManagerから使用）
     /// </summary>
     public GameObject GetSellConfirmPopupPrefab() => sellConfirmPopupPrefab;
+
+    /// <summary>
+    /// カードシートのPrefabを取得
+    /// </summary>
+    public GameObject GetCardSheetPrefab() => cardSheetPrefab;
 
     /// <summary>
     /// ポップアップ用のCanvasを取得（BattleManagerから使用）
