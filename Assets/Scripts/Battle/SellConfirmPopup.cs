@@ -139,7 +139,7 @@ public class SellConfirmPopup : MonoBehaviour
         isDestroying = true;
 
         // 承諾時の音効果（後で実装）
-        // SoundEffectPlayer.I?.Play("Assets/SE/...");
+        SoundEffectPlayer.I?.Play("Assets/SE/金額をお確かめください.mp3");
         
         onConfirm?.Invoke();
     }
@@ -150,7 +150,7 @@ public class SellConfirmPopup : MonoBehaviour
         isDestroying = true;
 
         // キャンセル時の音効果（後で実装）
-        // SoundEffectPlayer.I?.Play("Assets/SE/キャンセル4.mp3");
+        SoundEffectPlayer.I?.Play("Assets/SE/キャンセル4.mp3");
         
         Debug.Log("[SellConfirmPopup] キャンセルボタンが押されました");
         onCancel?.Invoke();

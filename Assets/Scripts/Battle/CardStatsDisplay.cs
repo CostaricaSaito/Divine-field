@@ -149,6 +149,8 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return true;
 
+        if (battleManager.IsEconomicActionInProgress()) return true;
+
         // 演出中のカードがある場合
         if (currentSequenceCards.Count > 0)
         {
@@ -230,6 +232,8 @@ public class CardStatsDisplay : MonoBehaviour
     {
         var battleManager = BattleManager.I;
         if (battleManager == null) return true;
+
+        if (battleManager.IsEconomicActionInProgress()) return true;
 
         // 敵のターン（攻撃フェーズ）の場合
         if (battleManager.CurrentState == GameState.AttackSelect && battleManager.CurrentTurnOwner == PlayerType.Enemy)

@@ -17,6 +17,8 @@ public class BuyFeature
     private CardPurchaseAnimation cardPurchaseAnimation;
 
     private CardData targetBuyCard; // 購入対象カード
+    private bool isBuyModeActive = false;
+    private bool isProcessingBuy = false;
 
     /// <summary>
     /// 初期化
@@ -74,6 +76,9 @@ public class BuyFeature
         targetBuyCard = cpuHand[Random.Range(0, cpuHand.Count)];
         Debug.Log($"[BuyFeature] 購入対象カード: {targetBuyCard.cardName} (価値: {targetBuyCard.cardValue})");
 
+        isBuyModeActive = true;
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+
         // 0.5秒インターバル（承諾後の待機）
         await Task.Delay(500);
 
@@ -88,6 +93,8 @@ public class BuyFeature
 
         // クールダウンを設定
         EconomicAction.I.SetBuyCooldown();
+        // クールダウン設定後にUIを即座に更新
+        BattleUIManager.I?.UpdateEconomicActionButtons();
 
         // 防御フェーズに移行（跳ね返し対応）
         battleManager.SetGameState(GameState.DefenseSelect);
@@ -103,36 +110,45 @@ public class BuyFeature
         if (targetBuyCard == null)
         {
             Debug.LogWarning("[BuyFeature] 購入対象カードが設定されていません");
+            ResetBuyProcessState();
             return;
         }
 
-        int cost = targetBuyCard.cardValue;
-        Debug.Log($"[BuyFeature] 経済アクション処理開始 - コスト: {cost}GP");
+        isProcessingBuy = true;
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
 
-        // 支払い処理
-        ProcessPayment(cost);
-
-        // 購入アニメーション実行
-        if (cardPurchaseAnimation != null && BattleUIManager.I != null)
+        try
         {
-            await cardPurchaseAnimation.PlayPurchaseAnimation(
-                targetBuyCard,
-                cost,
-                BattleUIManager.I.GetEnemyCardDisplayPanel(),
-                BattleUIManager.I.GetPlayerCardDisplayPanel()
-            );
+            int cost = targetBuyCard.cardValue;
+            Debug.Log($"[BuyFeature] 経済アクション処理開始 - コスト: {cost}GP");
+
+            // 支払い処理
+            ProcessPayment(cost);
+
+            // 購入アニメーション実行
+            if (cardPurchaseAnimation != null && BattleUIManager.I != null)
+            {
+                await cardPurchaseAnimation.PlayPurchaseAnimation(
+                    targetBuyCard,
+                    cost,
+                    BattleUIManager.I.GetEnemyCardDisplayPanel(),
+                    BattleUIManager.I.GetPlayerCardDisplayPanel()
+                );
+            }
+
+            // カード取得処理（裏向きのまま手札に追加）
+            ProcessCardAcquisition();
+
+            // ステータス更新
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+            Debug.Log("[BuyFeature] 購入処理完了");
         }
-
-        // カード取得処理（裏向きのまま手札に追加）
-        ProcessCardAcquisition();
-
-        // ステータス更新
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-
-        Debug.Log("[BuyFeature] 購入処理完了");
-
-        // 処理完了後、targetBuyCardをクリア
-        targetBuyCard = null;
+        finally
+        {
+            targetBuyCard = null;
+            ResetBuyProcessState();
+        }
     }
 
     /// <summary>
@@ -211,6 +227,15 @@ public class BuyFeature
                 SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             }
         }
+    }
+
+    public bool IsBuyProcessActive() => isBuyModeActive || isProcessingBuy;
+
+    private void ResetBuyProcessState()
+    {
+        isProcessingBuy = false;
+        isBuyModeActive = false;
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
     }
 
     /// <summary>
