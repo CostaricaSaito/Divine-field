@@ -239,6 +239,26 @@ public class BuyFeature
     }
 
     /// <summary>
+    /// 外部から買うアクションをキャンセルする（他の経済アクション開始時に使用）
+    /// </summary>
+    public void CancelBuy()
+    {
+        if (!IsBuyProcessActive()) return;
+        Debug.Log("[BuyFeature] 外部からキャンセル");
+        ResetBuyProcessState();
+        targetBuyCard = null;
+        // カード表示をリセット
+        BattleUIManager.I?.HideAllCardDetails();
+        // AttackSelect 状態に戻す
+        if (battleManager != null && battleManager.CurrentState != GameState.AttackSelect)
+        {
+            battleManager.SetCurrentAttackCard(null);
+            battleManager.SetGameState(GameState.AttackSelect);
+        }
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+    }
+
+    /// <summary>
     /// 購入対象カードを取得（防御フェーズでの使用）
     /// </summary>
     public CardData GetTargetBuyCard()

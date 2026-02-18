@@ -701,6 +701,50 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cardSheetPrefab: {fileID: 7123594745494731845, guid: 3dda2a7d0d53dc243a91edda11344065, type: 3}
   displayRoot: {fileID: 133051671}
+--- !u!1 &145475514
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 145475516}
+  - component: {fileID: 145475515}
+  m_Layer: 0
+  m_Name: Exchange
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &145475515
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 145475514}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e20148da48ad80d4e8e5abb046664c56, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &145475516
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 145475514}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 725.7911, y: 1084.8746, z: -8.107658}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &150121540 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 178460, guid: 2736bbc2f2c78a949957b0719c2992bd, type: 3}
@@ -5725,7 +5769,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1758844134}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2039896232}
+        m_TargetAssemblyTypeName: BattleUIManager, Assembly-CSharp
+        m_MethodName: OnExchangeButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1758844134
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5922,6 +5978,7 @@ MonoBehaviour:
   handRefill: {fileID: 636466263}
   cardStatsDisplay: {fileID: 1409014768}
   cardSequenceManager: {fileID: 1231503159}
+  exchangeFeature: {fileID: 145475515}
   playerHand: []
   cpuHand: []
   cutInDelay: 1
@@ -6343,6 +6400,7 @@ MonoBehaviour:
   exchangeCooldownText: {fileID: 976437118}
   confirmPopupPrefab: {fileID: 4859073390059423885, guid: ca9b7b26d0464b74a93f893680c4287b, type: 3}
   sellConfirmPopupPrefab: {fileID: 4859073390059423885, guid: ff01efb77bab9e0419796594ce1e75b6, type: 3}
+  exchangePopupPrefab: {fileID: 4859073390059423885, guid: 35cdf38aa3c489540807f9921899407c, type: 3}
   popupCanvas: {fileID: 871309408}
 --- !u!1 &2089198570
 GameObject:
@@ -6631,3 +6689,4 @@ SceneRoots:
   - {fileID: 1231503160}
   - {fileID: 830370673}
   - {fileID: 1376425100}
+  - {fileID: 145475516}

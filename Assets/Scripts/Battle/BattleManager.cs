@@ -68,6 +68,7 @@ public class BattleManager : MonoBehaviour
     private EnemyAI enemyAI = new EnemyAI();
     private BuyFeature buyFeature = new BuyFeature();
     private SellFeature sellFeature = new SellFeature();
+    [SerializeField] private ExchangeFeature exchangeFeature;
 
     // バトルデータ
     private PlayerStatus playerStatus, enemyStatus;
@@ -200,6 +201,18 @@ public class BattleManager : MonoBehaviour
             Debug.LogWarning("[BattleManager] BattleUIManager.Iがnullです");
         }
         sellFeature.Initialize(this, playerStatus, enemyStatus, playerHand, cpuHand, cardDealer, sellPopupPrefab, popupCanvas, cardSellAnimation, handRefill);
+
+        // ExchangeFeatureの初期化
+        if (exchangeFeature != null)
+        {
+            GameObject exchangePopupPrefab = BattleUIManager.I?.GetExchangePopupPrefab();
+            exchangeFeature.Initialize(this, playerStatus, exchangePopupPrefab, popupCanvas);
+            Debug.Log($"[BattleManager] exchangeFeature初期化完了");
+        }
+        else
+        {
+            Debug.LogWarning("[BattleManager] ExchangeFeatureがアタッチされていません");
+        }
 
         if (cardStatsDisplay != null)
         {
@@ -755,7 +768,37 @@ public class BattleManager : MonoBehaviour
 
     public bool IsEconomicActionInProgress()
     {
-        return IsSellProcessActive() || IsBuyProcessActive();
+        return IsSellProcessActive() || IsBuyProcessActive() || IsExchangeProcessActive();
+    }
+
+    public bool IsExchangeProcessActive()
+    {
+        return exchangeFeature != null && exchangeFeature.IsExchangeProcessActive();
+    }
+
+    /// <summary>
+    /// 現在進行中の経済アクション（売る・買う・両替）をキャンセルする
+    /// 他の経済アクションを開始する前に呼び出す
+    /// </summary>
+    public void CancelCurrentEconomicAction()
+    {
+        if (IsSellProcessActive())
+        {
+            Debug.Log("[BattleManager] 売るアクションをキャンセル");
+            sellFeature.CancelSell();
+        }
+        // 買う確認ポップアップが表示中なら先に閉じる
+        BattleUIManager.I?.CancelBuyPopup();
+        if (IsBuyProcessActive())
+        {
+            Debug.Log("[BattleManager] 買うアクションをキャンセル");
+            buyFeature.CancelBuy();
+        }
+        if (IsExchangeProcessActive())
+        {
+            Debug.Log("[BattleManager] 両替アクションをキャンセル");
+            exchangeFeature.CancelIfActive();
+        }
     }
 
     private SummonData GetRandomEnemySummon()
@@ -794,11 +837,21 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 「両替」アクションを実行（後で実装）
+    /// 「両替」アクションを実行（ExchangeFeatureに委譲）
     /// </summary>
     public void ExecuteExchangeAction()
     {
-        Debug.Log("[BattleManager] 両替アクションは未実装です");
+        _ = ExecuteExchangeActionAsync();
+    }
+
+    private async Task ExecuteExchangeActionAsync()
+    {
+        if (exchangeFeature == null)
+        {
+            Debug.LogError("[BattleManager] ExchangeFeatureがアタッチされていません");
+            return;
+        }
+        await exchangeFeature.ExecuteExchangeActionAsync();
     }
 
 

@@ -73,6 +73,7 @@ public class BattleUIManager : MonoBehaviour
     [Header("確認ポップアップ")]
     [SerializeField] private GameObject confirmPopupPrefab; // BuyConfirmPopup用
     [SerializeField] private GameObject sellConfirmPopupPrefab; // SellConfirmPopup用
+    [SerializeField] private GameObject exchangePopupPrefab; // ExchangePopup用
     [SerializeField] private Canvas popupCanvas;
 
     // プライベート変数
@@ -81,6 +82,7 @@ public class BattleUIManager : MonoBehaviour
     
     // ポップアップ状態管理
     private bool isBuyPopupOpen = false;
+    private GameObject currentBuyPopup = null; // 買う確認ポップアップの参照
 
     //==== 初期化 =====
     void Awake()
@@ -636,10 +638,12 @@ public class BattleUIManager : MonoBehaviour
             return;
         }
 
-        // ポップアップが既に開いている場合は無視
-        if (isBuyPopupOpen)
+        // 買う自身が進行中（ポップアップ表示中または買うモード中）の場合はキャンセルのみ
+        if (isBuyPopupOpen || (BattleManager.I != null && BattleManager.I.IsBuyProcessActive()))
         {
-            Debug.Log("[BattleUIManager] 買うポップアップが既に開いているため、無視します");
+            Debug.Log("[BattleUIManager] 買うアクション進行中 → キャンセル");
+            CancelBuyPopup();
+            BattleManager.I?.CancelCurrentEconomicAction();
             return;
         }
 
@@ -651,6 +655,9 @@ public class BattleUIManager : MonoBehaviour
             BattleUIManager.I?.HideAllCardDetails();
             return;
         }
+
+        // 他の経済アクションが進行中ならキャンセルしてから開始
+        BattleManager.I?.CancelCurrentEconomicAction();
 
         // 購入ボタン押下時の音効果
         SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
@@ -670,6 +677,9 @@ public class BattleUIManager : MonoBehaviour
             return;
         }
 
+        // 他の経済アクションが進行中ならキャンセルしてから開始
+        BattleManager.I?.CancelCurrentEconomicAction();
+
         SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
 
         Debug.Log("[BattleUIManager] 売るアクション実行");
@@ -686,6 +696,19 @@ public class BattleUIManager : MonoBehaviour
             Debug.LogWarning("[BattleUIManager] 両替アクションは使用できません");
             return;
         }
+
+        // 両替自身が進行中の場合はキャンセルのみ（新しいポップアップは開かない）
+        if (BattleManager.I != null && BattleManager.I.IsExchangeProcessActive())
+        {
+            Debug.Log("[BattleUIManager] 両替ポップアップ表示中 → キャンセル");
+            BattleManager.I.CancelCurrentEconomicAction();
+            return;
+        }
+
+        // 他の経済アクションが進行中ならキャンセルしてから開始
+        BattleManager.I?.CancelCurrentEconomicAction();
+
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
 
         Debug.Log("[BattleUIManager] 両替アクション実行");
         BattleManager.I?.ExecuteExchangeAction();
@@ -712,6 +735,7 @@ public class BattleUIManager : MonoBehaviour
         // ポップアップを生成
         var popup = Instantiate(confirmPopupPrefab, canvas.transform);
         popup.name = "BuyConfirmPopup";
+        currentBuyPopup = popup; // 参照を保存
 
         // ポップアップのコンポーネントを取得
         var confirmPopup = popup.GetComponent<BuyConfirmPopup>();
@@ -719,6 +743,7 @@ public class BattleUIManager : MonoBehaviour
         {
             Debug.LogError("[BattleUIManager] BuyConfirmPopupコンポーネントが見つかりません");
             Destroy(popup);
+            currentBuyPopup = null;
             return;
         }
 
@@ -729,18 +754,32 @@ public class BattleUIManager : MonoBehaviour
         confirmPopup.Setup(
             onConfirm: () => {
                 Debug.Log("[BattleUIManager] 買うアクション承諾");
-                isBuyPopupOpen = false; // ポップアップ状態をリセット
+                isBuyPopupOpen = false;
+                currentBuyPopup = null;
                 BattleManager.I?.ExecuteBuyAction();
                 Destroy(popup);
             },
             onCancel: () => {
                 Debug.Log("[BattleUIManager] 買うアクションキャンセル");
-                isBuyPopupOpen = false; // ポップアップ状態をリセット
+                isBuyPopupOpen = false;
+                currentBuyPopup = null;
                 Destroy(popup);
             }
         );
 
         Debug.Log("[BattleUIManager] 買うアクション確認ポップアップ表示完了");
+    }
+
+    /// <summary>
+    /// 買う確認ポップアップを強制クローズする（他の経済アクション開始時に使用）
+    /// </summary>
+    public void CancelBuyPopup()
+    {
+        if (!isBuyPopupOpen || currentBuyPopup == null) return;
+        Debug.Log("[BattleUIManager] 買うポップアップを強制クローズ");
+        isBuyPopupOpen = false;
+        Destroy(currentBuyPopup);
+        currentBuyPopup = null;
     }
 
     /// <summary>
@@ -787,6 +826,11 @@ public class BattleUIManager : MonoBehaviour
     /// SellConfirmPopupのPrefabを取得（BattleManagerから使用）
     /// </summary>
     public GameObject GetSellConfirmPopupPrefab() => sellConfirmPopupPrefab;
+
+    /// <summary>
+    /// ExchangePopupのPrefabを取得（BattleManagerから使用）
+    /// </summary>
+    public GameObject GetExchangePopupPrefab() => exchangePopupPrefab;
 
     /// <summary>
     /// カードシートのPrefabを取得

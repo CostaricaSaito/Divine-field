@@ -328,6 +328,16 @@ public class SellFeature
         BattleUIManager.I?.UpdateEconomicActionButtons();
     }
 
+    /// <summary>
+    /// 外部から売るアクションをキャンセルする（他の経済アクション開始時に使用）
+    /// </summary>
+    public void CancelSell()
+    {
+        if (!IsSellProcessActive()) return;
+        Debug.Log("[SellFeature] 外部からキャンセル");
+        OnCancelSell();
+    }
+
     private void ClosePopup()
     {
         if (currentPopup != null)
