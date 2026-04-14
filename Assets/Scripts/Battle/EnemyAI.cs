@@ -146,7 +146,7 @@ public class EnemyAI
         HandRefillService handRefill,
         PlayerStatus enemyStatus)
     {
-        SoundEffectPlayer.I?.Play("Assets/SE/砂時計1.mp3");
+        SoundEffectPlayer.I?.Play("Assets/SE/鳩時計1.mp3");
         Debug.Log("[EnemyAI] 相手の攻撃フェーズ開始");
 
         await Task.Delay(500);

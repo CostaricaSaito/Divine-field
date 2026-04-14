@@ -22,6 +22,7 @@ MonoBehaviour:
   hitRate: 100
   mpCost: 0
   maxUses: 1
+  isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
@@ -40,3 +41,5 @@ MonoBehaviour:
   statusEffectChance: 0
   elementIcon: {fileID: 0}
   cardValue: 3
+  attackPhaseRole: 0
+  defensePhaseRole: 4

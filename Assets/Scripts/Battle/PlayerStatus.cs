@@ -1,20 +1,20 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.Collections.Generic;
 
 
 [System.Serializable]
 public class PlayerStatus
 {
-    public string DisplayName { get; private set; } = "ƒvƒŒƒCƒ„[";
+    public string DisplayName { get; private set; } = "ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼";
 
     public void InitializeAsPlayer()
     {
-        DisplayName = (GameProfile.I != null) ? GameProfile.I.PlayerName : "ƒvƒŒƒCƒ„[";
+        DisplayName = (GameProfile.I != null) ? GameProfile.I.PlayerName : "ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼";
     }
 
     public void InitializeAsEnemy()
     {
-        DisplayName = (GameProfile.I != null) ? GameProfile.I.EnemyName : "‘Î“GÒ";
+        DisplayName = (GameProfile.I != null) ? GameProfile.I.EnemyName : "å¯¾æ•µè€…";
     }
 
     public void SetSummonData(SummonData data)
@@ -32,10 +32,31 @@ public class PlayerStatus
 
     public SummonData summonData;
 
-    public List<IStatusEffect> activeEffects = new List<IStatusEffect>();     // ó‘ÔˆÙíˆê——
+    public List<IStatusEffect> activeEffects = new List<IStatusEffect>(); // çŠ¶æ…‹ç•°å¸¸ä¸€è¦§
 
+    /// <summary>
+    /// UI ç”¨ï¼šç¾åœ¨ã‹ã‹ã£ã¦ã„ã‚‹çŠ¶æ…‹ç•°å¸¸ã®ç¨®é¡ï¼ˆé‡è¤‡ãªã—ãƒ»å…¬å¼IDé †ï¼‰ã€‚
+    /// </summary>
+    public List<StatusEffectType> GetActiveAilmentTypesOrdered()
+    {
+        var set = new HashSet<StatusEffectType>();
+        foreach (var effect in activeEffects)
+        {
+            if (effect == null) continue;
+            if (effect.EffectType == StatusEffectType.None) continue;
+            set.Add(effect.EffectType);
+        }
+        var list = new List<StatusEffectType>(set);
+        list.Sort(CompareAilmentOrder);
+        return list;
+    }
 
-    // ƒ_ƒ[ƒWˆ—ió‘ÔˆÙí‚É‚æ‚éC³‚ ‚èj
+    private static int CompareAilmentOrder(StatusEffectType a, StatusEffectType b)
+    {
+        return StatusEffectCatalog.ToOfficialId(a).CompareTo(StatusEffectCatalog.ToOfficialId(b));
+    }
+
+    // ãƒ€ãƒ¡ãƒ¼ã‚¸è¨ˆç®—ï¼ˆçŠ¶æ…‹ç•°å¸¸ã«ã‚ˆã‚‹è£œæ­£ã‚ã‚Šï¼‰
     public void TakeDamage(int amount)
     {
         int modifiedAmount = amount;
@@ -45,7 +66,7 @@ public class PlayerStatus
         }
 
         currentHP = Mathf.Max(currentHP - modifiedAmount, 0);
-        Debug.Log($"{DisplayName} ‚É {modifiedAmount} ƒ_ƒ[ƒWiŒ³’l: {amount}j");
+        Debug.Log($"{DisplayName} ã« {modifiedAmount} ãƒ€ãƒ¡ãƒ¼ã‚¸ï¼ˆå…ƒå€¤: {amount}ï¼‰");
     }
 
     public void UseMP(int amount)
@@ -63,14 +84,14 @@ public class PlayerStatus
         return currentHP <= 0;
     }
 
-    // ó‘ÔˆÙí‚Ì’Ç‰Á
+    // çŠ¶æ…‹ç•°å¸¸ã®è¿½åŠ 
     public void AddStatusEffect(StatusEffectType type)
     {
         foreach (var effect in activeEffects)
         {
             if (effect.EffectType == type)
             {
-                Debug.Log($"{DisplayName} ‚Í‚·‚Å‚É {type} ‚ğ‚Á‚Ä‚¢‚Ü‚·");
+                Debug.Log($"{DisplayName} ã¯ã™ã§ã« {type} ã‚’æŒã£ã¦ã„ã¾ã™");
                 return;
             }
         }
@@ -79,11 +100,11 @@ public class PlayerStatus
         if (newEffect != null)
         {
             activeEffects.Add(newEffect);
-            Debug.Log($"{DisplayName} ‚Éó‘ÔˆÙí {newEffect.GetEffectName()} ‚ğ•t—^‚µ‚Ü‚µ‚½");
+            Debug.Log($"{DisplayName} ã«çŠ¶æ…‹ç•°å¸¸ {newEffect.GetEffectName()} ã‚’ä»˜ä¸ã—ã¾ã—ãŸ");
         }
     }
 
-    // –ˆƒ^[ƒ“‚Ìó‘ÔˆÙí•]‰¿iBattleManager‘¤‚ÅŒÄ‚Ô‘z’èj
+    // ã‚¿ãƒ¼ãƒ³é–‹å§‹æ™‚ã®çŠ¶æ…‹ç•°å¸¸å‡¦ç†ï¼ˆBattleManager ã‹ã‚‰å‘¼ã¶æƒ³å®šï¼‰
     public void OnTurnStart()
     {
         foreach (var effect in activeEffects)
@@ -96,7 +117,7 @@ public class PlayerStatus
             if (e.IsExpired())
             {
                 e.OnRemove(this);
-                Debug.Log($"{DisplayName} ‚Ì {e.GetEffectName()} ‚ÍI—¹‚µ‚Ü‚µ‚½");
+                Debug.Log($"{DisplayName} ã® {e.GetEffectName()} ã¯çµ‚äº†ã—ã¾ã—ãŸ");
                 return true;
             }
             return false;

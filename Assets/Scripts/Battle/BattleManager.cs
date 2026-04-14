@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -535,6 +536,23 @@ public class BattleManager : MonoBehaviour
 
     private async Task RunTurnEndAsync()
     {
+        // 攻撃フェーズ終了直後：攻撃側の病系処理（補充・ドローより先）
+        PlayerStatus attackerStatus = CurrentTurnOwner == PlayerType.Player ? playerStatus : enemyStatus;
+        try
+        {
+            await DiseaseTurnEndProcessor.ProcessForAttackerAsync(attackerStatus, _phaseCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+
+        if (_phaseCts.Token.IsCancellationRequested) return;
+
         if (handRefill != null)
         {
             await handRefill.RefillAtTurnEndAsync(playerHand, cpuHand, _phaseCts.Token);
@@ -916,7 +934,7 @@ public class BattleManager : MonoBehaviour
             enemyCandidates.RemoveAt(SummonSelectionManager.I.SelectedIndex);
         }
 
-        return enemyCandidates[Random.Range(0, enemyCandidates.Count)];
+        return enemyCandidates[UnityEngine.Random.Range(0, enemyCandidates.Count)];
     }
 
     /// <summary>

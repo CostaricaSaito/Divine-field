@@ -1,30 +1,46 @@
-using UnityEngine;
-
-/// <summary>
-/// ó‘ÔˆÙí‚Ìí—Ş‚ğ’è‹`‚·‚é—ñ‹“‘Ì
+ï»¿/// <summary>
+/// çŠ¶æ…‹ç•°å¸¸ã®ç¨®é¡ï¼ˆå…¨15ç¨® + Noneï¼‰ã€‚
+/// æ•°å€¤ã¯å…¬å¼IDã¨ä¸€è‡´ï¼ˆ1=ç—… â€¦ 15=æ‹˜æŸï¼‰ã€‚ã‚·ãƒªã‚¢ãƒ©ã‚¤ã‚ºäº’æ›ã®ãŸã‚æ˜ç¤ºæŒ‡å®šã€‚
 /// </summary>
 public enum StatusEffectType
 {
-    None,           // ó‘ÔˆÙí‚È‚µiƒfƒtƒHƒ‹ƒgj
-    Sickness,         // •aF–ˆƒ^[ƒ“ƒ_ƒ[ƒWiŒyÇj
-    SevereSickness,   // d•aF‘å‚«‚ÈŒp‘±ƒ_ƒ[ƒW
-    PurgatorySickness,  // —ù–•aFÅ‘å‹‰‚ÌŒp‘±ƒ_ƒ[ƒW
-    ParadiseSickness,   // Šy‰€•aF‰ñ•œ+‘¦€‚ÌƒŠƒXƒN
+    None = 0,
 
-    Weaken,         // ŠãFUŒ‚—Í’á‰º
-    
-    EyeStrain,      // Šá¸”æ˜JFMPÁ”ï2”{
-    ClusterHeadache,// ŒQ”­“ª’ÉF–‚–@g—p•s”\
+    // --- å…¬å¼ID 1ã€œ4ï¼šç—…ç³»ï¼ˆç›¸äº’æ’ä»–ãƒ»æ®µéšé€²è¡Œï¼‰ ---
+    /// <summary>1 ç—…</summary>
+    Sickness = 1,
+    /// <summary>2 é‡ç—…</summary>
+    SevereSickness = 2,
+    /// <summary>3 ç…‰ç„ç—…</summary>
+    PurgatorySickness = 3,
+    /// <summary>4 æ¥½åœ’ç—…</summary>
+    ParadiseSickness = 4,
 
-    Smoke,          // ‰Œ–‹F–½’†—¦’á‰º
-    Illusion,       // Œ¶ŠoFƒJ[ƒh‚ª•Ï‰»
-    Misfortune,     // •s‰^F“G‚ÌUŒ‚‚ª•K’†
+    // --- å…¬å¼ID 5ã€œ7 ---
+    /// <summary>5 è¡°å¼±</summary>
+    Weaken = 5,
+    /// <summary>6 çœ¼ç²¾ç–²åŠ´</summary>
+    EyeStrain = 6,
+    /// <summary>7 ç¾¤ç™ºé ­ç—›</summary>
+    ClusterHeadache = 7,
 
-    Seal,           // ••ˆóFs“®•s”\i–hŒä‰Âj
-    Fog,            // ”Z–¶FƒXƒe[ƒ^ƒX“™”ñ•\¦
-    CurseBind,      // ô”›FƒpƒbƒVƒu–³Œø
+    // --- å…¬å¼ID 8ã€œ11 ---
+    /// <summary>8 ç…™å¹•</summary>
+    Smoke = 8,
+    /// <summary>9 ä¸é‹</summary>
+    Misfortune = 9,
+    /// <summary>10 å°å°</summary>
+    Seal = 10,
+    /// <summary>11 æ¿ƒéœ§</summary>
+    Fog = 11,
 
-    Intervention,   // ‰î“üF–ˆƒ^[ƒ“ƒ‰ƒ“ƒ_ƒ€ƒJ[ƒh‚ª”­“®
-    Confusion,      // ¬—F‘ÎÛ‚ªƒ‰ƒ“ƒ_ƒ€
-    Restraint       // S‘©F–hŒäƒJ[ƒh§ŒÀ
+    // --- å…¬å¼ID 12ã€œ15 ---
+    /// <summary>12 æ··ä¹±</summary>
+    Confusion = 12,
+    /// <summary>13 ä»‹å…¥</summary>
+    Intervention = 13,
+    /// <summary>14 å‘ªç¸›</summary>
+    CurseBind = 14,
+    /// <summary>15 æ‹˜æŸ</summary>
+    Restraint = 15,
 }

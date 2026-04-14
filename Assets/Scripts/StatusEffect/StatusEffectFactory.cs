@@ -9,9 +9,14 @@ public static class StatusEffectFactory
             case StatusEffectType.Weaken:
                 return new WeakenEffect();
 
-            // ‘¼‚Ìó‘ÔˆÙí‚à’Ç‰Á
+            case StatusEffectType.Sickness:
+            case StatusEffectType.SevereSickness:
+            case StatusEffectType.PurgatorySickness:
+            case StatusEffectType.ParadiseSickness:
+                return new DiseaseLineEffect(type);
+
             default:
-                Debug.LogWarning($"–¢À‘•‚Ìó‘ÔˆÙí: {type}");
+                Debug.LogWarning($"æœªå®Ÿè£…ã®çŠ¶æ…‹ç•°å¸¸: {type}");
                 return null;
         }
     }
