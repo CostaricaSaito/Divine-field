@@ -235,43 +235,38 @@ public class CardStatsDisplay : MonoBehaviour
 
         if (battleManager.IsEconomicActionInProgress()) return true;
 
-        // 敵のターン（攻撃フェーズ）の場合
-        if (battleManager.CurrentState == GameState.AttackSelect && battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        // 敵のターン（攻撃側）: currentAttackCard が設定されていれば表示
+        // RunEnemyTurnAsync は OnTurnStart から直接呼ばれるため
+        // CurrentState が TurnStart のまま AttackSelect に遷移しないケースがある
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
         {
-            // 敵が攻撃カードを選択している場合（currentAttackCardで判定）
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
             {
-                // 回復カードや特殊カード（即時効果）の場合は非表示
                 if (CardRules.IsImmediateAction(currentAttackCard)) return true;
-
-                // 攻撃力が0以下の場合は非表示
                 if (currentAttackCard.attackPower <= 0) return true;
-
-                // 表示する
                 return false;
             }
             return true;
         }
 
-        // プレイヤーのターン（防御フェーズ）の場合
-        if (battleManager.CurrentState == GameState.DefenseSelect && battleManager.CurrentTurnOwner == PlayerType.Player)
+        // プレイヤーのターン（敵が防御側）: selectedDefenseCard が設定されていれば表示
+        if (battleManager.CurrentTurnOwner == PlayerType.Player
+            && battleManager.DefenderPublic == PlayerType.Enemy)
         {
-            // 敵が防御カードを選択している場合（selectedDefenseCardで判定、ただしこれはプレイヤーの防御カードなので、敵の防御カードは別の方法で取得）
-            // 敵の防御カードは、DefenderがEnemyの場合のselectedDefenseCardで判定
-            var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
-            if (selectedDefenseCard != null && battleManager.DefenderPublic == PlayerType.Enemy)
+            var state = battleManager.CurrentState;
+            if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm)
             {
-                // 防御力が0以下の場合は非表示
-                if (selectedDefenseCard.defensePower <= 0) return true;
-
-                // 表示する
-                return false;
+                var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
+                if (selectedDefenseCard != null)
+                {
+                    if (selectedDefenseCard.defensePower <= 0) return true;
+                    return false;
+                }
             }
             return true;
         }
 
-        // その他の状態では非表示
         return true;
     }
 
@@ -348,10 +343,9 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return "";
 
-        // 敵のターン（攻撃フェーズ）の場合
-        if (battleManager.CurrentState == GameState.AttackSelect && battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        // 敵のターン（攻撃側）: ATK を表示
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
         {
-            // 敵が攻撃カードを選択している場合
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
             {
@@ -359,12 +353,12 @@ public class CardStatsDisplay : MonoBehaviour
             }
         }
 
-        // プレイヤーのターン（防御フェーズ）の場合
-        if (battleManager.CurrentState == GameState.DefenseSelect && battleManager.CurrentTurnOwner == PlayerType.Player)
+        // プレイヤーのターン（敵が防御側）: DEF を表示
+        if (battleManager.CurrentTurnOwner == PlayerType.Player
+            && battleManager.DefenderPublic == PlayerType.Enemy)
         {
-            // 敵が防御カードを選択している場合
             var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
-            if (selectedDefenseCard != null && battleManager.DefenderPublic == PlayerType.Enemy)
+            if (selectedDefenseCard != null)
             {
                 return $"DEF {selectedDefenseCard.defensePower}";
             }

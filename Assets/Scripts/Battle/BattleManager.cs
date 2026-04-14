@@ -65,6 +65,7 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private HandRefillService handRefill;
     [SerializeField] private CardStatsDisplay cardStatsDisplay;
     [SerializeField] private CardSequenceManager cardSequenceManager;
+    [SerializeField] private MagicPoolManager magicPoolManager;
     private EnemyAI enemyAI = new EnemyAI();
     private BuyFeature buyFeature = new BuyFeature();
     private SellFeature sellFeature = new SellFeature();
@@ -104,8 +105,32 @@ public class BattleManager : MonoBehaviour
     {
         selectedCard = card;
     }
+
+    /// <summary>
+    /// MagicPanel プール済みカードを選択する（MagicCardSlot.OnClick から呼ぶ）
+    /// 手札のカード選択と同じ UI フローを実行し、CardSelectionManager にも追加する
+    /// </summary>
+    public void SelectMagicPoolCard(CardData card)
+    {
+        if (card == null) return;
+
+        if (CurrentState != GameState.AttackSelect || Attacker != PlayerType.Player)
+        {
+            Debug.Log($"[BattleManager] MagicPanel カード選択不可: 現在のState={CurrentState}");
+            return;
+        }
+
+        // ShowCardDetail 内で AddCardSelection / CancelCardSelection が処理される
+        selectedCard = card;
+        BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+        UpdateTotalATKDEFDisplay();
+        Debug.Log($"[BattleManager] MagicPanel カード選択: {card.cardName} (残り{MagicPoolManager.I?.GetRemainingUses(card)}回)");
+    }
     private CardData selectedCard;
     private CardData selectedDefenseCard;
+    private bool isProcessingUseButton;
+    public bool IsUseButtonLocked => isProcessingUseButton;
 
     /// <summary>
     /// 選択中のカードを取得（CardStatsDisplayから使用）
@@ -214,6 +239,17 @@ public class BattleManager : MonoBehaviour
             Debug.LogWarning("[BattleManager] ExchangeFeatureがアタッチされていません");
         }
 
+        // MagicPoolManager の初期化
+        if (magicPoolManager != null)
+        {
+            magicPoolManager.RegisterOnPoolChanged(() =>
+            {
+                BattleUIManager.I?.UpdateMagicPanel();
+                BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            });
+            Debug.Log("[BattleManager] MagicPoolManager初期化完了");
+        }
+
         if (cardStatsDisplay != null)
         {
             cardStatsDisplay?.UpdateDisplay();
@@ -232,6 +268,7 @@ public class BattleManager : MonoBehaviour
 
         Debug.Log($"[State]{CurrentState} → {newState}(Turn: {CurrentTurnOwner})");
         CurrentState = newState;
+        isProcessingUseButton = false;
         HandleStateChange();
     }
 
@@ -315,6 +352,7 @@ public class BattleManager : MonoBehaviour
         }
 
         BattleUIManager.I?.HideAllCardDetails();
+        currentAttackCard = null;
         cardStatsDisplay?.UpdateDisplay();
 
         // TurnStart時点ではグレーアウトしない
@@ -335,17 +373,20 @@ public class BattleManager : MonoBehaviour
 
     private void EnterAttackSelect()
     {
+        BattleUIManager.I?.SetHandClickable(true);
+
         if (Attacker == PlayerType.Player)
         {
             // ターンプレイヤー（攻撃側）の処理
             var attackables = CardRules.GetAttackChoices(playerHand);
-            if (attackables.Count == 0 || attackables.TrueForAll(c => c.cardType == CardType.Magic))
+            if (attackables.Count == 0)
             {
                 BattleUIManager.I?.SetPrayModeUI(playerHand);
             }
             else
             {
                 BattleUIManager.I?.SetUseButtonLabel("使用");
+                BattleUIManager.I?.SetUseButtonInteractable(false);
                 
                 // グレーアウト制御フラグをチェック
                 if (shouldGrayOutCards)
@@ -360,6 +401,9 @@ public class BattleManager : MonoBehaviour
                 // 経済アクションボタンの状態を更新
                 BattleUIManager.I?.UpdateEconomicActionButtons();
             }
+
+            // MagicPanel のインタラクティブ状態を更新
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         }
         else
         {
@@ -396,8 +440,12 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
+            BattleUIManager.I?.HidePlayerCardDetails();
+            BattleUIManager.I?.SetHandClickable(true);
             BattleUIManager.I?.SetUseButtonLabel("許す");
             BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
+            // 防御フェーズでは攻撃魔法パネルを無効化
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
             
             // プレイヤーが防御カードを選択するまで待機
             // OnUseButtonPressedでHandleDefenseUseが呼ばれるまで待つ
@@ -420,6 +468,9 @@ public class BattleManager : MonoBehaviour
             {
                 Debug.Log("[BattleManager] 経済アクション（購入）の防御フェーズ処理");
                 await buyFeature.ProcessEconomicActionAsync();
+                currentAttackCard = null;
+                selectedDefenseCard = null;
+                UpdateTotalATKDEFDisplay();
                 SetGameState(GameState.TurnEnd);
                 return;
             }
@@ -427,6 +478,9 @@ public class BattleManager : MonoBehaviour
             {
                 Debug.Log("[BattleManager] 経済アクション（売却）の防御フェーズ処理");
                 await sellFeature.ProcessEconomicActionAsync();
+                currentAttackCard = null;
+                selectedDefenseCard = null;
+                UpdateTotalATKDEFDisplay();
                 SetGameState(GameState.TurnEnd);
                 return;
             }
@@ -464,6 +518,9 @@ public class BattleManager : MonoBehaviour
         await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
 
         if (_phaseCts.Token.IsCancellationRequested) return;
+
+        // ダメージ処理完了後、全カード表示をクリア
+        BattleUIManager.I?.HideAllCardDetails();
 
         // 敵の防御カード使用処理（裏向きにする）
         if (defenseCardToDisplay != null)
@@ -510,8 +567,8 @@ public class BattleManager : MonoBehaviour
 
     private async Task RunEnemyTurnAsync()
     {
-        // EnemyAIで攻撃ターンを実行
-        var attack = await enemyAI.ExecuteAttackTurnAsync(cpuHand, battleProcessor, handRefill);
+        // EnemyAIで攻撃ターンを実行（enemyStatusを渡してMP消費・魔法判定を行う）
+        var attack = await enemyAI.ExecuteAttackTurnAsync(cpuHand, battleProcessor, handRefill, enemyStatus);
         
         if (attack == null)
         {
@@ -527,6 +584,9 @@ public class BattleManager : MonoBehaviour
         // 相手のカード決定時の効果音
         SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
         Debug.Log($"[BattleManager] 相手のカード決定: {attack.cardName}");
+
+        // ステータスUI更新（MP消費の反映）
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
 
         // 敵のTotalATKDEF表示を更新
         cardStatsDisplay.UpdateDisplay();
@@ -588,16 +648,29 @@ public class BattleManager : MonoBehaviour
 
     public void OnUseButtonPressed()
     {
+        if (isProcessingUseButton) return;
+        isProcessingUseButton = true;
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+        BattleUIManager.I?.SetHandClickable(false);
+
         switch (CurrentState)
         {
             case GameState.AttackSelect:
                 if (Attacker == PlayerType.Player)
                     HandleAttackUse();
+                else
+                    isProcessingUseButton = false;
                 break;
 
             case GameState.DefenseSelect:
                 if (Defender == PlayerType.Player)
                     HandleDefenseUse();
+                else
+                    isProcessingUseButton = false;
+                break;
+
+            default:
+                isProcessingUseButton = false;
                 break;
         }
     }
@@ -632,6 +705,9 @@ public class BattleManager : MonoBehaviour
         if (selectedAttackCards == null || selectedAttackCards.Count == 0)
         {
             Debug.LogWarning("攻撃カードが選択されていません");
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+            BattleUIManager.I?.SetHandClickable(true);
             return;
         }
 
@@ -694,6 +770,9 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private async void HandleNoDefenseCard()
     {
+        // キャンセルトークンを先にキャプチャ（await 後に _phaseCts が Dispose される可能性があるため）
+        var token = _phaseCts.Token;
+
         // 選択状態をクリア
         BattleUIManager.I?.ClearAllSelections();
         UpdateTotalATKDEFDisplay();
@@ -708,7 +787,10 @@ public class BattleManager : MonoBehaviour
         // 防御カードなしで戦闘解決
         await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand);
 
-        if (_phaseCts.Token.IsCancellationRequested) return;
+        if (token.IsCancellationRequested) return;
+
+        // ダメージ処理完了後、全カード表示をクリア
+        BattleUIManager.I?.HideAllCardDetails();
 
         // 防御カード確定後の処理
         SetGameState(GameState.TurnEnd);
@@ -754,6 +836,28 @@ public class BattleManager : MonoBehaviour
     public void UpdateTotalATKDEFDisplay()
     {
         cardStatsDisplay?.UpdateDisplay();
+    }
+
+    /// <summary>
+    /// 手札カードを 1 枚ドローする（MagicPoolManager 経由で手札追加時に使用）
+    /// </summary>
+    public async void DrawOneCard()
+    {
+        if (handRefill != null)
+        {
+            await handRefill.DrawCardAsync(playerHand);
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        }
+    }
+
+    /// <summary>
+    /// 手札の上限枚数を返す（MagicPoolManager で手札追加可否の判定に使用）
+    /// </summary>
+    public int GetHandMaxCount()
+    {
+        // handPanel の子オブジェクト数 = スロット数（構造上の最大手札杖数）
+        if (handPanel != null) return handPanel.childCount;
+        return 10; // デフォルト値
     }
 
     public bool IsSellProcessActive()

@@ -59,6 +59,33 @@ public static class CardRules
         return IsImmediateAction(c);
     }
 
+    /// <summary>
+    /// 魔法カードかどうか
+    /// </summary>
+    public static bool IsMagicCard(CardData c)
+    {
+        if (c == null) return false;
+        return c.cardType == CardType.Magic;
+    }
+
+    /// <summary>
+    /// 攻撃魔法かどうか（単独型 or 組み合わせ型で、回復ではない）
+    /// </summary>
+    public static bool IsAttackMagic(CardData c)
+    {
+        if (c == null || c.cardType != CardType.Magic) return false;
+        return !c.isRecovery;
+    }
+
+    /// <summary>
+    /// 回復魔法かどうか
+    /// </summary>
+    public static bool IsRecoveryMagic(CardData c)
+    {
+        if (c == null || c.cardType != CardType.Magic) return false;
+        return c.isRecovery;
+    }
+
     public static List<CardData> GetAttackChoices(List<CardData> hand) => hand.FindAll(IsUsableInAttackPhase);
     public static List<CardData> GetDefenseChoices(List<CardData> hand) => hand.FindAll(IsUsableInDefensePhase);
 }

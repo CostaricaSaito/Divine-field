@@ -24,6 +24,29 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
 
+        // ===== 魔法カードの事前ガード =====
+        if (card.cardType == CardType.Magic)
+        {
+            bool isFromPool = card.cardUI == null;
+
+            // MP不足チェック（手札・プール共通）
+            var playerStatus = BattleManager.I?.GetPlayerStatus();
+            if (playerStatus != null && playerStatus.currentMP < card.mpCost)
+            {
+                Debug.Log($"[CardSelectionManager] MP不足: {card.cardName} (必要MP={card.mpCost}, 現在MP={playerStatus.currentMP})");
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MP不足！", Color.red);
+                return false;
+            }
+
+            // MagicPool 容量チェック（手札からの使用のみ）
+            if (!isFromPool && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card))
+            {
+                Debug.Log($"[CardSelectionManager] MagicPool 満杯のため {card.cardName} は選択不可");
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法容量不足！", new Color(1f, 0.5f, 0f));
+                return false;
+            }
+        }
+
         // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
         CheckCardConflicts(card);
 
@@ -133,6 +156,33 @@ public class CardSelectionManager : MonoBehaviour
             return false;
         }
 
+        // ===== 魔法カードの競合ルール =====
+        if (newCard.cardType == CardType.Magic)
+        {
+            // 単独型魔法は他の選択をリセットして単独で選択
+            if (!newCard.isCombinationMagic)
+            {
+                if (selectedCards.Count > 0)
+                {
+                    Debug.Log("[CardSelectionManager] 単独型魔法カードを選択するため、既存選択をクリア");
+                    ClearAllSelections();
+                    BattleUIManager.I?.HideAllCardDetails();
+                }
+            }
+            // 組み合わせ魔法は通常カード(主軸攻撃)選択後に追加可能
+            // 主軸攻撃カードがなくても単体で選択可能（追加攻撃と同等の振る舞い）
+            // 複数の組み合わせ魔法は同時選択不可
+            else
+            {
+                if (HasMagicCards())
+                {
+                    Debug.Log("[CardSelectionManager] 組み合わせ魔法が既に選択済み → 上書き");
+                    RemoveMagicCards();
+                }
+            }
+            return true;
+        }
+
         // カードの競合チェック
         bool hasConflict = false;
         if (newCard.isRecovery && HasRecoveryCard())
@@ -150,9 +200,9 @@ public class CardSelectionManager : MonoBehaviour
             Debug.Log("[CardSelectionManager] 攻撃カードを選択するため、既存のカードをキャンセルします");
             hasConflict = true;
         }
-        else if (newCard.isPrimaryAttack && HasPrimaryAttackCards())
+        else if (newCard.isPrimaryAttack && selectedCards.Count > 0)
         {
-            Debug.Log("[CardSelectionManager] 通常攻撃カードを選択するため、既存の通常攻撃カードをキャンセルします");
+            Debug.Log("[CardSelectionManager] 主軸攻撃カードを選択するため、既存の選択をクリアします");
             hasConflict = true;
         }
 
@@ -191,9 +241,6 @@ public class CardSelectionManager : MonoBehaviour
         return false;
     }
 
-    /// <summary>
-    /// 回復カードが選択されているかチェック
-    /// </summary>
     private bool HasRecoveryCard()
     {
         foreach (var card in selectedCards)
@@ -210,9 +257,6 @@ public class CardSelectionManager : MonoBehaviour
         return false;
     }
 
-    /// <summary>
-    /// 通常攻撃カードが選択されているかチェック
-    /// </summary>
     private bool HasPrimaryAttackCards()
     {
         foreach (var card in selectedCards)
@@ -230,16 +274,28 @@ public class CardSelectionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 攻撃カードかどうかを判定（回復カードも含む）
+    /// 魔法カードが選択済みかどうか
     /// </summary>
-    private bool IsAttackCard(CardData card)
+    private bool HasMagicCards()
     {
-        return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
+        return selectedCards.Exists(c => c.cardType == CardType.Magic);
     }
 
     /// <summary>
-    /// 防御カードかどうかを判定
+    /// 選択済みの魔法カードをすべて除去する
     /// </summary>
+    private void RemoveMagicCards()
+    {
+        selectedCards.RemoveAll(c => c.cardType == CardType.Magic);
+    }
+
+    private bool IsAttackCard(CardData card)
+    {
+        // 攻撃魔法カード（単独型・組み合わせ型とも）は攻撃カードとして扱う
+        if (card.cardType == CardType.Magic && !card.isRecovery) return true;
+        return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
+    }
+
     private bool IsDefenseCard(CardData card)
     {
         return card.cardType == CardType.Defense || card.isPrimaryDefense || card.isCounterAttack;

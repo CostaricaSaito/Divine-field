@@ -52,6 +52,7 @@ public class CardData : ScriptableObject
     [Header("魔法カード専用")]
     public int mpCost = 0;
     public int maxUses = 1;
+    public bool isCombinationMagic = false; // true: 単独使用不可、通常カードとの組み合わせのみ発動
 
     [Header("回復パラメータ")]
     public int recoveryAmount = 0; public bool healsHP = false;

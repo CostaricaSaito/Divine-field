@@ -3,30 +3,27 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// “GCPU‚Ìs“®‚ğŠÇ—‚·‚éƒNƒ‰ƒX
-/// BattleManager‚©‚çCPUŠÖ˜A‚Ìˆ—‚ğ‘S‚ÄˆÚİ
+/// æ•µCPUã®è¡Œå‹•ã‚’ç®¡ç†ã™ã‚‹ã‚¯ãƒ©ã‚¹
 /// </summary>
 public class EnemyAI
 {
     /// <summary>
-    /// ƒ‰ƒ“ƒ_ƒ€‚É“G‚Ì¢Š«ƒf[ƒ^‚ğ‘I‘ğ‚·‚é
-    /// BattleManager‚ÌGetRandomEnemySummon‚©‚çˆÚİ
+    /// ãƒ©ãƒ³ãƒ€ãƒ ã«æ•µã®å¬å–šãƒ‡ãƒ¼ã‚¿ã‚’é¸æŠã™ã‚‹
     /// </summary>
     public SummonData SelectRandomEnemySummon()
     {
         var list = SummonSelectionManager.I?.GetAllSummonData();
         if (list == null || list.Length == 0)
         {
-            // SummonSelectionManager‚ªnull‚Ìê‡‚Í’¼ÚResources‚©‚ç“Ç‚İ‚Ş
             list = Resources.LoadAll<SummonData>("Summons");
             if (list == null || list.Length == 0)
             {
-                Debug.LogWarning("[EnemyAI] ¢Š«ƒf[ƒ^ƒŠƒXƒg‚ªnull‚Ü‚½‚Í‹ó‚Å‚·");
+                Debug.LogWarning("[EnemyAI] å¬å–šãƒ‡ãƒ¼ã‚¿ãƒªã‚¹ãƒˆãŒnullã¾ãŸã¯ç©ºã§ã™");
                 return null;
             }
         }
 
-        Debug.Log($"[EnemyAI] ‘S¢Š«ƒf[ƒ^”: {list.Length}, ƒvƒŒƒCƒ„[‘I‘ğƒCƒ“ƒfƒbƒNƒX: {SummonSelectionManager.I?.SelectedIndex ?? -1}");
+        Debug.Log($"[EnemyAI] å…¨å¬å–šãƒ‡ãƒ¼ã‚¿æ•°: {list.Length}, ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼é¸æŠã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹: {SummonSelectionManager.I?.SelectedIndex ?? -1}");
 
         var enemyCandidates = new List<SummonData>(list);
         if (SummonSelectionManager.I != null)
@@ -35,65 +32,98 @@ public class EnemyAI
             if (playerIndex >= 0 && playerIndex < enemyCandidates.Count)
             {
                 var removedSummon = enemyCandidates[playerIndex];
-                Debug.Log($"[EnemyAI] ƒvƒŒƒCƒ„[‚ª‘I‘ğ‚µ‚½¢Š«b‚ğœŠO: {removedSummon?.summonName ?? "null"} (ƒCƒ“ƒfƒbƒNƒX: {playerIndex})");
+                Debug.Log($"[EnemyAI] ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ãŒé¸æŠã—ãŸå¬å–šç£ã‚’é™¤å¤–: {removedSummon?.summonName ?? "null"} (ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹: {playerIndex})");
                 enemyCandidates.RemoveAt(playerIndex);
             }
             else
             {
-                Debug.LogWarning($"[EnemyAI] –³Œø‚ÈSelectedIndex: {playerIndex} (Œó•â”: {enemyCandidates.Count})");
+                Debug.LogWarning($"[EnemyAI] ç„¡åŠ¹ãªSelectedIndex: {playerIndex} (å€™è£œæ•°: {enemyCandidates.Count})");
             }
         }
 
         if (enemyCandidates.Count == 0)
         {
-            Debug.LogWarning("[EnemyAI] “G‚ÌŒó•â¢Š«ƒf[ƒ^‚ª‚ ‚è‚Ü‚¹‚ñ");
+            Debug.LogWarning("[EnemyAI] æ•µã®å€™è£œå¬å–šãƒ‡ãƒ¼ã‚¿ãŒã‚ã‚Šã¾ã›ã‚“");
             return null;
-        }
-
-        Debug.Log($"[EnemyAI] “G‚ÌŒó•â¢Š«ƒf[ƒ^”: {enemyCandidates.Count}");
-        foreach (var candidate in enemyCandidates)
-        {
-            Debug.Log($"[EnemyAI] Œó•â: {candidate?.summonName ?? "null"}");
         }
 
         int randomIndex = Random.Range(0, enemyCandidates.Count);
         var selected = enemyCandidates[randomIndex];
-        Debug.Log($"[EnemyAI] ƒ‰ƒ“ƒ_ƒ€‘I‘ğ: ƒCƒ“ƒfƒbƒNƒX {randomIndex}, ¢Š«b: {selected?.summonName ?? "null"}");
+        Debug.Log($"[EnemyAI] ãƒ©ãƒ³ãƒ€ãƒ é¸æŠ: ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ {randomIndex}, å¬å–šç£: {selected?.summonName ?? "null"}");
         return selected;
     }
 
     /// <summary>
-    /// ŒoÏƒAƒNƒVƒ‡ƒ“‚Å”„‹p‘ÎÛ‚ÌƒJ[ƒh‚ğ‘I‘ğ‚·‚éiƒ‰ƒ“ƒ_ƒ€j
-    /// BattleManager‚Ì”ƒ‚¤ƒAƒNƒVƒ‡ƒ“ˆ—‚©‚çˆÚİ
+    /// çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã§å£²å´å¯¾è±¡ã®ã‚«ãƒ¼ãƒ‰ã‚’é¸æŠã™ã‚‹ï¼ˆãƒ©ãƒ³ãƒ€ãƒ ï¼‰
     /// </summary>
     public CardData SelectCardForSale(List<CardData> cpuHand)
     {
         if (cpuHand == null || cpuHand.Count == 0)
         {
-            Debug.LogWarning("[EnemyAI] ‘Šè‚ÌèD‚ª‹ó‚Ì‚½‚ßAƒJ[ƒh‚ğ‘I‘ğ‚Å‚«‚Ü‚¹‚ñ");
+            Debug.LogWarning("[EnemyAI] ç›¸æ‰‹ã®æ‰‹æœ­ãŒç©ºã®ãŸã‚ã€ã‚«ãƒ¼ãƒ‰ã‚’é¸æŠã§ãã¾ã›ã‚“");
             return null;
         }
 
         var selectedCard = cpuHand[Random.Range(0, cpuHand.Count)];
-        Debug.Log($"[EnemyAI] ”„‹p‘ÎÛƒJ[ƒh‘I‘ğ: {selectedCard.cardName} (‰¿’l: {selectedCard.cardValue})");
+        Debug.Log($"[EnemyAI] å£²å´å¯¾è±¡ã‚«ãƒ¼ãƒ‰é¸æŠ: {selectedCard.cardName} (ä¾¡å€¤: {selectedCard.cardValue})");
         return selectedCard;
     }
 
-    // UŒ‚ƒJ[ƒh‚Ì‘I‚Ñ•ûFPrimaryAttack ‚ğ—DæA–³‚¯‚ê‚Îg‚¦‚é’†‚©‚çæ“ª
-    public CardData SelectAttackCard(List<CardData> enemyHand)
+    /// <summary>
+    /// æ”»æ’ƒã‚«ãƒ¼ãƒ‰ã®é¸ã³æ–¹ï¼šé€šå¸¸æ”»æ’ƒã‚’å„ªå…ˆã€ãªã‘ã‚Œã°ä½¿ãˆã‚‹ã‚‚ã®ã‹ã‚‰é¸æŠ
+    /// é­”æ³•ã‚«ãƒ¼ãƒ‰ã¯MPæ¶ˆè²»å¯èƒ½ãªå ´åˆã®ã¿å€™è£œ
+    /// </summary>
+    public CardData SelectAttackCard(List<CardData> enemyHand, PlayerStatus enemyStatus)
     {
+        // ç¬¬1å„ªå…ˆ: é€šå¸¸æ”»æ’ƒã‚«ãƒ¼ãƒ‰ï¼ˆPrimaryAttack or Attackå‹ï¼‰
         foreach (var c in enemyHand)
+        {
+            if (c.cardType == CardType.Magic) continue;
             if (CardRules.IsUsableInAttackPhase(c) && (c.isPrimaryAttack || c.cardType == CardType.Attack))
                 return c;
+        }
 
+        // ç¬¬2å„ªå…ˆ: ãã®ä»–ã®é€šå¸¸ã‚«ãƒ¼ãƒ‰
         foreach (var c in enemyHand)
+        {
+            if (c.cardType == CardType.Magic) continue;
             if (CardRules.IsUsableInAttackPhase(c))
                 return c;
+        }
+
+        // ç¬¬3å„ªå…ˆ: æ‰‹æœ­ã®é­”æ³•ã‚«ãƒ¼ãƒ‰ï¼ˆMPãŒè¶³ã‚Šã‚‹ï¼‹ãƒ—ãƒ¼ãƒ«ã«ç©ºããŒã‚ã‚‹å ´åˆï¼‰
+        foreach (var c in enemyHand)
+        {
+            if (c.cardType != CardType.Magic) continue;
+            if (!CardRules.IsUsableInAttackPhase(c)) continue;
+            if (enemyStatus != null && enemyStatus.currentMP < c.mpCost) continue;
+            if (MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(c, PlayerType.Enemy)) continue;
+            return c;
+        }
 
         return null;
     }
 
-    // –hŒäƒJ[ƒh‚Ì‘I‚Ñ•ûFPrimaryDefense ‚ğ—DæA–³‚¯‚ê‚Îg‚¦‚é’†‚©‚çæ“ª
+    /// <summary>
+    /// æ•µMagicPoolã‹ã‚‰ä½¿ç”¨å¯èƒ½ãªã‚«ãƒ¼ãƒ‰ã‚’é¸æŠï¼ˆMPãŒè¶³ã‚Šã‚‹ã‚‚ã®ï¼‰
+    /// </summary>
+    public CardData SelectAttackFromPool(PlayerStatus enemyStatus)
+    {
+        if (MagicPoolManager.I == null) return null;
+        var poolEntries = MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy);
+        foreach (var entry in poolEntries)
+        {
+            if (entry.cardData == null) continue;
+            if (!CardRules.IsUsableInAttackPhase(entry.cardData)) continue;
+            if (enemyStatus != null && enemyStatus.currentMP < entry.cardData.mpCost) continue;
+            return entry.cardData;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// é˜²å¾¡ã‚«ãƒ¼ãƒ‰ã®é¸ã³æ–¹ï¼šPrimaryDefenseã‚’å„ªå…ˆã€ãªã‘ã‚Œã°ä½¿ãˆã‚‹ã‚‚ã®ã‹ã‚‰é¸æŠ
+    /// </summary>
     public CardData SelectDefenseCard(List<CardData> enemyHand)
     {
         foreach (var c in enemyHand)
@@ -108,69 +138,94 @@ public class EnemyAI
     }
 
     /// <summary>
-    /// “G‚ÌUŒ‚ƒ^[ƒ“‚ğÀs‚·‚é
-    /// BattleManager‚ÌRunEnemyTurnAsync‚©‚çˆÚİ
+    /// æ•µã®æ”»æ’ƒã‚¿ãƒ¼ãƒ³ã‚’å®Ÿè¡Œã™ã‚‹ï¼ˆé­”æ³•ã‚«ãƒ¼ãƒ‰ãƒ»MagicPoolå¯¾å¿œï¼‰
     /// </summary>
     public async Task<CardData> ExecuteAttackTurnAsync(
         List<CardData> cpuHand,
         BattleProcessor battleProcessor,
-        HandRefillService handRefill)
+        HandRefillService handRefill,
+        PlayerStatus enemyStatus)
     {
-        // ‘Šè‚ÌUŒ‚ƒtƒF[ƒYŠJn‚ÌŒø‰Ê‰¹
-        SoundEffectPlayer.I?.Play("Assets/SE/”µŒv1.mp3");
-        Debug.Log("[EnemyAI] ‘Šè‚ÌUŒ‚ƒtƒF[ƒYŠJn");
-        
-        // ”µŒvŒø‰Ê‰¹Œã‚ÌƒCƒ“ƒ^[ƒoƒ‹
-        await Task.Delay(500);
-        Debug.Log("[EnemyAI] ”µŒvŒø‰Ê‰¹ŒãA0.5•b‘Ò‹@");
+        SoundEffectPlayer.I?.Play("Assets/SE/ç ‚æ™‚è¨ˆ1.mp3");
+        Debug.Log("[EnemyAI] ç›¸æ‰‹ã®æ”»æ’ƒãƒ•ã‚§ãƒ¼ã‚ºé–‹å§‹");
 
-        // UŒ‚ƒJ[ƒh‚ğ‘I‘ğ
-        var attack = SelectAttackCard(cpuHand);
+        await Task.Delay(500);
+
+        // æ‰‹æœ­ã‹ã‚‰æ”»æ’ƒã‚«ãƒ¼ãƒ‰ã‚’é¸æŠ
+        var attack = SelectAttackCard(cpuHand, enemyStatus);
+        bool isFromPool = false;
+
+        // æ‰‹æœ­ã«ã‚«ãƒ¼ãƒ‰ãŒãªã‘ã‚Œã°ãƒ—ãƒ¼ãƒ«ã‹ã‚‰
         if (attack == null)
         {
-            Debug.Log("[EnemyAI] UŒ‚ƒJ[ƒh‚ªŒ©‚Â‚©‚ç‚È‚¢‚½‚ßAƒ^[ƒ“I—¹");
+            attack = SelectAttackFromPool(enemyStatus);
+            isFromPool = true;
+        }
+
+        if (attack == null)
+        {
+            Debug.Log("[EnemyAI] æ”»æ’ƒã‚«ãƒ¼ãƒ‰ãŒè¦‹ã¤ã‹ã‚‰ãªã„ãŸã‚ã€ã‚¿ãƒ¼ãƒ³çµ‚äº†");
             return null;
         }
 
-        // ƒJ[ƒh‚ğg—p
-        battleProcessor.UseCard(attack, cpuHand);
-        handRefill?.RecordEnemyUse(attack);
+        // é­”æ³•ã‚«ãƒ¼ãƒ‰ã®å ´åˆã¯MPæ¶ˆè²»ï¼‹ãƒ—ãƒ¼ãƒ«å‡¦ç†
+        if (attack.cardType == CardType.Magic)
+        {
+            if (enemyStatus != null && attack.mpCost > 0)
+            {
+                enemyStatus.UseMP(attack.mpCost);
+                Debug.Log($"[EnemyAI] MPæ¶ˆè²»: {attack.cardName} -{attack.mpCost}MP (æ®‹ã‚Š={enemyStatus.currentMP})");
+            }
 
-        Debug.Log($"[EnemyAI] UŒ‚ƒJ[ƒh‘I‘ğ: {attack.cardName}");
+            if (isFromPool)
+            {
+                MagicPoolManager.I?.ConsumeUse(attack, PlayerType.Enemy);
+                Debug.Log($"[EnemyAI] ãƒ—ãƒ¼ãƒ«ã‚«ãƒ¼ãƒ‰ä½¿ç”¨å›æ•°æ¶ˆè²»: {attack.cardName}");
+            }
+            else
+            {
+                // æ‰‹æœ­ã®é­”æ³• â†’ æ•µãƒ—ãƒ¼ãƒ«ã«ç™»éŒ²
+                MagicPoolManager.I?.TryUseMagicCard(attack, cpuHand, 10, null, PlayerType.Enemy);
+                battleProcessor.UseCard(attack, cpuHand);
+                handRefill?.RecordEnemyUse(attack);
+                Debug.Log($"[EnemyAI] æ‰‹æœ­é­”æ³•ã‚’ãƒ—ãƒ¼ãƒ«ç™»éŒ²: {attack.cardName}");
+            }
+        }
+        else
+        {
+            // é€šå¸¸ã‚«ãƒ¼ãƒ‰
+            battleProcessor.UseCard(attack, cpuHand);
+            handRefill?.RecordEnemyUse(attack);
+        }
 
+        Debug.Log($"[EnemyAI] æ”»æ’ƒã‚«ãƒ¼ãƒ‰é¸æŠ: {attack.cardName}");
         return attack;
     }
 
     /// <summary>
-    /// “G‚Ì–hŒä‘I‘ğ‚ğÀs‚·‚é
-    /// BattleManager‚ÌRunDefenseSelectAsync‚©‚çˆÚİ
+    /// æ•µã®é˜²å¾¡é¸æŠã‚’å®Ÿè¡Œã™ã‚‹
     /// </summary>
     public async Task<CardData> ExecuteDefenseSelectAsync(List<CardData> cpuHand)
     {
-        Debug.Log("[EnemyAI] –hŒäƒJ[ƒh‘I‘ğŠJn");
+        Debug.Log("[EnemyAI] é˜²å¾¡ã‚«ãƒ¼ãƒ‰é¸æŠé–‹å§‹");
 
-        // –hŒäƒJ[ƒh‚ğ‘I‘ğ
         var defenseCard = SelectDefenseCard(cpuHand);
 
         if (defenseCard != null)
         {
-            Debug.Log($"[EnemyAI] –hŒäƒJ[ƒh‘I‘ğŠ®—¹: {defenseCard.cardName}");
+            Debug.Log($"[EnemyAI] é˜²å¾¡ã‚«ãƒ¼ãƒ‰é¸æŠå®Œäº†: {defenseCard.cardName}");
         }
         else
         {
-            Debug.Log("[EnemyAI] –hŒäƒJ[ƒh‚ªŒ©‚Â‚©‚ç‚È‚¢‚½‚ßA‹–‚·");
+            Debug.Log("[EnemyAI] é˜²å¾¡ã‚«ãƒ¼ãƒ‰ãŒè¦‹ã¤ã‹ã‚‰ãªã„ãŸã‚ã€è¨±ã™");
         }
 
-        // –hŒäƒJ[ƒh‘I‘ğŒã‚Ì0.5•bƒCƒ“ƒ^[ƒoƒ‹
         await Task.Delay(500);
-        Debug.Log("[EnemyAI] –hŒäƒJ[ƒh‘I‘ğŠ®—¹A0.5•b‘Ò‹@");
-
         return defenseCard;
     }
 
     /// <summary>
-    /// –hŒäƒJ[ƒh‚ğg—p‚·‚éi— Œü‚«‚É‚·‚éˆ—j
-    /// BattleManager‚ÌRunDefenseConfirmAsync‚©‚çˆÚİ
+    /// é˜²å¾¡ã‚«ãƒ¼ãƒ‰ã‚’ä½¿ç”¨ã™ã‚‹ï¼ˆè£å‘ãã«ã™ã‚‹å‡¦ç†ï¼‰
     /// </summary>
     public void UseDefenseCard(
         CardData defenseCard,
@@ -180,15 +235,13 @@ public class EnemyAI
     {
         if (defenseCard == null) return;
 
-        // HandRefillService‚Ég—p‚ğ‹L˜^
         if (handRefill != null)
         {
             handRefill.RecordEnemyUse(defenseCard);
-            Debug.Log($"[EnemyAI] –hŒäƒJ[ƒhg—p‹L˜^: {defenseCard.cardName}");
+            Debug.Log($"[EnemyAI] é˜²å¾¡ã‚«ãƒ¼ãƒ‰ä½¿ç”¨è¨˜éŒ²: {defenseCard.cardName}");
         }
 
-        // ƒJ[ƒh‚ğg—pi— Œü‚«‚É‚·‚éj
         battleProcessor.UseCard(defenseCard, cpuHand);
-        Debug.Log($"[EnemyAI] –hŒäƒJ[ƒhg—p: {defenseCard.cardName}");
+        Debug.Log($"[EnemyAI] é˜²å¾¡ã‚«ãƒ¼ãƒ‰ä½¿ç”¨: {defenseCard.cardName}");
     }
 }

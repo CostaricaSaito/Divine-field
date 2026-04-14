@@ -5,15 +5,15 @@ using System.Linq;
 /// <summary>
 /// カード表示ゾーンのレイアウト管理を担当するクラス
 /// 
-/// 【役割】
-/// - カードの位置計算
-/// - カードの配置・再配置
-/// - 表示順序の管理
+/// 【方式】
+/// VerticalLayoutGroupは使用せず、パネル内でカードを手動配置する。
+/// - パネルに収まる場合：上から順に通常Spacingで配置
+/// - 収まらない場合：1枚目を上端、最終枚を下端に固定し、中間カードを均等配置
+/// - カードサイズは常に一定（縮小なし）
+/// - パネルから絶対にはみ出さない
 /// 
-/// 【責任範囲】
-/// - カードの位置計算ロジック
-/// - レイアウトの調整
-/// - 表示順序の決定
+/// 【親Panelの設定】
+/// - VerticalLayoutGroupは無効化すること
 /// 
 /// 【他のクラスとの関係】
 /// - BattleUIManager: カード配置の指示を受ける
@@ -24,8 +24,9 @@ public class CardLayoutManager : MonoBehaviour
 {
     [Header("レイアウト設定")]
     [SerializeField] private float cardSpacing = 10f;
-    [SerializeField] private int maxVisibleCards = 3;
+    [SerializeField] private float cardHeight = 120f;
     
+    private RectTransform panelRectTransform;
     private List<GameObject> activeCardSheets = new List<GameObject>();
     private List<CardData> selectedCards = new List<CardData>();
     
@@ -46,96 +47,24 @@ public class CardLayoutManager : MonoBehaviour
     }
     
     /// <summary>
-    /// カードの位置を設定
+    /// カードの位置を設定（カード追加時に全カードを再配置）
     /// </summary>
     public void SetupCardPosition(GameObject cardObj, Transform parent)
     {
-        var rt = cardObj.transform as RectTransform;
-        if (rt == null) return;
-        
-        // 基本設定
-        rt.anchorMin = new Vector2(0.5f, 1f);
-        rt.anchorMax = new Vector2(0.5f, 1f);
-        rt.pivot = new Vector2(0.5f, 1f);
+        if (panelRectTransform == null && parent != null)
+        {
+            panelRectTransform = parent as RectTransform;
+        }
         
         var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
         if (cardDisplay == null || cardDisplay.GetCardData() == null) return;
         
         var cardData = cardDisplay.GetCardData();
-        int displayOrder = GetCardDisplayOrder(cardData);
-        
-        Debug.Log($"[CardLayoutManager] カード表示順序: {cardData.cardName} -> 順序: {displayOrder}");
-        
-        // 現在の総カード数を取得（同じタイプのカードのみ）
         int totalCards = GetCardCountByType(cardData);
         
-        if (totalCards <= maxVisibleCards)
-        {
-            // 3枚以下の場合：等間隔配置（既存カードは動かさない）
-            SetupNormalLayout(rt, displayOrder, totalCards);
-            return;
-        }
-        else
-        {
-            // 4枚以上の場合：1枚目と最終枚を固定、中間を等間隔配置
-            SetupAdvancedLayout(rt, displayOrder, totalCards);
-        }
+        Debug.Log($"[CardLayoutManager] カード追加: {cardData.cardName}, 合計: {totalCards}");
         
-        // 4枚目以降が追加された場合のみ、カードの再配置を実行
-        if (displayOrder >= maxVisibleCards) // 4枚目（index=3）以降
-        {
-            ReorderAllCards();
-        }
-        
-        cardObj.transform.SetAsLastSibling();
-    }
-    
-    /// <summary>
-    /// 3枚以下の場合の等間隔配置
-    /// </summary>
-    private void SetupNormalLayout(RectTransform rt, int displayOrder, int totalCards)
-    {
-        float totalHeight = (rt.rect.height + cardSpacing) * (totalCards - 1);
-        float startY = totalHeight / 2f; // 中央から上に半分
-        float yOffset = startY - (displayOrder + 1) * (rt.rect.height + cardSpacing);
-        rt.anchoredPosition = new Vector2(0, yOffset);
-        rt.localScale = Vector3.one;
-    }
-    
-    /// <summary>
-    /// 4枚以上の場合の高度な配置
-    /// </summary>
-    private void SetupAdvancedLayout(RectTransform rt, int displayOrder, int totalCards)
-    {
-        float cardSpaceHeight = rt.rect.height + cardSpacing;
-        
-        // 1枚目の位置（上端）
-        float firstCardY = cardSpaceHeight * (maxVisibleCards - 1) / 2f;
-        // 最終枚の位置（下端）
-        float lastCardY = firstCardY - (maxVisibleCards - 1) * cardSpaceHeight;
-        
-        if (displayOrder == 0)
-        {
-            // 1枚目：上端に固定
-            rt.anchoredPosition = new Vector2(0, firstCardY);
-            rt.localScale = Vector3.one;
-        }
-        else if (displayOrder == totalCards - 1)
-        {
-            // 最終枚：下端に固定
-            rt.anchoredPosition = new Vector2(0, lastCardY);
-            rt.localScale = Vector3.one;
-        }
-        else
-        {
-            // 中間カード：1枚目と最終枚の間に等間隔で配置
-            int middleCardCount = totalCards - 2; // 中間カードの数
-            float interval = (firstCardY - lastCardY) / (middleCardCount + 1);
-            float yOffset = firstCardY - interval * (displayOrder + 1);
-            
-            rt.anchoredPosition = new Vector2(0, yOffset);
-            rt.localScale = Vector3.one;
-        }
+        RepositionAllCards();
     }
     
     /// <summary>
@@ -143,68 +72,24 @@ public class CardLayoutManager : MonoBehaviour
     /// </summary>
     public void HandleCardCancellation()
     {
-        // 残りのカードの位置を再配置（4枚以上の場合のみ）
-        if (selectedCards.Count >= 4)
-        {
-            ReorderAllCards();
-        }
-        else if (selectedCards.Count == 1)
-        {
-            // 1枚だけの場合は上端スロットに配置
-            SetupSingleCardLayout();
-        }
-        // 2枚、3枚の場合は既存カードを再配置しない（要件通り）
+        RepositionAllCards();
     }
     
     /// <summary>
-    /// 1枚だけの場合のレイアウト
+    /// 全カードをパネル内に収まるよう再配置する
     /// </summary>
-    private void SetupSingleCardLayout()
+    private void RepositionAllCards()
     {
-        var remainingCard = selectedCards[0];
-        var cardObj = activeCardSheets.FirstOrDefault(obj => 
-            obj?.GetComponent<CardSheetDisplay>()?.GetCardData() == remainingCard);
+        activeCardSheets.RemoveAll(obj => obj == null);
         
-        if (cardObj != null)
-        {
-            var rt = cardObj.transform as RectTransform;
-            if (rt != null)
-            {
-                // 3枚以下の場合の1枚目の位置計算と同じロジック
-                float totalHeight = (rt.rect.height + cardSpacing) * (1 - 1); // 1枚の場合
-                float startY = totalHeight / 2f; // 中央から上に半分
-                float yOffset = startY - (0 + 1) * (rt.rect.height + cardSpacing); // displayOrder=0
-                rt.anchoredPosition = new Vector2(0, yOffset);
-                rt.localScale = Vector3.one;
-            }
-        }
-    }
-    
-    /// <summary>
-    /// 現在のカード数に応じて全カードを適切に再配置
-    /// </summary>
-    private void ReorderAllCards()
-    {
-        int totalCards = activeCardSheets.Count(card => card != null);
+        int totalCards = selectedCards.Count;
+        if (totalCards == 0) return;
         
-        if (totalCards <= 3)
-        {
-            // 3枚以下の場合は通常の等間隔配置
-            ReorderToNormalLayout();
-        }
-        else
-        {
-            // 4枚以上の場合は中間カード再配置
-            ReorderIntermediateCards();
-        }
-    }
-    
-    /// <summary>
-    /// 3枚以下の場合の等間隔配置
-    /// </summary>
-    private void ReorderToNormalLayout()
-    {
-        // 選択されたカードの順序に基づいて配置
+        Canvas.ForceUpdateCanvases();
+        float panelHeight = panelRectTransform != null ? panelRectTransform.rect.height : 0;
+        
+        Debug.Log($"[CardLayoutManager] 再配置: カード数={totalCards}, パネル高さ={panelHeight}");
+        
         for (int i = 0; i < selectedCards.Count; i++)
         {
             var card = selectedCards[i];
@@ -216,72 +101,39 @@ public class CardLayoutManager : MonoBehaviour
             var rt = cardObj.transform as RectTransform;
             if (rt == null) continue;
             
-            // 3枚以下の場合：等間隔配置（SetupCardPositionと一致させる）
-            float totalHeight = (rt.rect.height + cardSpacing) * (selectedCards.Count - 1);
-            float startY = totalHeight / 2f; // 中央から上に半分
-            float yOffset = startY - (i + 1) * (rt.rect.height + cardSpacing);
-            rt.anchoredPosition = new Vector2(0, yOffset);
+            rt.anchorMin = new Vector2(0, 1f);
+            rt.anchorMax = new Vector2(1, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            
+            float y = CalculateCardY(i, totalCards, panelHeight);
+            rt.offsetMin = new Vector2(0, y - cardHeight);
+            rt.offsetMax = new Vector2(0, y);
             rt.localScale = Vector3.one;
             
-            Debug.Log($"[CardLayoutManager] 通常配置: {card.cardName} (順序{i}) -> Y位置: {rt.anchoredPosition.y}");
+            cardObj.transform.SetSiblingIndex(i);
+            
+            Debug.Log($"[CardLayoutManager] {card.cardName} (順序{i}) -> Y={y}");
         }
     }
     
     /// <summary>
-    /// 4枚以上の場合：1枚目と最終枚を固定、中間カードを等間隔で再配置
+    /// カードのY座標を計算する。
+    /// パネルに収まる場合は通常Spacing、収まらない場合は均等配置。
     /// </summary>
-    private void ReorderIntermediateCards()
+    private float CalculateCardY(int index, int totalCards, float panelHeight)
     {
-        // 現在表示されているカード数を取得
-        int totalCards = activeCardSheets.Count(card => card != null);
+        if (totalCards <= 0) return 0;
+        if (totalCards == 1) return 0;
         
-        // 4枚未満の場合は再配置不要
-        if (totalCards < 4) return;
+        float normalTotal = totalCards * cardHeight + (totalCards - 1) * cardSpacing;
         
-        // 選択されたカードの順序に基づいて配置
-        for (int i = 0; i < selectedCards.Count; i++)
+        if (panelHeight > 0 && normalTotal > panelHeight)
         {
-            var card = selectedCards[i];
-            var cardObj = activeCardSheets.FirstOrDefault(obj => 
-                obj?.GetComponent<CardSheetDisplay>()?.GetCardData() == card);
-            
-            if (cardObj == null) continue;
-            
-            var rt = cardObj.transform as RectTransform;
-            if (rt == null) continue;
-            
-            float cardSpaceHeight = rt.rect.height + cardSpacing;
-            
-            // 1枚目の位置（上端）
-            float firstCardY = cardSpaceHeight * (maxVisibleCards - 1) / 2f;
-            // 最終枚の位置（下端）
-            float lastCardY = firstCardY - (maxVisibleCards - 1) * cardSpaceHeight;
-            
-            if (i == 0)
-            {
-                // 1枚目：上端に固定
-                rt.anchoredPosition = new Vector2(0, firstCardY);
-                rt.localScale = Vector3.one;
-            }
-            else if (i == selectedCards.Count - 1)
-            {
-                // 最終枚：下端に固定
-                rt.anchoredPosition = new Vector2(0, lastCardY);
-                rt.localScale = Vector3.one;
-            }
-            else
-            {
-                // 中間カード：1枚目と最終枚の間に等間隔で配置
-                int middleCardCount = selectedCards.Count - 2; // 中間カードの数
-                float interval = (firstCardY - lastCardY) / (middleCardCount + 1);
-                float yOffset = firstCardY - interval * i;
-                
-                rt.anchoredPosition = new Vector2(0, yOffset);
-                rt.localScale = Vector3.one;
-            }
-            
-            Debug.Log($"[CardLayoutManager] 中間カード再配置: {card.cardName} (順序{i}) -> Y位置: {rt.anchoredPosition.y}");
+            float interval = (panelHeight - cardHeight) / (totalCards - 1);
+            return -index * interval;
         }
+        
+        return -index * (cardHeight + cardSpacing);
     }
     
     /// <summary>
@@ -289,10 +141,8 @@ public class CardLayoutManager : MonoBehaviour
     /// </summary>
     private int GetCardDisplayOrder(CardData cardData)
     {
-        // 防御カードの複数選択対応
         if (cardData.cardType == CardType.Defense || cardData.isPrimaryDefense)
         {
-            // 防御カードは選択順に表示（0, 1, 2...）
             return CountExistingDefenseCards();
         }
         
@@ -300,11 +150,9 @@ public class CardLayoutManager : MonoBehaviour
         
         if (cardData.canBeUsedWithPrimaryAttack)
         {
-            // 追加攻撃カードは既存の攻撃カード数を返す
             return CountExistingAttackCards();
         }
         
-        // その他のカード（回復カード等）は既存のカード数を返す
         return CountExistingOtherCards();
     }
     
@@ -386,7 +234,6 @@ public class CardLayoutManager : MonoBehaviour
     {
         if (CardRules.IsAttackCard(cardData))
         {
-            // 攻撃カードの場合：activeCardSheetsから攻撃カードのみをカウント
             return activeCardSheets.Count(card => 
                 card != null && 
                 card.GetComponent<CardSheetDisplay>()?.GetCardData() != null &&
@@ -394,7 +241,6 @@ public class CardLayoutManager : MonoBehaviour
         }
         else if (CardRules.IsDefenseCard(cardData))
         {
-            // 防御カードの場合：activeCardSheetsから防御カードのみをカウント
             return activeCardSheets.Count(card => 
                 card != null && 
                 card.GetComponent<CardSheetDisplay>()?.GetCardData() != null &&
@@ -402,7 +248,6 @@ public class CardLayoutManager : MonoBehaviour
         }
         else
         {
-            // その他のカードタイプの場合は全体から取得
             return activeCardSheets.Count(card => card != null);
         }
     }

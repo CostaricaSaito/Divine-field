@@ -52,7 +52,14 @@ public class CardSequenceManager : MonoBehaviour
 
         // ①表示ゾーンをクリア
         BattleUIManager.I?.ClearAllSelections();
-        BattleUIManager.I?.HideAllCardDetails();
+        if (cardType == "防御")
+        {
+            BattleUIManager.I?.HidePlayerCardDetails();
+        }
+        else
+        {
+            BattleUIManager.I?.HideAllCardDetails();
+        }
 
         // クリア後のインターバル（まっさらな状態を維持）
         await Task.Delay(300, cancellationToken);
@@ -109,8 +116,10 @@ public class CardSequenceManager : MonoBehaviour
 
         if (cancellationToken.IsCancellationRequested) return;
 
-        // ダメージ処理完了後、演出中のカードリストをクリア
+        // ダメージ処理完了後、全カード表示と演出リストをクリア
+        BattleUIManager.I?.HideAllCardDetails();
         cardStatsDisplay?.ClearSequenceCards();
+        battleManager.SetCurrentAttackCard(null);
         cardStatsDisplay?.UpdateDisplay();
 
         // カード確定後の処理
@@ -139,21 +148,45 @@ public class CardSequenceManager : MonoBehaviour
     /// </summary>
     private void ProcessMultipleCards(List<CardData> cards, string cardType)
     {
-        // 攻撃カードの場合は最初のカードをcurrentAttackCardに設定
-        if (cardType == "攻撃" && cards.Count > 0)
+        // 魔法カードと通常カードに分別
+        var magicCards = cards.FindAll(c => c.cardType == CardType.Magic);
+        var normalCards = cards.FindAll(c => c.cardType != CardType.Magic);
+
+        // 魔法カードのプール処理
+        foreach (var magic in magicCards)
         {
-            battleManager.SetCurrentAttackCard(cards[0]);
+            bool isFromHand = battleManager.playerHand.Contains(magic);
+            ApplyMagicCardToPool(magic, isFromHand);
+            Debug.Log($"[CardSequenceManager] 魔法カード {magic.cardName} をプール処理 (fromHand={isFromHand}, combination={magic.isCombinationMagic})");
         }
-        
-        foreach (var card in cards)
+
+        // 攻撃カードの場合は最初のカードを currentAttackCard に設定
+        if (cardType == "攻撃" && normalCards.Count > 0)
+        {
+            battleManager.SetCurrentAttackCard(normalCards[0]);
+        }
+
+        // 通常カードのみ UseCard で手札から除去
+        foreach (var card in normalCards)
         {
             if (card?.cardUI == null) continue;
-            
+
             int slotIndex = card.cardUI.transform.GetSiblingIndex();
-            // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
             handRefill?.RecordPlayerUseSlot(slotIndex);
             battleProcessor.UseCard(card, battleManager.playerHand);
             Debug.Log($"[CardSequenceManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
+        }
+
+        // 手札の魔法カードのみ手札から削除（プールカードは手札に存在しない）
+        foreach (var magic in magicCards)
+        {
+            if (battleManager.playerHand.Contains(magic) && magic.cardUI != null)
+            {
+                int slotIndex = magic.cardUI.transform.GetSiblingIndex();
+                handRefill?.RecordPlayerUseSlot(slotIndex);
+                battleProcessor.UseCard(magic, battleManager.playerHand);
+                Debug.Log($"[CardSequenceManager] 手札魔法カードを手札から削除: {magic.cardName}");
+            }
         }
     }
 
@@ -162,6 +195,23 @@ public class CardSequenceManager : MonoBehaviour
     /// </summary>
     private void ProcessSingleCard(CardData card, string cardType)
     {
+        // 魔法カード（単独型・組み合わせ型とも）の場合は特殊処理
+        if (card.cardType == CardType.Magic)
+        {
+            Debug.Log($"[CardSequenceManager] 魔法カード処理: {card.cardName} (組み合わせ={card.isCombinationMagic})");
+            bool isFromHand = battleManager.playerHand.Contains(card);
+            ApplyMagicCardToPool(card, isFromHand);
+            battleManager.SetCurrentAttackCard(card);
+
+            if (isFromHand && card.cardUI != null)
+            {
+                int slotIndex = card.cardUI.transform.GetSiblingIndex();
+                handRefill?.RecordPlayerUseSlot(slotIndex);
+                battleProcessor.UseCard(card, battleManager.playerHand);
+            }
+            return;
+        }
+
         if (cardType == "防御")
         {
             battleManager.SetSelectedDefenseCard(card);
@@ -169,14 +219,67 @@ public class CardSequenceManager : MonoBehaviour
         else
         {
             battleManager.SetSelectedCard(card);
-            battleManager.SetCurrentAttackCard(card); // 攻撃カードの場合はcurrentAttackCardも設定
+            battleManager.SetCurrentAttackCard(card);
         }
-        
-        int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
-        // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
-        if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
+
+        int normalSlotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+        if (normalSlotIndex >= 0) handRefill?.RecordPlayerUseSlot(normalSlotIndex);
         battleProcessor.UseCard(card, battleManager.playerHand);
-        Debug.Log($"[CardSequenceManager] 単一{cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
+        Debug.Log($"[CardSequenceManager] 単一{cardType}カード処理: {card.cardName} (スロット: {normalSlotIndex})");
+    }
+
+    /// <summary>
+    /// 魔法カードを MagicPool に適用する内部ヘルパー
+    /// MP消費 → プール操作 → (プール使用時)カードドロー
+    /// </summary>
+    private void ApplyMagicCardToPool(CardData card, bool isFromHand)
+    {
+        if (MagicPoolManager.I == null) return;
+
+        // MP消費
+        var playerStatus = battleManager.GetPlayerStatus();
+        if (playerStatus != null && card.mpCost > 0)
+        {
+            playerStatus.UseMP(card.mpCost);
+            Debug.Log($"[CardSequenceManager] MP消費: {card.cardName} -{card.mpCost}MP (残り={playerStatus.currentMP})");
+            BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+        }
+
+        if (isFromHand)
+        {
+            var drawCallback = GetDrawCardCallback();
+            bool result = MagicPoolManager.I.TryUseMagicCard(
+                card,
+                battleManager.playerHand,
+                battleManager.GetHandMaxCount(),
+                drawCallback);
+            Debug.Log($"[CardSequenceManager] TryUseMagicCard: {card.cardName} -> {result}");
+        }
+        else
+        {
+            // MagicPanel から使用 → 使用回数を消費 + 手札1枚ドロー
+            MagicPoolManager.I.ConsumeUse(card);
+            Debug.Log($"[CardSequenceManager] ConsumeUse: {card.cardName}");
+
+            // プールカード使用時は手札が1枚純増
+            if (battleManager.playerHand.Count < battleManager.GetHandMaxCount())
+            {
+                battleManager.DrawOneCard();
+                Debug.Log("[CardSequenceManager] MagicPanel使用による手札1枚追加");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 手札追加ドローのコールバックを取得する
+    /// </summary>
+    private System.Action GetDrawCardCallback()
+    {
+        return () =>
+        {
+            // BattleManager のドローメソッドを呼び出す
+            battleManager.DrawOneCard();
+        };
     }
 
     /// <summary>
@@ -194,7 +297,8 @@ public class CardSequenceManager : MonoBehaviour
                 var attackCards = new List<CardData>();
                 foreach (var card in selectedCards)
                 {
-                    if (card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack)
+                    if (card.cardType == CardType.Attack || card.cardType == CardType.Magic
+                        || card.isPrimaryAttack || card.isAdditionalAttack)
                     {
                         attackCards.Add(card);
                     }
