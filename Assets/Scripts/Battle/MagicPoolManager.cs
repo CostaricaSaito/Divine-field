@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -176,6 +176,21 @@ public class MagicPoolManager : MonoBehaviour
     {
         if (card == null || card.cardType != CardType.Magic) return false;
         return !IsPoolFull(owner) || IsInPool(card, owner);
+    }
+
+    /// <summary>
+    /// 手札から TryUseMagicCard したときに表示されるスロット番号 (0〜2) を、登録前に推定する
+    /// </summary>
+    public int GetPredictedPlayerSlotIndex(CardData card)
+    {
+        if (card == null) return 0;
+        var pool = playerPool;
+        var existing = FindEntry(card, pool);
+        if (existing != null)
+            return Mathf.Max(0, pool.IndexOf(existing));
+        if (pool.Count < MaxPoolSize)
+            return pool.Count;
+        return MaxPoolSize - 1;
     }
 
     public List<CardData> GetPooledCardDatas(PlayerType owner = PlayerType.Player)

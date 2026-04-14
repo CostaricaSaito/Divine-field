@@ -104,6 +104,17 @@ public class MagicPanelUI : MonoBehaviour
         }
         return null;
     }
+
+    /// <summary>
+    /// スロット index (0〜2) の着地点 Rect（手札→MagicPanel 飛行用）
+    /// </summary>
+    public bool TryGetSlotTargetRect(int index, out RectTransform rect)
+    {
+        rect = null;
+        if (slots == null || index < 0 || index >= slots.Count) return false;
+        rect = slots[index].GetFlyTargetRect();
+        return rect != null;
+    }
 }
 
 // ====================================================================
@@ -227,6 +238,21 @@ public class MagicCardSlot
 
     public CardData GetCardData() => currentEntry?.cardData;
     public CardUI GetCardUI() => cardUI;
+
+    /// <summary>
+    /// 手札→MagicPanel 飛行アニメーションの着地点（CardUI または Placeholder）
+    /// </summary>
+    public RectTransform GetFlyTargetRect()
+    {
+        if (cardUI != null)
+        {
+            var rt = cardUI.transform as RectTransform;
+            if (rt != null) return rt;
+        }
+        if (slotRoot != null)
+            return slotRoot.GetComponent<RectTransform>();
+        return null;
+    }
 
     private void UpdateUsesText(int uses)
     {

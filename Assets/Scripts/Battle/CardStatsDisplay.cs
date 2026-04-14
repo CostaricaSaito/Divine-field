@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -104,6 +104,7 @@ public class CardStatsDisplay : MonoBehaviour
         {
             string displayText = GetPlayerDisplayText();
             atkdefText.text = displayText;
+            atkdefText.color = ElementHelper.GetElementColor(GetPlayerCombinedElement());
         }
         else
         {
@@ -134,6 +135,7 @@ public class CardStatsDisplay : MonoBehaviour
         {
             string displayText = GetEnemyDisplayText();
             atkdefTextEnemy.text = displayText;
+            atkdefTextEnemy.color = ElementHelper.GetElementColor(GetEnemyCombinedElement());
         }
         else
         {
@@ -365,6 +367,53 @@ public class CardStatsDisplay : MonoBehaviour
         }
 
         return "";
+    }
+
+    /// <summary>
+    /// プレイヤー側の合算属性を取得
+    /// </summary>
+    private ElementType GetPlayerCombinedElement()
+    {
+        if (currentSequenceCards.Count > 0)
+            return ElementHelper.GetCombinedElement(currentSequenceCards);
+
+        var battleManager = BattleManager.I;
+        if (battleManager == null) return ElementType.None;
+
+        if (battleManager.CurrentState == GameState.AttackSelect)
+        {
+            var cards = BattleUIManager.I?.GetSelectedAttackCards();
+            if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
+        }
+        else if (battleManager.CurrentState == GameState.DefenseSelect)
+        {
+            var cards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
+        }
+        return ElementType.None;
+    }
+
+    /// <summary>
+    /// 敵側の合算属性を取得
+    /// </summary>
+    private ElementType GetEnemyCombinedElement()
+    {
+        var battleManager = BattleManager.I;
+        if (battleManager == null) return ElementType.None;
+
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        {
+            var card = battleManager.GetCurrentAttackCard();
+            if (card != null) return card.element;
+        }
+
+        if (battleManager.CurrentTurnOwner == PlayerType.Player
+            && battleManager.DefenderPublic == PlayerType.Enemy)
+        {
+            var card = battleManager.GetSelectedDefenseCard();
+            if (card != null) return card.element;
+        }
+        return ElementType.None;
     }
 
     /// <summary>

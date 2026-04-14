@@ -443,12 +443,12 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.HidePlayerCardDetails();
             BattleUIManager.I?.SetHandClickable(true);
             BattleUIManager.I?.SetUseButtonLabel("許す");
-            BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
-            // 防御フェーズでは攻撃魔法パネルを無効化
+
+            var attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
+            var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+            BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, defenseChoices);
+
             BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
-            
-            // プレイヤーが防御カードを選択するまで待機
-            // OnUseButtonPressedでHandleDefenseUseが呼ばれるまで待つ
         }
     }
 

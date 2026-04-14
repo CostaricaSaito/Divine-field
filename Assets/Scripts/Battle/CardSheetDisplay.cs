@@ -22,9 +22,42 @@ public class CardSheetDisplay : MonoBehaviour
         if (cardNameText) cardNameText.text = cardData.cardName;
         if (atkDefText) atkDefText.text = $"ATK {cardData.attackPower} / DEF {cardData.defensePower}";
         if (descText) descText.text = cardData.description;
-        if (attributeIcon) attributeIcon.gameObject.SetActive(false);
+        SetupElementDisplay(cardData);
         if (goldIcon) goldIcon.gameObject.SetActive(false);
         if (goldValueText) goldValueText.text = "";
+    }
+
+    private void SetupElementDisplay(CardData cardData)
+    {
+        ElementType elem = cardData != null ? cardData.element : ElementType.None;
+
+        if (attributeIcon)
+        {
+            Sprite icon = ElementHelper.LoadIcon(elem);
+            if (icon != null)
+            {
+                attributeIcon.sprite = icon;
+                attributeIcon.gameObject.SetActive(true);
+            }
+            else
+            {
+                attributeIcon.gameObject.SetActive(false);
+            }
+        }
+
+        if (elem != ElementType.None)
+        {
+            Color elemColor = ElementHelper.GetElementColor(elem);
+            if (cardNameText) cardNameText.color = elemColor;
+            if (atkDefText) atkDefText.color = elemColor;
+            if (descText) descText.color = elemColor;
+        }
+        else
+        {
+            if (cardNameText) cardNameText.color = Color.black;
+            if (atkDefText) atkDefText.color = Color.black;
+            if (descText) descText.color = Color.black;
+        }
     }
     
     public CardData GetCardData()

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
 using System.Linq;
@@ -209,8 +209,18 @@ public class BattleProcessor : MonoBehaviour
         // 攻撃力・防御力の計算
         int attackPower = CalculateTotalAttackPower(attackCards, attacker);
         int defensePower = CalculateTotalDefensePower(defenseCard, defender);
-        
-        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}");
+
+        // 属性マッチング: 属性が一致しない防御は無効
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
+        if (attackElement != ElementType.None && defenseCard != null
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
+        {
+            Debug.Log($"[BattleProcessor] 属性不一致: 攻撃={attackElement} vs 防御={defElement} → 防御力0");
+            defensePower = 0;
+        }
+
+        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
         // 命中判定（最初の攻撃カードを使用）
         bool hit = CheckHit(attackCards[0], defenseCard);
@@ -218,54 +228,48 @@ public class BattleProcessor : MonoBehaviour
         {
             Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
             PlayDamageSE();
-            // ミスポップアップを表示
             BattleUIManager.I?.ShowMissPopup(defender);
             return;
         }
 
         // ダメージ計算
         int baseDamage = attackPower - defensePower;
-        int finalDamage = baseDamage; // 状態異常による修正は将来的に実装
-        finalDamage = Mathf.Max(0, finalDamage); // 負のダメージは0に
+        int finalDamage = Mathf.Max(0, baseDamage);
+
+        // 闇属性即死: ダメージが1以上なら残HP全損
+        if (attackElement == ElementType.Dark && finalDamage > 0)
+        {
+            finalDamage = defender.currentHP;
+            Debug.Log($"[BattleProcessor] 闇属性即死発動: ダメージ={finalDamage}");
+        }
 
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
         Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
 
-        // ⑤ダメージポップアップ前の0.5秒インターバル
         await Task.Delay(500);
-        Debug.Log("[BattleProcessor] ダメージポップアップ前、0.5秒待機");
 
-        // ダメージ適用
         if (finalDamage > 0)
         {
             ApplyDamage(defender, finalDamage);
             Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
-            // ダメージポップアップを表示
             BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
         }
         else
         {
             Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
-            // ダメージ0の場合もポップアップを表示
             BattleUIManager.I?.ShowDamagePopup(0, defender);
         }
 
-        // 戦闘結果の表示
         PlayDamageSE();
-        // HP/MP/GPと手札枚数を更新（手札枚数は変わらないため、常に現在の値を参照）
         UpdateStatusDisplay();
 
-        // 戦闘終了判定
         if (IsDead(attacker) || IsDead(defender))
         {
             Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
         }
 
-        // ダメージポップアップ表示後のインターバル（相手の防御カード選択開始まで）
         await Task.Delay(500);
-        Debug.Log("[BattleProcessor] ダメージポップアップ表示後、0.5秒待機");
-
         Debug.Log($"[BattleProcessor] 戦闘解決完了");
     }
 
@@ -525,8 +529,18 @@ public class BattleProcessor : MonoBehaviour
         // 攻撃力・防御力の計算
         int attackPower = CalculateTotalAttackPower(attackCards, attacker);
         int defensePower = CalculateTotalDefensePower(defenseCards, defender);
-        
-        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}");
+
+        // 属性マッチング: 防御の合算属性が攻撃属性と一致しなければ防御力0
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType defElement = ElementHelper.GetCombinedElement(defenseCards);
+        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
+            && !ElementHelper.CanDefendAgainst(attackElement, defElement))
+        {
+            Debug.Log($"[BattleProcessor] 属性不一致: 攻撃={attackElement} vs 防御={defElement} → 防御力0");
+            defensePower = 0;
+        }
+
+        Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
         // 命中判定（最初の攻撃カードを使用）
         bool hit = CheckHit(attackCards[0], defenseCards?.FirstOrDefault());
@@ -534,48 +548,43 @@ public class BattleProcessor : MonoBehaviour
         {
             Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
             PlayDamageSE();
-            // ミスポップアップを表示
             BattleUIManager.I?.ShowMissPopup(defender);
             return;
         }
 
         // ダメージ計算
         int baseDamage = attackPower - defensePower;
-        int finalDamage = baseDamage; // 状態異常による修正は将来的に実装
-        finalDamage = Mathf.Max(0, finalDamage); // 負のダメージは0に
+        int finalDamage = Mathf.Max(0, baseDamage);
+
+        // 闇属性即死: ダメージが1以上なら残HP全損
+        if (attackElement == ElementType.Dark && finalDamage > 0)
+        {
+            finalDamage = defender.currentHP;
+            Debug.Log($"[BattleProcessor] 闇属性即死発動: ダメージ={finalDamage}");
+        }
 
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
         Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
 
-        // ⑤ダメージポップアップ前の0.5秒インターバル
         await Task.Delay(500);
-        Debug.Log("[BattleProcessor] ダメージポップアップ前、0.5秒待機");
 
-        // ダメージ適用
         if (finalDamage > 0)
         {
             ApplyDamage(defender, finalDamage);
             Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
-            // ダメージポップアップを表示
             BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
         }
         else
         {
             Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
-            // ダメージ0の場合もポップアップを表示
             BattleUIManager.I?.ShowDamagePopup(0, defender);
         }
 
-        // 戦闘結果の表示
         PlayDamageSE();
-        // HP/MP/GPと手札枚数を更新（手札枚数は変わらないため、常に現在の値を参照）
         UpdateStatusDisplay();
 
-        // ダメージポップアップ表示後のインターバル（相手の防御カード選択開始まで）
         await Task.Delay(500);
-        Debug.Log("[BattleProcessor] ダメージポップアップ表示後、0.5秒待機");
-
         Debug.Log($"[BattleProcessor] 戦闘解決完了");
         return;
     }

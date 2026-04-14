@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -7,63 +8,66 @@ using System.Linq;
 public enum Side { Player, Enemy }
 
 /// <summary>
-/// ãƒãƒˆãƒ«ç”»é¢ã®UIè¡¨ç¤ºãƒ»ç®¡ç†ã‚’æ‹…å½“ã™ã‚‹ãƒãƒãƒ¼ã‚¸ãƒ£ãƒ¼ã‚¯ãƒ©ã‚¹
+/// ƒoƒgƒ‹‰æ–Ê‚ÌUI•\¦EŠÇ—‚ğ’S“–‚·‚éƒ}ƒl[ƒWƒƒ[ƒNƒ‰ƒX
 /// 
-/// ã€ä¸»ãªæ©Ÿèƒ½ã€‘
-/// - ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹è¡¨ç¤ºã®æ›´æ–°
-/// - ã‚«ãƒ¼ãƒ‰è©³ç´°ã®è¡¨ç¤ºãƒ»éè¡¨ç¤º
-/// - ãƒœã‚¿ãƒ³ã®çŠ¶æ…‹ç®¡ç†ï¼ˆä½¿ç”¨/è¨±å¯/ç¥ˆã‚Šï¼‰
-/// - ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®è¡¨ç¤ºï¼ˆãƒ€ãƒ¡ãƒ¼ã‚¸ã€ãƒŸã‚¹ï¼‰
-/// - æ‰‹æœ­ã®æ“ä½œåˆ¶å¾¡ï¼ˆé¸æŠ/ã‚­ãƒ£ãƒ³ã‚»ãƒ«ï¼‰
+/// yå‚È‹@”\z
+/// - ƒXƒe[ƒ^ƒX•\¦‚ÌXV
+/// - ƒJ[ƒhÚ×‚Ì•\¦E”ñ•\¦
+/// - ƒ{ƒ^ƒ“‚Ìó‘ÔŠÇ—ig—p/‹–‰Â/‹F‚èj
+/// - ƒ|ƒbƒvƒAƒbƒv‚Ì•\¦iƒ_ƒ[ƒWAƒ~ƒXj
+/// - èD‚Ì‘€ì§Œäi‘I‘ğ/ƒLƒƒƒ“ƒZƒ‹j
 /// 
-/// ã€è²¬ä»»ç¯„å›²ã€‘
-/// - UIè¦ç´ ã®è¡¨ç¤ºãƒ»éè¡¨ç¤º
-/// - UIè¦ç´ ã®çŠ¶æ…‹å¤‰æ›´
-/// - ã‚«ãƒ¼ãƒ‰é¸æŠã®ç®¡ç†
-/// - ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ã®åˆ¶å¾¡
+/// yÓ”C”ÍˆÍz
+/// - UI—v‘f‚Ì•\¦E”ñ•\¦
+/// - UI—v‘f‚Ìó‘Ô•ÏX
+/// - ƒJ[ƒh‘I‘ğ‚ÌŠÇ—
+/// - ƒAƒjƒ[ƒVƒ‡ƒ“‚Ì§Œä
 /// 
-/// ã€ä»–ã®ã‚¯ãƒ©ã‚¹ã¨ã®é–¢ä¿‚ã€‘
-/// - BattleManager: UIæ›´æ–°ã®æŒ‡ç¤ºã‚’å—ã‘ã‚‹
-/// - CardSheetDisplay: ã‚«ãƒ¼ãƒ‰è©³ç´°ã®è¡¨ç¤º
-/// - DamagePopup: ãƒ€ãƒ¡ãƒ¼ã‚¸è¡¨ç¤º
+/// y‘¼‚ÌƒNƒ‰ƒX‚Æ‚ÌŠÖŒWz
+/// - BattleManager: UIXV‚Ìw¦‚ğó‚¯‚é
+/// - CardSheetDisplay: ƒJ[ƒhÚ×‚Ì•\¦
+/// - DamagePopup: ƒ_ƒ[ƒW•\¦
 /// 
-/// ã€æ³¨æ„äº‹é …ã€‘
-/// - ã‚·ãƒ³ã‚°ãƒ«ãƒˆãƒ³ãƒ‘ã‚¿ãƒ¼ãƒ³ã¯å«ã¾ãªã„ï¼ˆå¿…è¦ã«å¿œã˜ã¦ä½¿ç”¨å¯å¦ã‚’æ¤œè¨ï¼‰
-/// - ã‚¨ãƒ©ãƒ¼ã®å‡¦ç†ã¯å¤–éƒ¨ã«å§”ã­ã‚‹
-/// - ãƒãƒ«ãƒã‚¹ãƒ¬ãƒƒãƒ‰ã§ã®æ›´æ–°ã¯è¡Œã‚ãªã„
+/// y’ˆÓ–€z
+/// - ƒVƒ“ƒOƒ‹ƒgƒ“ƒpƒ^[ƒ“‚ÍŠÜ‚Ü‚È‚¢i•K—v‚É‰‚¶‚Äg—p‰Â”Û‚ğŒŸ“¢j
+/// - ƒGƒ‰[‚Ìˆ—‚ÍŠO•”‚ÉˆÏ‚Ë‚é
+/// - ƒ}ƒ‹ƒ`ƒXƒŒƒbƒh‚Å‚ÌXV‚Ís‚í‚È‚¢
 /// </summary>
 public class BattleUIManager : MonoBehaviour
 {
     public static BattleUIManager I;
 
-    //==== ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ =====
-    [Header("UI è¦ç´ ")]
+    //==== ƒtƒB[ƒ‹ƒh =====
+    [Header("UI —v‘f")]
     [SerializeField] private BattleStatusUI statusUI;
     [SerializeField] private Button useButton;
     [SerializeField] private TMP_Text useButtonLabelTMP;
     [SerializeField] private Text useButtonLabelUGUI;
     [SerializeField] private Image useButtonImage;
 
-    [Header("ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—")]
+    [Header("ƒ|ƒbƒvƒAƒbƒv")]
     [SerializeField] private GameObject damagePopupPrefab;
     [SerializeField] private Canvas uiCanvas;
 
-    [Header("ã‚«ãƒ¼ãƒ‰è©³ç´°è¡¨ç¤º")]
+    [Header("ƒJ[ƒhÚ×•\¦")]
     [SerializeField] private GameObject cardSheetPrefab;
     [SerializeField] private Transform playerCardDisplayPanel;
     [SerializeField] private Transform enemyCardDisplayPanel;
     [SerializeField] private MagicPanelUI magicPanelUI;
 
-    [Header("Use ãƒœã‚¿ãƒ³è¨­å®š")]
+    [Header("–‚–@FèD¨MagicPanel ”òsƒAƒjƒ")]
+    [SerializeField] private float magicHandToPanelDuration = 0.2f;
+
+    [Header("Use ƒ{ƒ^ƒ“İ’è")]
     [SerializeField] private Color useButtonNormalColor = new Color(0.2f, 0.5f, 1f, 1f);
     [SerializeField] private Color useButtonDangerColor = new Color(0.9f, 0.2f, 0.25f, 1f);
     [SerializeField] private Color useButtonPrayColor = new Color(1f, 0.95f, 0.6f, 1f);
 
-    [Header("ã‚«ãƒ¼ãƒ‰ç®¡ç†")]
+    [Header("ƒJ[ƒhŠÇ—")]
     [SerializeField] private CardLayoutManager cardLayoutManager;
     [SerializeField] private CardSelectionManager cardSelectionManager;
 
-    [Header("çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³")]
+    [Header("ŒoÏƒAƒNƒVƒ‡ƒ“")]
     [SerializeField] private Button buyButton;
     [SerializeField] private Button sellButton;
     [SerializeField] private Button exchangeButton;
@@ -71,28 +75,28 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private TMP_Text sellCooldownText;
     [SerializeField] private TMP_Text exchangeCooldownText;
 
-    [Header("ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—")]
-    [SerializeField] private GameObject confirmPopupPrefab; // BuyConfirmPopupç”¨
-    [SerializeField] private GameObject sellConfirmPopupPrefab; // SellConfirmPopupç”¨
-    [SerializeField] private GameObject exchangePopupPrefab; // ExchangePopupç”¨
+    [Header("Šm”Fƒ|ƒbƒvƒAƒbƒv")]
+    [SerializeField] private GameObject confirmPopupPrefab; // BuyConfirmPopup—p
+    [SerializeField] private GameObject sellConfirmPopupPrefab; // SellConfirmPopup—p
+    [SerializeField] private GameObject exchangePopupPrefab; // ExchangePopup—p
     [SerializeField] private Canvas popupCanvas;
 
-    // ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆå¤‰æ•°
+    // ƒvƒ‰ƒCƒx[ƒg•Ï”
     private readonly List<GameObject> activeCardSheets = new();
     private enum UseButtonMode { Use, Allow, Pray }
     
-    // ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—çŠ¶æ…‹ç®¡ç†
+    // ƒ|ƒbƒvƒAƒbƒvó‘ÔŠÇ—
     private bool isHandInputBlocked = false;
     private bool isBuyPopupOpen = false;
-    private GameObject currentBuyPopup = null; // è²·ã†ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®å‚ç…§
+    private GameObject currentBuyPopup = null; // ”ƒ‚¤Šm”Fƒ|ƒbƒvƒAƒbƒv‚ÌQÆ
 
-    //==== åˆæœŸåŒ– =====
+    //==== ‰Šú‰» =====
     void Awake()
     {
         if (I != null && I != this) { Destroy(gameObject); return; }
         I = this;
 
-        // ãƒœã‚¿ãƒ³ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã®è‡ªå‹•å–å¾—
+        // ƒ{ƒ^ƒ“ƒRƒ“ƒ|[ƒlƒ“ƒg‚Ì©“®æ“¾
         if (useButton != null)
         {
             if (useButtonLabelTMP == null) useButtonLabelTMP = useButton.GetComponentInChildren<TMP_Text>(true);
@@ -102,19 +106,19 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹è¡¨ç¤º =====
+    //==== ƒpƒuƒŠƒbƒNAPIFƒXƒe[ƒ^ƒX•\¦ =====
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
     {
-        // æ‰‹æœ­ã®æšæ•°ã‚’å–å¾—ï¼ˆå¸¸ã«ç¾åœ¨ã®æ‰‹æœ­æšæ•°ã‚’å‚ç…§ï¼‰
+        // èD‚Ì–‡”‚ğæ“¾ií‚ÉŒ»İ‚ÌèD–‡”‚ğQÆj
         int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
         int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
         
-        Debug.Log($"[BattleUIManager] æ‰‹æœ­æšæ•° - ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼: {playerHandCount}, æ•µ: {enemyHandCount}");
+        Debug.Log($"[BattleUIManager] èD–‡” - ƒvƒŒƒCƒ„[: {playerHandCount}, “G: {enemyHandCount}");
         
         statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount);
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šã‚«ãƒ¼ãƒ‰è©³ç´°è¡¨ç¤º =====
+    //==== ƒpƒuƒŠƒbƒNAPIFƒJ[ƒhÚ×•\¦ =====
     public void ShowCardDetail(CardData card, Side side)
     {
         if (card == null)
@@ -123,26 +127,29 @@ public class BattleUIManager : MonoBehaviour
             return;
         }
 
-        // æ—¢ã«é¸æŠã•ã‚Œã¦ã„ã‚‹ã‚«ãƒ¼ãƒ‰ã®å ´åˆã¯é¸æŠè§£é™¤
+        // Šù‚É‘I‘ğ‚³‚ê‚Ä‚¢‚éƒJ[ƒh‚Ìê‡‚Í‘I‘ğ‰ğœ
         if (cardSelectionManager.IsCardSelected(card))
         {
-            // ã‚«ãƒ¼ãƒ‰é¸æŠã‚’ã‚­ãƒ£ãƒ³ã‚»ãƒ«
-            Debug.Log($"[BattleUIManager] ã‚«ãƒ¼ãƒ‰é¸æŠã‚’ã‚­ãƒ£ãƒ³ã‚»ãƒ«: {card.cardName}");
+            // ƒJ[ƒh‘I‘ğ‚ğƒLƒƒƒ“ƒZƒ‹
+            Debug.Log($"[BattleUIManager] ƒJ[ƒh‘I‘ğ‚ğƒLƒƒƒ“ƒZƒ‹: {card.cardName}");
             CancelCardSelection(card);
             return;
         }
 
-        // ã‚«ãƒ¼ãƒ‰é¸æŠã‚’è¿½åŠ ï¼ˆåˆ¶é™ãƒã‚§ãƒƒã‚¯ã¯å†…éƒ¨ã§å®Ÿè¡Œï¼‰
+        // ƒJ[ƒh‘I‘ğ‚ğ’Ç‰Ái§ŒÀƒ`ƒFƒbƒN‚Í“à•”‚ÅÀsj
         if (cardSelectionManager.AddCardSelection(card))
         {
-            // ã‚«ãƒ¼ãƒ‰è¡¨ç¤º
+            // ƒJ[ƒh•\¦
             DisplayCard(card, side);
 
-            // ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã®ã‚«ãƒ¼ãƒ‰é¸æŠæ™‚ã«UseButtonã‚’æœ‰åŠ¹åŒ–ï¼ˆæ¼”å‡ºä¸­ã¯é™¤ãï¼‰
+            // ƒvƒŒƒCƒ„[‚ÌƒJ[ƒh‘I‘ğ‚ÉUseButton‚ğ—LŒø‰»i‰‰o’†‚Íœ‚­j
             if (side == Side.Player && !BattleManager.I.IsUseButtonLocked)
             {
                 SetUseButtonInteractable(true);
             }
+
+            // ‡Z‘®«ETotalATKDEF ‚ÌF‚ğ‘I‘ğ“à—e‚É“¯Šú
+            BattleManager.I?.UpdateTotalATKDEFDisplay();
         }
     }
 
@@ -159,7 +166,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼å´ã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºã®ã¿ã‚¯ãƒªã‚¢ï¼ˆæ•µå´ã¯æ®‹ã™ï¼‰
+    /// ƒvƒŒƒCƒ„[‘¤‚ÌƒJ[ƒh•\¦‚Ì‚İƒNƒŠƒAi“G‘¤‚Íc‚·j
     /// </summary>
     public void HidePlayerCardDetails()
     {
@@ -177,7 +184,7 @@ public class BattleUIManager : MonoBehaviour
         UpdateHandCardHighlights();
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šã‚«ãƒ¼ãƒ‰é¸æŠç®¡ç† =====
+    //==== ƒpƒuƒŠƒbƒNAPIFƒJ[ƒh‘I‘ğŠÇ— =====
     public List<CardData> GetSelectedCards()
     {
         return cardSelectionManager.GetSelectedCards();
@@ -193,7 +200,7 @@ public class BattleUIManager : MonoBehaviour
         return cardSelectionManager.GetSelectedDefenseCards();
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šãƒœã‚¿ãƒ³ç®¡ç† =====
+    //==== ƒpƒuƒŠƒbƒNAPIFƒ{ƒ^ƒ“ŠÇ— =====
     public void SetUseButtonLabel(string text)
     {
         if (useButton == null) return;
@@ -201,8 +208,8 @@ public class BattleUIManager : MonoBehaviour
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
 
-        var mode = text == "è¨±å¯" ? UseButtonMode.Allow
-                 : text == "ç¥ˆã‚Š" ? UseButtonMode.Pray
+        var mode = text == "‹–‰Â" ? UseButtonMode.Allow
+                 : text == "‹F‚è" ? UseButtonMode.Pray
                  : UseButtonMode.Use;
         ApplyUseButtonMode(mode);
     }
@@ -213,7 +220,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// æ‰‹æœ­ã‚«ãƒ¼ãƒ‰ã®ã‚¯ãƒªãƒƒã‚¯å—ä»˜ã®ã¿ã‚’åˆ‡ã‚Šæ›¿ãˆã‚‹ï¼ˆè¦‹ãŸç›®ã¯å¤‰æ›´ã—ãªã„ï¼‰
+    /// èDƒJ[ƒh‚ÌƒNƒŠƒbƒNó•t‚Ì‚İ‚ğØ‚è‘Ö‚¦‚éiŒ©‚½–Ú‚Í•ÏX‚µ‚È‚¢j
     /// </summary>
     public void SetHandClickable(bool clickable)
     {
@@ -229,7 +236,7 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šæ‰‹æœ­ç®¡ç† =====
+    //==== ƒpƒuƒŠƒbƒNAPIFèDŠÇ— =====
     public void SetHandInteractivity(List<CardData> hand, bool interactable)
     {
         if (hand == null) return;
@@ -253,7 +260,7 @@ public class BattleUIManager : MonoBehaviour
     {
         if (hand == null) return;
         
-        // allowedCardsãŒnullã®å ´åˆã¯å…¨ã¦ã®ã‚«ãƒ¼ãƒ‰ã‚’ä½¿ç”¨å¯èƒ½ã«ã™ã‚‹
+        // allowedCards‚ªnull‚Ìê‡‚Í‘S‚Ä‚ÌƒJ[ƒh‚ğg—p‰Â”\‚É‚·‚é
         if (allowedCards == null)
         {
             foreach (var card in hand)
@@ -264,7 +271,7 @@ public class BattleUIManager : MonoBehaviour
             return;
         }
         
-        // å‚ç…§æ¯”è¼ƒã§ã¯ãªãã€ã‚«ãƒ¼ãƒ‰ã®cardUIã‚’åŸºæº–ã«æ¯”è¼ƒã™ã‚‹
+        // QÆ”äŠr‚Å‚Í‚È‚­AƒJ[ƒh‚ÌcardUI‚ğŠî€‚É”äŠr‚·‚é
         var allowedCardUIs = new HashSet<CardUI>();
         foreach (var allowedCard in allowedCards)
         {
@@ -277,7 +284,7 @@ public class BattleUIManager : MonoBehaviour
         foreach (var card in hand)
         {
             if (card?.cardUI == null) continue;
-            // cardUIã‚’åŸºæº–ã«æ¯”è¼ƒï¼ˆæ–°ã—ã„ã‚«ãƒ¼ãƒ‰ãŒç½®ãæ›ãˆã‚‰ã‚Œã¦ã‚‚ã€cardUIãŒåŒã˜ãªã‚‰ä¸€è‡´ã™ã‚‹ï¼‰
+            // cardUI‚ğŠî€‚É”äŠriV‚µ‚¢ƒJ[ƒh‚ª’u‚«Š·‚¦‚ç‚ê‚Ä‚àAcardUI‚ª“¯‚¶‚È‚çˆê’v‚·‚éj
             bool canUse = allowedCardUIs.Contains(card.cardUI);
             SetCardInteractable(card, canUse);
         }
@@ -285,7 +292,7 @@ public class BattleUIManager : MonoBehaviour
     
     public void SetPrayModeUI(List<CardData> hand)
     {
-        SetUseButtonLabel("ç¥ˆã‚Š");
+        SetUseButtonLabel("‹F‚è");
         SetUseButtonInteractable(true);
         SetHandInteractivity(hand, false);
     }
@@ -293,34 +300,34 @@ public class BattleUIManager : MonoBehaviour
     public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
     {
         UpdateHandInteractivity(hand, attackableCards);
-        SetUseButtonLabel("ä½¿ç”¨");
+        SetUseButtonLabel("g—p");
     }
     
     public void RefreshDefenseInteractivity(List<CardData> hand, List<CardData> defenseCards)
     {
         UpdateHandInteractivity(hand, defenseCards);
-        SetUseButtonLabel("è¨±å¯");
+        SetUseButtonLabel("‹–‰Â");
         SetUseButtonInteractable(true);
     }
 
     /// <summary>
-    /// Introæ™‚ç‚¹ã§ã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºï¼ˆã‚°ãƒ¬ãƒ¼ã‚¢ã‚¦ãƒˆãªã—ï¼‰
+    /// Intro“_‚Å‚ÌƒJ[ƒh•\¦iƒOƒŒ[ƒAƒEƒg‚È‚µj
     /// </summary>
     public void SetIntroModeUI(List<CardData> hand)
     {
-        SetUseButtonLabel("ä½¿ç”¨");
-        SetHandInteractivity(hand, true); // ã™ã¹ã¦ã®ã‚«ãƒ¼ãƒ‰ã‚’æœ‰åŠ¹ã«ã™ã‚‹ï¼ˆã‚°ãƒ¬ãƒ¼ã‚¢ã‚¦ãƒˆãªã—ï¼‰
+        SetUseButtonLabel("g—p");
+        SetHandInteractivity(hand, true); // ‚·‚×‚Ä‚ÌƒJ[ƒh‚ğ—LŒø‚É‚·‚éiƒOƒŒ[ƒAƒEƒg‚È‚µj
     }
 
-    //==== ãƒ‘ãƒ–ãƒªãƒƒã‚¯APIï¼šãƒãƒƒãƒ—ã‚¢ãƒƒãƒ— =====
+    //==== ƒpƒuƒŠƒbƒNAPIFƒ|ƒbƒvƒAƒbƒv =====
     public void ShowDamagePopup(int amount, PlayerStatus target)
     {
-        Debug.Log($"[BattleUIManager] ãƒ€ãƒ¡ãƒ¼ã‚¸ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤º: {amount}ãƒ€ãƒ¡ãƒ¼ã‚¸ å¯¾è±¡ {target?.DisplayName ?? "null"}");
+        Debug.Log($"[BattleUIManager] ƒ_ƒ[ƒWƒ|ƒbƒvƒAƒbƒv•\¦: {amount}ƒ_ƒ[ƒW ‘ÎÛ {target?.DisplayName ?? "null"}");
         
         var popup = SpawnPopupFor(target);
         if (popup == null) 
         {
-            Debug.LogWarning("[BattleUIManager] ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®ç”Ÿæˆã«å¤±æ•—ã—ã¾ã—ãŸ");
+            Debug.LogWarning("[BattleUIManager] ƒ|ƒbƒvƒAƒbƒv‚Ì¶¬‚É¸”s‚µ‚Ü‚µ‚½");
             return;
         }
 
@@ -328,28 +335,28 @@ public class BattleUIManager : MonoBehaviour
         if (damageText != null)
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
-            string displayText = amount > 0 ? $"{amount} ãƒ€ãƒ¡ãƒ¼ã‚¸ï¼" : "ãƒ€ãƒ¡ãƒ¼ã‚¸ãªã—ï¼";
+            string displayText = amount > 0 ? $"{amount} ƒ_ƒ[ƒWI" : "ƒ_ƒ[ƒW‚È‚µI";
             Color displayColor = amount > 0 ? (hitPlayer ? Color.cyan : Color.red) : Color.yellow;
             damageText.Setup(displayText, displayColor);
-            Debug.Log($"[BattleUIManager] ãƒ€ãƒ¡ãƒ¼ã‚¸ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¨­å®šå®Œäº†: {amount}ãƒ€ãƒ¡ãƒ¼ã‚¸");
+            Debug.Log($"[BattleUIManager] ƒ_ƒ[ƒWƒ|ƒbƒvƒAƒbƒvİ’èŠ®—¹: {amount}ƒ_ƒ[ƒW");
         }
         else
         {
-            Debug.LogWarning("[BattleUIManager] DamagePopupã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] DamagePopupƒRƒ“ƒ|[ƒlƒ“ƒg‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ");
         }
     }
 
     /// <summary>
-    /// å›å¾©ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’è¡¨ç¤º
+    /// ‰ñ•œƒ|ƒbƒvƒAƒbƒv‚ğ•\¦
     /// </summary>
     public void ShowHealPopup(int amount, string statType, PlayerStatus target)
     {
-        Debug.Log($"[BattleUIManager] å›å¾©ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤º: {statType}{amount}å›å¾© å¯¾è±¡ {target?.DisplayName ?? "null"}");
+        Debug.Log($"[BattleUIManager] ‰ñ•œƒ|ƒbƒvƒAƒbƒv•\¦: {statType}{amount}‰ñ•œ ‘ÎÛ {target?.DisplayName ?? "null"}");
         
         var popup = SpawnPopupFor(target);
         if (popup == null) 
         {
-            Debug.LogWarning("[BattleUIManager] ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®ç”Ÿæˆã«å¤±æ•—ã—ã¾ã—ãŸ");
+            Debug.LogWarning("[BattleUIManager] ƒ|ƒbƒvƒAƒbƒv‚Ì¶¬‚É¸”s‚µ‚Ü‚µ‚½");
             return;
         }
 
@@ -357,43 +364,43 @@ public class BattleUIManager : MonoBehaviour
         if (damageText != null)
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
-            string displayText = $"{statType}{amount}å›å¾©ï¼";
-            Color displayColor = Color.green; // å›å¾©ã¯ç·‘è‰²
+            string displayText = $"{statType}{amount}‰ñ•œI";
+            Color displayColor = Color.green; // ‰ñ•œ‚Í—ÎF
             damageText.Setup(displayText, displayColor);
-            Debug.Log($"[BattleUIManager] å›å¾©ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¨­å®šå®Œäº†: {statType}{amount}å›å¾©");
+            Debug.Log($"[BattleUIManager] ‰ñ•œƒ|ƒbƒvƒAƒbƒvİ’èŠ®—¹: {statType}{amount}‰ñ•œ");
         }
         else
         {
-            Debug.LogWarning("[BattleUIManager] DamagePopupã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] DamagePopupƒRƒ“ƒ|[ƒlƒ“ƒg‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ");
         }
     }
 
     public void ShowMissPopup(PlayerStatus target)
     {
-        Debug.Log($"[BattleUIManager] ãƒŸã‚¹ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤º å¯¾è±¡ {target?.DisplayName ?? "null"}");
+        Debug.Log($"[BattleUIManager] ƒ~ƒXƒ|ƒbƒvƒAƒbƒv•\¦ ‘ÎÛ {target?.DisplayName ?? "null"}");
         
         var popup = SpawnPopupFor(target);
         if (popup == null) 
         {
-            Debug.LogWarning("[BattleUIManager] ãƒŸã‚¹ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®ç”Ÿæˆã«å¤±æ•—ã—ã¾ã—ãŸ");
+            Debug.LogWarning("[BattleUIManager] ƒ~ƒXƒ|ƒbƒvƒAƒbƒv‚Ì¶¬‚É¸”s‚µ‚Ü‚µ‚½");
             return;
         }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            damageText.Setup("ãƒŸã‚¹ï¼", Color.yellow);
-            Debug.Log("[BattleUIManager] ãƒŸã‚¹ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¨­å®šå®Œäº†");
+            damageText.Setup("ƒ~ƒXI", Color.yellow);
+            Debug.Log("[BattleUIManager] ƒ~ƒXƒ|ƒbƒvƒAƒbƒvİ’èŠ®—¹");
         }
         else
         {
-            Debug.LogWarning("[BattleUIManager] DamagePopupã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] DamagePopupƒRƒ“ƒ|[ƒlƒ“ƒg‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ");
         }
     }
 
     /// <summary>
-    /// ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã® CardDisplayPanel ä¸­å¤®ã«æƒ…å ±ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’è¡¨ç¤ºã™ã‚‹
-    /// ï¼ˆMPä¸è¶³ã€é­”æ³•å®¹é‡ä¸è¶³ãªã©ï¼‰
+    /// ƒvƒŒƒCƒ„[‚Ì CardDisplayPanel ’†‰›‚Éî•ñƒ|ƒbƒvƒAƒbƒv‚ğ•\¦‚·‚é
+    /// iMP•s‘«A–‚–@—e—Ê•s‘«‚È‚Çj
     /// </summary>
     public void ShowInfoPopupOnCardPanel(string message, Color color)
     {
@@ -403,7 +410,7 @@ public class BattleUIManager : MonoBehaviour
         var rt = go.transform as RectTransform;
         if (rt != null)
         {
-            // playerCardDisplayPanel ã®ä¸­å¤®ã‚’ã‚¹ã‚¯ãƒªãƒ¼ãƒ³åº§æ¨™â†’Canvasåº§æ¨™ã«å¤‰æ›
+            // playerCardDisplayPanel ‚Ì’†‰›‚ğƒXƒNƒŠ[ƒ“À•W¨CanvasÀ•W‚É•ÏŠ·
             var panelRT = playerCardDisplayPanel as RectTransform;
             if (panelRT != null)
             {
@@ -422,30 +429,30 @@ public class BattleUIManager : MonoBehaviour
         if (popup != null) popup.Setup(message, color);
     }
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šã‚«ãƒ¼ãƒ‰é¸æŠç®¡ç† =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒJ[ƒh‘I‘ğŠÇ— =====
     private void CancelCardSelection(CardData card)
     {
         bool removed = cardSelectionManager.CancelCardSelection(card);
-        Debug.Log($"[BattleUIManager] ã‚«ãƒ¼ãƒ‰é¸æŠã‚’ã‚­ãƒ£ãƒ³ã‚»ãƒ«: {card.cardName} (å‰Šé™¤æˆåŠŸ: {removed}, selectedCardsæ•°: {cardSelectionManager.SelectedCardCount})");
+        Debug.Log($"[BattleUIManager] ƒJ[ƒh‘I‘ğ‚ğƒLƒƒƒ“ƒZƒ‹: {card.cardName} (íœ¬Œ÷: {removed}, selectedCards”: {cardSelectionManager.SelectedCardCount})");
         
-        // è¡¨ç¤ºã•ã‚Œã¦ã„ã‚‹ã‚«ãƒ¼ãƒ‰ã‚·ãƒ¼ãƒˆã‚’å‰Šé™¤
+        // •\¦‚³‚ê‚Ä‚¢‚éƒJ[ƒhƒV[ƒg‚ğíœ
         RemoveCardFromDisplay(card);
         
-        // æ‰‹æœ­ã®ãƒã‚¤ãƒ©ã‚¤ãƒˆæ›´æ–°
+        // èD‚ÌƒnƒCƒ‰ƒCƒgXV
         UpdateHandCardHighlights();
         
-        // ã‚«ãƒ¼ãƒ‰ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã®æ›´æ–°
+        // ƒJ[ƒhƒŒƒCƒAƒEƒg‚ÌXV
         cardLayoutManager.SetActiveCardSheets(activeCardSheets);
         cardLayoutManager.SetSelectedCards(cardSelectionManager.GetSelectedCards());
         cardLayoutManager.HandleCardCancellation();
         
-        // BattleManagerã®æ›´æ–°
+        // BattleManager‚ÌXV
         UpdateBattleManagerAfterCancel();
         
-        // TotalATKDEFè¡¨ç¤ºã‚’æ›´æ–°ï¼ˆé¸æŠãŒç©ºã®å ´åˆã¯éè¡¨ç¤ºã«ãªã‚‹ï¼‰
+        // TotalATKDEF•\¦‚ğXVi‘I‘ğ‚ª‹ó‚Ìê‡‚Í”ñ•\¦‚É‚È‚éj
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
-        // æ”»æ’ƒãƒ•ã‚§ãƒ¼ã‚ºã§ã‚«ãƒ¼ãƒ‰ãŒ0æšã«ãªã£ãŸã‚‰UseButtonã‚’ç„¡åŠ¹åŒ–
+        // UŒ‚ƒtƒF[ƒY‚ÅƒJ[ƒh‚ª0–‡‚É‚È‚Á‚½‚çUseButton‚ğ–³Œø‰»
         if (BattleManager.I?.CurrentState == GameState.AttackSelect
             && cardSelectionManager.SelectedCardCount == 0)
         {
@@ -476,7 +483,7 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šã‚«ãƒ¼ãƒ‰è¡¨ç¤º =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒJ[ƒh•\¦ =====
     private void DisplayCard(CardData card, Side side)
     {
         Transform parent = (side == Side.Player) ? playerCardDisplayPanel : enemyCardDisplayPanel;
@@ -495,24 +502,24 @@ public class BattleUIManager : MonoBehaviour
             
             activeCardSheets.Add(go);
             
-            // ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆãƒãƒãƒ¼ã‚¸ãƒ£ãƒ¼ã®æ›´æ–°
+            // ƒŒƒCƒAƒEƒgƒ}ƒl[ƒWƒƒ[‚ÌXV
             cardLayoutManager.SetActiveCardSheets(activeCardSheets);
             cardLayoutManager.SetSelectedCards(cardSelectionManager.GetSelectedCards());
             
-            // ã‚«ãƒ¼ãƒ‰ä½ç½®ã®è¨­å®š
+            // ƒJ[ƒhˆÊ’u‚Ìİ’è
             cardLayoutManager.SetupCardPosition(go, parent);
             UpdateHandCardHighlights();
             return;
         }
 
-        // ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯å‡¦ç†
+        // ƒtƒH[ƒ‹ƒoƒbƒNˆ—
         HandleCardDisplayFallback(card, side);
     }
 
 
 
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒAƒjƒ[ƒVƒ‡ƒ“ =====
     private System.Collections.IEnumerator StackCardAnimation(GameObject cardObj, float targetX, float targetY)
     {
         var rt = cardObj.transform as RectTransform;
@@ -521,7 +528,7 @@ public class BattleUIManager : MonoBehaviour
         Vector3 startPos = new Vector3(0, 0, 0);
         Vector3 endPos = new Vector3(targetX, targetY, 0);
         Vector3 startScale = Vector3.one;
-        Vector3 endScale = Vector3.one * 0.9f; // cardScaleã®å›ºå®šå€¤
+        Vector3 endScale = Vector3.one * 0.9f; // cardScale‚ÌŒÅ’è’l
         
         float duration = 0.3f;
         float elapsed = 0f;
@@ -542,7 +549,7 @@ public class BattleUIManager : MonoBehaviour
         rt.localScale = endScale;
     }
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šãƒœã‚¿ãƒ³ç®¡ç† =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒ{ƒ^ƒ“ŠÇ— =====
     private void ApplyUseButtonMode(UseButtonMode mode)
     {
         if (useButton == null) return;
@@ -554,14 +561,14 @@ public class BattleUIManager : MonoBehaviour
                  : useButtonNormalColor;
     }
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šãƒãƒƒãƒ—ã‚¢ãƒƒãƒ— =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒ|ƒbƒvƒAƒbƒv =====
     private GameObject SpawnPopupFor(PlayerStatus target)
     {
-        Debug.Log($"[BattleUIManager] ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ç”Ÿæˆ - damagePopupPrefab: {damagePopupPrefab != null}, uiCanvas: {uiCanvas != null}");
+        Debug.Log($"[BattleUIManager] ƒ|ƒbƒvƒAƒbƒv¶¬ - damagePopupPrefab: {damagePopupPrefab != null}, uiCanvas: {uiCanvas != null}");
         
         if (damagePopupPrefab == null || uiCanvas == null)
         {
-            Debug.LogWarning("[BattleUIManager] DamagePopup / Canvas ãŒè¨­å®šã•ã‚Œã¦ã„ã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] DamagePopup / Canvas ‚ªİ’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñ");
             return null;
         }
 
@@ -571,7 +578,7 @@ public class BattleUIManager : MonoBehaviour
         {
             rt.anchoredPosition = GetPopupAnchor(target);
             rt.localScale = Vector3.one;
-            Debug.Log($"[BattleUIManager] ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ä½ç½®è¨­å®š - ä½ç½®: {rt.anchoredPosition}");
+            Debug.Log($"[BattleUIManager] ƒ|ƒbƒvƒAƒbƒvˆÊ’uİ’è - ˆÊ’u: {rt.anchoredPosition}");
         }
         return go;
     }
@@ -582,7 +589,7 @@ public class BattleUIManager : MonoBehaviour
         return isPlayer ? new Vector2(-300, -200) : new Vector2(300, 200);
     }
 
-    //==== ãƒ—ãƒ©ã‚¤ãƒ™ãƒ¼ãƒˆãƒ¡ã‚½ãƒƒãƒ‰ï¼šãƒ˜ãƒ«ãƒ‘ãƒ¼ =====
+    //==== ƒvƒ‰ƒCƒx[ƒgƒƒ\ƒbƒhFƒwƒ‹ƒp[ =====
     private void RemoveCardFromDisplay(CardData card)
     {
         for (int i = activeCardSheets.Count - 1; i >= 0; i--)
@@ -629,7 +636,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// é˜²å¾¡ãƒ•ã‚§ãƒ¼ã‚ºã®ãƒœã‚¿ãƒ³ãƒ©ãƒ™ãƒ«ã‚’æ›´æ–°
+    /// –hŒäƒtƒF[ƒY‚Ìƒ{ƒ^ƒ“ƒ‰ƒxƒ‹‚ğXV
     /// </summary>
     public void UpdateDefenseButtonLabel()
     {
@@ -638,11 +645,11 @@ public class BattleUIManager : MonoBehaviour
         var selectedDefenseCards = GetSelectedDefenseCards();
         if (selectedDefenseCards.Count > 0)
         {
-            SetUseButtonLabel("ä½¿ç”¨");
+            SetUseButtonLabel("g—p");
         }
         else
         {
-            SetUseButtonLabel("è¨±å¯");
+            SetUseButtonLabel("‹–‰Â");
         }
         SetUseButtonInteractable(true);
     }
@@ -651,11 +658,11 @@ public class BattleUIManager : MonoBehaviour
     {
         if (cardSheetPrefab == null)
         {
-            Debug.LogWarning("[BattleUIManager] cardSheetPrefab ãŒè¨­å®šã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚CardDisplayController ã¸ã®ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯å‡¦ç†ã‚’å®Ÿè¡Œã—ã¾ã™ã€‚");
+            Debug.LogWarning("[BattleUIManager] cardSheetPrefab ‚ªİ’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñBCardDisplayController ‚Ö‚ÌƒtƒH[ƒ‹ƒoƒbƒNˆ—‚ğÀs‚µ‚Ü‚·B");
         }
         if ((side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel) == null)
         {
-            Debug.LogWarning("[BattleUIManager] CardDisplayPanel ãŒè¨­å®šã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚CardDisplayController ã¸ã®ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯å‡¦ç†ã‚’å®Ÿè¡Œã—ã¾ã™ã€‚side=" + side);
+            Debug.LogWarning("[BattleUIManager] CardDisplayPanel ‚ªİ’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñBCardDisplayController ‚Ö‚ÌƒtƒH[ƒ‹ƒoƒbƒNˆ—‚ğÀs‚µ‚Ü‚·Bside=" + side);
         }
 
         var controller = FindObjectOfType<CardDisplayController>(true);
@@ -665,20 +672,20 @@ public class BattleUIManager : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[BattleUIManager] ã™ã¹ã¦ã®è¡¨ç¤ºæ–¹æ³•ãŒåˆ©ç”¨ã§ãã¾ã›ã‚“ã€‚cardSheetPrefab / panel ãŒè¨­å®šã•ã‚Œã¦ã„ãªã„ã€CardDisplayController ã‚‚è¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚");
+            Debug.LogError("[BattleUIManager] ‚·‚×‚Ä‚Ì•\¦•û–@‚ª—˜—p‚Å‚«‚Ü‚¹‚ñBcardSheetPrefab / panel ‚ªİ’è‚³‚ê‚Ä‚¢‚È‚¢ACardDisplayController ‚àŒ©‚Â‚©‚è‚Ü‚¹‚ñB");
         }
     }
 
-    //==== çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ =====
+    //==== ŒoÏƒAƒNƒVƒ‡ƒ“ =====
     
     /// <summary>
-    /// çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãƒœã‚¿ãƒ³ã®çŠ¶æ…‹ã‚’æ›´æ–°
+    /// ŒoÏƒAƒNƒVƒ‡ƒ“ƒ{ƒ^ƒ“‚Ìó‘Ô‚ğXV
     /// </summary>
     public void UpdateEconomicActionButtons()
     {
         if (EconomicAction.I == null) return;
 
-        // è²·ã†ãƒœã‚¿ãƒ³
+        // ”ƒ‚¤ƒ{ƒ^ƒ“
         if (buyButton != null)
         {
             bool canBuy = EconomicAction.I.CanBuy();
@@ -688,7 +695,7 @@ public class BattleUIManager : MonoBehaviour
             buyButton.image.color = canBuy ? Color.white : Color.gray;
         }
 
-        // å£²ã‚‹ãƒœã‚¿ãƒ³
+        // ”„‚éƒ{ƒ^ƒ“
         if (sellButton != null)
         {
             bool canSell = EconomicAction.I.CanSell();
@@ -698,7 +705,7 @@ public class BattleUIManager : MonoBehaviour
             sellButton.image.color = canSell ? Color.white : Color.gray;
         }
 
-        // ä¸¡æ›¿ãƒœã‚¿ãƒ³
+        // —¼‘Öƒ{ƒ^ƒ“
         if (exchangeButton != null)
         {
             bool canExchange = EconomicAction.I.CanExchange();
@@ -708,166 +715,166 @@ public class BattleUIManager : MonoBehaviour
             exchangeButton.image.color = canExchange ? Color.white : Color.gray;
         }
 
-        Debug.Log($"[BattleUIManager] çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãƒœã‚¿ãƒ³æ›´æ–°å®Œäº†");
+        Debug.Log($"[BattleUIManager] ŒoÏƒAƒNƒVƒ‡ƒ“ƒ{ƒ^ƒ“XVŠ®—¹");
     }
 
     /// <summary>
-    /// è²·ã†ãƒœã‚¿ãƒ³ãŒæŠ¼ã•ã‚ŒãŸæ™‚ã®å‡¦ç†
+    /// ”ƒ‚¤ƒ{ƒ^ƒ“‚ª‰Ÿ‚³‚ê‚½‚Ìˆ—
     /// </summary>
     public void OnBuyButtonPressed()
     {
         if (EconomicAction.I == null || !EconomicAction.I.CanBuy())
         {
-            Debug.LogWarning("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã¯ä½¿ç”¨ã§ãã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“‚Íg—p‚Å‚«‚Ü‚¹‚ñ");
             return;
         }
 
-        // è²·ã†è‡ªèº«ãŒé€²è¡Œä¸­ï¼ˆãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤ºä¸­ã¾ãŸã¯è²·ã†ãƒ¢ãƒ¼ãƒ‰ä¸­ï¼‰ã®å ´åˆã¯ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã®ã¿
+        // ”ƒ‚¤©g‚ªis’†iƒ|ƒbƒvƒAƒbƒv•\¦’†‚Ü‚½‚Í”ƒ‚¤ƒ‚[ƒh’†j‚Ìê‡‚ÍƒLƒƒƒ“ƒZƒ‹‚Ì‚İ
         if (isBuyPopupOpen || (BattleManager.I != null && BattleManager.I.IsBuyProcessActive()))
         {
-            Debug.Log("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³é€²è¡Œä¸­ â†’ ã‚­ãƒ£ãƒ³ã‚»ãƒ«");
+            Debug.Log("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“is’† ¨ ƒLƒƒƒ“ƒZƒ‹");
             CancelBuyPopup();
             BattleManager.I?.CancelCurrentEconomicAction();
             return;
         }
 
-        // æ—¢ã«ã‚«ãƒ¼ãƒ‰ãŒé¸æŠã•ã‚Œã¦ã„ã‚‹å ´åˆã¯ã‚­ãƒ£ãƒ³ã‚»ãƒ«
+        // Šù‚ÉƒJ[ƒh‚ª‘I‘ğ‚³‚ê‚Ä‚¢‚éê‡‚ÍƒLƒƒƒ“ƒZƒ‹
         if (cardSelectionManager != null && cardSelectionManager.SelectedCardCount > 0)
         {
-            Debug.Log("[BattleUIManager] æ—¢ã«ã‚«ãƒ¼ãƒ‰ãŒé¸æŠã•ã‚Œã¦ã„ã‚‹ãŸã‚ã€è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã‚’ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã—ã¾ã™");
+            Debug.Log("[BattleUIManager] Šù‚ÉƒJ[ƒh‚ª‘I‘ğ‚³‚ê‚Ä‚¢‚é‚½‚ßA”ƒ‚¤ƒAƒNƒVƒ‡ƒ“‚ğƒLƒƒƒ“ƒZƒ‹‚µ‚Ü‚·");
             cardSelectionManager.ClearAllSelections();
             BattleUIManager.I?.HideAllCardDetails();
             return;
         }
 
-        // ä»–ã®çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãŒé€²è¡Œä¸­ãªã‚‰ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã—ã¦ã‹ã‚‰é–‹å§‹
+        // ‘¼‚ÌŒoÏƒAƒNƒVƒ‡ƒ“‚ªis’†‚È‚çƒLƒƒƒ“ƒZƒ‹‚µ‚Ä‚©‚çŠJn
         BattleManager.I?.CancelCurrentEconomicAction();
 
-        // è³¼å…¥ãƒœã‚¿ãƒ³æŠ¼ä¸‹æ™‚ã®éŸ³åŠ¹æœ
-        SoundEffectPlayer.I?.Play("Assets/SE/æ±ºå®šãƒœã‚¿ãƒ³ã‚’æŠ¼ã™3.mp3");
+        // w“üƒ{ƒ^ƒ“‰Ÿ‰º‚Ì‰¹Œø‰Ê
+        SoundEffectPlayer.I?.Play("Assets/SE/Œˆ’èƒ{ƒ^ƒ“‚ğ‰Ÿ‚·3.mp3");
 
-        Debug.Log("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤º");
+        Debug.Log("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“Šm”Fƒ|ƒbƒvƒAƒbƒv•\¦");
         ShowBuyConfirmPopup();
     }
 
     /// <summary>
-    /// å£²ã‚‹ãƒœã‚¿ãƒ³ãŒæŠ¼ã•ã‚ŒãŸæ™‚ã®å‡¦ç†
+    /// ”„‚éƒ{ƒ^ƒ“‚ª‰Ÿ‚³‚ê‚½‚Ìˆ—
     /// </summary>
     public void OnSellButtonPressed()
     {
         if (EconomicAction.I == null || !EconomicAction.I.CanSell())
         {
-            Debug.LogWarning("[BattleUIManager] å£²ã‚‹ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã¯ä½¿ç”¨ã§ãã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] ”„‚éƒAƒNƒVƒ‡ƒ“‚Íg—p‚Å‚«‚Ü‚¹‚ñ");
             return;
         }
 
-        // ä»–ã®çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãŒé€²è¡Œä¸­ãªã‚‰ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã—ã¦ã‹ã‚‰é–‹å§‹
+        // ‘¼‚ÌŒoÏƒAƒNƒVƒ‡ƒ“‚ªis’†‚È‚çƒLƒƒƒ“ƒZƒ‹‚µ‚Ä‚©‚çŠJn
         BattleManager.I?.CancelCurrentEconomicAction();
 
-        SoundEffectPlayer.I?.Play("Assets/SE/æ±ºå®šãƒœã‚¿ãƒ³ã‚’æŠ¼ã™3.mp3");
+        SoundEffectPlayer.I?.Play("Assets/SE/Œˆ’èƒ{ƒ^ƒ“‚ğ‰Ÿ‚·3.mp3");
 
-        Debug.Log("[BattleUIManager] å£²ã‚‹ã‚¢ã‚¯ã‚·ãƒ§ãƒ³å®Ÿè¡Œ");
+        Debug.Log("[BattleUIManager] ”„‚éƒAƒNƒVƒ‡ƒ“Às");
         BattleManager.I?.ExecuteSellAction();
     }
 
     /// <summary>
-    /// ä¸¡æ›¿ãƒœã‚¿ãƒ³ãŒæŠ¼ã•ã‚ŒãŸæ™‚ã®å‡¦ç†
+    /// —¼‘Öƒ{ƒ^ƒ“‚ª‰Ÿ‚³‚ê‚½‚Ìˆ—
     /// </summary>
     public void OnExchangeButtonPressed()
     {
         if (EconomicAction.I == null || !EconomicAction.I.CanExchange())
         {
-            Debug.LogWarning("[BattleUIManager] ä¸¡æ›¿ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã¯ä½¿ç”¨ã§ãã¾ã›ã‚“");
+            Debug.LogWarning("[BattleUIManager] —¼‘ÖƒAƒNƒVƒ‡ƒ“‚Íg—p‚Å‚«‚Ü‚¹‚ñ");
             return;
         }
 
-        // ä¸¡æ›¿è‡ªèº«ãŒé€²è¡Œä¸­ã®å ´åˆã¯ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã®ã¿ï¼ˆæ–°ã—ã„ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã¯é–‹ã‹ãªã„ï¼‰
+        // —¼‘Ö©g‚ªis’†‚Ìê‡‚ÍƒLƒƒƒ“ƒZƒ‹‚Ì‚İiV‚µ‚¢ƒ|ƒbƒvƒAƒbƒv‚ÍŠJ‚©‚È‚¢j
         if (BattleManager.I != null && BattleManager.I.IsExchangeProcessActive())
         {
-            Debug.Log("[BattleUIManager] ä¸¡æ›¿ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤ºä¸­ â†’ ã‚­ãƒ£ãƒ³ã‚»ãƒ«");
+            Debug.Log("[BattleUIManager] —¼‘Öƒ|ƒbƒvƒAƒbƒv•\¦’† ¨ ƒLƒƒƒ“ƒZƒ‹");
             BattleManager.I.CancelCurrentEconomicAction();
             return;
         }
 
-        // ä»–ã®çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãŒé€²è¡Œä¸­ãªã‚‰ã‚­ãƒ£ãƒ³ã‚»ãƒ«ã—ã¦ã‹ã‚‰é–‹å§‹
+        // ‘¼‚ÌŒoÏƒAƒNƒVƒ‡ƒ“‚ªis’†‚È‚çƒLƒƒƒ“ƒZƒ‹‚µ‚Ä‚©‚çŠJn
         BattleManager.I?.CancelCurrentEconomicAction();
 
-        SoundEffectPlayer.I?.Play("Assets/SE/æ±ºå®šãƒœã‚¿ãƒ³ã‚’æŠ¼ã™3.mp3");
+        SoundEffectPlayer.I?.Play("Assets/SE/Œˆ’èƒ{ƒ^ƒ“‚ğ‰Ÿ‚·3.mp3");
 
-        Debug.Log("[BattleUIManager] ä¸¡æ›¿ã‚¢ã‚¯ã‚·ãƒ§ãƒ³å®Ÿè¡Œ");
+        Debug.Log("[BattleUIManager] —¼‘ÖƒAƒNƒVƒ‡ƒ“Às");
         BattleManager.I?.ExecuteExchangeAction();
     }
 
     /// <summary>
-    /// è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã®ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’è¡¨ç¤º
+    /// ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“‚ÌŠm”Fƒ|ƒbƒvƒAƒbƒv‚ğ•\¦
     /// </summary>
     private void ShowBuyConfirmPopup()
     {
         if (confirmPopupPrefab == null)
         {
-            Debug.LogError("[BattleUIManager] ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®PrefabãŒè¨­å®šã•ã‚Œã¦ã„ã¾ã›ã‚“");
+            Debug.LogError("[BattleUIManager] Šm”Fƒ|ƒbƒvƒAƒbƒv‚ÌPrefab‚ªİ’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñ");
             return;
         }
 
         var canvas = popupCanvas != null ? popupCanvas : uiCanvas;
         if (canvas == null)
         {
-            Debug.LogError("[BattleUIManager] ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ç”¨ã®CanvasãŒè¨­å®šã•ã‚Œã¦ã„ã¾ã›ã‚“");
+            Debug.LogError("[BattleUIManager] ƒ|ƒbƒvƒAƒbƒv—p‚ÌCanvas‚ªİ’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñ");
             return;
         }
 
-        // ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’ç”Ÿæˆ
+        // ƒ|ƒbƒvƒAƒbƒv‚ğ¶¬
         var popup = Instantiate(confirmPopupPrefab, canvas.transform);
         popup.name = "BuyConfirmPopup";
-        currentBuyPopup = popup; // å‚ç…§ã‚’ä¿å­˜
+        currentBuyPopup = popup; // QÆ‚ğ•Û‘¶
 
-        // ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã®ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã‚’å–å¾—
+        // ƒ|ƒbƒvƒAƒbƒv‚ÌƒRƒ“ƒ|[ƒlƒ“ƒg‚ğæ“¾
         var confirmPopup = popup.GetComponent<BuyConfirmPopup>();
         if (confirmPopup == null)
         {
-            Debug.LogError("[BattleUIManager] BuyConfirmPopupã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“");
+            Debug.LogError("[BattleUIManager] BuyConfirmPopupƒRƒ“ƒ|[ƒlƒ“ƒg‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ");
             Destroy(popup);
             currentBuyPopup = null;
             return;
         }
 
-        // ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—çŠ¶æ…‹ã‚’è¨­å®š
+        // ƒ|ƒbƒvƒAƒbƒvó‘Ô‚ğİ’è
         isBuyPopupOpen = true;
 
-        // ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ã‚’è¨­å®š
+        // ƒR[ƒ‹ƒoƒbƒN‚ğİ’è
         confirmPopup.Setup(
             onConfirm: () => {
-                Debug.Log("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³æ‰¿è«¾");
+                Debug.Log("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“³‘ø");
                 isBuyPopupOpen = false;
                 currentBuyPopup = null;
                 BattleManager.I?.ExecuteBuyAction();
                 Destroy(popup);
             },
             onCancel: () => {
-                Debug.Log("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ã‚­ãƒ£ãƒ³ã‚»ãƒ«");
+                Debug.Log("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“ƒLƒƒƒ“ƒZƒ‹");
                 isBuyPopupOpen = false;
                 currentBuyPopup = null;
                 Destroy(popup);
             }
         );
 
-        Debug.Log("[BattleUIManager] è²·ã†ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—è¡¨ç¤ºå®Œäº†");
+        Debug.Log("[BattleUIManager] ”ƒ‚¤ƒAƒNƒVƒ‡ƒ“Šm”Fƒ|ƒbƒvƒAƒbƒv•\¦Š®—¹");
     }
 
     /// <summary>
-    /// è²·ã†ç¢ºèªãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’å¼·åˆ¶ã‚¯ãƒ­ãƒ¼ã‚ºã™ã‚‹ï¼ˆä»–ã®çµŒæ¸ˆã‚¢ã‚¯ã‚·ãƒ§ãƒ³é–‹å§‹æ™‚ã«ä½¿ç”¨ï¼‰
+    /// ”ƒ‚¤Šm”Fƒ|ƒbƒvƒAƒbƒv‚ğ‹­§ƒNƒ[ƒY‚·‚éi‘¼‚ÌŒoÏƒAƒNƒVƒ‡ƒ“ŠJn‚Ég—pj
     /// </summary>
     public void CancelBuyPopup()
     {
         if (!isBuyPopupOpen || currentBuyPopup == null) return;
-        Debug.Log("[BattleUIManager] è²·ã†ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ã‚’å¼·åˆ¶ã‚¯ãƒ­ãƒ¼ã‚º");
+        Debug.Log("[BattleUIManager] ”ƒ‚¤ƒ|ƒbƒvƒAƒbƒv‚ğ‹­§ƒNƒ[ƒY");
         isBuyPopupOpen = false;
         Destroy(currentBuyPopup);
         currentBuyPopup = null;
     }
 
     /// <summary>
-    /// ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºã‚¨ãƒªã‚¢ã®ä¸­å¿ƒä½ç½®ã‚’å–å¾—
+    /// ƒvƒŒƒCƒ„[‚ÌƒJ[ƒh•\¦ƒGƒŠƒA‚Ì’†SˆÊ’u‚ğæ“¾
     /// </summary>
     public Vector3 GetPlayerCardDisplayCenter()
     {
@@ -879,7 +886,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// æ•µã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºã‚¨ãƒªã‚¢ã®ä¸­å¿ƒä½ç½®ã‚’å–å¾—
+    /// “G‚ÌƒJ[ƒh•\¦ƒGƒŠƒA‚Ì’†SˆÊ’u‚ğæ“¾
     /// </summary>
     public Vector3 GetEnemyCardDisplayCenter()
     {
@@ -891,7 +898,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºã‚¨ãƒªã‚¢ã®Transformã‚’å–å¾—
+    /// ƒvƒŒƒCƒ„[‚ÌƒJ[ƒh•\¦ƒGƒŠƒA‚ÌTransform‚ğæ“¾
     /// </summary>
     public Transform GetPlayerCardDisplayPanel()
     {
@@ -899,7 +906,7 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// æ•µã®ã‚«ãƒ¼ãƒ‰è¡¨ç¤ºã‚¨ãƒªã‚¢ã®Transformã‚’å–å¾—
+    /// “G‚ÌƒJ[ƒh•\¦ƒGƒŠƒA‚ÌTransform‚ğæ“¾
     /// </summary>
     public Transform GetEnemyCardDisplayPanel()
     {
@@ -907,22 +914,22 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// SellConfirmPopupã®Prefabã‚’å–å¾—ï¼ˆBattleManagerã‹ã‚‰ä½¿ç”¨ï¼‰
+    /// SellConfirmPopup‚ÌPrefab‚ğæ“¾iBattleManager‚©‚çg—pj
     /// </summary>
     public GameObject GetSellConfirmPopupPrefab() => sellConfirmPopupPrefab;
 
     /// <summary>
-    /// ExchangePopupã®Prefabã‚’å–å¾—ï¼ˆBattleManagerã‹ã‚‰ä½¿ç”¨ï¼‰
+    /// ExchangePopup‚ÌPrefab‚ğæ“¾iBattleManager‚©‚çg—pj
     /// </summary>
     public GameObject GetExchangePopupPrefab() => exchangePopupPrefab;
 
     /// <summary>
-    /// ã‚«ãƒ¼ãƒ‰ã‚·ãƒ¼ãƒˆã®Prefabã‚’å–å¾—
+    /// ƒJ[ƒhƒV[ƒg‚ÌPrefab‚ğæ“¾
     /// </summary>
     public GameObject GetCardSheetPrefab() => cardSheetPrefab;
 
     /// <summary>
-    /// ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—ç”¨ã®Canvasã‚’å–å¾—ï¼ˆBattleManagerã‹ã‚‰ä½¿ç”¨ï¼‰
+    /// ƒ|ƒbƒvƒAƒbƒv—p‚ÌCanvas‚ğæ“¾iBattleManager‚©‚çg—pj
     /// </summary>
     public Canvas GetPopupCanvas() => popupCanvas != null ? popupCanvas : uiCanvas;
 
@@ -932,6 +939,59 @@ public class BattleUIManager : MonoBehaviour
     {
         if (magicPanelUI == null || MagicPoolManager.I == null) return;
         magicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries());
+    }
+
+    /// <summary>
+    /// èD‚Ì–‚–@ƒJ[ƒh‚ª MagicPanel ‚ÌƒXƒƒbƒg‚Ö’¼üˆÚ“®‚·‚é‰‰oiƒv[ƒ‹“o˜^‚ÍŒÄ‚Ño‚µ‘¤j
+    /// </summary>
+    public async Task PlayMagicFlyHandToPanelAsync(CardData card, RectTransform handCardRt, int slotIndex)
+    {
+        if (card == null || handCardRt == null || magicPanelUI == null || card.cardImage == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        if (!magicPanelUI.TryGetSlotTargetRect(slotIndex, out RectTransform slotRt) || slotRt == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        Canvas canvas = uiCanvas != null ? uiCanvas : handCardRt.GetComponentInParent<Canvas>();
+        if (canvas == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        RectTransform canvasRt = canvas.transform as RectTransform;
+        CanvasGroup cg = handCardRt.GetComponent<CanvasGroup>();
+        if (cg == null) cg = handCardRt.gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = 0f;
+
+        var fly = new GameObject("MagicHandToPanelFly");
+        var flyRt = fly.AddComponent<RectTransform>();
+        flyRt.SetParent(canvasRt, false);
+        flyRt.SetAsLastSibling();
+        var img = fly.AddComponent<Image>();
+        img.sprite = card.cardImage;
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        flyRt.sizeDelta = new Vector2(handCardRt.rect.width, handCardRt.rect.height);
+
+        Vector3 startWorld = handCardRt.TransformPoint(handCardRt.rect.center);
+        Vector3 endWorld = slotRt.TransformPoint(slotRt.rect.center);
+        fly.transform.position = startWorld;
+
+        LeanTween.move(fly, endWorld, magicHandToPanelDuration).setEase(LeanTweenType.easeOutCubic);
+
+        int ms = Mathf.Max(1, Mathf.RoundToInt(magicHandToPanelDuration * 1000f));
+        await Task.Delay(ms);
+
+        SoundEffectPlayer.I?.Play("Assets/SE/Œˆ’èƒ{ƒ^ƒ“‚ğ‰Ÿ‚·42.mp3");
+
+        if (fly != null) Destroy(fly);
     }
 
     public void RefreshMagicCardInteractivity(List<CardData> hand)

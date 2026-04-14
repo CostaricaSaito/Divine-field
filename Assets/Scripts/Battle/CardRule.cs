@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 public static class CardRules
 {
@@ -88,4 +88,15 @@ public static class CardRules
 
     public static List<CardData> GetAttackChoices(List<CardData> hand) => hand.FindAll(IsUsableInAttackPhase);
     public static List<CardData> GetDefenseChoices(List<CardData> hand) => hand.FindAll(IsUsableInDefensePhase);
+
+    /// <summary>
+    /// 攻撃属性を考慮した防御候補を返す。
+    /// 無属性攻撃なら全防御カード、属性攻撃なら対応属性+光のみ。
+    /// </summary>
+    public static List<CardData> GetDefenseChoicesForElement(List<CardData> hand, ElementType attackElement)
+    {
+        var all = GetDefenseChoices(hand);
+        if (attackElement == ElementType.None) return all;
+        return all.FindAll(c => ElementHelper.CanDefendAgainst(attackElement, c));
+    }
 }

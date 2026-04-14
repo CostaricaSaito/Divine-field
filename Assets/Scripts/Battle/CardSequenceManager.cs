@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -88,7 +88,7 @@ public class CardSequenceManager : MonoBehaviour
         if (cancellationToken.IsCancellationRequested) return;
 
         // ③カードの処理
-        ProcessCards(selectedCards, cardType);
+        await ProcessCardsAsync(selectedCards, cardType);
 
         // 選択状態をクリア（ProcessCardsで既に設定済み）
         BattleUIManager.I?.ClearAllSelections();
@@ -129,24 +129,24 @@ public class CardSequenceManager : MonoBehaviour
     /// <summary>
     /// カード処理（攻撃・防御共通）
     /// </summary>
-    private void ProcessCards(List<CardData> cards, string cardType)
+    private async System.Threading.Tasks.Task ProcessCardsAsync(List<CardData> cards, string cardType)
     {
         if (cards.Count > 1)
         {
             Debug.Log($"[CardSequenceManager] 複数{cardType}カード選択中: {cards.Count}枚。全てのカードを処理します。");
-            ProcessMultipleCards(cards, cardType);
+            await ProcessMultipleCardsAsync(cards, cardType);
         }
         else
         {
             Debug.Log($"[CardSequenceManager] 単一{cardType}カード選択中。カードを処理します。");
-            ProcessSingleCard(cards[0], cardType);
+            await ProcessSingleCardAsync(cards[0], cardType);
         }
     }
 
     /// <summary>
     /// 複数カードの処理（攻撃・防御共通）
     /// </summary>
-    private void ProcessMultipleCards(List<CardData> cards, string cardType)
+    private async System.Threading.Tasks.Task ProcessMultipleCardsAsync(List<CardData> cards, string cardType)
     {
         // 魔法カードと通常カードに分別
         var magicCards = cards.FindAll(c => c.cardType == CardType.Magic);
@@ -156,7 +156,7 @@ public class CardSequenceManager : MonoBehaviour
         foreach (var magic in magicCards)
         {
             bool isFromHand = battleManager.playerHand.Contains(magic);
-            ApplyMagicCardToPool(magic, isFromHand);
+            await ApplyMagicCardToPoolAsync(magic, isFromHand);
             Debug.Log($"[CardSequenceManager] 魔法カード {magic.cardName} をプール処理 (fromHand={isFromHand}, combination={magic.isCombinationMagic})");
         }
 
@@ -193,14 +193,14 @@ public class CardSequenceManager : MonoBehaviour
     /// <summary>
     /// 単一カードの処理（攻撃・防御共通）
     /// </summary>
-    private void ProcessSingleCard(CardData card, string cardType)
+    private async System.Threading.Tasks.Task ProcessSingleCardAsync(CardData card, string cardType)
     {
         // 魔法カード（単独型・組み合わせ型とも）の場合は特殊処理
         if (card.cardType == CardType.Magic)
         {
             Debug.Log($"[CardSequenceManager] 魔法カード処理: {card.cardName} (組み合わせ={card.isCombinationMagic})");
             bool isFromHand = battleManager.playerHand.Contains(card);
-            ApplyMagicCardToPool(card, isFromHand);
+            await ApplyMagicCardToPoolAsync(card, isFromHand);
             battleManager.SetCurrentAttackCard(card);
 
             if (isFromHand && card.cardUI != null)
@@ -230,9 +230,9 @@ public class CardSequenceManager : MonoBehaviour
 
     /// <summary>
     /// 魔法カードを MagicPool に適用する内部ヘルパー
-    /// MP消費 → プール操作 → (プール使用時)カードドロー
+    /// MP消費 → (手札からなら飛行アニメ) → プール操作 → (プール使用時)カードドロー
     /// </summary>
-    private void ApplyMagicCardToPool(CardData card, bool isFromHand)
+    private async System.Threading.Tasks.Task ApplyMagicCardToPoolAsync(CardData card, bool isFromHand)
     {
         if (MagicPoolManager.I == null) return;
 
@@ -247,6 +247,12 @@ public class CardSequenceManager : MonoBehaviour
 
         if (isFromHand)
         {
+            if (card.cardUI != null && BattleUIManager.I != null && card.cardImage != null)
+            {
+                int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
+                await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, card.cardUI.transform as RectTransform, slot);
+            }
+
             var drawCallback = GetDrawCardCallback();
             bool result = MagicPoolManager.I.TryUseMagicCard(
                 card,
