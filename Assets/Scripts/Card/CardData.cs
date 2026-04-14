@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 
 
@@ -26,6 +26,15 @@ public enum ElementType
     
 }
 
+public enum SelectionRole
+{
+    None = 0,
+    Standalone = 1,
+    Primary = 2,
+    Addable = 3,
+    Free = 4,
+}
+
 public interface ISpecialCardEffect
 {
     void Activate(PlayerStatus player, PlayerStatus enemy);
@@ -36,56 +45,60 @@ public interface ISpecialCardEffect
 public class CardData : ScriptableObject
 {
 
-    [Header("Šî–{î•ñ")]
+    [Header("åŸºæœ¬æƒ…å ±")]
     public string cardName;
     public CardType cardType;
     public Sprite cardImage;
     [TextArea(2, 4)] public string description;
 
-    [Header("”’lƒpƒ‰ƒ[ƒ^")]
+    [Header("æ•°å€¤ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿")]
     public int attackPower = 0;
     public int defensePower = 0;
     public ElementType element = ElementType.None;
     [Range(0, 100)] public int hitRate = 100;
 
 
-    [Header("–‚–@ƒJ[ƒhê—p")]
+    [Header("é­”æ³•ã‚«ãƒ¼ãƒ‰å°‚ç”¨")]
     public int mpCost = 0;
     public int maxUses = 1;
-    public bool isCombinationMagic = false; // true: ’P“Æg—p•s‰ÂA’ÊíƒJ[ƒh‚Æ‚Ì‘g‚İ‡‚í‚¹‚Ì‚İ”­“®
+    public bool isCombinationMagic = false;
 
-    [Header("‰ñ•œƒpƒ‰ƒ[ƒ^")]
+    [Header("å›å¾©ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿")]
     public int recoveryAmount = 0; public bool healsHP = false;
     public bool healsMP = false;
     public bool healsGP = false;
 
-    [Header("g—p‰Â”\‚ÈƒtƒF[ƒY")]
+    [Header("ä½¿ç”¨å¯èƒ½ãªãƒ•ã‚§ãƒ¼ã‚º")]
     public bool usableInAttackPhase = false;
     public bool usableInDefensePhase = false;
 
-    [Header("s“®•ª—Şƒtƒ‰ƒO")]
-    public bool isPrimaryAttack = false;         // —áFŒ•A‰Š‚ÌŒ
-    public bool isAdditionalAttack = false;      // —áF˜AŒ‚A‰Î‚Ì•²
-    public bool isPrimaryDefense = false;        // —áF‚
-    public bool isCounterAttack = false;         // —áF”½ËŒ•AƒJƒEƒ“ƒ^[
-    public bool isRecovery = false;              // —áF‰ñ•œ‘
-    public bool isSpecialEffect = false;         // —áF¸—ì‚Ì‚Ê‚¢‚®‚é‚İ
+    [Header("è¡Œå‹•åˆ†é¡ãƒ•ãƒ©ã‚°")]
+    public bool isPrimaryAttack = false;         // ä¾‹ï¼šå‰£ã€ç‚ã®æ‹³
+    public bool isAdditionalAttack = false;      // ä¾‹ï¼šé€£æ’ƒã€ç«ã®ç²‰
+    public bool isPrimaryDefense = false;        // ä¾‹ï¼šç›¾
+    public bool isCounterAttack = false;         // ä¾‹ï¼šåå°„å‰£ã€ã‚«ã‚¦ãƒ³ã‚¿ãƒ¼
+    public bool isRecovery = false;              // ä¾‹ï¼šå›å¾©è‰
+    public bool isSpecialEffect = false;         // ä¾‹ï¼šç²¾éœŠã®ã¬ã„ãã‚‹ã¿
 
-    [Header("•¡”–‡g—pE•¹—p")]
-    public bool canBeUsedMultipleTimes = false;  // ‚±‚ÌƒJ[ƒh‚ğ•¡”–‡g—p‰Â”\‚©H
-    public bool canBeUsedWithPrimaryAttack = false; // PrimaryAttack‚Æ•¹—p‰Â”\‚©H
+    [Header("è¤‡æ•°æšä½¿ç”¨ãƒ»ä½µç”¨")]
+    public bool canBeUsedMultipleTimes = false;
+    public bool canBeUsedWithPrimaryAttack = false;
 
-    [Header("“ÁêŒø‰Êi”CˆÓj")]
+    [Header("ç‰¹æ®ŠåŠ¹æœï¼ˆä»»æ„ï¼‰")]
     public bool canApplyStatusEffect = false;
     [Range(0, 100)] public int statusEffectChance = 0;
 
-    [Header("UI•\¦—p")]
-    public Sprite elementIcon; // ‘®«ƒAƒCƒRƒ“i—áF‰ÎA…‚È‚Çj
+    [Header("UIè¡¨ç¤ºç”¨")]
+    public Sprite elementIcon;
 
-    [Header("ŒoÏƒpƒ‰ƒ[ƒ^")]
-    public int cardValue = 0; // GP‚Å‚Ì‰¿’li”„”ƒ‰¿Šij
+    [Header("çµŒæ¸ˆãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿")]
+    public int cardValue = 0;
 
-    [Header("UIQÆi”ñ•\¦j")]
+    [Header("é¸æŠãƒ­ãƒ¼ãƒ«")]
+    public SelectionRole attackPhaseRole = SelectionRole.None;
+    public SelectionRole defensePhaseRole = SelectionRole.None;
+
+    [Header("UIå‚ç…§ï¼ˆéè¡¨ç¤ºï¼‰")]
     [System.NonSerialized] public CardUI cardUI;
 
 }

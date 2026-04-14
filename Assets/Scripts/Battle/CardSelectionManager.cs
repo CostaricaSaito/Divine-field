@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -141,157 +141,78 @@ public class CardSelectionManager : MonoBehaviour
         return selectedCards.Contains(card);
     }
 
-    /// <summary>
-    /// カード競合チェック
-    /// </summary>
-    private bool CheckCardConflicts(CardData newCard)
+    // ---- SelectionRole ベースの競合チェック ----
+
+    private SelectionRole GetRoleForCurrentPhase(CardData card)
     {
-        Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} (isPrimaryAttack: {newCard.isPrimaryAttack}, cardType: {newCard.cardType})");
-        Debug.Log($"[CardSelectionManager] 現在の選択カード数: {selectedCards.Count}");
+        if (BattleManager.I == null) return card.attackPhaseRole;
 
-        // 同じカードの重複選択をチェック
-        if (selectedCards.Contains(newCard))
-        {
-            Debug.Log($"[CardSelectionManager] 同じカードの重複選択を拒否: {newCard.cardName}");
-            return false;
-        }
+        var state = BattleManager.I.CurrentState;
+        if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm)
+            return card.defensePhaseRole;
 
-        // ===== 魔法カードの競合ルール =====
-        if (newCard.cardType == CardType.Magic)
-        {
-            // 単独型魔法は他の選択をリセットして単独で選択
-            if (!newCard.isCombinationMagic)
-            {
-                if (selectedCards.Count > 0)
-                {
-                    Debug.Log("[CardSelectionManager] 単独型魔法カードを選択するため、既存選択をクリア");
-                    ClearAllSelections();
-                    BattleUIManager.I?.HideAllCardDetails();
-                }
-            }
-            // 組み合わせ魔法は通常カード(主軸攻撃)選択後に追加可能
-            // 主軸攻撃カードがなくても単体で選択可能（追加攻撃と同等の振る舞い）
-            // 複数の組み合わせ魔法は同時選択不可
-            else
-            {
-                if (HasMagicCards())
-                {
-                    Debug.Log("[CardSelectionManager] 組み合わせ魔法が既に選択済み → 上書き");
-                    RemoveMagicCards();
-                }
-            }
-            return true;
-        }
-
-        // カードの競合チェック
-        bool hasConflict = false;
-        if (newCard.isRecovery && HasRecoveryCard())
-        {
-            Debug.Log("[CardSelectionManager] 回復カードを選択するため、既存の回復カードをキャンセルします");
-            hasConflict = true;
-        }
-        else if (newCard.isRecovery && HasAttackCards())
-        {
-            Debug.Log("[CardSelectionManager] 回復カードを選択するため、既存のカードをキャンセルします");
-            hasConflict = true;
-        }
-        else if (IsAttackCard(newCard) && HasRecoveryCard())
-        {
-            Debug.Log("[CardSelectionManager] 攻撃カードを選択するため、既存のカードをキャンセルします");
-            hasConflict = true;
-        }
-        else if (newCard.isPrimaryAttack && selectedCards.Count > 0)
-        {
-            Debug.Log("[CardSelectionManager] 主軸攻撃カードを選択するため、既存の選択をクリアします");
-            hasConflict = true;
-        }
-
-        // 競合がある場合は既存のカードをキャンセル
-        if (hasConflict)
-        {
-            ClearAllSelections();
-            // UI表示もクリアする
-            BattleUIManager.I?.HideAllCardDetails();
-            Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} -> 競合あり、既存カードをキャンセル");
-        }
-        else
-        {
-            Debug.Log($"[CardSelectionManager] CheckCardConflicts: {newCard.cardName} -> 競合なし");
-        }
-
-        return true;
+        return card.attackPhaseRole;
     }
 
-    /// <summary>
-    /// 攻撃カードが選択されているかチェック
-    /// </summary>
-    private bool HasAttackCards()
+    private bool HasRoleSelected(SelectionRole role)
     {
-        foreach (var card in selectedCards)
+        foreach (var c in selectedCards)
         {
-            if (IsAttackCard(card))
-            {
-                if (Debug.isDebugBuild)
-                    Debug.Log($"[CardSelectionManager] HasAttackCards: true");
-                return true;
-            }
+            if (GetRoleForCurrentPhase(c) == role) return true;
         }
-        if (Debug.isDebugBuild)
-            Debug.Log($"[CardSelectionManager] HasAttackCards: false");
         return false;
     }
 
-    private bool HasRecoveryCard()
-    {
-        foreach (var card in selectedCards)
-        {
-            if (card.isRecovery)
-            {
-                if (Debug.isDebugBuild)
-                    Debug.Log($"[CardSelectionManager] HasRecoveryCard: true");
-                return true;
-            }
-        }
-        if (Debug.isDebugBuild)
-            Debug.Log($"[CardSelectionManager] HasRecoveryCard: false");
-        return false;
-    }
-
-    private bool HasPrimaryAttackCards()
-    {
-        foreach (var card in selectedCards)
-        {
-            if (card.isPrimaryAttack)
-            {
-                if (Debug.isDebugBuild)
-                    Debug.Log($"[CardSelectionManager] HasPrimaryAttackCards: true");
-                return true;
-            }
-        }
-        if (Debug.isDebugBuild)
-            Debug.Log($"[CardSelectionManager] HasPrimaryAttackCards: false");
-        return false;
-    }
-
-    /// <summary>
-    /// 魔法カードが選択済みかどうか
-    /// </summary>
     private bool HasMagicCards()
     {
         return selectedCards.Exists(c => c.cardType == CardType.Magic);
     }
 
-    /// <summary>
-    /// 選択済みの魔法カードをすべて除去する
-    /// </summary>
-    private void RemoveMagicCards()
+    private void ClearAllWithUI()
     {
-        selectedCards.RemoveAll(c => c.cardType == CardType.Magic);
+        ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+    }
+
+    /// <summary>
+    /// カード競合チェック（SelectionRole ベース）
+    /// </summary>
+    private void CheckCardConflicts(CardData newCard)
+    {
+        if (selectedCards.Contains(newCard)) return;
+
+        SelectionRole role = GetRoleForCurrentPhase(newCard);
+
+        switch (role)
+        {
+            case SelectionRole.Standalone:
+                if (selectedCards.Count > 0)
+                    ClearAllWithUI();
+                break;
+
+            case SelectionRole.Primary:
+                if (selectedCards.Count > 0)
+                    ClearAllWithUI();
+                break;
+
+            case SelectionRole.Addable:
+                if (HasRoleSelected(SelectionRole.Standalone))
+                {
+                    ClearAllWithUI();
+                }
+                else if (newCard.cardType == CardType.Magic && HasMagicCards())
+                {
+                    ClearAllWithUI();
+                }
+                break;
+
+            case SelectionRole.Free:
+                break;
+        }
     }
 
     private bool IsAttackCard(CardData card)
     {
-        // 攻撃魔法カード（単独型・組み合わせ型とも）は攻撃カードとして扱う
         if (card.cardType == CardType.Magic && !card.isRecovery) return true;
         return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
     }
