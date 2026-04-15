@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -78,11 +78,13 @@ public class SellFeature
 
     public async Task ProcessEconomicActionAsync()
     {
-        if (targetSellCard == null) return;
-
+        // OnConfirm 直後〜本処理まで isProcessingConfirm が true のまま残ると
+        // IsSellProcessActive が永久に true になり経済UI・キャンセルが壊れるため、必ず finally で戻す。
         try
         {
-            isProcessingConfirm = true;
+            if (targetSellCard == null) return;
+
+            // isProcessingConfirm は OnConfirmSell で既に true（防御フェーズ待ち中もキャンセルで壊さないため）
             BattleManager.I?.UpdateTotalATKDEFDisplay();
 
             // 売却アニメーション実行
@@ -112,6 +114,12 @@ public class SellFeature
             isProcessingConfirm = false;
             BattleManager.I?.UpdateTotalATKDEFDisplay();
         }
+    }
+
+    /// <summary>防御確定フローに入れなかった売却など、異常系でフラグだけ残ったときに呼ぶ。</summary>
+    public void ForceEndSellProcessingState()
+    {
+        isProcessingConfirm = false;
     }
 
     private void ProcessGPTheft()

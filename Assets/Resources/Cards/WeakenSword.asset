@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
+  m_Name: WeakenSword
+  m_EditorClassIdentifier: 
+  cardName: "\u8870\u5F31"
+  cardType: 0
+  cardImage: {fileID: 21300000, guid: 9daa588660e8f1247a20023d44886723, type: 3}
+  description: "\u8870\u5F31"
+  attackPower: 5
+  defensePower: 0
+  element: 0
+  hitRate: 100
+  mpCost: 0
+  maxUses: 0
+  isCombinationMagic: 0
+  recoveryAmount: 0
+  healsHP: 0
+  healsMP: 0
+  healsGP: 0
+  usableInAttackPhase: 1
+  usableInDefensePhase: 0
+  isPrimaryAttack: 0
+  isAdditionalAttack: 0
+  isPrimaryDefense: 0
+  isCounterAttack: 0
+  isRecovery: 0
+  isSpecialEffect: 0
+  canApplyStatusEffect: 1
+  statusEffectChance: 100
+  statusEffectToApply: 5
+  cardValue: 0
+  attackPhaseRole: 1
+  defensePhaseRole: 0

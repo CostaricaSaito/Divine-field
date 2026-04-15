@@ -35,11 +35,8 @@ MonoBehaviour:
   isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
-  canBeUsedMultipleTimes: 1
-  canBeUsedWithPrimaryAttack: 1
   canApplyStatusEffect: 0
   statusEffectChance: 0
-  elementIcon: {fileID: 21300000, guid: 99632894a2a6f9f409d3402853ee3d15, type: 3}
   cardValue: 0
   attackPhaseRole: 3
   defensePhaseRole: 0

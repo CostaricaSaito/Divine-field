@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -320,7 +320,8 @@ public class BattleUIManager : MonoBehaviour
     }
 
     //==== パブリックAPI：ポップアップ =====
-    public void ShowDamagePopup(int amount, PlayerStatus target)
+    /// <returns>表示したポップアップが Destroy されるまでの秒数（<see cref="DamagePopup.fadeDuration"/>）。生成失敗時は 0。</returns>
+    public float ShowDamagePopup(int amount, PlayerStatus target)
     {
         Debug.Log($"[BattleUIManager] ダメージポップアップ表示: {amount}ダメージ 対象 {target?.DisplayName ?? "null"}");
 
@@ -328,6 +329,33 @@ public class BattleUIManager : MonoBehaviour
         if (popup == null)
         {
             Debug.LogWarning("[BattleUIManager] ポップアップの生成に失敗しました");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
+            damageText.SetupDamage(amount, hitPlayer);
+            Debug.Log($"[BattleUIManager] ダメージポップアップ設定完了: {amount}ダメージ");
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+        return 0f;
+    }
+
+    /// <summary>
+    /// 闇属性：通常の超過ダメージ適用後の「残りHP分」表示（紫背景）。SE は呼び出し側で鳴らす。
+    /// </summary>
+    public void ShowDarkFollowupDamagePopup(int amount, PlayerStatus target)
+    {
+        Debug.Log($"[BattleUIManager] 闇フォローダメージポップアップ: {amount} 対象 {target?.DisplayName ?? "null"}");
+
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattleUIManager] 闇ポップアップの生成に失敗しました");
             return;
         }
 
@@ -335,15 +363,43 @@ public class BattleUIManager : MonoBehaviour
         if (damageText != null)
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
-            string displayText = amount > 0 ? $"{amount} ダメージ！" : "ダメージなし！";
-            Color displayColor = amount > 0 ? (hitPlayer ? Color.cyan : Color.red) : Color.yellow;
-            damageText.Setup(displayText, displayColor);
-            Debug.Log($"[BattleUIManager] ダメージポップアップ設定完了: {amount}ダメージ");
+            damageText.SetupDarkFollowupDamage(amount, hitPlayer);
         }
         else
-        {
             Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+    }
+
+    /// <summary>
+    /// 状態異常が付与されたとき（ダメージポップと同じプレハブ）。表示成功時に SE を再生。
+    /// </summary>
+    public void ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
+    {
+        if (target == null || type == StatusEffectType.None) return;
+
+        string name = StatusEffectPresentation.GetDisplayName(type);
+        if (string.IsNullOrEmpty(name))
+        {
+            Debug.LogWarning($"[BattleUIManager] 状態異常の表示名がありません: {type}");
+            return;
         }
+
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattleUIManager] 状態異常ポップアップの生成に失敗しました");
+            return;
+        }
+
+        StatusEffectPresentation.GetPopupColors(type, out Color bg, out Color fg);
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
+            damageText.SetupStatusAilmentGrant(name, bg, fg);
+            Debug.Log($"[BattleUIManager] 状態異常ポップアップ: {name}");
+        }
+        else
+            Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
     }
 
     /// <summary>
@@ -425,26 +481,10 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public void ShowInfoPopupOnCardPanel(string message, Color color)
     {
-        if (damagePopupPrefab == null || uiCanvas == null || playerCardDisplayPanel == null) return;
+        if (damagePopupPrefab == null || playerCardDisplayPanel == null) return;
 
-        var go = Instantiate(damagePopupPrefab, uiCanvas.transform);
-        var rt = go.transform as RectTransform;
-        if (rt != null)
-        {
-            // playerCardDisplayPanel の中心をスクリーン座標→Canvas座標に変換
-            var panelRT = playerCardDisplayPanel as RectTransform;
-            if (panelRT != null)
-            {
-                Vector3 worldCenter = panelRT.TransformPoint(panelRT.rect.center);
-                RectTransform canvasRT = uiCanvas.transform as RectTransform;
-                Vector2 localPoint;
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    canvasRT, RectTransformUtility.WorldToScreenPoint(uiCanvas.worldCamera, worldCenter),
-                    uiCanvas.worldCamera, out localPoint);
-                rt.anchoredPosition = localPoint;
-            }
-            rt.localScale = Vector3.one;
-        }
+        var go = Instantiate(damagePopupPrefab, playerCardDisplayPanel, false);
+        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
 
         var popup = go.GetComponent<DamagePopup>();
         if (popup != null) popup.Setup(message, color);
@@ -593,21 +633,34 @@ public class BattleUIManager : MonoBehaviour
             return null;
         }
 
-        var go = Instantiate(damagePopupPrefab, uiCanvas.transform);
-        var rt = go.transform as RectTransform;
-        if (rt != null)
+        bool isPlayer = target != null && target == BattleManager.I?.GetPlayerStatus();
+        Transform parent = isPlayer ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (parent == null)
         {
-            rt.anchoredPosition = GetPopupAnchor(target);
-            rt.localScale = Vector3.one;
-            Debug.Log($"[BattleUIManager] ポップアップ位置設定 - 位置: {rt.anchoredPosition}");
+            Debug.LogWarning("[BattleUIManager] CardDisplayPanel / EnemyCardDisplayPanel が未設定のため Canvas 直下に出します");
+            parent = uiCanvas != null ? uiCanvas.transform : null;
         }
+        if (parent == null) return null;
+
+        var go = Instantiate(damagePopupPrefab, parent, false);
+        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
+        Debug.Log($"[BattleUIManager] ポップアップを {(isPlayer ? "CardDisplayPanel" : "EnemyCardDisplayPanel")} 中央に配置");
         return go;
     }
 
-    private Vector2 GetPopupAnchor(PlayerStatus target)
+    /// <summary>
+    /// 親パネル中央に重なるよう、ルート RectTransform を中央アンカー・位置0にそろえる。
+    /// （プレハブが stretch のときのズレを上書きする）
+    /// </summary>
+    private static void ApplyDamagePopupLayoutToPanelCenter(RectTransform rt)
     {
-        bool isPlayer = (target == BattleManager.I.GetPlayerStatus());
-        return isPlayer ? new Vector2(-300, -200) : new Vector2(300, 200);
+        if (rt == null) return;
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.localScale = Vector3.one;
+        rt.SetAsLastSibling();
     }
 
     //==== プライベートメソッド：ヘルパー =====
@@ -987,9 +1040,6 @@ public class BattleUIManager : MonoBehaviour
         }
 
         RectTransform canvasRt = canvas.transform as RectTransform;
-        CanvasGroup cg = handCardRt.GetComponent<CanvasGroup>();
-        if (cg == null) cg = handCardRt.gameObject.AddComponent<CanvasGroup>();
-        cg.alpha = 0f;
 
         var fly = new GameObject("MagicHandToPanelFly");
         var flyRt = fly.AddComponent<RectTransform>();

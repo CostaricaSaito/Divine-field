@@ -44,11 +44,6 @@ public class BattleManager : MonoBehaviour
     public BattleStatusUI statusUI;
     public CutInController cutInController;
 
-    [Header("音響(効果音)")]
-    public AudioSource audioSource;
-    public AudioClip cardDealSE;
-    public AudioClip cardRevealSE;
-
     [Header("カードUI")]
     public Transform handPanel;
     public GameObject cardUIPrefab;
@@ -57,6 +52,10 @@ public class BattleManager : MonoBehaviour
     [Header("システム")]
     public CardDealer cardDealer;
     public BattleProcessor battleProcessor;
+
+    [Header("状態異常（ScriptableObject）")]
+    [SerializeField] private StatusProgressionConfig statusProgressionConfig;
+    [SerializeField] private DiseaseTurnEndSettings diseaseTurnEndSettings;
 
     [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
@@ -196,12 +195,13 @@ public class BattleManager : MonoBehaviour
         summonSkillButton.SetStatus(playerStatus, enemyStatus);
 
         // システム初期化
-        cardDealer.Initialize(playerStatus, enemyStatus, handPanel, cardUIPrefab, cardBackSprite,
-                              audioSource, cardDealSE, cardRevealSE);
+        cardDealer.Initialize(playerStatus, enemyStatus, handPanel, cardUIPrefab, cardBackSprite);
         battleProcessor.Initialize(playerStatus, enemyStatus, statusUI, cardDealer);
+        DiseaseTurnEndProcessor.BindSettings(diseaseTurnEndSettings);
+        battleProcessor.ConfigureStatusEffects(statusProgressionConfig);
 
         if (handRefill != null)
-            handRefill.Initialize(handPanel, cardUIPrefab, cardBackSprite, audioSource, cardDealSE, cardDealer);
+            handRefill.Initialize(handPanel, cardUIPrefab, cardBackSprite, cardDealer);
 
         // CardSequenceManagerの初期化
         if (cardSequenceManager != null)
@@ -425,46 +425,62 @@ public class BattleManager : MonoBehaviour
 
     private async Task RunDefenseSelectAsync()
     {
-        // 攻撃カード確定後のインターバルと効果音
-        await Task.Delay(1000);
-        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
-        Debug.Log("[BattleManager] 攻撃カード確定、防御カード選択開始");
+        // 売却確定後はダミー攻撃カードが載っている。DefenseConfirm に到達しなかった場合も SellFeature のフラグを戻す。
+        bool sellFlowFromPendingConfirm = currentAttackCard != null
+            && currentAttackCard.cardName == "経済アクション（売却）";
+        bool reachedDefenseConfirm = false;
 
-        if (Defender == PlayerType.Enemy)
+        try
         {
-            // EnemyAIで防御選択を実行
-            selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
-            
-            cardStatsDisplay?.UpdateDisplay();
-            
-            SetGameState(GameState.DefenseConfirm);
+            // 攻撃カード確定後のインターバルと効果音
+            await Task.Delay(1000);
+            SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+            Debug.Log("[BattleManager] 攻撃カード確定、防御カード選択開始");
+
+            if (Defender == PlayerType.Enemy)
+            {
+                // EnemyAIで防御選択を実行
+                selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
+
+                cardStatsDisplay?.UpdateDisplay();
+
+                SetGameState(GameState.DefenseConfirm);
+                reachedDefenseConfirm = true;
+            }
+            else
+            {
+                BattleUIManager.I?.HidePlayerCardDetails();
+                BattleUIManager.I?.SetHandClickable(true);
+                BattleUIManager.I?.SetUseButtonLabel("許す");
+
+                var attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
+                var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+                BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, defenseChoices);
+
+                BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            }
         }
-        else
+        finally
         {
-            BattleUIManager.I?.HidePlayerCardDetails();
-            BattleUIManager.I?.SetHandClickable(true);
-            BattleUIManager.I?.SetUseButtonLabel("許す");
-
-            var attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
-            var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
-            BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, defenseChoices);
-
-            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            if (sellFlowFromPendingConfirm && !reachedDefenseConfirm && sellFeature != null)
+                sellFeature.ForceEndSellProcessingState();
         }
     }
 
     private async Task RunDefenseConfirmAsync()
     {
-        if (currentAttackCard == null)
-        {
-            Debug.LogWarning("攻撃カードが設定されていません");
-            SetGameState(GameState.AttackSelect);
-            return;
-        }
+        bool sellFlow = currentAttackCard != null && currentAttackCard.cardName == "経済アクション（売却）";
 
-        // 経済アクションの場合は特別処理
-        if (CurrentState == GameState.DefenseConfirm && currentAttackCard != null)
+        try
         {
+            if (currentAttackCard == null)
+            {
+                Debug.LogWarning("攻撃カードが設定されていません");
+                SetGameState(GameState.AttackSelect);
+                return;
+            }
+
+            // 経済アクションの場合は特別処理（DefenseConfirm からのみ呼ばれる想定。CurrentState 条件は外し、取りこぼしを防ぐ）
             if (currentAttackCard.cardName == "経済アクション")
             {
                 Debug.Log("[BattleManager] 経済アクション（購入）の防御フェーズ処理");
@@ -475,7 +491,8 @@ public class BattleManager : MonoBehaviour
                 SetGameState(GameState.TurnEnd);
                 return;
             }
-            else if (currentAttackCard.cardName == "経済アクション（売却）")
+
+            if (currentAttackCard.cardName == "経済アクション（売却）")
             {
                 Debug.Log("[BattleManager] 経済アクション（売却）の防御フェーズ処理");
                 await sellFeature.ProcessEconomicActionAsync();
@@ -485,100 +502,144 @@ public class BattleManager : MonoBehaviour
                 SetGameState(GameState.TurnEnd);
                 return;
             }
-        }
 
-        // プレイヤーの防御カード選択はCardSequenceManagerで処理済み（HandleDefenseUse経由）
-        if (Defender == PlayerType.Player)
+            // プレイヤーの防御カード選択はCardSequenceManagerで処理済み（HandleDefenseUse経由）
+            if (Defender == PlayerType.Player)
+            {
+                return;
+            }
+
+            // 敵の単一防御カードの処理
+            var defenseCardToDisplay = selectedDefenseCard;
+            if (defenseCardToDisplay != null)
+            {
+                // 敵の防御カードを表示
+                BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, Side.Enemy);
+
+                // 防御カード表示時の効果音
+                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+                Debug.Log($"[BattleManager] 防御カード表示: {defenseCardToDisplay.cardName}");
+
+                // 0.5秒待機
+                await Task.Delay(500);
+                Debug.Log("[BattleManager] 防御カード表示完了、0.5秒待機");
+            }
+
+            var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
+            var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
+            var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
+
+            List<CardData> attackCards = GetAttackCardsForCombat();
+
+            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+
+            if (_phaseCts.Token.IsCancellationRequested) return;
+
+            // ダメージ処理完了後、全カード表示をクリア
+            BattleUIManager.I?.HideAllCardDetails();
+
+            // 敵の防御カード使用処理（裏向きにする）
+            if (defenseCardToDisplay != null)
+            {
+                // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
+                handRefill?.RecordEnemyUse(defenseCardToDisplay);
+                battleProcessor.UseCard(defenseCardToDisplay, defHand);
+            }
+
+            SetGameState(GameState.TurnEnd);
+        }
+        finally
         {
-            return;
+            if (sellFlow && sellFeature != null)
+                sellFeature.ForceEndSellProcessingState();
         }
-
-        // 敵の単一防御カードの処理
-        var defenseCardToDisplay = selectedDefenseCard;
-        if (defenseCardToDisplay != null)
-        {
-            // 敵の防御カードを表示
-            BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, Side.Enemy);
-            
-            // 防御カード表示時の効果音
-            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-            
-            Debug.Log($"[BattleManager] 防御カード表示: {defenseCardToDisplay.cardName}");
-            
-            // 0.5秒待機
-            await Task.Delay(500);
-            Debug.Log("[BattleManager] 防御カード表示完了、0.5秒待機");
-        }
-
-        var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
-        var def = (Defender == PlayerType.Player) ? playerStatus : enemyStatus;
-        var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
-
-        List<CardData> attackCards = GetAttackCardsForCombat();
-
-        await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
-
-        if (_phaseCts.Token.IsCancellationRequested) return;
-
-        // ダメージ処理完了後、全カード表示をクリア
-        BattleUIManager.I?.HideAllCardDetails();
-
-        // 敵の防御カード使用処理（裏向きにする）
-        if (defenseCardToDisplay != null)
-        {
-            // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
-            handRefill?.RecordEnemyUse(defenseCardToDisplay);
-            battleProcessor.UseCard(defenseCardToDisplay, defHand);
-        }
-
-        SetGameState(GameState.TurnEnd);
     }
 
     private async Task RunTurnEndAsync()
     {
-        // 攻撃フェーズ終了直後：攻撃側の病系処理（補充・ドローより先）
-        PlayerStatus attackerStatus = CurrentTurnOwner == PlayerType.Player ? playerStatus : enemyStatus;
+        // TurnEnd 突入時のフェーズ専用トークン（途中で SetGameState され _phaseCts が差し替わっても判定に使う）
+        CancellationToken phaseToken = _phaseCts != null ? _phaseCts.Token : default;
+
         try
         {
-            await DiseaseTurnEndProcessor.ProcessForAttackerAsync(attackerStatus, _phaseCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // 攻撃フェーズ終了直後：攻撃側の病系処理（補充・ドローより先）
+            PlayerStatus attackerStatus = CurrentTurnOwner == PlayerType.Player ? playerStatus : enemyStatus;
+            try
+            {
+                await DiseaseTurnEndProcessor.ProcessForAttackerAsync(attackerStatus, phaseToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("[BattleManager] DiseaseTurnEndProcessor: キャンセル（TurnEnd 続行を試みます）");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+            }
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            if (handRefill != null)
+            {
+                try
+                {
+                    await handRefill.RefillAtTurnEndAsync(playerHand, cpuHand, phaseToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    Debug.Log("[BattleManager] RefillAtTurnEnd: キャンセル");
+                }
+            }
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // 経済アクション後のドロー処理
+            await ProcessEconomicActionDrawAsync();
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // 裏向きカードを表向きにする処理
+            await RevealFaceDownCardsAsync();
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // 手札枚数が正しく更新された後にステータスを更新
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+            // ターン切り替えのインターバル中はグレーアウトしない（全てのカードを表示）
+            // グレーアウト状態の更新は次のターン開始時にEnterAttackSelectで行う
+            BattleUIManager.I?.SetIntroModeUI(playerHand);
+
+            // 相手の攻撃ターン前のインターバル
+            await Task.Delay(500);
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // 2ターン目以降はグレーアウトを有効にする
+            shouldGrayOutCards = true;
+
+            ToggleTurnOwner();
+            SetGameState(GameState.TurnStart);
         }
         catch (Exception ex)
         {
             Debug.LogException(ex);
+            TryRecoverTurnEndToTurnStart();
         }
+    }
 
-        if (_phaseCts.Token.IsCancellationRequested) return;
+    /// <summary>
+    /// TurnEnd 処理が例外や中断で TurnStart に進めなかったときの保険。
+    /// </summary>
+    private void TryRecoverTurnEndToTurnStart()
+    {
+        if (CurrentState != GameState.TurnEnd) return;
 
-        if (handRefill != null)
-        {
-            await handRefill.RefillAtTurnEndAsync(playerHand, cpuHand, _phaseCts.Token);
-        }
-
-        if (_phaseCts.Token.IsCancellationRequested) return;
-
-        // 経済アクション後のドロー処理
-        await ProcessEconomicActionDrawAsync();
-
-        // 裏向きカードを表向きにする処理
-        await RevealFaceDownCardsAsync();
-
-        // 手札枚数が正しく更新された後にステータスを更新
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-
-        // ターン切り替えのインターバル中はグレーアウトしない（全てのカードを表示）
-        // グレーアウト状態の更新は次のターン開始時にEnterAttackSelectで行う
-        BattleUIManager.I?.SetIntroModeUI(playerHand);
-
-        // 相手の攻撃ターン前のインターバル
-        await Task.Delay(500);
-
-        // 2ターン目以降はグレーアウトを有効にする
+        Debug.LogWarning("[BattleManager] TurnEnd から復帰できなかったため TurnStart に移行します");
         shouldGrayOutCards = true;
-
         ToggleTurnOwner();
         SetGameState(GameState.TurnStart);
     }
@@ -869,6 +930,17 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 手札に裏面で 1 枚追加し、ドローしたカードを返す（await 用）
+    /// </summary>
+    public async Task<CardData> DrawOneCardAsync(int trailingDelayMs = 200, bool playSoundOnDraw = true)
+    {
+        if (handRefill == null) return null;
+        var drawn = await handRefill.DrawCardAsync(playerHand, trailingDelayMs, playSoundOnDraw);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        return drawn;
+    }
+
+    /// <summary>
     /// 手札の上限枚数を返す（MagicPoolManager で手札追加可否の判定に使用）
     /// </summary>
     public int GetHandMaxCount()
@@ -1027,18 +1099,19 @@ public class BattleManager : MonoBehaviour
         }
 
         // 手札のUIを取得して裏向きのカードを表向きにする
-        for (int i = 0; i < handPanel.childCount; i++)
+        // childCount がループ中に増えると終了しないことがあるため、開始時の子数で固定する
+        int childCountSnapshot = handPanel.childCount;
+        for (int i = 0; i < childCountSnapshot; i++)
         {
             var child = handPanel.GetChild(i);
             var cardUI = child.GetComponent<CardUI>();
             
             if (cardUI != null && cardUI.IsFaceDown())
             {
+                CardDealAudio.Play(cardUI.GetCardData());
+                await Task.Delay(50);
                 cardUI.Reveal();
-                
-                // 効果音を再生（Addressables使用）
-                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-                
+
                 // カードごとに短い間隔を空ける
                 await Task.Delay(300);
             }

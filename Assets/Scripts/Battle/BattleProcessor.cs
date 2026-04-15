@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
@@ -49,6 +50,9 @@ public class BattleProcessor : MonoBehaviour
     public PlayerStatus playerStatus;
     public PlayerStatus enemyStatus;
 
+    [Header("状態異常（未設定時はランタイム既定）")]
+    [SerializeField] private StatusProgressionConfig statusProgressionConfig;
+
     [Header("音響")]
     public AudioSource audioSource;
     public AudioClip damageSE;
@@ -80,6 +84,12 @@ public class BattleProcessor : MonoBehaviour
         this.cardDealer = cardDealer;
     }
 
+    /// <summary>BattleManager の Start で呼ばれる想定。同一 SO を参照する。</summary>
+    public void ConfigureStatusEffects(StatusProgressionConfig config)
+    {
+        statusProgressionConfig = config;
+    }
+
     //========================
     // カード使用処理
     //========================
@@ -108,7 +118,7 @@ public class BattleProcessor : MonoBehaviour
         // カードを裏向きにする
         if (card.cardUI != null)
         {
-            card.cardUI.Setup(null, cardDealer?.CardBackSprite);
+            card.cardUI.Setup(null, cardDealer?.CardBackSprite, playerHandRareBackPresentation: false);
             card.cardUI.button.interactable = false;
         }
 
@@ -135,12 +145,12 @@ public class BattleProcessor : MonoBehaviour
     /// <param name="user">使用者</param>
     /// <param name="target">対象</param>
     /// <returns>処理完了まで待機</returns>
-    public Task ResolveImmediateEffectAsync(CardData card, PlayerStatus user, PlayerStatus target)
+    public async Task ResolveImmediateEffectAsync(CardData card, PlayerStatus user, PlayerStatus target)
     {
         if (card == null || user == null)
         {
             Debug.LogWarning("[BattleProcessor] カードまたは使用者がnullです");
-            return Task.CompletedTask;
+            return;
         }
 
         Debug.Log($"[BattleProcessor] 即時効果解決開始: {card.cardName}");
@@ -151,21 +161,26 @@ public class BattleProcessor : MonoBehaviour
             ApplyRecovery(card, user);
         }
 
-        // 状態異常の適用（将来的に実装）
-        if (card.canApplyStatusEffect && target != null)
+        if (card.canApplyStatusEffect && target != null && card.statusEffectToApply != StatusEffectType.None
+            && card.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve)
         {
-            // TODO: 状態異常処理を実装
-            Debug.Log($"[BattleProcessor] 状態異常適用予定: {card.cardName}");
+            int roll = Random.Range(0, 100);
+            if (roll < card.statusEffectChance)
+            {
+                var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
+                var result = target.TryApplyStatusEffect(card.statusEffectToApply, cfg);
+                if (ShouldShowStatusAilmentGrantPopup(result))
+                    BattleUIManager.I?.ShowStatusAilmentGrantPopup(card.statusEffectToApply, target);
+                if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
+                    await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(target, CancellationToken.None);
+            }
         }
 
-        // 特殊効果の処理（将来的に拡張）
         ProcessSpecialEffects(card, user, target);
 
-        // ステータス更新
         UpdateStatusDisplay();
 
         Debug.Log($"[BattleProcessor] 即時効果解決完了: {card.cardName}");
-        return Task.CompletedTask;
     }
 
     //========================
@@ -232,50 +247,43 @@ public class BattleProcessor : MonoBehaviour
             return;
         }
 
-        // ダメージ計算
-        int baseDamage = attackPower - defensePower;
-        int finalDamage = Mathf.Max(0, baseDamage);
-
-        // 闇属性即死: ダメージが1以上なら残HP全損
-        if (attackElement == ElementType.Dark && finalDamage > 0)
-        {
-            finalDamage = defender.currentHP;
-            Debug.Log($"[BattleProcessor] 闇属性即死発動: ダメージ={finalDamage}");
-        }
-
-        Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
-        Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
-        Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
-
-        await Task.Delay(500);
-
-        if (finalDamage > 0)
-        {
-            ApplyDamage(defender, finalDamage);
-            Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
-            BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
-        }
-        else
-        {
-            Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
-            BattleUIManager.I?.ShowDamagePopup(0, defender);
-        }
-
-        PlayDamageSE();
-        UpdateStatusDisplay();
-
-        if (IsDead(attacker) || IsDead(defender))
-        {
-            Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
-        }
-
-        await Task.Delay(500);
-        Debug.Log($"[BattleProcessor] 戦闘解決完了");
+        await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
     }
 
     //========================
     // 内部処理メソッド
     //========================
+
+    /// <param name="finalDamage">命中後の最終ダメージ。①は1以上のときのみ付与。②は0でも付与（ミス時は呼ばれない）。</param>
+    private async Task TryApplyAttackCardStatusEffectsAsync(List<CardData> attackCards, PlayerStatus defender, int finalDamage)
+    {
+        if (attackCards == null || defender == null) return;
+
+        var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
+        foreach (var card in attackCards)
+        {
+            if (card == null || !card.canApplyStatusEffect) continue;
+            if (card.statusEffectToApply == StatusEffectType.None) continue;
+            if (card.statusEffectApplyTiming == StatusEffectApplyTiming.WithDamageThrough && finalDamage <= 0)
+                continue;
+            if (Random.Range(0, 100) >= card.statusEffectChance) continue;
+
+            var result = defender.TryApplyStatusEffect(card.statusEffectToApply, cfg);
+            if (ShouldShowStatusAilmentGrantPopup(result))
+                BattleUIManager.I?.ShowStatusAilmentGrantPopup(card.statusEffectToApply, defender);
+            if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
+                await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(defender, CancellationToken.None);
+
+            UpdateStatusDisplay();
+        }
+    }
+
+    private static bool ShouldShowStatusAilmentGrantPopup(ProgressiveApplyResult result)
+    {
+        return result == ProgressiveApplyResult.Applied
+            || result == ProgressiveApplyResult.DiseaseProgressed
+            || result == ProgressiveApplyResult.ForcedParadiseEcstasy;
+    }
 
     /// <summary>
     /// 複数カードの合計攻撃力を計算する
@@ -482,15 +490,23 @@ public class BattleProcessor : MonoBehaviour
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
-    /// <summary>
-    /// ダメージSEを再生する
-    /// </summary>
+    /// <summary>ミス時など、命中後のダメージ結果に依らないSE。</summary>
     private void PlayDamageSE()
     {
         if (audioSource && damageSE)
-        {
             audioSource.PlayOneShot(damageSE);
+    }
+
+    /// <summary>命中後：ダメージ0（ダメージなし！）はピコッ、1以上は従来の damageSE。</summary>
+    private void PlayDamageSE(int finalDamage)
+    {
+        if (finalDamage <= 0)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/ピコッ.mp3");
+            return;
         }
+        if (audioSource && damageSE)
+            audioSource.PlayOneShot(damageSE);
     }
 
     /// <summary>
@@ -552,40 +568,78 @@ public class BattleProcessor : MonoBehaviour
             return;
         }
 
-        // ダメージ計算
-        int baseDamage = attackPower - defensePower;
-        int finalDamage = Mathf.Max(0, baseDamage);
+        await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
+    }
 
-        // 闇属性即死: ダメージが1以上なら残HP全損
-        if (attackElement == ElementType.Dark && finalDamage > 0)
-        {
-            finalDamage = defender.currentHP;
-            Debug.Log($"[BattleProcessor] 闇属性即死発動: ダメージ={finalDamage}");
-        }
+    /// <summary>
+    /// 命中後：超過ダメージ（第1段）→ 闇ならその直後に「その時点の残りHP」分（第2段・紫ポップアップ＋チーン1）。
+    /// </summary>
+    private async Task ApplyCombatDamageSequenceAfterHitAsync(
+        List<CardData> attackCards,
+        ElementType attackElement,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        int attackPower,
+        int defensePower)
+    {
+        int baseDamage = attackPower - defensePower;
+        int firstPhaseDamage = Mathf.Max(0, baseDamage);
+        if (!CardRules.IsMagicOnlyAttackCombo(attackCards))
+            firstPhaseDamage = attacker.ApplyOutgoingDamageModifiers(firstPhaseDamage);
 
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
-        Debug.Log($"[BattleProcessor] 最終ダメージ: {finalDamage}");
+        Debug.Log($"[BattleProcessor] 第1段（超過）: {firstPhaseDamage}");
 
         await Task.Delay(500);
 
-        if (finalDamage > 0)
+        float normalPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+        if (firstPhaseDamage > 0)
         {
-            ApplyDamage(defender, finalDamage);
-            Debug.Log($"[BattleProcessor] ダメージ適用完了: {finalDamage} → {defender.DisplayName}");
-            BattleUIManager.I?.ShowDamagePopup(finalDamage, defender);
+            ApplyDamage(defender, firstPhaseDamage);
+            Debug.Log($"[BattleProcessor] ダメージ適用完了: {firstPhaseDamage} → {defender.DisplayName}");
+            normalPopupLifetimeSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDamagePopup(firstPhaseDamage, defender)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
         }
         else
         {
             Debug.Log($"[BattleProcessor] ダメージ0: 攻撃力{attackPower} - 防御力{defensePower} = {baseDamage}");
-            BattleUIManager.I?.ShowDamagePopup(0, defender);
+            normalPopupLifetimeSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDamagePopup(0, defender)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
         }
 
-        PlayDamageSE();
+        if (normalPopupLifetimeSec <= 0f)
+            normalPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+
+        PlayDamageSE(firstPhaseDamage);
         UpdateStatusDisplay();
+
+        if (attackElement == ElementType.Dark && firstPhaseDamage > 0 && defender.currentHP > 0)
+        {
+            await Task.Delay(System.TimeSpan.FromSeconds(normalPopupLifetimeSec + 0.5f));
+            int darkDamage = defender.currentHP;
+            SoundEffectPlayer.I?.Play("Assets/SE/チーン1.mp3");
+            BattleUIManager.I?.ShowDarkFollowupDamagePopup(darkDamage, defender);
+            ApplyDamage(defender, darkDamage);
+            Debug.Log($"[BattleProcessor] 闇フォロー: 残HP相当 {darkDamage} → {defender.DisplayName}");
+            UpdateStatusDisplay();
+        }
+
+        bool anyWithDamageThrough =
+            attackCards.Any(c => c != null && c.canApplyStatusEffect
+                && c.statusEffectToApply != StatusEffectType.None
+                && c.statusEffectApplyTiming == StatusEffectApplyTiming.WithDamageThrough);
+        if (firstPhaseDamage > 0 && anyWithDamageThrough)
+            await Task.Delay(1000);
+
+        await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage);
+
+        if (IsDead(attacker) || IsDead(defender))
+            Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
 
         await Task.Delay(500);
         Debug.Log($"[BattleProcessor] 戦闘解決完了");
-        return;
     }
 }

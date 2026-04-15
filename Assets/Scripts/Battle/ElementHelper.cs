@@ -112,7 +112,8 @@ public static class ElementHelper
     }
 
     /// <summary>
-    /// 攻撃属性に対して防御カードが有効かどうかを判定する
+    /// 攻撃属性に対して防御カードが有効かどうかを判定する（属性値同士）。
+    /// 闇攻撃は光以外の任意属性で防げる想定だが、無属性防具は <see cref="CanDefendAgainst(ElementType, CardData)"/> 側で闇専用に許可する。
     /// </summary>
     public static bool CanDefendAgainst(ElementType attackElement, ElementType defenseCardElement)
     {
@@ -124,12 +125,14 @@ public static class ElementHelper
 
     /// <summary>
     /// 攻撃属性に対して防御カードが有効かを判定する（CardData版）
-    /// 無属性の防御カードは属性攻撃に対して無効
+    /// 無属性の防御カードは、属性攻撃に対して原則無効（闇攻撃は例外で無属性防具も可）。
     /// </summary>
     public static bool CanDefendAgainst(ElementType attackElement, CardData defenseCard)
     {
         if (defenseCard == null) return false;
         if (attackElement == ElementType.None) return true;
+        // 闇はどの属性の防具でも防げる（無属性の「通常防具」も含む）
+        if (attackElement == ElementType.Dark) return true;
         if (defenseCard.element == ElementType.None) return false;
         return CanDefendAgainst(attackElement, defenseCard.element);
     }

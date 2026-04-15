@@ -148,7 +148,7 @@ public class CardLayoutManager : MonoBehaviour
         
         if (cardData.isPrimaryAttack) return 0;
         
-        if (cardData.canBeUsedWithPrimaryAttack)
+        if (cardData.attackPhaseRole == SelectionRole.Addable)
         {
             return CountExistingAttackCards();
         }

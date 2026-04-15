@@ -1,9 +1,11 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public static class StatusEffectFactory
 {
-    public static IStatusEffect Create(StatusEffectType type)
+    public static IStatusEffect Create(StatusEffectType type, StatusProgressionConfig config = null)
     {
+        config ??= StatusProgressionConfig.GetRuntimeFallback();
+
         switch (type)
         {
             case StatusEffectType.Weaken:
@@ -14,6 +16,15 @@ public static class StatusEffectFactory
             case StatusEffectType.PurgatorySickness:
             case StatusEffectType.ParadiseSickness:
                 return new DiseaseLineEffect(type);
+
+            case StatusEffectType.Seal:
+                return new SealEffect(config.defaultSealDurationTurns);
+
+            case StatusEffectType.EyeStrain:
+                return new EyeStrainEffect();
+
+            case StatusEffectType.ClusterHeadache:
+                return new ClusterHeadacheEffect();
 
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");

@@ -56,6 +56,7 @@ public class PlayerStatus
         return StatusEffectCatalog.ToOfficialId(a).CompareTo(StatusEffectCatalog.ToOfficialId(b));
     }
 
+
     // ダメージ計算（状態異常による補正あり）
     public void TakeDamage(int amount)
     {
@@ -67,6 +68,20 @@ public class PlayerStatus
 
         currentHP = Mathf.Max(currentHP - modifiedAmount, 0);
         Debug.Log($"{DisplayName} に {modifiedAmount} ダメージ（元値: {amount}）");
+    }
+
+    /// <summary>
+    /// 与えるダメージに状態異常を適用（衰弱など）。補正が終わった値を受け手へ渡す。
+    /// </summary>
+    public int ApplyOutgoingDamageModifiers(int amount)
+    {
+        int m = amount;
+        foreach (var effect in activeEffects)
+        {
+            if (effect == null) continue;
+            m = effect.ModifyOutgoingDamage(m);
+        }
+        return m;
     }
 
     public void UseMP(int amount)
@@ -84,23 +99,38 @@ public class PlayerStatus
         return currentHP <= 0;
     }
 
-    // 状態異常の追加
-    public void AddStatusEffect(StatusEffectType type)
+    /// <summary>
+    /// 段階型・排他型（病・眼精／群発・封印）と単純付与（衰弱など）を統合した付与API。
+    /// </summary>
+    /// <returns>強制絶頂が必要な場合は <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>。呼び出し側で非同期処理すること。</returns>
+    public ProgressiveApplyResult TryApplyStatusEffect(StatusEffectType type, StatusProgressionConfig config)
     {
-        foreach (var effect in activeEffects)
+        if (type == StatusEffectType.None)
+            return ProgressiveApplyResult.NoChange;
+
+        config ??= StatusProgressionConfig.GetRuntimeFallback();
+
+        if (type == StatusEffectType.Seal
+            || DiseaseLineEffect.IsDiseaseFamily(type)
+            || type == StatusEffectType.EyeStrain
+            || type == StatusEffectType.ClusterHeadache)
         {
-            if (effect.EffectType == type)
-            {
-                Debug.Log($"{DisplayName} はすでに {type} を持っています");
-                return;
-            }
+            return ProgressiveStatusApplicator.Apply(this, type, config);
         }
 
-        var newEffect = StatusEffectFactory.Create(type);
-        if (newEffect != null)
+        if (ProgressiveStatusApplicator.TryAddSimpleEffect(this, type, config))
+            return ProgressiveApplyResult.Applied;
+
+        return ProgressiveApplyResult.NoChange;
+    }
+
+    /// <summary>従来の単純付与。内部で <see cref="TryApplyStatusEffect"/> を使用。</summary>
+    public void AddStatusEffect(StatusEffectType type)
+    {
+        var result = TryApplyStatusEffect(type, null);
+        if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
         {
-            activeEffects.Add(newEffect);
-            Debug.Log($"{DisplayName} に状態異常 {newEffect.GetEffectName()} を付与しました");
+            Debug.LogWarning($"{DisplayName}: 楽園病＋「病」は AddStatusEffect では処理されません。TryApplyStatusEffect の戻り値に応じて強制絶頂を実行してください。");
         }
     }
 

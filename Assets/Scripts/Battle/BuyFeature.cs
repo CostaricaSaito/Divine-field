@@ -223,8 +223,7 @@ public class BuyFeature
                 // 即座に表向きにする
                 ui.Reveal();
                 
-                // 効果音を再生
-                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+                CardDealAudio.Play(targetBuyCard);
             }
         }
     }

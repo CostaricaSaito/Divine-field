@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -34,9 +34,6 @@ public class CardDealer : MonoBehaviour
     private Transform handPanel;
     private GameObject cardUIPrefab;
     private Sprite cardBackSprite;
-    private AudioSource audioSource;
-    private AudioClip cardDealSE;
-    private AudioClip cardRevealSE;
 
     // 外部からアクセス可能なプロパティ
     public Sprite CardBackSprite => cardBackSprite;
@@ -62,27 +59,18 @@ public class CardDealer : MonoBehaviour
     /// <param name="handPanel">手札UIの親パネル</param>
     /// <param name="cardUIPrefab">カードUIのプレハブ</param>
     /// <param name="cardBackSprite">カードの裏面画像</param>
-    /// <param name="audioSource">音響ソース</param>
-    /// <param name="cardDealSE">カード配布SE</param>
-    /// <param name="cardRevealSE">カード表示SE</param>
     public void Initialize(
         PlayerStatus playerStatus,
         PlayerStatus enemyStatus,
         Transform handPanel,
         GameObject cardUIPrefab,
-        Sprite cardBackSprite,
-        AudioSource audioSource,
-        AudioClip cardDealSE,
-        AudioClip cardRevealSE)
+        Sprite cardBackSprite)
     {
         this.playerStatus = playerStatus;
         this.enemyStatus = enemyStatus;
         this.handPanel = handPanel;
         this.cardUIPrefab = cardUIPrefab;
         this.cardBackSprite = cardBackSprite;
-        this.audioSource = audioSource;
-        this.cardDealSE = cardDealSE;
-        this.cardRevealSE = cardRevealSE;
 
         // カードデータの読み込み（Resources/ Cards フォルダ）
         allCards = Resources.LoadAll<CardData>("Cards");
@@ -134,16 +122,17 @@ public class CardDealer : MonoBehaviour
                 BattleManager.I?.GetEnemyStatus()
             );
 
-            // SE再生
-            if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
+            // 自分の手札に裏向きで入ったタイミングのSE（レア切り替え）
+            CardDealAudio.Play(playerCardInstance);
 
             yield return new WaitForSeconds(0.15f);
         }
 
-        // 表示演出
+        // 表示演出：一斉めくり＋ バトル開始SE を1回（レア有無は問わない）
         yield return new WaitForSeconds(0.5f);
-        foreach (var ui in activeCardUIs) ui?.Reveal();
-        if (audioSource && cardRevealSE) audioSource.PlayOneShot(cardRevealSE);
+        foreach (var ui in activeCardUIs)
+            ui?.Reveal();
+        SoundEffectPlayer.I?.Play("Assets/SE/バトル開始.mp3");
     }
 
     //====================================================
@@ -229,8 +218,7 @@ public class CardDealer : MonoBehaviour
         }
 
         // 適切な CardUI の API に合わせる（Setup / SetCard / Bind のいずれか）
-        // 現在は Setup(CardData, Sprite) を想定
-        ui.Setup(instance, cardBackSprite);
+        ui.Setup(instance, cardBackSprite, playerHandRareBackPresentation: true);
 
         // 現在紐付け（このインスタンスを指すUI）
         instance.cardUI = ui;

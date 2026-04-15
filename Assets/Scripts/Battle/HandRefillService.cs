@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,8 +11,6 @@ public class HandRefillService : MonoBehaviour
     [SerializeField] private Transform handPanel;
     [SerializeField] private GameObject cardUIPrefab;
     [SerializeField] private Sprite cardBackSprite;
-    [SerializeField] private AudioSource audioSource;
-    [SerializeField] private AudioClip cardDealSE;
     [SerializeField] private CardDealer cardDealer;
 
     // 裏向きスロット（プレイヤーのUI表示用）
@@ -23,13 +21,11 @@ public class HandRefillService : MonoBehaviour
     private readonly List<CardData> _enemyUsedCardsThisTurn = new();
 
     // ---- 設定（インスペクターから、または手動） ----
-    public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, AudioSource src, AudioClip deal, CardDealer dealer)
+    public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, CardDealer dealer)
     {
         this.handPanel = handPanel;
         this.cardUIPrefab = cardUIPrefab;
         this.cardBackSprite = back;
-        this.audioSource = src;
-        this.cardDealSE = deal;
         this.cardDealer = dealer;
     }
 
@@ -64,7 +60,7 @@ public class HandRefillService : MonoBehaviour
             Debug.Log($"[HandRefillService] RecordPlayerUseSlot: カード記録 - {usedCard.cardName} (スロット: {siblingIndex})");
             
             // 既存のUIを裏向きにする
-            existingUI.Setup(null, cardBackSprite);
+            existingUI.Setup(null, cardBackSprite, playerHandRareBackPresentation: false);
             existingUI.button.interactable = false;
             _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = existingUI, usedCard = usedCard });
         }
@@ -133,19 +129,19 @@ public class HandRefillService : MonoBehaviour
 
             // 裏向きのUIに新しいカードをセットアップ
             // これにより、CardUIのcardDataが新しいカードに更新される
-            slot.ui.Setup(newCard, cardBackSprite);
+            slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
             
             // 念のため、CardUIのcardDataが新しいカードを参照していることを確認
             if (slot.ui.GetCardData() != newCard)
             {
                 Debug.LogWarning($"[HandRefillService] CardUIのcardDataが新しいカードと一致しません。再設定します。");
-                slot.ui.Setup(newCard, cardBackSprite);
+                slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
             }
             
             slot.ui.button.interactable = true; // 新しいカードは使用可能にする
 
             await Task.Delay(150, ct);
-            if (audioSource && cardDealSE) audioSource.PlayOneShot(cardDealSE);
+            CardDealAudio.Play(newCard);
 
             slot.ui.Reveal();       // 表向きに
 
@@ -199,41 +195,60 @@ public class HandRefillService : MonoBehaviour
     }
 
     /// <summary>
-    /// カードを1枚ドローして手札に追加
+    /// カードを1枚ドローして手札に追加（裏面のまま）。ドローした CardData を返す。
     /// </summary>
-    public async Task DrawCardAsync(List<CardData> hand)
+    /// <param name="trailingDelayMs">配布後の待機（ms）。0 で即時。</param>
+    /// <param name="playSoundOnDraw">true のとき配布時に <see cref="CardDealAudio"/> を鳴らす（戦闘後に表向けする用途は false 推奨）</param>
+    public async Task<CardData> DrawCardAsync(List<CardData> hand, int trailingDelayMs = 200, bool playSoundOnDraw = true)
     {
         if (hand == null || cardDealer == null)
         {
             Debug.LogWarning("[HandRefillService] DrawCardAsync: パラメータがnullです");
-            return;
+            return null;
         }
 
         var newCard = DrawRandomCard();
         if (newCard == null)
         {
             Debug.LogWarning("[HandRefillService] DrawCardAsync: カードの取得に失敗しました");
-            return;
+            return null;
         }
 
-        // 手札に追加
         hand.Add(newCard);
         Debug.Log($"[HandRefillService] カードドロー: {newCard.cardName}");
 
-        // カードUIを生成
         var ui = cardDealer.CreateCardUIForHand(newCard);
         if (ui != null)
         {
             Debug.Log($"[HandRefillService] カードUI生成完了: {newCard.cardName}");
         }
 
-        // 効果音再生
-        if (audioSource != null && cardDealSE != null)
-        {
-            audioSource.PlayOneShot(cardDealSE);
-        }
+        if (playSoundOnDraw)
+            CardDealAudio.Play(newCard);
 
-        // 短い待機時間
-        await Task.Delay(200);
+        if (trailingDelayMs > 0)
+            await Task.Delay(trailingDelayMs);
+
+        return newCard;
+    }
+
+    /// <summary>
+    /// MagicPanel ボーナスドロー等：ダメージ処理後に表向け（TurnEnd の Refill と同じ間隔・SE）
+    /// </summary>
+    public async Task RevealDrawnCardAfterCombatAsync(CardData card, CancellationToken ct = default)
+    {
+        if (card?.cardUI == null) return;
+
+        if (card.cardUI.button != null)
+            card.cardUI.button.interactable = true;
+
+        await Task.Delay(150, ct);
+        if (ct.IsCancellationRequested) return;
+
+        CardDealAudio.Play(card);
+
+        card.cardUI.Reveal();
+
+        await Task.Delay(100, ct);
     }
 }

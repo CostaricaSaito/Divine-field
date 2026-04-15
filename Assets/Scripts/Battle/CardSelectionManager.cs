@@ -175,7 +175,8 @@ public class CardSelectionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// カード競合チェック（SelectionRole ベース）
+    /// カード競合チェック（SelectionRole ベース）。
+    /// <see cref="SelectionRole.None"/> のときは <c>switch</c> に入らず既選択をクリアしない（複数枚のまま追加可能）。
     /// </summary>
     private void CheckCardConflicts(CardData newCard)
     {
@@ -185,6 +186,9 @@ public class CardSelectionManager : MonoBehaviour
 
         switch (role)
         {
+            case SelectionRole.None:
+                break;
+
             case SelectionRole.Standalone:
                 if (selectedCards.Count > 0)
                     ClearAllWithUI();

@@ -1,41 +1,33 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
-/// <summary>
-/// Šãó‘ÔF‘Šè‚É—^‚¦‚éƒ_ƒ[ƒW‚ª”¼•ª‚É‚È‚é
-/// </summary>
-/// 
-[CreateAssetMenu(fileName = "05_WeakenEffect", menuName = "DivineField/StatusEffects/Weaken")]
-public class WeakenEffect : ScriptableObject, IStatusEffect
+/// <summary>è¡°å¼±: ä¸ãˆã‚‹ãƒ€ãƒ¡ãƒ¼ã‚¸ãŒåŠåˆ†ã«ãªã‚‹ã€‚</summary>
+public sealed class WeakenEffect : IStatusEffect
 {
     public StatusEffectType EffectType => StatusEffectType.Weaken;
 
     public void ApplyEffect(PlayerStatus target)
     {
-        Debug.Log($"{target.DisplayName} ‚ÉwŠãx‚ª•t—^‚³‚ê‚Ü‚µ‚½B");
+        Debug.Log($"{target.DisplayName} ã«ã€Œè¡°å¼±ã€ãŒä»˜ä¸ã•ã‚Œã¾ã—ãŸ");
     }
 
-    public int ModifyDamage(int originalDamage)
+    /// <summary>å—ã‘å–ã‚‹ãƒ€ãƒ¡ãƒ¼ã‚¸ã«ã¯è¡°å¼±ã¯å½±éŸ¿ã—ãªã„ï¼ˆä¸ãƒ€ãƒ¡ã®ã¿åŠæ¸›ï¼‰ã€‚</summary>
+    public int ModifyDamage(int originalDamage) => originalDamage;
+
+    public int ModifyOutgoingDamage(int outgoingDamage)
     {
-        return Mathf.FloorToInt(originalDamage * 0.5f);
+        return Mathf.FloorToInt(outgoingDamage * 0.5f);
     }
 
-    public void OnTurnStart(PlayerStatus target)
-    {
-        // Œp‘±Œø‰Ê‚È‚µ
-    }
+    public void OnTurnStart(PlayerStatus target) { }
 
     public void OnRemove(PlayerStatus target)
     {
-        Debug.Log($"{target.DisplayName} ‚ÌwŠãx‚ª‰ğœ‚³‚ê‚Ü‚µ‚½B");
+        Debug.Log($"{target.DisplayName} ã®ã€Œè¡°å¼±ã€ãŒè§£é™¤ã•ã‚Œã¾ã—ãŸ");
     }
 
-    public bool IsExpired()
-    {
-        // P‹v“I‚Å‚Í‚È‚¢‚È‚çƒJƒEƒ“ƒgŠÇ—‚È‚Ç‚à
-        return false;
-    }
+    public bool IsExpired() => false;
 
-    public string GetEffectName() => "Šã";
+    public string GetEffectName() => "è¡°å¼±";
 
-    public string GetDescription() => "‘Šè‚É—^‚¦‚éƒ_ƒ[ƒW‚ª”¼Œ¸‚·‚éB";
+    public string GetDescription() => "ç›¸æ‰‹ã«ä¸ãˆã‚‹ãƒ€ãƒ¡ãƒ¼ã‚¸ãŒåŠåˆ†ã«ãªã‚‹ã€‚";
 }

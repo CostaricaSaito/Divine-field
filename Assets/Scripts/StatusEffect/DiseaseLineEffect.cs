@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 病・重病・煉獄病・楽園病のいずれか1段階を表す状態異常（相互排他）。
@@ -42,6 +42,8 @@ public sealed class DiseaseLineEffect : IStatusEffect
     public void OnRemove(PlayerStatus target) { }
 
     public int ModifyDamage(int originalDamage) => originalDamage;
+
+    public int ModifyOutgoingDamage(int outgoingDamage) => outgoingDamage;
 
     public bool IsExpired() => false;
 

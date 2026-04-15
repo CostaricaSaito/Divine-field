@@ -1,4 +1,5 @@
 ﻿// BattleDebugTools.cs
+using System.Threading;
 using UnityEngine;
 
 #if UNITY_EDITOR
@@ -86,10 +87,9 @@ public class BattleDebugTools : MonoBehaviour
     private static void ApplyDiseaseStage(PlayerStatus status, StatusEffectType stage)
     {
         if (status == null) return;
-        status.activeEffects.RemoveAll(e => e != null && DiseaseLineEffect.IsDiseaseFamily(e.EffectType));
-        var created = StatusEffectFactory.Create(stage);
-        if (created != null)
-            status.activeEffects.Add(created);
+        var r = status.TryApplyStatusEffect(stage, null);
+        if (r == ProgressiveApplyResult.ForcedParadiseEcstasy)
+            _ = DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(status, CancellationToken.None);
     }
 
     private bool EnsurePlaying()

@@ -26,6 +26,9 @@ public class CardSequenceManager : MonoBehaviour
     private HandRefillService handRefill;
     private CardStatsDisplay cardStatsDisplay;
 
+    /// <summary>MagicPanel 使用で裏面追加したカード（ダメージ後に表向け）</summary>
+    private readonly List<CardData> _magicPanelBonusDrawsPendingReveal = new();
+
     /// <summary>
     /// 初期化
     /// </summary>
@@ -46,6 +49,8 @@ public class CardSequenceManager : MonoBehaviour
                                             CancellationToken cancellationToken)
     {
         Debug.Log($"[CardSequenceManager] {cardType}カード演出開始: {selectedCards.Count}枚");
+
+        _magicPanelBonusDrawsPendingReveal.Clear();
 
         // 演出中のカードリストを初期化
         cardStatsDisplay?.SetSequenceCards(new List<CardData>(), cardType);
@@ -116,6 +121,10 @@ public class CardSequenceManager : MonoBehaviour
 
         if (cancellationToken.IsCancellationRequested) return;
 
+        await RevealMagicPanelBonusDrawsAsync(cancellationToken);
+
+        if (cancellationToken.IsCancellationRequested) return;
+
         // ダメージ処理完了後、全カード表示と演出リストをクリア
         BattleUIManager.I?.HideAllCardDetails();
         cardStatsDisplay?.ClearSequenceCards();
@@ -177,17 +186,7 @@ public class CardSequenceManager : MonoBehaviour
             Debug.Log($"[CardSequenceManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
         }
 
-        // 手札の魔法カードのみ手札から削除（プールカードは手札に存在しない）
-        foreach (var magic in magicCards)
-        {
-            if (battleManager.playerHand.Contains(magic) && magic.cardUI != null)
-            {
-                int slotIndex = magic.cardUI.transform.GetSiblingIndex();
-                handRefill?.RecordPlayerUseSlot(slotIndex);
-                battleProcessor.UseCard(magic, battleManager.playerHand);
-                Debug.Log($"[CardSequenceManager] 手札魔法カードを手札から削除: {magic.cardName}");
-            }
-        }
+        // 手札の魔法カードの裏面化・UseCard は ApplyMagicCardToPoolAsync 内で実施済み
     }
 
     /// <summary>
@@ -202,13 +201,6 @@ public class CardSequenceManager : MonoBehaviour
             bool isFromHand = battleManager.playerHand.Contains(card);
             await ApplyMagicCardToPoolAsync(card, isFromHand);
             battleManager.SetCurrentAttackCard(card);
-
-            if (isFromHand && card.cardUI != null)
-            {
-                int slotIndex = card.cardUI.transform.GetSiblingIndex();
-                handRefill?.RecordPlayerUseSlot(slotIndex);
-                battleProcessor.UseCard(card, battleManager.playerHand);
-            }
             return;
         }
 
@@ -247,6 +239,14 @@ public class CardSequenceManager : MonoBehaviour
 
         if (isFromHand)
         {
+            // 飛行演出と同時に手札枠は通常攻撃と同様に裏面表示（Record→Use の順を厳守）
+            if (card.cardUI != null)
+            {
+                int slotIndex = card.cardUI.transform.GetSiblingIndex();
+                handRefill?.RecordPlayerUseSlot(slotIndex);
+                battleProcessor.UseCard(card, battleManager.playerHand);
+            }
+
             if (card.cardUI != null && BattleUIManager.I != null && card.cardImage != null)
             {
                 int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
@@ -263,17 +263,33 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            // MagicPanel から使用 → 使用回数を消費 + 手札1枚ドロー
+            // ① MagicPanel から使用を確定 → ② 直後に裏面で 1 枚追加（③ 表向けは ResolveCombat 後）
             MagicPoolManager.I.ConsumeUse(card);
             Debug.Log($"[CardSequenceManager] ConsumeUse: {card.cardName}");
 
-            // プールカード使用時は手札が1枚純増
-            if (battleManager.playerHand.Count < battleManager.GetHandMaxCount())
-            {
-                battleManager.DrawOneCard();
-                Debug.Log("[CardSequenceManager] MagicPanel使用による手札1枚追加");
-            }
+            var drawn = await battleManager.DrawOneCardAsync(trailingDelayMs: 0, playSoundOnDraw: false);
+            if (drawn != null)
+                _magicPanelBonusDrawsPendingReveal.Add(drawn);
+            Debug.Log("[CardSequenceManager] MagicPanel使用による手札1枚追加（裏面・戦闘後に表向け）");
         }
+    }
+
+    /// <summary>
+    /// MagicPanel ボーナスドローの表向け（TurnEnd の手札更新と同じテンポ）
+    /// </summary>
+    private async Task RevealMagicPanelBonusDrawsAsync(CancellationToken ct)
+    {
+        if (handRefill == null || _magicPanelBonusDrawsPendingReveal.Count == 0) return;
+
+        for (int i = 0; i < _magicPanelBonusDrawsPendingReveal.Count; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            var card = _magicPanelBonusDrawsPendingReveal[i];
+            if (card == null) continue;
+            await handRefill.RevealDrawnCardAfterCombatAsync(card, ct);
+        }
+
+        _magicPanelBonusDrawsPendingReveal.Clear();
     }
 
     /// <summary>

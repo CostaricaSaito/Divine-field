@@ -17,6 +17,11 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: d84574dd1811ed642871682b9e9b708f
   m_SerializeEntries:
+  - m_GUID: 041ce1553b308774883af98392f45d67
+    m_Address: "Assets/SE/\u30D4\u30B3\u30C3.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2b87382277447574da47aa6b4e9c957a
     m_Address: "Assets/SE/\u30EC\u30B8\u30B9\u30BF\u30FC\u3067\u7CBE\u7B97.mp3"
     m_ReadOnly: 0

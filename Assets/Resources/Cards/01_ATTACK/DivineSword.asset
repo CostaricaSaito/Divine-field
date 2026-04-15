@@ -34,9 +34,6 @@ MonoBehaviour:
   isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
-  canBeUsedMultipleTimes: 0
-  canBeUsedWithPrimaryAttack: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
-  elementIcon: {fileID: 0}
   cardValue: 30

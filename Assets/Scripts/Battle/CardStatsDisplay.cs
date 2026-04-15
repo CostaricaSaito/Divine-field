@@ -285,7 +285,7 @@ public class CardStatsDisplay : MonoBehaviour
         {
             if (currentSequenceType == "攻撃")
             {
-                int totalAttack = CalculateTotalAttackPower(currentSequenceCards);
+                int totalAttack = GetDisplayedAttackStrength(currentSequenceCards, battleManager.GetPlayerStatus());
                 return $"ATK {totalAttack}";
             }
             else if (currentSequenceType == "防御")
@@ -301,14 +301,16 @@ public class CardStatsDisplay : MonoBehaviour
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
             if (selectedAttackCards != null && selectedAttackCards.Count > 1)
             {
-                int totalAttack = CalculateTotalAttackPower(selectedAttackCards);
+                int totalAttack = GetDisplayedAttackStrength(selectedAttackCards, battleManager.GetPlayerStatus());
                 return $"ATK {totalAttack}";
             }
             
             // 単一選択の場合
             if (selectedAttackCards != null && selectedAttackCards.Count == 1)
             {
-                return $"ATK {selectedAttackCards[0].attackPower}";
+                var one = new List<CardData> { selectedAttackCards[0] };
+                int atk = GetDisplayedAttackStrength(one, battleManager.GetPlayerStatus());
+                return $"ATK {atk}";
             }
             
             // CardSelectionManagerから取得した選択カードが空の場合は、空文字列を返す（表示しない）
@@ -351,7 +353,9 @@ public class CardStatsDisplay : MonoBehaviour
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
             {
-                return $"ATK {currentAttackCard.attackPower}";
+                var one = new List<CardData> { currentAttackCard };
+                int atk = GetDisplayedAttackStrength(one, battleManager.GetEnemyStatus());
+                return $"ATK {atk}";
             }
         }
 
@@ -438,6 +442,18 @@ public class CardStatsDisplay : MonoBehaviour
     public int CalculateTotalAttackPower(List<CardData> attackCards)
     {
         return CalculateTotalPower(attackCards, true);
+    }
+
+    /// <summary>
+    /// TotalATK 表示用。衰弱時は与ダメ補正（魔法単体攻撃は除外）を反映。
+    /// </summary>
+    private int GetDisplayedAttackStrength(List<CardData> cards, PlayerStatus attacker)
+    {
+        if (cards == null || cards.Count == 0) return 0;
+        int raw = CalculateTotalAttackPower(cards);
+        if (attacker == null || raw <= 0) return raw;
+        if (CardRules.IsMagicOnlyAttackCombo(cards)) return raw;
+        return attacker.ApplyOutgoingDamageModifiers(raw);
     }
 
     /// <summary>

@@ -1,18 +1,37 @@
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
 /// 攻撃フェーズ終了時（TurnEnd 突入直後）に、攻撃側の病系状態異常を処理する。
+/// 数値は <see cref="DiseaseTurnEndSettings"/>（Inspector）で変更する。
 /// </summary>
 public static class DiseaseTurnEndProcessor
 {
-    private const float WorsenChance = 0.05f;
-    private const float EcstasyChance = 0.10f;
-    private const int ParadiseHealAmount = 5;
+    private static DiseaseTurnEndSettings _settings;
 
-    /// <summary>メッセージと数値ポップの間隔（DamagePopup のフェードに合わせる）</summary>
-    private const int MessageToValueDelayMs = 700;
+    /// <summary>バトル開始時に BattleManager などから登録。null のときはランタイム既定値。</summary>
+    public static void BindSettings(DiseaseTurnEndSettings settings)
+    {
+        _settings = settings;
+    }
+
+    private static DiseaseTurnEndSettings Active
+    {
+        get
+        {
+            if (_settings != null) return _settings;
+            if (_fallbackInstance == null)
+            {
+                _fallbackInstance = ScriptableObject.CreateInstance<DiseaseTurnEndSettings>();
+                _fallbackInstance.name = "DiseaseTurnEndSettings (Runtime Fallback)";
+            }
+            return _fallbackInstance;
+        }
+    }
+
+    private static DiseaseTurnEndSettings _fallbackInstance;
 
     public static async Task ProcessForAttackerAsync(PlayerStatus attacker, CancellationToken ct)
     {
@@ -28,8 +47,9 @@ public static class DiseaseTurnEndProcessor
             return;
         }
 
-        // 5% で悪化（楽園病では段階アップなし）
-        if (stage != StatusEffectType.ParadiseSickness && UnityEngine.Random.value < WorsenChance)
+        var s = Active;
+
+        if (stage != StatusEffectType.ParadiseSickness && UnityEngine.Random.value < s.worsenChance)
         {
             StatusEffectType next = DiseaseLineEffect.GetNextStage(stage);
             if (next != StatusEffectType.None)
@@ -46,6 +66,33 @@ public static class DiseaseTurnEndProcessor
         }
 
         await ProcessDamageStagesAsync(attacker, stage, ui, ct);
+    }
+
+    /// <summary>
+    /// 楽園病＋「病」付与など、ターン終了10%絶頂とは別ルートの強制絶頂（即死級ダメージ）。
+    /// </summary>
+    public static async Task ProcessForcedParadiseEcstasyAsync(PlayerStatus attacker, CancellationToken ct)
+    {
+        if (attacker == null) return;
+        var ui = BattleUIManager.I;
+        if (ui == null)
+        {
+            Debug.LogWarning("[DiseaseTurnEndProcessor] BattleUIManager.I が null のため強制絶頂をスキップします");
+            return;
+        }
+
+        var s = Active;
+        await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
+        await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
+
+        ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
+        await Task.Delay(s.messageToValueDelayMs, ct);
+
+        int lethal = attacker.currentHP;
+        ApplyHpLossIgnoringCardModifiers(attacker, lethal);
+        ui.ShowDamagePopup(lethal, attacker);
+        RefreshStatuses();
+        await Task.Delay(s.messageToValueDelayMs, ct);
     }
 
     private static StatusEffectType FindDiseaseStage(PlayerStatus status)
@@ -77,45 +124,46 @@ public static class DiseaseTurnEndProcessor
         };
         if (damage <= 0) return;
 
+        var s = Active;
         ui.ShowMessagePopupForTarget(attacker, "病が体を蝕む！", Color.white);
-        await Task.Delay(MessageToValueDelayMs, ct);
+        await Task.Delay(s.messageToValueDelayMs, ct);
 
         ApplyHpLossIgnoringCardModifiers(attacker, damage);
         ui.ShowDamagePopup(damage, attacker);
         RefreshStatuses();
-        await Task.Delay(MessageToValueDelayMs, ct);
+        await Task.Delay(s.messageToValueDelayMs, ct);
     }
 
     private static async Task ProcessParadiseAsync(PlayerStatus attacker, BattleUIManager ui, CancellationToken ct)
     {
-        if (UnityEngine.Random.value < EcstasyChance)
+        var s = Active;
+        if (UnityEngine.Random.value < s.ecstasyChance)
         {
-            // 絶頂：ヘブン回復の代わりに即死級ダメージ（砕け散る演出はフェーズ4で差し替え予定のプレースホルダー）
-            await Task.Delay(400, ct);
-            await ShatterPlaceholderAsync(ct);
+            await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
+            await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
             ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-            await Task.Delay(MessageToValueDelayMs, ct);
+            await Task.Delay(s.messageToValueDelayMs, ct);
 
             int lethal = attacker.currentHP;
             ApplyHpLossIgnoringCardModifiers(attacker, lethal);
             ui.ShowDamagePopup(lethal, attacker);
             RefreshStatuses();
-            await Task.Delay(MessageToValueDelayMs, ct);
+            await Task.Delay(s.messageToValueDelayMs, ct);
             return;
         }
 
         ui.ShowMessagePopupForTarget(attacker, "ヘブン状態！", new Color(1f, 0.6f, 0.95f));
-        await Task.Delay(MessageToValueDelayMs, ct);
+        await Task.Delay(s.messageToValueDelayMs, ct);
 
         int oldHp = attacker.currentHP;
-        attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + ParadiseHealAmount);
+        attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + s.paradiseHealAmount);
         int healed = attacker.currentHP - oldHp;
         if (healed > 0)
             ui.ShowHealPopup(healed, "HP", attacker);
 
         RefreshStatuses();
-        await Task.Delay(MessageToValueDelayMs, ct);
+        await Task.Delay(s.messageToValueDelayMs, ct);
     }
 
     private static void RefreshStatuses()
@@ -125,13 +173,11 @@ public static class DiseaseTurnEndProcessor
         BattleUIManager.I.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
     }
 
-    private static Task ShatterPlaceholderAsync(CancellationToken ct)
+    private static Task ShatterPlaceholderAsync(int durationMs, CancellationToken ct)
     {
-        // TODO: 楽園病専用の砕け散る VFX（フェーズ4）
-        return Task.Delay(600, ct);
+        return Task.Delay(Mathf.Max(0, durationMs), ct);
     }
 
-    /// <summary>衰弱などの ModifyDamage を経由せず、病系ターン終了ダメージのみを適用する。</summary>
     private static void ApplyHpLossIgnoringCardModifiers(PlayerStatus target, int amount)
     {
         if (target == null || amount <= 0) return;

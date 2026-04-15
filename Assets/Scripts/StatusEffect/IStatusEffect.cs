@@ -1,4 +1,4 @@
-public interface IStatusEffect
+﻿public interface IStatusEffect
 {
 
     StatusEffectType EffectType { get; }
@@ -8,11 +8,13 @@ public interface IStatusEffect
 
     int ModifyDamage(int originalDamage);
 
+    /// <summary>与えるダメージ用（衰弱など）。受け手に渡す直前の値に対して順に適用する。</summary>
+    int ModifyOutgoingDamage(int outgoingDamage);
 
-    bool IsExpired(); // ��Ԉُ킪�I�����Ă��邩�ǂ���
+    bool IsExpired(); // ó‘ÔˆÙí‚ªI—¹‚µ‚Ä‚¢‚é‚©‚Ç‚¤‚©
 
-    string GetEffectName(); // UI�Ȃǂŕ\�����邽�߂̖��O�i��F�u�Łv�Ȃǁj
+    string GetEffectName(); // UI‚È‚Ç‚Å•\Ž¦‚·‚é‚½‚ß‚Ì–¼‘Oi—áFu“Åv‚È‚Çj
 
-    string GetDescription(); // �������i��F�u���^�[��HP��1��������v�Ȃǁj
+    string GetDescription(); // à–¾•¶i—áFu–ˆƒ^[ƒ“HP‚ª1Œ¸­‚·‚év‚È‚Çj
 
 }

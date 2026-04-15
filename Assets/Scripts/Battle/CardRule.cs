@@ -32,10 +32,16 @@ public static class CardRules
     }
 
     // �����s���i�h��t�F�[�Y�����܂Ȃ��j
+    /// <summary>
+    /// 防御フェーズを挟まず、使用後すぐ効果解決するカード（回復・②の状態異常単体カードなど）。
+    /// </summary>
     public static bool IsImmediateAction(CardData c)
     {
         if (c == null) return false;
-        return (c.cardType == CardType.Recovery || c.isRecovery);
+        if (c.cardType == CardType.Recovery || c.isRecovery) return true;
+        return c.canApplyStatusEffect
+            && c.statusEffectToApply != StatusEffectType.None
+            && c.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve;
     }
 
     // 攻撃カードかどうか
@@ -56,7 +62,7 @@ public static class CardRules
     public static bool IsRecoveryCard(CardData c)
     {
         if (c == null) return false;
-        return IsImmediateAction(c);
+        return c.cardType == CardType.Recovery || c.isRecovery;
     }
 
     /// <summary>
@@ -98,5 +104,23 @@ public static class CardRules
         var all = GetDefenseChoices(hand);
         if (attackElement == ElementType.None) return all;
         return all.FindAll(c => ElementHelper.CanDefendAgainst(attackElement, c));
+    }
+
+    /// <summary>
+    /// 攻撃コンボが魔法カードのみか。魔法単体攻撃は衰弱の対象外。
+    /// </summary>
+    public static bool IsMagicOnlyAttackCombo(IReadOnlyList<CardData> cards)
+    {
+        if (cards == null || cards.Count == 0) return false;
+        bool any = false;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var c = cards[i];
+            if (c == null) continue;
+            any = true;
+            if (c.cardType != CardType.Magic)
+                return false;
+        }
+        return any;
     }
 }
