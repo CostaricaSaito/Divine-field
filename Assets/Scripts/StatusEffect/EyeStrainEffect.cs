@@ -1,4 +1,4 @@
-﻿/// <summary>眼精疲労（戦闘中の数値効果はフェーズ4で拡張予定）。</summary>
+﻿/// <summary>眼精疲労：魔法の消費MPが2倍（<see cref="PlayerStatus.GetEffectiveMagicMpCost"/>）。</summary>
 public sealed class EyeStrainEffect : IStatusEffect
 {
     public StatusEffectType EffectType => StatusEffectType.EyeStrain;

@@ -142,6 +142,21 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     public CardData GetSelectedDefenseCard() => selectedDefenseCard;
 
+    /// <summary>
+    /// プレイヤー攻撃が命中したあと：敵の防御を選びカードを表示（状態遷移はしない）。
+    /// </summary>
+    public async Task PickAndDisplayEnemyDefenseAfterPlayerHitAsync()
+    {
+        selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
+        cardStatsDisplay?.UpdateDisplay();
+        if (selectedDefenseCard != null)
+        {
+            BattleUIManager.I?.ShowCardDetail(selectedDefenseCard, Side.Enemy);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            await Task.Delay(500);
+        }
+    }
+
     private CancellationTokenSource _phaseCts;
 
     [SerializeField] private float cutInDelay = 0.5f;
@@ -334,6 +349,8 @@ public class BattleManager : MonoBehaviour
 
     private void OnTurnStart()
     {
+        BattleUIManager.I?.HideYurusuButton();
+
         if (CurrentTurnOwner == PlayerType.Player)
         {
             
@@ -532,7 +549,20 @@ public class BattleManager : MonoBehaviour
 
             List<CardData> attackCards = GetAttackCardsForCombat();
 
-            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+            bool showYurusuDuringCombat =
+                Defender == PlayerType.Enemy && selectedDefenseCard == null && BattleUIManager.I != null;
+            if (showYurusuDuringCombat)
+                BattleUIManager.I.ShowYurusuDisplay();
+
+            try
+            {
+                await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+            }
+            finally
+            {
+                if (showYurusuDuringCombat)
+                    BattleUIManager.I?.HideYurusuButton();
+            }
 
             if (_phaseCts.Token.IsCancellationRequested) return;
 
@@ -671,6 +701,33 @@ public class BattleManager : MonoBehaviour
         cardStatsDisplay.UpdateDisplay();
 
         await Task.Delay(1000);
+
+        var atkList = new List<CardData> { attack };
+        var primary = HitRateRules.GetPrimaryForHitRate(atkList);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus);
+        bool rolledHit = HitRateRules.RollHit(finalPct);
+        if (!rolledHit)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
+            BattleUIManager.I?.ShowMissPopup(playerStatus);
+            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
+            await Task.Delay(DamagePopup.PostPopupIntervalMs);
+            BattleUIManager.I?.HideAllCardDetails();
+            currentAttackCard = null;
+            SetGameState(GameState.TurnEnd);
+            return;
+        }
+
+        if (finalPct < 100)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/小パンチ.mp3");
+            float popupSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowCombatHitConfirmedPopup(playerStatus)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
+            await Task.Delay(TimeSpan.FromSeconds(popupSec));
+            await Task.Delay(DamagePopup.PostPopupIntervalMs);
+        }
+
         SetGameState(GameState.DefenseSelect);
     }
 
@@ -790,6 +847,28 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
+        foreach (var c in selectedAttackCards)
+        {
+            if (c != null && c.cardType == CardType.Magic && playerStatus.IsMagicUseForbidden())
+            {
+                isProcessingUseButton = false;
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法が使用できません", new Color(0.95f, 0.25f, 0.2f));
+                BattleUIManager.I?.SetHandClickable(true);
+                UpdateTotalATKDEFDisplay();
+                return;
+            }
+        }
+
+        int totalMagicMp = playerStatus.GetTotalEffectiveMagicMpForCards(selectedAttackCards);
+        if (totalMagicMp > playerStatus.currentMP)
+        {
+            isProcessingUseButton = false;
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りません", new Color(0.95f, 0.25f, 0.2f));
+            BattleUIManager.I?.SetHandClickable(true);
+            UpdateTotalATKDEFDisplay();
+            return;
+        }
+
         // 即時効果（回復など）の場合は通常処理
         if (selectedAttackCards.Count == 1 && CardRules.IsImmediateAction(selectedAttackCards[0]))
         {
@@ -863,8 +942,9 @@ public class BattleManager : MonoBehaviour
 
         List<CardData> attackCards = GetAttackCardsForCombat();
 
-        // 防御カードなしで戦闘解決
-        await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand);
+        // 防御カードなしで戦闘解決（敵の攻撃は RunEnemyTurnAsync で命中済み）
+        bool skipHit = Attacker == PlayerType.Enemy;
+        await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHit);
 
         if (token.IsCancellationRequested) return;
 
@@ -915,6 +995,7 @@ public class BattleManager : MonoBehaviour
     public void UpdateTotalATKDEFDisplay()
     {
         cardStatsDisplay?.UpdateDisplay();
+        BattleUIManager.I?.RefreshUseButtonForMpAndSelection();
     }
 
     /// <summary>

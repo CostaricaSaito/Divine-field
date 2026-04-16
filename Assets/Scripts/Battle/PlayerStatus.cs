@@ -99,6 +99,50 @@ public class PlayerStatus
         return currentHP <= 0;
     }
 
+    /// <summary>群発頭痛が付与されているか（魔法使用不可）。</summary>
+    public bool HasClusterHeadacheEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.ClusterHeadache) return true;
+        return false;
+    }
+
+    /// <summary>眼精疲労のみ（魔法MP消費2倍）。群発と同時には通常なら存在しない。</summary>
+    public bool HasEyeStrainEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.EyeStrain) return true;
+        return false;
+    }
+
+    /// <summary>群発頭痛により魔法が一切使えない。</summary>
+    public bool IsMagicUseForbidden()
+    {
+        return HasClusterHeadacheEffect();
+    }
+
+    /// <summary>魔法1回の実際のMP消費（眼精疲労で2倍）。群発時は使用不可のため呼び出し側でガード。</summary>
+    public int GetEffectiveMagicMpCost(int baseMpCost)
+    {
+        if (baseMpCost <= 0) return 0;
+        if (HasClusterHeadacheEffect()) return baseMpCost;
+        if (HasEyeStrainEffect()) return baseMpCost * 2;
+        return baseMpCost;
+    }
+
+    /// <summary>選択中の魔法カードの合計消費MP（眼精疲労の倍率反映）。</summary>
+    public int GetTotalEffectiveMagicMpForCards(System.Collections.Generic.IEnumerable<CardData> cards)
+    {
+        if (cards == null) return 0;
+        int sum = 0;
+        foreach (var c in cards)
+        {
+            if (c == null || c.cardType != CardType.Magic) continue;
+            sum += GetEffectiveMagicMpCost(c.mpCost);
+        }
+        return sum;
+    }
+
     /// <summary>
     /// 段階型・排他型（病・眼精／群発・封印）と単純付与（衰弱など）を統合した付与API。
     /// </summary>

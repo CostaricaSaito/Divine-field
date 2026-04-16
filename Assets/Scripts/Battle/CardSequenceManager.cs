@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -106,17 +107,17 @@ public class CardSequenceManager : MonoBehaviour
 
         List<CardData> attackCards = GetAttackCardsForCombat(selectedCards);
 
-        // 戦闘解決を呼び出し
         if (cardType == "攻撃")
         {
-            // 攻撃カードの場合、防御カードは単一またはnull
-            var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
-            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+            bool finished = await ResolvePlayerAttackCombatAsync(attackCards, atk, def, defHand, cancellationToken);
+            if (!finished)
+                return;
         }
         else
         {
-            // 防御カードの場合、複数防御カード対応
-            await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand);
+            // 防御カードの場合、複数防御カード対応（敵の攻撃は既に命中判定済み）
+            bool skipHit = battleManager.AttackerPublic == PlayerType.Enemy;
+            await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand, skipHit);
         }
 
         if (cancellationToken.IsCancellationRequested) return;
@@ -133,6 +134,67 @@ public class CardSequenceManager : MonoBehaviour
 
         // カード確定後の処理
         battleManager.SetGameState(GameState.TurnEnd);
+    }
+
+    /// <summary>
+    /// プレイヤー攻撃：カード消費後に命中→（的中演出）→敵防御→戦闘。ミス時は TurnEnd まで。
+    /// </summary>
+    /// <returns>通常終了で true。ミスで TurnEnd 済みのとき false。</returns>
+    private async Task<bool> ResolvePlayerAttackCombatAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        PlayerStatus def,
+        List<CardData> defHand,
+        CancellationToken cancellationToken)
+    {
+        var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, atk);
+        bool hit = HitRateRules.RollHit(finalPct);
+
+        if (!hit)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
+            BattleUIManager.I?.ShowMissPopup(def);
+            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), cancellationToken);
+            await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+            await RevealMagicPanelBonusDrawsAsync(cancellationToken);
+            BattleUIManager.I?.HideAllCardDetails();
+            cardStatsDisplay?.ClearSequenceCards();
+            battleManager.SetCurrentAttackCard(null);
+            cardStatsDisplay?.UpdateDisplay();
+            battleManager.SetGameState(GameState.TurnEnd);
+            return false;
+        }
+
+        if (finalPct < 100)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/小パンチ.mp3");
+            float sec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowCombatHitConfirmedPopup(def)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
+            await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
+            await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+        }
+
+        await battleManager.PickAndDisplayEnemyDefenseAfterPlayerHitAsync();
+
+        var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
+        bool showYurusuDuringCombat =
+            battleManager.DefenderPublic == PlayerType.Enemy && selectedDefenseCard == null && BattleUIManager.I != null;
+        if (showYurusuDuringCombat)
+            BattleUIManager.I.ShowYurusuDisplay();
+
+        try
+        {
+            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
+        }
+        finally
+        {
+            if (showYurusuDuringCombat)
+                BattleUIManager.I?.HideYurusuButton();
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -228,12 +290,13 @@ public class CardSequenceManager : MonoBehaviour
     {
         if (MagicPoolManager.I == null) return;
 
-        // MP消費
+        // MP消費（眼精疲労で倍率）
         var playerStatus = battleManager.GetPlayerStatus();
         if (playerStatus != null && card.mpCost > 0)
         {
-            playerStatus.UseMP(card.mpCost);
-            Debug.Log($"[CardSequenceManager] MP消費: {card.cardName} -{card.mpCost}MP (残り={playerStatus.currentMP})");
+            int pay = playerStatus.GetEffectiveMagicMpCost(card.mpCost);
+            playerStatus.UseMP(pay);
+            Debug.Log($"[CardSequenceManager] MP消費: {card.cardName} -{pay}MP (残り={playerStatus.currentMP})");
             BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
         }
 

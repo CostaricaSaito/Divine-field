@@ -13,7 +13,7 @@ public enum Side { Player, Enemy }
 /// 【主な機能】
 /// - ステータス表示の更新
 /// - カード詳細の表示・非表示
-/// - ボタンの状態操作（使用／許す／祈り）
+/// - ボタンの状態操作（使用／祈り）と「許す」表示オブジェクト
 /// - ポップアップの表示（ダメージ、ミス）
 /// - 手札の操作制御（選択／キャンセル）
 ///
@@ -41,6 +41,8 @@ public class BattleUIManager : MonoBehaviour
     [Header("UI 要素")]
     [SerializeField] private BattleStatusUI statusUI;
     [SerializeField] private Button useButton;
+    [Header("許す表示（四角オブジェクト・非インタラクティブ）")]
+    [SerializeField] private GameObject yurusuDisplay;
     [SerializeField] private TMP_Text useButtonLabelTMP;
     [SerializeField] private Text useButtonLabelUGUI;
     [SerializeField] private Image useButtonImage;
@@ -83,7 +85,7 @@ public class BattleUIManager : MonoBehaviour
 
     // プライベート変数
     private readonly List<GameObject> activeCardSheets = new();
-    private enum UseButtonMode { Use, Allow, Pray }
+    private enum UseButtonMode { Use, Allow, Pray, MpShortage }
 
     // ポップアップ状態管理
     private bool isHandInputBlocked = false;
@@ -104,6 +106,24 @@ public class BattleUIManager : MonoBehaviour
             if (useButtonImage == null) useButtonImage = useButton.targetGraphic as Image;
             useButton.interactable = false;
         }
+
+        if (yurusuDisplay != null)
+            yurusuDisplay.SetActive(false);
+    }
+
+    /// <summary>
+    /// 相手が防具を使わなかった／使えなかったときに「許す」を表示する。非表示は <see cref="HideYurusuButton"/>（戦闘解決の await 完了後）。
+    /// </summary>
+    public void ShowYurusuDisplay()
+    {
+        if (yurusuDisplay == null) return;
+        yurusuDisplay.SetActive(true);
+    }
+
+    public void HideYurusuButton()
+    {
+        if (yurusuDisplay == null) return;
+        yurusuDisplay.SetActive(false);
     }
 
     //==== パブリックAPI：ステータス表示 =====
@@ -210,6 +230,7 @@ public class BattleUIManager : MonoBehaviour
 
         var mode = text == "許す" ? UseButtonMode.Allow
                  : text == "祈り" ? UseButtonMode.Pray
+                 : text == "MPが足りない" || text == "魔法使用不可" ? UseButtonMode.MpShortage
                  : UseButtonMode.Use;
         ApplyUseButtonMode(mode);
     }
@@ -420,7 +441,7 @@ public class BattleUIManager : MonoBehaviour
         if (damageText != null)
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
-            string displayText = $"{statType}{amount}回復！";
+            string displayText = $"{statType}{amount}回復";
             Color displayColor = Color.green; // 回復は緑色
             damageText.Setup(displayText, displayColor);
             Debug.Log($"[BattleUIManager] 回復ポップアップ設定完了: {statType}{amount}回復");
@@ -445,7 +466,7 @@ public class BattleUIManager : MonoBehaviour
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            damageText.Setup("ミス！", Color.yellow);
+            damageText.Setup("ミス", Color.yellow);
             Debug.Log("[BattleUIManager] ミスポップアップ設定完了");
         }
         else
@@ -454,8 +475,26 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
+    /// <summary>命中時（100% 未満のみ呼び出す想定）。SE は呼び出し側。</summary>
+    /// <returns>フェード秒（待機の目安）</returns>
+    public float ShowCombatHitConfirmedPopup(PlayerStatus target)
+    {
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+            return DamagePopup.DefaultFadeDurationIfUnknown;
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            damageText.Setup("的中", new Color(1f, 0.92f, 0.35f));
+            return damageText.fadeDuration;
+        }
+
+        return DamagePopup.DefaultFadeDurationIfUnknown;
+    }
+
     /// <summary>
-    /// ステータス付近に任意メッセージのポップアップ（病系の「病が体を蝕む！」等）。
+    /// ステータス付近に任意メッセージのポップアップ（病系は改行入りで2行表示等）。
     /// </summary>
     public void ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
     {
@@ -558,7 +597,10 @@ public class BattleUIManager : MonoBehaviour
             var display = go.GetComponent<CardSheetDisplay>();
             if (display != null)
             {
-                display.Setup(card);
+                PlayerStatus mpOwner = side == Side.Player
+                    ? BattleManager.I?.GetPlayerStatus()
+                    : BattleManager.I?.GetEnemyStatus();
+                display.Setup(card, mpOwner);
             }
 
             activeCardSheets.Add(go);
@@ -617,7 +659,7 @@ public class BattleUIManager : MonoBehaviour
         var img = useButtonImage ?? (useButton.targetGraphic as Image);
         if (img == null) return;
 
-        img.color = mode == UseButtonMode.Allow ? useButtonDangerColor
+        img.color = mode == UseButtonMode.Allow || mode == UseButtonMode.MpShortage ? useButtonDangerColor
                  : mode == UseButtonMode.Pray ? useButtonPrayColor
                  : useButtonNormalColor;
     }
@@ -725,6 +767,53 @@ public class BattleUIManager : MonoBehaviour
         {
             SetUseButtonLabel("許す");
         }
+        SetUseButtonInteractable(true);
+    }
+
+    /// <summary>
+    /// 攻撃選択中：魔法の合算MP（眼精疲労の倍率・群発の使用不可）に応じて使用ボタンを更新。
+    /// </summary>
+    public void RefreshUseButtonForMpAndSelection()
+    {
+        if (useButton == null || BattleManager.I == null || cardSelectionManager == null) return;
+
+        var bm = BattleManager.I;
+        if (bm.CurrentState != GameState.AttackSelect || bm.CurrentTurnOwner != PlayerType.Player)
+            return;
+
+        if (bm.IsUseButtonLocked)
+            return;
+
+        var ps = bm.GetPlayerStatus();
+        if (ps == null) return;
+
+        var selected = cardSelectionManager.GetSelectedCards();
+        if (selected == null || selected.Count == 0)
+        {
+            SetUseButtonLabel("使用");
+            SetUseButtonInteractable(false);
+            return;
+        }
+
+        foreach (var c in selected)
+        {
+            if (c != null && c.cardType == CardType.Magic && ps.IsMagicUseForbidden())
+            {
+                SetUseButtonLabel("魔法使用不可");
+                SetUseButtonInteractable(false);
+                return;
+            }
+        }
+
+        int magicTotal = ps.GetTotalEffectiveMagicMpForCards(selected);
+        if (magicTotal > ps.currentMP)
+        {
+            SetUseButtonLabel("MPが足りない");
+            SetUseButtonInteractable(false);
+            return;
+        }
+
+        SetUseButtonLabel("使用");
         SetUseButtonInteractable(true);
     }
 

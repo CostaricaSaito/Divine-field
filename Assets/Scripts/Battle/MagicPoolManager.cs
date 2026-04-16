@@ -66,7 +66,8 @@ public class MagicPoolManager : MonoBehaviour
     public bool HasEnoughMP(CardData card, PlayerStatus status)
     {
         if (card == null || status == null) return false;
-        return status.currentMP >= card.mpCost;
+        if (status.IsMagicUseForbidden()) return false;
+        return status.currentMP >= status.GetEffectiveMagicMpCost(card.mpCost);
     }
 
     // ===== メイン操作 =====

@@ -26,6 +26,9 @@ public static class StatusEffectFactory
             case StatusEffectType.ClusterHeadache:
                 return new ClusterHeadacheEffect();
 
+            case StatusEffectType.Smoke:
+                return new SmokeEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

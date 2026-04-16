@@ -206,7 +206,8 @@ public class BattleProcessor : MonoBehaviour
     /// <param name="defender">防御者</param>
     /// <param name="defenderHand">防御者の手札</param>
     /// <returns>戦闘解決完了まで待機</returns>
-    public async Task ResolveCombatAsync(List<CardData> attackCards, CardData defenseCard, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand)
+    /// <param name="skipHitCheck">true のとき命中判定をスキップ（呼び出し側で既に判定済み）。</param>
+    public async Task ResolveCombatAsync(List<CardData> attackCards, CardData defenseCard, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand, bool skipHitCheck = false)
     {
         if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
         {
@@ -237,14 +238,16 @@ public class BattleProcessor : MonoBehaviour
 
         Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
-        // 命中判定（最初の攻撃カードを使用）
-        bool hit = CheckHit(attackCards[0], defenseCard);
-        if (!hit)
+        if (!skipHitCheck)
         {
-            Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
-            PlayDamageSE();
-            BattleUIManager.I?.ShowMissPopup(defender);
-            return;
+            bool hit = CheckHit(attackCards, attacker);
+            if (!hit)
+            {
+                Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
+                SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+                BattleUIManager.I?.ShowMissPopup(defender);
+                return;
+            }
         }
 
         await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
@@ -371,25 +374,17 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 命中判定を行う
+    /// 命中判定（Primary の hitRate・攻撃側の煙幕補正）。
     /// </summary>
-    private bool CheckHit(CardData attackCard, CardData defenseCard)
+    private bool CheckHit(List<CardData> attackCards, PlayerStatus attacker)
     {
-        if (attackCard == null) return false;
+        var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
+        if (primary == null) return false;
 
-        int hitRate = attackCard.hitRate;
-        
-        // 現在のカードはすべて命中率100%のため、防御カードによる命中率減少は無効化
-        // if (defenseCard != null)
-        // {
-        //     // 防御カードがある場合は命中率を下げる（将来的に拡張）
-        //     hitRate = Mathf.Max(0, hitRate - 10);
-        // }
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, attacker);
+        bool result = HitRateRules.RollHit(finalPct);
 
-        int roll = Random.Range(0, 100);
-        bool result = roll < hitRate;
-        
-        Debug.Log($"[BattleProcessor] 命中判定: 命中率{hitRate}%, 乱数{roll}, 結果{(result ? "命中" : "ミス")}");
+        Debug.Log($"[BattleProcessor] 命中判定: Primary={primary.cardName}, 最終{finalPct}%, 結果{(result ? "命中" : "ミス")}");
         return result;
     }
 
@@ -510,6 +505,14 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
+    /// <see cref="BattleUIManager.ShowDamagePopup"/> と同じタイミングの SE（病ターン終了など、戦闘解決を経由しない経路用）。
+    /// </summary>
+    public void PlayDamagePopupCompanionSound(int finalDamage)
+    {
+        PlayDamageSE(finalDamage);
+    }
+
+    /// <summary>
     /// 死亡判定
     /// </summary>
     private bool IsDead(PlayerStatus status)
@@ -526,7 +529,8 @@ public class BattleProcessor : MonoBehaviour
     /// <param name="defender">防御者</param>
     /// <param name="defenderHand">防御者の手札</param>
     /// <returns>戦闘解決完了まで待機</returns>
-    public async Task ResolveCombatAsync(List<CardData> attackCards, List<CardData> defenseCards, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand)
+    /// <param name="skipHitCheck">true のとき命中判定をスキップ（呼び出し側で既に判定済み）。</param>
+    public async Task ResolveCombatAsync(List<CardData> attackCards, List<CardData> defenseCards, PlayerStatus attacker, PlayerStatus defender, List<CardData> defenderHand, bool skipHitCheck = false)
     {
         if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
         {
@@ -558,14 +562,16 @@ public class BattleProcessor : MonoBehaviour
 
         Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
-        // 命中判定（最初の攻撃カードを使用）
-        bool hit = CheckHit(attackCards[0], defenseCards?.FirstOrDefault());
-        if (!hit)
+        if (!skipHitCheck)
         {
-            Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
-            PlayDamageSE();
-            BattleUIManager.I?.ShowMissPopup(defender);
-            return;
+            bool hit = CheckHit(attackCards, attacker);
+            if (!hit)
+            {
+                Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
+                SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
+                BattleUIManager.I?.ShowMissPopup(defender);
+                return;
+            }
         }
 
         await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
@@ -618,7 +624,8 @@ public class BattleProcessor : MonoBehaviour
 
         if (attackElement == ElementType.Dark && firstPhaseDamage > 0 && defender.currentHP > 0)
         {
-            await Task.Delay(System.TimeSpan.FromSeconds(normalPopupLifetimeSec + 0.5f));
+            await Task.Delay(System.TimeSpan.FromSeconds(normalPopupLifetimeSec));
+            await Task.Delay(DamagePopup.PostPopupIntervalMs);
             int darkDamage = defender.currentHP;
             SoundEffectPlayer.I?.Play("Assets/SE/チーン1.mp3");
             BattleUIManager.I?.ShowDarkFollowupDamagePopup(darkDamage, defender);

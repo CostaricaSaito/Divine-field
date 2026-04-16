@@ -86,13 +86,15 @@ public static class DiseaseTurnEndProcessor
         await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
         ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
 
         int lethal = attacker.currentHP;
         ApplyHpLossIgnoringCardModifiers(attacker, lethal);
         ui.ShowDamagePopup(lethal, attacker);
         RefreshStatuses();
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
     }
 
     private static StatusEffectType FindDiseaseStage(PlayerStatus status)
@@ -125,13 +127,18 @@ public static class DiseaseTurnEndProcessor
         if (damage <= 0) return;
 
         var s = Active;
-        ui.ShowMessagePopupForTarget(attacker, "病が体を蝕む！", Color.white);
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        // 2行表示（「病が」／「体を蝕む」）。ダメージ数値は通常の ShowDamagePopup を流用（病1／重病3／煉獄病5）。
+        ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
+        SoundEffectPlayer.I?.Play("Assets/SE/病ダメージ.mp3");
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
 
         ApplyHpLossIgnoringCardModifiers(attacker, damage);
         ui.ShowDamagePopup(damage, attacker);
+        BattleProcessor.I?.PlayDamagePopupCompanionSound(damage);
         RefreshStatuses();
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
     }
 
     private static async Task ProcessParadiseAsync(PlayerStatus attacker, BattleUIManager ui, CancellationToken ct)
@@ -143,18 +150,21 @@ public static class DiseaseTurnEndProcessor
             await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
             ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-            await Task.Delay(s.messageToValueDelayMs, ct);
+            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
 
             int lethal = attacker.currentHP;
             ApplyHpLossIgnoringCardModifiers(attacker, lethal);
             ui.ShowDamagePopup(lethal, attacker);
             RefreshStatuses();
-            await Task.Delay(s.messageToValueDelayMs, ct);
+            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
             return;
         }
 
-        ui.ShowMessagePopupForTarget(attacker, "ヘブン状態！", new Color(1f, 0.6f, 0.95f));
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        ui.ShowMessagePopupForTarget(attacker, "ヘブン状態", new Color(1f, 0.6f, 0.95f));
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
 
         int oldHp = attacker.currentHP;
         attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + s.paradiseHealAmount);
@@ -163,7 +173,8 @@ public static class DiseaseTurnEndProcessor
             ui.ShowHealPopup(healed, "HP", attacker);
 
         RefreshStatuses();
-        await Task.Delay(s.messageToValueDelayMs, ct);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
     }
 
     private static void RefreshStatuses()

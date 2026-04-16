@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -96,7 +96,8 @@ public class EnemyAI
         {
             if (c.cardType != CardType.Magic) continue;
             if (!CardRules.IsUsableInAttackPhase(c)) continue;
-            if (enemyStatus != null && enemyStatus.currentMP < c.mpCost) continue;
+            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
+            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(c.mpCost)) continue;
             if (MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(c, PlayerType.Enemy)) continue;
             return c;
         }
@@ -115,7 +116,8 @@ public class EnemyAI
         {
             if (entry.cardData == null) continue;
             if (!CardRules.IsUsableInAttackPhase(entry.cardData)) continue;
-            if (enemyStatus != null && enemyStatus.currentMP < entry.cardData.mpCost) continue;
+            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
+            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(entry.cardData.mpCost)) continue;
             return entry.cardData;
         }
         return null;
@@ -173,8 +175,9 @@ public class EnemyAI
         {
             if (enemyStatus != null && attack.mpCost > 0)
             {
-                enemyStatus.UseMP(attack.mpCost);
-                Debug.Log($"[EnemyAI] MP消費: {attack.cardName} -{attack.mpCost}MP (残り={enemyStatus.currentMP})");
+                int pay = enemyStatus.GetEffectiveMagicMpCost(attack.mpCost);
+                enemyStatus.UseMP(pay);
+                Debug.Log($"[EnemyAI] MP消費: {attack.cardName} -{pay}MP (残り={enemyStatus.currentMP})");
             }
 
             if (isFromPool)

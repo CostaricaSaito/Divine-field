@@ -3,18 +3,68 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
+/// 数値ダメージ表示の配色（テキスト・縁・背後パネル）。パネルはアルファ0のとき Setup で変更しない。
+/// </summary>
+[System.Serializable]
+public struct DamagePopupNumericAppearance
+{
+    [Tooltip("数字・「ダメージ」ラベルの塗り")]
+    public Color textFill;
+    [Tooltip("TMP アウトライン（縁）")]
+    public Color outlineColor;
+    [Tooltip("ルート Image への着色（アルファ0なら数値ダメージ時は背景を変えない）")]
+    public Color panelBackground;
+}
+
+/// <summary>
 /// ダメージ／回復／メッセージ用フローティングテキスト。
 /// レイアウト（パネル内位置・Rect）は BattleUIManager とプレハブ側。このクラスは主に文言・色・浮き／フェード。
 /// </summary>
 public class DamagePopup : MonoBehaviour
 {
-    // --- Inspector 参照（DamagePopUp プレハブで割り当て）---
-    // ルートの Image（任意）。闇フォロー時に紫背景へ塗り替える。未割り当てなら GetComponent。
-    [SerializeField] private Image panelBackground;
-    // valueText … 大きい数字、または「無傷」など1行メッセージ全体（Setup 時）
+    // --- 参照（実行時にルートから取得。プレハブのルートに Image が無い場合はパネル着色なし）---
+    private Image _rootPanelImage;
+    // valueText（DamageValue）… ダメージ数値（1段目の大きい数字）専用。レイアウトは数字向け。
     [SerializeField] private TMP_Text valueText;
-    // labelText … 「ダメージ」の小さい行。Setup では非表示にする。null のプレハブなら未使用。
+    // labelText … 「ダメージ」の小さい行（数値ダメージ時のみ）。
     [SerializeField] private TMP_Text labelText;
+    // messageText（Message）… 「無傷」「衰弱」など語句・状態異常名。DamageValue とは別 Rect で中央寄せしやすくする。
+    [SerializeField] private TMP_Text messageText;
+
+    [Header("Message（TextMeshPro Auto Size）")]
+    [Tooltip("長い文言はこの範囲で縮小され、Rect 内に収まりやすくなります。プレハブの Message の Rect 幅・高さも確認してください。")]
+    [SerializeField] [Range(8f, 80f)] private float messageFontSizeMin = 22f;
+    [SerializeField] [Range(40f, 200f)] private float messageFontSizeMax = 160f;
+
+    [Header("数値ダメージの配色")]
+    [Tooltip("対象がプレイヤー（自分が食らう）とき。従来: シアン系＋白縁")]
+    [SerializeField] private DamagePopupNumericAppearance damageWhenPlayerIsTarget = new DamagePopupNumericAppearance
+    {
+        textFill = new Color(0.25f, 0.95f, 1f),
+        outlineColor = Color.white,
+        panelBackground = new Color(0f, 0f, 0f, 0f)
+    };
+    [Tooltip("対象が敵（相手が食らう）とき。従来: 赤＋白縁")]
+    [SerializeField] private DamagePopupNumericAppearance damageWhenEnemyIsTarget = new DamagePopupNumericAppearance
+    {
+        textFill = new Color(0.92f, 0.12f, 0.18f),
+        outlineColor = Color.white,
+        panelBackground = new Color(0f, 0f, 0f, 0f)
+    };
+
+    [Header("ダメージ0「無傷」")]
+    [SerializeField] private DamagePopupNumericAppearance noDamageAppearance = new DamagePopupNumericAppearance
+    {
+        textFill = new Color(1f, 0.92f, 0.15f),
+        outlineColor = Color.white,
+        panelBackground = new Color(0f, 0f, 0f, 0f)
+    };
+
+    [Header("闇属性・第2段（数値の色は上のプレイヤー／敵と同じ。ここはパネルのみ）")]
+    [SerializeField] private Color darkFollowupPanelBackground = new Color(0.28f, 0.1f, 0.42f, 0.94f);
+
+    [Header("単純メッセージ Setup（ミス・回復文言など）のデフォルト縁色")]
+    [SerializeField] private Color defaultOutlineForSimpleMessage = Color.white;
 
     // --- 演出パラメータ（Inspector からも変更可）---
     // floatSpeed … 上方向に漂う速度。大きいほど速く上に抜ける（ワールド／ローカルは親の向き依存。通常は上へ）。
@@ -25,17 +75,83 @@ public class DamagePopup : MonoBehaviour
     /// <summary>UI 生成に失敗したときなど、闇フォロー前の待ちに使う既定秒数（<see cref="fadeDuration"/> のデフォルトと一致）。</summary>
     public const float DefaultFadeDurationIfUnknown = 1f;
 
+    /// <summary>ポップアップ消滅後?次処理までの標準インターバル（ms）。寿命は <see cref="fadeDuration"/> と別途待つ。</summary>
+    public const int PostPopupIntervalMs = 500;
+
     private float timer;
     // CanvasGroup … ない場合はフェードなし（透明度は変わらず、そのまま消えるまで表示）。
     private CanvasGroup canvasGroup;
 
     private void Awake()
     {
-        // valueText 未割り当て時の保険：子の TMP を1つ拾う（複数あると意図しないものを掴むので、基本は Inspector で明示推奨）。
+        // valueText 未割り当て時の保険：子の TMP を1つ拾う（Message 追加後は Inspector 割り当て推奨）。
         if (valueText == null)
             valueText = GetComponentInChildren<TMP_Text>(true);
-        if (panelBackground == null)
-            panelBackground = GetComponent<Image>();
+        _rootPanelImage = GetComponent<Image>();
+    }
+
+    /// <summary>数値ダメージ用：DamageValue を表示し Message は隠す（ラベルは呼び出し側で「ダメージ」時に表示）。</summary>
+    private void PrepareDamageNumberLayout()
+    {
+        if (messageText != null)
+            messageText.gameObject.SetActive(false);
+        if (valueText != null)
+            valueText.gameObject.SetActive(true);
+    }
+
+    /// <summary>語句・状態異常・無傷など Message のみ。DamageValue／ラベルは隠す。</summary>
+    private void ShowMessageLayout(string text, Color fillColor, Color outlineColor, bool statusAilmentAutoSize)
+    {
+        if (labelText != null)
+            labelText.gameObject.SetActive(false);
+        if (valueText != null)
+            valueText.gameObject.SetActive(false);
+
+        var target = messageText != null ? messageText : valueText;
+        if (target == null) return;
+
+        target.gameObject.SetActive(true);
+        target.text = text ?? string.Empty;
+        ApplyFillAndOutline(target, fillColor, outlineColor);
+
+        if (messageText != null)
+        {
+            if (statusAilmentAutoSize)
+            {
+                // 状態異常名：1行を大きく（従来どおり折り返しなし）
+                target.enableWordWrapping = false;
+                target.overflowMode = TextOverflowModes.Overflow;
+                target.enableAutoSizing = true;
+                target.fontSizeMin = messageFontSizeMin;
+                target.fontSizeMax = messageFontSizeMax;
+                target.alignment = TextAlignmentOptions.Center;
+            }
+            else
+            {
+                // 病系・ミス・無傷など：Rect 内に収まるよう Auto Size
+                ApplyMessageAutoSizeForPopup(target);
+            }
+        }
+        else
+        {
+            // Message 未設定の旧プレハブ：valueText のみ
+            ApplyMessageAutoSizeForPopup(target);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Setup(string, Color)"/> 等：プレハブの Message Rect 内に収まるよう TMP の Auto Size を使用。
+    /// </summary>
+    private void ApplyMessageAutoSizeForPopup(TMP_Text target)
+    {
+        if (target == null) return;
+
+        target.enableWordWrapping = true;
+        target.overflowMode = TextOverflowModes.Overflow;
+        target.enableAutoSizing = true;
+        target.fontSizeMin = messageFontSizeMin;
+        target.fontSizeMax = messageFontSizeMax;
+        target.alignment = TextAlignmentOptions.Center;
     }
 
     private void Start()
@@ -53,30 +169,24 @@ public class DamagePopup : MonoBehaviour
     /// <param name="fillColor">文字の塗りつぶし色（縁は ApplyFillAndOutline 参照）。</param>
     public void Setup(string message, Color fillColor)
     {
-        // 2行レイアウト用ラベルは使わないので消す（表示領域の衝突防止）。
-        if (labelText != null)
-            labelText.gameObject.SetActive(false);
-
-        if (valueText == null) return;
-        valueText.gameObject.SetActive(true);
-        valueText.text = message;
-        // 長文だけ自動縮小：文字数しきい値を変えれば「いつから縮小するか」が変わる。
-        valueText.enableAutoSizing = message != null && message.Length > 12;
-        ApplyFillAndOutline(valueText, fillColor);
+        ShowMessageLayout(message, fillColor, defaultOutlineForSimpleMessage, statusAilmentAutoSize: false);
     }
 
     /// <summary>
     /// 戦闘ダメージ表示：ダメージありは数字＋「ダメージ」、0 のときは1行（無傷）など。
     /// </summary>
     /// <param name="amount">与ダメ。0 以下は else 側の見た目。</param>
-    /// <param name="damageHitsPlayer">true＝プレイヤーが食らう（シアン系）、false＝敵が食らう（赤系）。色は下の fill を編集。</param>
+    /// <param name="damageHitsPlayer">true＝プレイヤーが食らう、false＝敵が食らう。色は Inspector の配色を参照。</param>
     public void SetupDamage(int amount, bool damageHitsPlayer)
     {
-        if (valueText == null) return;
-
-        Color fill;
         if (amount > 0)
         {
+            if (valueText == null) return;
+
+            var style = damageHitsPlayer ? damageWhenPlayerIsTarget : damageWhenEnemyIsTarget;
+            ApplyPanelBackgroundIfSpecified(style.panelBackground);
+
+            PrepareDamageNumberLayout();
             // 数字の見た目：プレハブの fontSize よりここが優先される。
             valueText.enableAutoSizing = false;
             valueText.fontSize = 160f;
@@ -84,26 +194,30 @@ public class DamagePopup : MonoBehaviour
             if (labelText != null)
             {
                 labelText.gameObject.SetActive(true);
-                // 「ダメージ」の文言を変えたい場合はここ（例：「DMG」）。
                 labelText.text = "ダメージ";
             }
-            // 食らう側がプレイヤーならシアン、敵なら赤。RGB をいじればトーン変更。
-            fill = damageHitsPlayer ? new Color(0.25f, 0.95f, 1f) : new Color(0.92f, 0.12f, 0.18f);
-            ApplyFillAndOutline(valueText, fill);
+            ApplyFillAndOutline(valueText, style.textFill, style.outlineColor);
             if (labelText != null)
-                ApplyFillAndOutline(labelText, fill);
+                ApplyFillAndOutline(labelText, style.textFill, style.outlineColor);
         }
         else
         {
-            // 0 ダメージ：ラベルは使わず value だけで表現（2行にしない）。
-            if (labelText != null)
-                labelText.gameObject.SetActive(false);
-            // 表示文言を変えたい場合はここ（例：「ダメージなし！」）。
-            valueText.text = "無傷";
-            valueText.fontSize = 160f;
-            // 黄色系：無傷のトーンを変えたいときはこの Color。
-            fill = new Color(1f, 0.92f, 0.15f);
-            ApplyFillAndOutline(valueText, fill);
+            // 0 ダメージ「無傷」は Message 用 Rect（DamageValue は数字向けレイアウトのため使わない）。
+            var nd = noDamageAppearance;
+            ApplyPanelBackgroundIfSpecified(nd.panelBackground);
+            if (messageText != null)
+            {
+                ShowMessageLayout("無傷", nd.textFill, nd.outlineColor, statusAilmentAutoSize: false);
+            }
+            else if (valueText != null)
+            {
+                if (labelText != null)
+                    labelText.gameObject.SetActive(false);
+                valueText.gameObject.SetActive(true);
+                valueText.text = "無傷";
+                ApplyMessageAutoSizeForPopup(valueText);
+                ApplyFillAndOutline(valueText, nd.textFill, nd.outlineColor);
+            }
         }
     }
 
@@ -112,8 +226,7 @@ public class DamagePopup : MonoBehaviour
     /// </summary>
     public void SetupDarkFollowupDamage(int amount, bool damageHitsPlayer)
     {
-        if (panelBackground != null)
-            panelBackground.color = new Color(0.28f, 0.1f, 0.42f, 0.94f);
+        ApplyPanelBackgroundIfSpecified(darkFollowupPanelBackground);
         SetupDamage(amount, damageHitsPlayer);
     }
 
@@ -122,36 +235,46 @@ public class DamagePopup : MonoBehaviour
     /// </summary>
     public void SetupStatusAilmentGrant(string ailmentDisplayName, Color panelBackgroundColor, Color textFillColor)
     {
-        if (labelText != null)
-            labelText.gameObject.SetActive(false);
-        if (panelBackground != null)
-            panelBackground.color = panelBackgroundColor;
-        if (valueText == null) return;
-        valueText.gameObject.SetActive(true);
-        valueText.text = ailmentDisplayName ?? string.Empty;
-        valueText.enableWordWrapping = false;
-        valueText.overflowMode = TextOverflowModes.Overflow;
-        valueText.enableAutoSizing = true;
-        valueText.fontSizeMin = 12f;
-        valueText.fontSizeMax = 160f;
-        ApplyFillAndOutline(valueText, textFillColor);
+        if (_rootPanelImage != null)
+            _rootPanelImage.color = panelBackgroundColor;
+
+        if (messageText != null)
+        {
+            ShowMessageLayout(ailmentDisplayName ?? string.Empty, textFillColor, defaultOutlineForSimpleMessage, statusAilmentAutoSize: true);
+        }
+        else if (valueText != null)
+        {
+            if (labelText != null)
+                labelText.gameObject.SetActive(false);
+            valueText.gameObject.SetActive(true);
+            valueText.text = ailmentDisplayName ?? string.Empty;
+            valueText.enableWordWrapping = false;
+            valueText.overflowMode = TextOverflowModes.Overflow;
+            valueText.enableAutoSizing = true;
+            valueText.fontSizeMin = messageFontSizeMin;
+            valueText.fontSizeMax = messageFontSizeMax;
+            ApplyFillAndOutline(valueText, textFillColor, defaultOutlineForSimpleMessage);
+        }
+    }
+
+    private void ApplyPanelBackgroundIfSpecified(Color c)
+    {
+        if (_rootPanelImage == null) return;
+        if (c.a <= 0.001f) return;
+        _rootPanelImage.color = c;
     }
 
     /// <summary>
-    /// 文字の「塗り」と TMP のアウトライン（縁）をまとめて適用。見た目の基準はここが強い。
+    /// 文字の「塗り」と TMP のアウトライン（縁）をまとめて適用。
     /// </summary>
-    private static void ApplyFillAndOutline(TMP_Text t, Color fill)
+    private void ApplyFillAndOutline(TMP_Text t, Color fill, Color outlineColor)
     {
         if (t == null) return;
-        // 面の色（敵への赤・自分へのシアンなど）。
         t.color = fill;
         t.fontStyle = FontStyles.Bold;
-        // アウトライン幅：プレハブで既に太ければそのまま。細すぎるときだけ下限を 0.22 に引き上げ。
-        // もっと太い縁にしたいなら 0.22 を大きくする、またはプレハブの Outline を触る。
         if (t.outlineWidth < 0.08f)
             t.outlineWidth = 0.22f;
-        // 縁の色：白のまま＝赤文字に白縁。縁も赤くしたい場合は Color.red などに変更。
-        t.outlineColor = Color.white;
+        t.outlineColor = outlineColor;
     }
 
     private void Update()

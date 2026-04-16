@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
   m_Name: DarkTest
   m_EditorClassIdentifier: 
-  cardName: "\u30C7\u30A3\u30D0\u30A4\u30F3\u30B7\u30FC\u30EB\u30C9\t"
-  cardType: 1
-  cardImage: {fileID: 21300000, guid: 743bdad4337ba4146b8f82b7078e4263, type: 3}
-  description: "\u8056\u306A\u308B\u52A0\u8B77 "
-  attackPower: 0
-  defensePower: 30
-  element: 0
+  cardName: "\u95C7\u30C6\u30B9\u30C8"
+  cardType: 0
+  cardImage: {fileID: 21300000, guid: 55ddab88f1b6de64294855a03c2d8325, type: 3}
+  description: "\u95C7\u30C6\u30B9\u30C8"
+  attackPower: 10
+  defensePower: 0
+  element: 7
   hitRate: 100
   mpCost: 0
   maxUses: 0
@@ -27,16 +27,19 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  usableInAttackPhase: 0
-  usableInDefensePhase: 1
-  isPrimaryAttack: 0
+  usableInAttackPhase: 1
+  usableInDefensePhase: 0
+  isPrimaryAttack: 1
   isAdditionalAttack: 0
-  isPrimaryDefense: 1
+  isPrimaryDefense: 0
   isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  statusEffectToApply: 0
+  statusEffectApplyTiming: 0
   cardValue: 30
-  attackPhaseRole: 0
-  defensePhaseRole: 4
+  isRare: 0
+  attackPhaseRole: 1
+  defensePhaseRole: 0

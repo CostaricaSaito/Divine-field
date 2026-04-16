@@ -11,7 +11,6 @@ public sealed class DiseaseTurnEndSettings : ScriptableObject
     [Min(0)] public int paradiseHealAmount = 5;
 
     [Header("UI タイミング（ms）")]
-    [Min(0)] public int messageToValueDelayMs = 700;
     [Min(0)] public int paradiseEcstasyShatterDelayMs = 400;
     [Min(0)] public int paradiseEcstasyShatterDurationMs = 600;
 }

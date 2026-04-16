@@ -22,6 +22,7 @@ MonoBehaviour:
   hitRate: 100
   mpCost: 0
   maxUses: 1
+  isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
@@ -36,4 +37,9 @@ MonoBehaviour:
   isSpecialEffect: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  statusEffectToApply: 0
+  statusEffectApplyTiming: 0
   cardValue: 30
+  isRare: 1
+  attackPhaseRole: 2
+  defensePhaseRole: 0

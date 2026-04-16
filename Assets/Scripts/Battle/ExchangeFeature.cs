@@ -1,3 +1,4 @@
+﻿using System;
 using System.Threading.Tasks;
 using UnityEngine;
 using TMPro;
@@ -126,11 +127,13 @@ public class ExchangeFeature : MonoBehaviour
 
         // 演出：操作前の数値をフワッと表示
         ShowExchangeResultPopup(beforeHP, beforeMP, beforeGP, isBefore: true);
-        await Task.Delay(700);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
+        await Task.Delay(DamagePopup.PostPopupIntervalMs);
 
         // 演出：操作後の数値をフワッと表示
         ShowExchangeResultPopup(afterHP, afterMP, afterGP, isBefore: false);
-        await Task.Delay(700);
+        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
+        await Task.Delay(DamagePopup.PostPopupIntervalMs);
 
         // 実際のステータスに反映
         playerStatus.currentHP = Mathf.Max(afterHP, 0);

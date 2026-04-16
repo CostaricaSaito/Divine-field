@@ -29,14 +29,14 @@ public class CardSelectionManager : MonoBehaviour
         {
             bool isFromPool = card.cardUI == null;
 
-            // MP不足チェック（手札・プール共通）
             var playerStatus = BattleManager.I?.GetPlayerStatus();
-            if (playerStatus != null && playerStatus.currentMP < card.mpCost)
+            if (playerStatus != null && playerStatus.IsMagicUseForbidden())
             {
-                Debug.Log($"[CardSelectionManager] MP不足: {card.cardName} (必要MP={card.mpCost}, 現在MP={playerStatus.currentMP})");
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MP不足！", Color.red);
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法が使用できません", new Color(0.95f, 0.22f, 0.2f));
                 return false;
             }
+
+            // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。ここでは単体MP不足で弾かない。
 
             // MagicPool 容量チェック（手札からの使用のみ）
             if (!isFromPool && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card))

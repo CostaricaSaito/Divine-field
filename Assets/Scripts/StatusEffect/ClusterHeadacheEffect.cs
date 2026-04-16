@@ -1,4 +1,4 @@
-﻿/// <summary>群発頭痛（戦闘中の数値効果はフェーズ4で拡張予定）。</summary>
+﻿/// <summary>群発頭痛：魔法が使用不可（<see cref="PlayerStatus.IsMagicUseForbidden"/>）。</summary>
 public sealed class ClusterHeadacheEffect : IStatusEffect
 {
     public StatusEffectType EffectType => StatusEffectType.ClusterHeadache;
