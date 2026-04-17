@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections.Generic;
@@ -28,6 +28,8 @@ public class SoundEffectPlayer : MonoBehaviour
     [SerializeField] private AudioSource seSource;
     private Dictionary<string, AudioClip> clipCache = new();
 
+    private static bool bootstrapInitialized;
+
     private void Awake()
     {
         if (I != null && I != this)
@@ -36,9 +38,29 @@ public class SoundEffectPlayer : MonoBehaviour
             return;
         }
         I = this;
+        DontDestroyOnLoad(gameObject);
 
         if (seSource == null)
             seSource = gameObject.AddComponent<AudioSource>();
+        seSource.playOnAwake = false;
+
+        bootstrapInitialized = true;
+    }
+
+    /// <summary>
+    /// どのシーンからでも <see cref="I"/> を用意する（Resources/Prefab/SEPlayer）。
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void AutoCreate()
+    {
+        if (bootstrapInitialized)
+            return;
+
+        var prefab = Resources.Load<GameObject>("Prefab/SEPlayer");
+        if (prefab != null)
+            Instantiate(prefab);
+        else
+            Debug.LogWarning("[SoundEffectPlayer] Resources/Prefab/SEPlayer が見つかりません。");
     }
 
     /// <summary>
@@ -94,6 +116,36 @@ public class SoundEffectPlayer : MonoBehaviour
         {
             Debug.LogError($"[SoundEffectPlayer] SE読み込み例外: {addressKey} - {ex.Message}");
         }
+    }
+
+    /// <summary>Inspector などで参照した <see cref="AudioClip"/> をそのまま再生（ワンショット）。</summary>
+    public void Play(AudioClip clip)
+    {
+        if (clip == null)
+        {
+            Debug.LogWarning("[SoundEffectPlayer] AudioClip が null です");
+            return;
+        }
+        seSource.PlayOneShot(clip);
+    }
+
+    /// <summary>ループや上書き向け：再生を止めてから <paramref name="clip"/> を再生。</summary>
+    public void PlayReplace(AudioClip clip)
+    {
+        if (clip == null)
+        {
+            Debug.LogWarning("[SoundEffectPlayer] AudioClip が null です");
+            return;
+        }
+        seSource.Stop();
+        seSource.clip = clip;
+        seSource.Play();
+    }
+
+    /// <summary>ループ再生などを停止。</summary>
+    public void Stop()
+    {
+        seSource.Stop();
     }
 
     /// <summary>

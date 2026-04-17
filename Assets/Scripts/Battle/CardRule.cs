@@ -107,6 +107,46 @@ public static class CardRules
     }
 
     /// <summary>
+    /// 拘束中は防御カードを1枚まで。既に1枚選んでいるときはそのカードだけを許可リストに残す。
+    /// 候補は手札側の参照で揃え、選択との照合は InstanceID でも行う（キャンセル後の選び直しで参照がずれるのを防ぐ）。
+    /// </summary>
+    public static List<CardData> ApplyRestraintDefenseFilter(
+        List<CardData> defenseChoices,
+        List<CardData> selectedDefenseCards,
+        bool defenderHasRestraint)
+    {
+        if (defenseChoices == null) return new List<CardData>();
+        if (!defenderHasRestraint || selectedDefenseCards == null || selectedDefenseCards.Count == 0)
+            return defenseChoices;
+
+        var filtered = new List<CardData>();
+        foreach (var sel in selectedDefenseCards)
+        {
+            if (sel == null || !IsDefenseCard(sel)) continue;
+
+            CardData matchInChoices = null;
+            foreach (var ch in defenseChoices)
+            {
+                if (ch == null) continue;
+                if (ch == sel || ch.GetInstanceID() == sel.GetInstanceID())
+                {
+                    matchInChoices = ch;
+                    break;
+                }
+            }
+
+            if (matchInChoices != null)
+                filtered.Add(matchInChoices);
+        }
+
+        // 照合できなければ制限しない（選択残りと候補の不整合時は選び直し可にする）
+        if (filtered.Count == 0)
+            return defenseChoices;
+
+        return filtered;
+    }
+
+    /// <summary>
     /// 攻撃コンボが魔法カードのみか。魔法単体攻撃は衰弱の対象外。
     /// </summary>
     public static bool IsMagicOnlyAttackCombo(IReadOnlyList<CardData> cards)

@@ -237,7 +237,7 @@ public class SellFeature
         }
         else if (battleManager.CurrentState == GameState.DefenseSelect && isPlayerDefender)
         {
-            BattleUIManager.I.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
+            battleManager.RefreshPlayerDefensePhaseInteractivity();
         }
         else
         {

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class SummonConfirmButton : MonoBehaviour
@@ -10,9 +10,9 @@ public class SummonConfirmButton : MonoBehaviour
     {
         int selectedIndex = viewer.GetSelectedSummonIndex();
         SummonSelectionManager.I.SetSelectedIndex(selectedIndex);
-        SEPlayer.I.Play(confirmSE);
+        SoundEffectPlayer.I.Play(confirmSE);
 
-        viewer.ForceRefresh(); // �� ����ōĕ`��I
+        viewer.ForceRefresh(); // © ‚±‚ê‚ÅÄ•`‰æI
 
     }
 }

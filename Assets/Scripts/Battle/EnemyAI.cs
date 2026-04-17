@@ -124,17 +124,29 @@ public class EnemyAI
     }
 
     /// <summary>
-    /// 防御カードの選び方：PrimaryDefenseを優先、なければ使えるものから選択
+    /// 防御カードの選び方。プレイヤーと同じく <see cref="CardRules.GetDefenseChoicesForElement"/> の候補のみから、
+    /// PrimaryDefense／Defense型を優先して選ぶ。候補がなければ null（許す）。
     /// </summary>
-    public CardData SelectDefenseCard(List<CardData> enemyHand)
+    public CardData SelectDefenseCard(List<CardData> enemyHand, ElementType attackElement)
     {
-        foreach (var c in enemyHand)
-            if (CardRules.IsUsableInDefensePhase(c) && (c.isPrimaryDefense || c.cardType == CardType.Defense))
-                return c;
+        if (enemyHand == null || enemyHand.Count == 0) return null;
 
-        foreach (var c in enemyHand)
-            if (CardRules.IsUsableInDefensePhase(c))
+        var choices = CardRules.GetDefenseChoicesForElement(enemyHand, attackElement);
+        if (choices == null || choices.Count == 0)
+            return null;
+
+        foreach (var c in choices)
+        {
+            if (c != null && CardRules.IsUsableInDefensePhase(c)
+                && (c.isPrimaryDefense || c.cardType == CardType.Defense))
                 return c;
+        }
+
+        foreach (var c in choices)
+        {
+            if (c != null && CardRules.IsUsableInDefensePhase(c))
+                return c;
+        }
 
         return null;
     }
@@ -208,11 +220,12 @@ public class EnemyAI
     /// <summary>
     /// 敵の防御選択を実行する
     /// </summary>
-    public async Task<CardData> ExecuteDefenseSelectAsync(List<CardData> cpuHand)
+    /// <param name="attackElement">攻撃側の合算属性（<see cref="ElementHelper.GetCombinedElement"/> と一致させる）</param>
+    public async Task<CardData> ExecuteDefenseSelectAsync(List<CardData> cpuHand, ElementType attackElement)
     {
-        Debug.Log("[EnemyAI] 防御カード選択開始");
+        Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
 
-        var defenseCard = SelectDefenseCard(cpuHand);
+        var defenseCard = SelectDefenseCard(cpuHand, attackElement);
 
         if (defenseCard != null)
         {
@@ -220,7 +233,7 @@ public class EnemyAI
         }
         else
         {
-            Debug.Log("[EnemyAI] 防御カードが見つからないため、許す");
+            Debug.Log("[EnemyAI] 有効な防御カードがないため、許す");
         }
 
         await Task.Delay(500);

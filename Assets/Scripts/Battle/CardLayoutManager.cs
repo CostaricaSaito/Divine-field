@@ -135,6 +135,16 @@ public class CardLayoutManager : MonoBehaviour
         
         return -index * (cardHeight + cardSpacing);
     }
+
+    /// <summary>
+    /// 防御パネル内で「2枚並んだときの2枚目」上端Y（上基準・負方向）。拘束オーバーレイ配置用。
+    /// </summary>
+    public float GetSecondSlotTopYForPanelHeight(float panelHeight)
+    {
+        return CalculateCardY(1, 2, panelHeight);
+    }
+
+    public float LayoutCardHeight => cardHeight;
     
     /// <summary>
     /// カードの表示順序を取得

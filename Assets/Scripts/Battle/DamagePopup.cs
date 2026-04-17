@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -81,6 +84,17 @@ public class DamagePopup : MonoBehaviour
     private float timer;
     // CanvasGroup … ない場合はフェードなし（透明度は変わらず、そのまま消えるまで表示）。
     private CanvasGroup canvasGroup;
+
+    private enum PopupRunMode
+    {
+        Normal,
+        DiseaseWorsenPhase1Float,
+        DiseaseWorsenSequenceManual,
+    }
+
+    private PopupRunMode _runMode = PopupRunMode.Normal;
+    private float _diseasePhase1Duration;
+    private TaskCompletionSource<bool> _diseasePhase1Tcs;
 
     private void Awake()
     {
@@ -265,6 +279,108 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
+    /// 病系・自然進行：第1文言「病が体を蝕む」。<paramref name="phase1FloatSeconds"/> 経過で移動が止まり、戻り値の Task が完了する。
+    /// </summary>
+    public Task BeginDiseaseWorsenPhase1AndGetTask(string message, Color color, float phase1FloatSeconds)
+    {
+        EnsureDiseaseReelClippingMask();
+        Setup(message, color);
+        _runMode = PopupRunMode.DiseaseWorsenPhase1Float;
+        timer = 0f;
+        _diseasePhase1Duration = Mathf.Max(0.02f, phase1FloatSeconds);
+        _diseasePhase1Tcs = new TaskCompletionSource<bool>();
+        return _diseasePhase1Tcs.Task;
+    }
+
+    /// <summary>第1文言停止後、リールで第2文言へ差し替え、規定インターバル後にこのインスタンスを破棄する。</summary>
+    public Task RunDiseaseReelSecondLinePostIntervalAndDestroyAsync(
+        string secondMessage,
+        Color secondColor,
+        float reelDurationSeconds,
+        float postIntervalSeconds,
+        CancellationToken ct)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        StartCoroutine(CoDiseaseReelSecondThenIntervalDestroy(secondMessage, secondColor, reelDurationSeconds, postIntervalSeconds, ct, tcs));
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// リールで文言がルート矩形からはみ出しても、イラストのクリッピングのように枠外を描画しない（<see cref="RectMask2D"/>）。
+    /// </summary>
+    private void EnsureDiseaseReelClippingMask()
+    {
+        if (GetComponent<RectMask2D>() != null)
+            return;
+        gameObject.AddComponent<RectMask2D>();
+    }
+
+    private IEnumerator CoDiseaseReelSecondThenIntervalDestroy(
+        string secondMessage,
+        Color secondColor,
+        float reelDurationSeconds,
+        float postIntervalSeconds,
+        CancellationToken ct,
+        TaskCompletionSource<bool> tcs)
+    {
+        EnsureDiseaseReelClippingMask();
+        _runMode = PopupRunMode.DiseaseWorsenSequenceManual;
+
+        TMP_Text t = messageText != null ? messageText : valueText;
+        if (t == null)
+        {
+            Setup(secondMessage, secondColor);
+            yield return WaitForSecondsOrCancel(postIntervalSeconds, ct);
+            tcs?.TrySetResult(true);
+            Destroy(gameObject);
+            yield break;
+        }
+
+        var rt = t.rectTransform;
+        Vector2 basePos = rt.anchoredPosition;
+        float half = Mathf.Max(0.04f, reelDurationSeconds * 0.5f);
+        float el = 0f;
+        while (el < half)
+        {
+            if (ct.IsCancellationRequested) { tcs?.TrySetCanceled(); Destroy(gameObject); yield break; }
+            el += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(el / half);
+            rt.anchoredPosition = basePos + Vector2.down * (72f * p);
+            yield return null;
+        }
+
+        Setup(secondMessage, secondColor);
+        rt.anchoredPosition = basePos + Vector2.up * 72f;
+        el = 0f;
+        while (el < half)
+        {
+            if (ct.IsCancellationRequested) { tcs?.TrySetCanceled(); Destroy(gameObject); yield break; }
+            el += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(el / half);
+            rt.anchoredPosition = Vector2.Lerp(basePos + Vector2.up * 72f, basePos, p);
+            yield return null;
+        }
+        rt.anchoredPosition = basePos;
+
+        yield return WaitForSecondsOrCancel(postIntervalSeconds, ct);
+        if (ct.IsCancellationRequested) { tcs?.TrySetCanceled(); Destroy(gameObject); yield break; }
+
+        tcs?.TrySetResult(true);
+        Destroy(gameObject);
+    }
+
+    private static IEnumerator WaitForSecondsOrCancel(float seconds, CancellationToken ct)
+    {
+        float t = 0f;
+        while (t < seconds)
+        {
+            if (ct.IsCancellationRequested) yield break;
+            t += Time.unscaledDeltaTime;
+            yield return null;
+        }
+    }
+
+    /// <summary>
     /// 文字の「塗り」と TMP のアウトライン（縁）をまとめて適用。
     /// </summary>
     private void ApplyFillAndOutline(TMP_Text t, Color fill, Color outlineColor)
@@ -279,6 +395,26 @@ public class DamagePopup : MonoBehaviour
 
     private void Update()
     {
+        if (_runMode == PopupRunMode.DiseaseWorsenPhase1Float)
+        {
+            timer += Time.deltaTime;
+            transform.Translate(Vector3.up * (floatSpeed * Time.deltaTime));
+            if (canvasGroup != null)
+                canvasGroup.alpha = 1f;
+
+            if (timer >= _diseasePhase1Duration)
+            {
+                floatSpeed = 0f;
+                _runMode = PopupRunMode.DiseaseWorsenSequenceManual;
+                _diseasePhase1Tcs?.TrySetResult(true);
+                _diseasePhase1Tcs = null;
+            }
+            return;
+        }
+
+        if (_runMode == PopupRunMode.DiseaseWorsenSequenceManual)
+            return;
+
         timer += Time.deltaTime;
 
         // 親の座標系で上方向へ移動。斜めにしたいなら Vector3.up を変えるか、RectTransform.anchoredPosition をいじる方式に変更。

@@ -73,7 +73,7 @@ public class SummonRingViewer : MonoBehaviour
 
         // 選択音の再生（ここも移譲可能）
         if (data.summonSE != null)
-            SEPlayer.I.PlayReplace(data.summonSE);
+            SoundEffectPlayer.I.PlayReplace(data.summonSE);
 
         int selectedIndex = SummonSelectionManager.I.SelectedIndex;
 

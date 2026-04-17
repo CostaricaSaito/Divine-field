@@ -49,23 +49,76 @@ public static class DiseaseTurnEndProcessor
 
         var s = Active;
 
-        if (stage != StatusEffectType.ParadiseSickness && UnityEngine.Random.value < s.worsenChance)
+        StatusEffectType stageBeforeWorsen = stage;
+        bool diseaseNaturalProgressionOccurred = false;
+
+        bool worsenRoll =
+            s.debugAlwaysWorsenNaturalProgress
+            || UnityEngine.Random.value < s.worsenChance;
+
+        if (stage != StatusEffectType.ParadiseSickness && worsenRoll)
         {
             StatusEffectType next = DiseaseLineEffect.GetNextStage(stage);
             if (next != StatusEffectType.None)
             {
                 ReplaceDiseaseStage(attacker, next);
                 stage = next;
+                diseaseNaturalProgressionOccurred = true;
             }
         }
 
+        // 煉獄病→楽園病への自然進行直後は絶頂抽選を行わない（即死でバランスが崩れるのを防ぐ）。以降の楽園病ターンは従来どおり ecstasyChance。
+        bool skipEcstasyBecausePurgatoryToParadise =
+            stageBeforeWorsen == StatusEffectType.PurgatorySickness
+            && stage == StatusEffectType.ParadiseSickness;
+
         if (stage == StatusEffectType.ParadiseSickness)
         {
-            await ProcessParadiseAsync(attacker, ui, ct);
+            await ProcessParadiseAsync(attacker, ui, ct,
+                skipEcstasyRoll: skipEcstasyBecausePurgatoryToParadise,
+                showPurgatoryToParadiseProgressionIntro: diseaseNaturalProgressionOccurred && skipEcstasyBecausePurgatoryToParadise);
             return;
         }
 
-        await ProcessDamageStagesAsync(attacker, stage, ui, ct);
+        await ProcessDamageStagesAsync(attacker, stage, ui, diseaseNaturalProgressionOccurred, ct);
+    }
+
+    /// <summary>
+    /// 自然進行時：第1「病が体を蝕む」→停止→リール→第2文言→規定インターバルまで（第1ポップアップは破棄される）。
+    /// </summary>
+    private static async Task RunDiseaseNaturalProgressIntroAsync(
+        PlayerStatus attacker,
+        BattleUIManager ui,
+        string secondLineMessage,
+        CancellationToken ct)
+    {
+        var s = Active;
+        DamagePopup dp = ui.SpawnDamagePopupForTarget(attacker);
+        if (dp == null)
+        {
+            ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
+            SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
+            await Task.Delay(TimeSpan.FromSeconds(Mathf.Max(0.1f, s.diseaseWorsenPhase1FloatSeconds)), ct);
+            await Task.Delay(TimeSpan.FromSeconds(s.diseaseWorsenPauseBeforeReelSeconds), ct);
+            PlaySecondLineDiseaseIntroSound(secondLineMessage);
+            ui.ShowMessagePopupForTarget(attacker, secondLineMessage, Color.black);
+            await Task.Delay(TimeSpan.FromSeconds(PostSecondLineHoldSecondsBeforePopupResolves(secondLineMessage)), ct);
+            return;
+        }
+
+        SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
+        await dp.BeginDiseaseWorsenPhase1AndGetTask("病が\n体を蝕む", Color.black, s.diseaseWorsenPhase1FloatSeconds);
+
+        await Task.Delay(TimeSpan.FromSeconds(s.diseaseWorsenPauseBeforeReelSeconds), ct);
+
+        PlaySecondLineDiseaseIntroSound(secondLineMessage);
+
+        await dp.RunDiseaseReelSecondLinePostIntervalAndDestroyAsync(
+            secondLineMessage,
+            Color.black,
+            s.diseaseWorsenReelDurationSeconds,
+            PostSecondLineHoldSecondsBeforePopupResolves(secondLineMessage),
+            ct);
     }
 
     /// <summary>
@@ -108,6 +161,25 @@ public static class DiseaseTurnEndProcessor
         return StatusEffectType.None;
     }
 
+    /// <summary>
+    /// 第2文言（体調が悪くなった／病が裏返った）表示後、ポップアップ破棄までの待ち秒。
+    /// 「体調が悪くなった」のあとはダメージポップが続くため、規定 <see cref="DamagePopup.PostPopupIntervalMs"/> の2倍。
+    /// </summary>
+    private static float PostSecondLineHoldSecondsBeforePopupResolves(string secondLineMessage)
+    {
+        float baseSec = DamagePopup.PostPopupIntervalMs / 1000f;
+        return secondLineMessage == "体調が悪くなった" ? baseSec * 2f : baseSec;
+    }
+
+    /// <summary>第2文言表示（リール開始）直前の SE。体調悪化は毒系、煉獄→楽園はきらーん。</summary>
+    private static void PlaySecondLineDiseaseIntroSound(string secondLineMessage)
+    {
+        if (secondLineMessage == "体調が悪くなった")
+            SoundEffectPlayer.I?.Play("Assets/SE/病ダメージ.mp3");
+        else if (secondLineMessage == "病が裏返った")
+            SoundEffectPlayer.I?.Play("Assets/SE/きらーん1.mp3");
+    }
+
     private static void ReplaceDiseaseStage(PlayerStatus status, StatusEffectType newStage)
     {
         status.activeEffects.RemoveAll(e => e != null && DiseaseLineEffect.IsDiseaseFamily(e.EffectType));
@@ -115,7 +187,12 @@ public static class DiseaseTurnEndProcessor
         Debug.Log($"[DiseaseTurnEndProcessor] 病系が悪化: {newStage}");
     }
 
-    private static async Task ProcessDamageStagesAsync(PlayerStatus attacker, StatusEffectType stage, BattleUIManager ui, CancellationToken ct)
+    private static async Task ProcessDamageStagesAsync(
+        PlayerStatus attacker,
+        StatusEffectType stage,
+        BattleUIManager ui,
+        bool diseaseNaturalProgressionOccurred,
+        CancellationToken ct)
     {
         int damage = stage switch
         {
@@ -126,12 +203,18 @@ public static class DiseaseTurnEndProcessor
         };
         if (damage <= 0) return;
 
-        var s = Active;
-        // 2行表示（「病が」／「体を蝕む」）。ダメージ数値は通常の ShowDamagePopup を流用（病1／重病3／煉獄病5）。
-        ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
-        SoundEffectPlayer.I?.Play("Assets/SE/病ダメージ.mp3");
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        if (diseaseNaturalProgressionOccurred)
+        {
+            await RunDiseaseNaturalProgressIntroAsync(attacker, ui, "体調が悪くなった", ct);
+        }
+        else
+        {
+            // 2行表示（「病が」／「体を蝕む」）。ダメージ数値は通常の ShowDamagePopup を流用（病1／重病3／煉獄病5）。
+            ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
+            SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
+            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
+            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        }
 
         ApplyHpLossIgnoringCardModifiers(attacker, damage);
         ui.ShowDamagePopup(damage, attacker);
@@ -141,10 +224,17 @@ public static class DiseaseTurnEndProcessor
         await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
     }
 
-    private static async Task ProcessParadiseAsync(PlayerStatus attacker, BattleUIManager ui, CancellationToken ct)
+    /// <param name="skipEcstasyRoll">煉獄→楽園に自然進行した当ターンは true。絶頂抽選をせずヘブン＋回復のみ。</param>
+    /// <param name="showPurgatoryToParadiseProgressionIntro">煉獄→楽園への自然進行当ターン：蝕む→リール→「病が裏返った」まで。</param>
+    private static async Task ProcessParadiseAsync(
+        PlayerStatus attacker,
+        BattleUIManager ui,
+        CancellationToken ct,
+        bool skipEcstasyRoll = false,
+        bool showPurgatoryToParadiseProgressionIntro = false)
     {
         var s = Active;
-        if (UnityEngine.Random.value < s.ecstasyChance)
+        if (!skipEcstasyRoll && UnityEngine.Random.value < s.ecstasyChance)
         {
             await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
             await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
@@ -161,6 +251,9 @@ public static class DiseaseTurnEndProcessor
             await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
             return;
         }
+
+        if (showPurgatoryToParadiseProgressionIntro)
+            await RunDiseaseNaturalProgressIntroAsync(attacker, ui, "病が裏返った", ct);
 
         ui.ShowMessagePopupForTarget(attacker, "ヘブン状態", new Color(1f, 0.6f, 0.95f));
         await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);

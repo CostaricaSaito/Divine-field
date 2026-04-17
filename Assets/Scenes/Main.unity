@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -187,7 +187,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7f82a277fff22a14d99661425c632fb7, type: 3}
+  m_Script: {fileID: 11500000, guid: 96cc6541a2c11cb42a3234e455d205a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &277555047
@@ -561,7 +561,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 81845158}
-        m_TargetAssemblyTypeName: SEPlayer, Assembly-CSharp
+        m_TargetAssemblyTypeName: SoundEffectPlayer, Assembly-CSharp
         m_MethodName: Play
         m_Mode: 2
         m_Arguments:

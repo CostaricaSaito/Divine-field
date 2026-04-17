@@ -29,6 +29,18 @@ public static class StatusEffectFactory
             case StatusEffectType.Smoke:
                 return new SmokeEffect();
 
+            case StatusEffectType.Misfortune:
+                return new MisfortuneEffect();
+
+            case StatusEffectType.Fog:
+                return new FogEffect();
+
+            case StatusEffectType.Restraint:
+                return new RestraintEffect();
+
+            case StatusEffectType.Intervention:
+                return new InterventionEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

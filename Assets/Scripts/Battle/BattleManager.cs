@@ -63,8 +63,11 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private CardSellAnimation cardSellAnimation;
     
     [SerializeField] private HandRefillService handRefill;
+    public HandRefillService HandRefill => handRefill;
     [SerializeField] private CardStatsDisplay cardStatsDisplay;
     [SerializeField] private CardSequenceManager cardSequenceManager;
+    /// <summary>介入・テスト用に外部からシーケンスを参照する。</summary>
+    public CardSequenceManager Sequences => cardSequenceManager;
     [SerializeField] private MagicPoolManager magicPoolManager;
     private EnemyAI enemyAI = new EnemyAI();
     private BuyFeature buyFeature = new BuyFeature();
@@ -129,6 +132,8 @@ public class BattleManager : MonoBehaviour
     }
     private CardData selectedCard;
     private CardData selectedDefenseCard;
+    private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
+    private List<CardData> _interventionAttackForDefenseUi;
     private bool isProcessingUseButton;
     public bool IsUseButtonLocked => isProcessingUseButton;
 
@@ -145,9 +150,11 @@ public class BattleManager : MonoBehaviour
     /// <summary>
     /// プレイヤー攻撃が命中したあと：敵の防御を選びカードを表示（状態遷移はしない）。
     /// </summary>
-    public async Task PickAndDisplayEnemyDefenseAfterPlayerHitAsync()
+    /// <param name="playerAttackCards">戦闘解決に使う攻撃カード一覧（合算属性の算出に使用）</param>
+    public async Task PickAndDisplayEnemyDefenseAfterPlayerHitAsync(List<CardData> playerAttackCards)
     {
-        selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
+        ElementType attackElement = ElementHelper.GetCombinedElement(playerAttackCards);
+        selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement);
         cardStatsDisplay?.UpdateDisplay();
         if (selectedDefenseCard != null)
         {
@@ -181,6 +188,92 @@ public class BattleManager : MonoBehaviour
 
     public PlayerStatus GetPlayerStatus() => playerStatus;
     public PlayerStatus GetEnemyStatus() => enemyStatus;
+
+    /// <summary>
+    /// 防御フェーズ・プレイヤー防御側の手札グレーアウト（拘束時は選択済み1枚のみ）と「体が重い」オーバーレイを更新。
+    /// </summary>
+    /// <summary>TurnEnd 中、敵介入のプレイヤー防御入力待ちか。</summary>
+    public bool IsInterventionDefenseWaitActive()
+    {
+        return _interventionDefenseSubmitTcs != null && !_interventionDefenseSubmitTcs.Task.IsCompleted;
+    }
+
+    public void BeginInterventionPlayerDefensePhase(List<CardData> attackCardsForElement)
+    {
+        _interventionAttackForDefenseUi = attackCardsForElement;
+        _interventionDefenseSubmitTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HidePlayerCardDetails();
+
+        RefreshPlayerDefensePhaseInteractivity();
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.UpdateDefenseButtonLabel();
+    }
+
+    public async Task WaitForInterventionPlayerDefenseSubmitAsync(CancellationToken ct)
+    {
+        if (_interventionDefenseSubmitTcs == null) return;
+        var tcs = _interventionDefenseSubmitTcs;
+        using (ct.Register(() => tcs.TrySetCanceled()))
+            await tcs.Task;
+    }
+
+    public void ClearInterventionDefenseWait()
+    {
+        _interventionAttackForDefenseUi = null;
+        if (_interventionDefenseSubmitTcs != null && !_interventionDefenseSubmitTcs.Task.IsCompleted)
+            _interventionDefenseSubmitTcs.TrySetCanceled();
+        _interventionDefenseSubmitTcs = null;
+    }
+
+    private void TrySubmitInterventionPlayerDefense()
+    {
+        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (selectedDefenseCards == null)
+            selectedDefenseCards = new List<CardData>();
+
+        if (playerStatus != null && playerStatus.HasRestraintEffect() && selectedDefenseCards.Count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetUseButtonInteractable(true);
+            BattleUIManager.I?.SetHandClickable(true);
+            return;
+        }
+
+        _interventionDefenseSubmitTcs?.TrySetResult(true);
+        BattleUIManager.I?.SetHandClickable(false);
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+        isProcessingUseButton = false;
+    }
+
+    public void RefreshPlayerDefensePhaseInteractivity()
+    {
+        bool interventionDefense = CurrentState == GameState.TurnEnd && IsInterventionDefenseWaitActive();
+
+        if (!(CurrentState == GameState.DefenseSelect && Defender == PlayerType.Player) && !interventionDefense)
+            return;
+        if (BattleUIManager.I == null) return;
+
+        List<CardData> attackSource;
+        if (interventionDefense && _interventionAttackForDefenseUi != null)
+            attackSource = _interventionAttackForDefenseUi;
+        else if (CurrentState == GameState.DefenseSelect)
+            attackSource = GetAttackCardsForCombat();
+        else
+            return;
+
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackSource);
+        var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+        var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
+        defenseChoices = CardRules.ApplyRestraintDefenseFilter(
+            defenseChoices,
+            selectedDefense,
+            playerStatus != null && playerStatus.HasRestraintEffect());
+
+        BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
+    }
 
     private void Awake()
     {
@@ -454,10 +547,13 @@ public class BattleManager : MonoBehaviour
             SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
             Debug.Log("[BattleManager] 攻撃カード確定、防御カード選択開始");
 
+            BattleUIManager.I?.SyncRestraintHeavyOverlay();
+
             if (Defender == PlayerType.Enemy)
             {
-                // EnemyAIで防御選択を実行
-                selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand);
+                // EnemyAIで防御選択を実行（攻撃属性はプレイヤー攻撃カードから合算）
+                ElementType attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
+                selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement);
 
                 cardStatsDisplay?.UpdateDisplay();
 
@@ -470,9 +566,7 @@ public class BattleManager : MonoBehaviour
                 BattleUIManager.I?.SetHandClickable(true);
                 BattleUIManager.I?.SetUseButtonLabel("許す");
 
-                var attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
-                var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
-                BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, defenseChoices);
+                RefreshPlayerDefensePhaseInteractivity();
 
                 BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
             }
@@ -595,6 +689,21 @@ public class BattleManager : MonoBehaviour
         {
             if (CurrentState != GameState.TurnEnd) return;
 
+            try
+            {
+                await InterventionTurnEndProcessor.ProcessIfNeededAsync(this, phaseToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("[BattleManager] InterventionTurnEnd: キャンセル");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+            }
+
+            if (CurrentState != GameState.TurnEnd) return;
+
             // 攻撃フェーズ終了直後：攻撃側の病系処理（補充・ドローより先）
             PlayerStatus attackerStatus = CurrentTurnOwner == PlayerType.Player ? playerStatus : enemyStatus;
             try
@@ -704,7 +813,7 @@ public class BattleManager : MonoBehaviour
 
         var atkList = new List<CardData> { attack };
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus, playerStatus);
         bool rolledHit = HitRateRules.RollHit(finalPct);
         if (!rolledHit)
         {
@@ -776,6 +885,21 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
+        if (CurrentState == GameState.TurnEnd && IsInterventionDefenseWaitActive() && Defender == PlayerType.Player)
+        {
+            if (!CardRules.IsUsableInDefensePhase(card))
+            {
+                Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
+                return;
+            }
+            selectedDefenseCard = card;
+            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            UpdateTotalATKDEFDisplay();
+            BattleUIManager.I?.UpdateDefenseButtonLabel();
+            return;
+        }
+
         if (CurrentState != GameState.AttackSelect && CurrentState != GameState.DefenseSelect)
         {
             Debug.Log($"カード選択は現在できません - State: {CurrentState}, Attacker: {Attacker}, Defender: {Defender}, Card: {card?.cardName}");
@@ -803,6 +927,16 @@ public class BattleManager : MonoBehaviour
                     HandleDefenseUse();
                 else
                     isProcessingUseButton = false;
+                break;
+
+            case GameState.TurnEnd:
+                if (IsInterventionDefenseWaitActive())
+                    TrySubmitInterventionPlayerDefense();
+                else
+                {
+                    isProcessingUseButton = false;
+                    BattleUIManager.I?.SetUseButtonInteractable(false);
+                }
                 break;
 
             default:
@@ -909,6 +1043,15 @@ public class BattleManager : MonoBehaviour
             // 防御カードを1枚も使わない場合（「許す」）
             Debug.Log("[BattleManager] 防御カードを使用せずにダメージを受ける（許す）");
             HandleNoDefenseCard();
+            return;
+        }
+
+        if (Defender == PlayerType.Player
+            && playerStatus != null
+            && playerStatus.HasRestraintEffect()
+            && selectedDefenseCards.Count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
             return;
         }
 
@@ -1185,16 +1328,24 @@ public class BattleManager : MonoBehaviour
         for (int i = 0; i < childCountSnapshot; i++)
         {
             var child = handPanel.GetChild(i);
+            if (child == null) continue;
             var cardUI = child.GetComponent<CardUI>();
-            
-            if (cardUI != null && cardUI.IsFaceDown())
+            // 介入などで CardData / GameObject が破棄済みのスロットをスキップ
+            if (cardUI == null) continue;
+            try
             {
-                CardDealAudio.Play(cardUI.GetCardData());
+                if (!cardUI.IsFaceDown()) continue;
+
+                var data = cardUI.GetCardData();
+                if (data != null)
+                    CardDealAudio.Play(data);
                 await Task.Delay(50);
                 cardUI.Reveal();
-
-                // カードごとに短い間隔を空ける
                 await Task.Delay(300);
+            }
+            catch (MissingReferenceException)
+            {
+                continue;
             }
         }
     }

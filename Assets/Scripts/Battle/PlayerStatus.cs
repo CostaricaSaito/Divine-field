@@ -99,6 +99,14 @@ public class PlayerStatus
         return currentHP <= 0;
     }
 
+    /// <summary>濃霧が付与されているか（BottomStatusPanel の視界マスク用）。</summary>
+    public bool HasFogEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Fog) return true;
+        return false;
+    }
+
     /// <summary>群発頭痛が付与されているか（魔法使用不可）。</summary>
     public bool HasClusterHeadacheEffect()
     {
@@ -119,6 +127,40 @@ public class PlayerStatus
     public bool IsMagicUseForbidden()
     {
         return HasClusterHeadacheEffect();
+    }
+
+    /// <summary>拘束が付与されているか（防御は1枚まで）。</summary>
+    public bool HasRestraintEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Restraint) return true;
+        return false;
+    }
+
+    /// <summary>介入が付与されているか（TurnEnd で追加攻撃抽選の対象）。</summary>
+    public bool HasInterventionEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Intervention) return true;
+        return false;
+    }
+
+    /// <summary>指定タイプの状態異常をすべて除去（回復による拘束解除など）。</summary>
+    public bool RemoveStatusEffectsOfType(StatusEffectType type)
+    {
+        if (type == StatusEffectType.None) return false;
+        bool removed = false;
+        for (int i = activeEffects.Count - 1; i >= 0; i--)
+        {
+            var e = activeEffects[i];
+            if (e != null && e.EffectType == type)
+            {
+                e.OnRemove(this);
+                activeEffects.RemoveAt(i);
+                removed = true;
+            }
+        }
+        return removed;
     }
 
     /// <summary>魔法1回の実際のMP消費（眼精疲労で2倍）。群発時は使用不可のため呼び出し側でガード。</summary>

@@ -19,7 +19,7 @@ MonoBehaviour:
   attackPower: 10
   defensePower: 0
   element: 7
-  hitRate: 100
+  hitRate: 50
   mpCost: 0
   maxUses: 0
   isCombinationMagic: 0

@@ -24,6 +24,35 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
 
+        // ===== 防御フェーズ：拘束中は防御カードを2枚目まで選べない =====
+        if (BattleManager.I != null
+            && (BattleManager.I.CurrentState == GameState.DefenseSelect
+                || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
+            && IsDefenseCard(card))
+        {
+            PlayerStatus defender = BattleManager.I.DefenderPublic == PlayerType.Player
+                ? BattleManager.I.GetPlayerStatus()
+                : BattleManager.I.GetEnemyStatus();
+            if (defender != null && defender.HasRestraintEffect())
+            {
+                var already = GetSelectedDefenseCards();
+                bool sameAsSelected = false;
+                foreach (var a in already)
+                {
+                    if (a != null && a.GetInstanceID() == card.GetInstanceID())
+                    {
+                        sameAsSelected = true;
+                        break;
+                    }
+                }
+                if (already.Count >= 1 && !sameAsSelected)
+                {
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+                    return false;
+                }
+            }
+        }
+
         // ===== 魔法カードの事前ガード =====
         if (card.cardType == CardType.Magic)
         {
@@ -50,10 +79,12 @@ public class CardSelectionManager : MonoBehaviour
         // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
         CheckCardConflicts(card);
 
-        // 同じカードが既に選択されている場合は追加しない
-        if (selectedCards.Contains(card))
+        // 同じカードが既に選択されている場合は追加しない（参照が別でも同じ SO なら弾く）
+        int pickId = card.GetInstanceID();
+        foreach (var c in selectedCards)
         {
-            return false;
+            if (c != null && c.GetInstanceID() == pickId)
+                return false;
         }
 
         // カード選択を追加
@@ -66,8 +97,13 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public bool CancelCardSelection(CardData card)
     {
-        bool removed = selectedCards.Remove(card);
-        Debug.Log($"[CardSelectionManager] カード選択キャンセル: {card.cardName} (削除成功: {removed}, selectedCards数: {selectedCards.Count})");
+        if (card == null) return false;
+
+        // ScriptableObject でも参照が一致しないケースがあるため InstanceID で除去（表示と選択の不整合防止）
+        int id = card.GetInstanceID();
+        int n = selectedCards.RemoveAll(c => c != null && c.GetInstanceID() == id);
+        bool removed = n > 0;
+        Debug.Log($"[CardSelectionManager] カード選択キャンセル: {card.cardName} (削除成功: {removed}, 件数={n}, selectedCards数: {selectedCards.Count})");
         return removed;
     }
 
@@ -138,7 +174,14 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public bool IsCardSelected(CardData card)
     {
-        return selectedCards.Contains(card);
+        if (card == null) return false;
+        int id = card.GetInstanceID();
+        foreach (var c in selectedCards)
+        {
+            if (c != null && c.GetInstanceID() == id)
+                return true;
+        }
+        return false;
     }
 
     // ---- SelectionRole ベースの競合チェック ----
@@ -148,7 +191,8 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I == null) return card.attackPhaseRole;
 
         var state = BattleManager.I.CurrentState;
-        if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm)
+        if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm
+            || (state == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
             return card.defensePhaseRole;
 
         return card.attackPhaseRole;
@@ -171,7 +215,11 @@ public class CardSelectionManager : MonoBehaviour
     private void ClearAllWithUI()
     {
         ClearAllSelections();
-        BattleUIManager.I?.HideAllCardDetails();
+        // TurnEnd 介入中は敵パネルに出した介入攻撃カードを残し、プレイヤー側の表示だけ消す
+        if (BattleManager.I != null && BattleManager.I.IsInterventionDefenseWaitActive())
+            BattleUIManager.I?.HidePlayerCardDetails();
+        else
+            BattleUIManager.I?.HideAllCardDetails();
     }
 
     /// <summary>
@@ -180,7 +228,7 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     private void CheckCardConflicts(CardData newCard)
     {
-        if (selectedCards.Contains(newCard)) return;
+        if (newCard != null && IsCardSelected(newCard)) return;
 
         SelectionRole role = GetRoleForCurrentPhase(newCard);
 

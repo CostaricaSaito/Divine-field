@@ -54,8 +54,13 @@ public class BattleProcessor : MonoBehaviour
     [SerializeField] private StatusProgressionConfig statusProgressionConfig;
 
     [Header("音響")]
-    public AudioSource audioSource;
     public AudioClip damageSE;
+
+    /// <summary>
+    /// 戦闘解決（状態異常付与など）完了後、<see cref="CardSequenceManager"/> に戻る直前の待機。
+    /// 従来 500ms。TurnEnd→「病が体を蝕む」までの体感にも効くため 1000ms（2倍）を既定とする。
+    /// </summary>
+    private const int CombatResolveTailDelayMs = 1000;
 
     private CardDealer cardDealer; // UI管理用（カードの一時表示等）
 
@@ -155,8 +160,8 @@ public class BattleProcessor : MonoBehaviour
 
         Debug.Log($"[BattleProcessor] 即時効果解決開始: {card.cardName}");
 
-        // 回復効果の適用
-        if (card.recoveryAmount > 0)
+        // 回復効果の適用（拘束解除のみのカードも ApplyRecovery 内で処理）
+        if (card.recoveryAmount > 0 || card.clearsRestraintOnUse)
         {
             ApplyRecovery(card, user);
         }
@@ -240,7 +245,7 @@ public class BattleProcessor : MonoBehaviour
 
         if (!skipHitCheck)
         {
-            bool hit = CheckHit(attackCards, attacker);
+            bool hit = CheckHit(attackCards, attacker, defender);
             if (!hit)
             {
                 Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
@@ -374,14 +379,14 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 命中判定（Primary の hitRate・攻撃側の煙幕補正）。
+    /// 命中判定（Primary の hitRate・防御側の不運・攻撃側の煙幕補正）。
     /// </summary>
-    private bool CheckHit(List<CardData> attackCards, PlayerStatus attacker)
+    private bool CheckHit(List<CardData> attackCards, PlayerStatus attacker, PlayerStatus defender)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
         if (primary == null) return false;
 
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, attacker);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, attacker, defender);
         bool result = HitRateRules.RollHit(finalPct);
 
         Debug.Log($"[BattleProcessor] 命中判定: Primary={primary.cardName}, 最終{finalPct}%, 結果{(result ? "命中" : "ミス")}");
@@ -455,6 +460,9 @@ public class BattleProcessor : MonoBehaviour
                 SoundEffectPlayer.I?.Play("Assets/SE/レジスターで精算.mp3");
             }
         }
+
+        if (card.clearsRestraintOnUse && target.RemoveStatusEffectsOfType(StatusEffectType.Restraint))
+            Debug.Log($"[BattleProcessor] 拘束解除（カード）: {target.DisplayName}");
     }
 
     /// <summary>
@@ -488,8 +496,8 @@ public class BattleProcessor : MonoBehaviour
     /// <summary>ミス時など、命中後のダメージ結果に依らないSE。</summary>
     private void PlayDamageSE()
     {
-        if (audioSource && damageSE)
-            audioSource.PlayOneShot(damageSE);
+        if (damageSE != null)
+            SoundEffectPlayer.I?.Play(damageSE);
     }
 
     /// <summary>命中後：ダメージ0（ダメージなし！）はピコッ、1以上は従来の damageSE。</summary>
@@ -500,8 +508,8 @@ public class BattleProcessor : MonoBehaviour
             SoundEffectPlayer.I?.Play("Assets/SE/ピコッ.mp3");
             return;
         }
-        if (audioSource && damageSE)
-            audioSource.PlayOneShot(damageSE);
+        if (damageSE != null)
+            SoundEffectPlayer.I?.Play(damageSE);
     }
 
     /// <summary>
@@ -564,7 +572,7 @@ public class BattleProcessor : MonoBehaviour
 
         if (!skipHitCheck)
         {
-            bool hit = CheckHit(attackCards, attacker);
+            bool hit = CheckHit(attackCards, attacker, defender);
             if (!hit)
             {
                 Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
@@ -646,7 +654,7 @@ public class BattleProcessor : MonoBehaviour
         if (IsDead(attacker) || IsDead(defender))
             Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
 
-        await Task.Delay(500);
+        await Task.Delay(CombatResolveTailDelayMs);
         Debug.Log($"[BattleProcessor] 戦闘解決完了");
     }
 }

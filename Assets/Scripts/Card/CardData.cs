@@ -92,6 +92,8 @@ public class CardData : ScriptableObject
     public bool healsHP = false;
     public bool healsMP = false;
     public bool healsGP = false;
+    [Tooltip("回復解決時に対象から拘束を除去する（特定の治癒カード用）。")]
+    public bool clearsRestraintOnUse = false;
 
     [Header("使用可能なフェーズ")]
     public bool usableInAttackPhase = false;

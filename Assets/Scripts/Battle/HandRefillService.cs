@@ -71,12 +71,171 @@ public class HandRefillService : MonoBehaviour
     }
 
     // 敵のカード使用を記録（使用済みカードを記録）
+    /// <remarks>同一ターン・同一インスタンスの二重記録を防ぐ（通常攻撃後の介入で同じ防御カードを再度使う場合など）。</remarks>
     public void RecordEnemyUse(CardData usedCard)
     {
-        if (usedCard != null)
+        if (usedCard == null) return;
+        int id = usedCard.GetInstanceID();
+        for (int i = 0; i < _enemyUsedCardsThisTurn.Count; i++)
         {
-            _enemyUsedCardsThisTurn.Add(usedCard);
+            var c = _enemyUsedCardsThisTurn[i];
+            if (c != null && c.GetInstanceID() == id)
+                return;
         }
+        _enemyUsedCardsThisTurn.Add(usedCard);
+    }
+
+    /// <summary>
+    /// TurnEnd 介入で手札から破棄する前に呼ぶ。補充待ちリストと手札を同期し、通常の Refill と同様に置換する。
+    /// （介入で先に Remove すると IndexOf 失敗・UI 不整合になる）
+    /// </summary>
+    public async Task FinalizeInterventionDiscardedCardAsync(
+        CardData source,
+        PlayerType interventionOwner,
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        CancellationToken ct)
+    {
+        if (source == null) return;
+
+        if (interventionOwner == PlayerType.Player)
+        {
+            if (playerHand == null || !playerHand.Contains(source)) return;
+
+            for (int i = 0; i < _playerBackSlotsThisTurn.Count; i++)
+            {
+                var slot = _playerBackSlotsThisTurn[i];
+                if (slot.usedCard == null || slot.usedCard.GetInstanceID() != source.GetInstanceID())
+                    continue;
+
+                await ReplacePlayerBackSlotAsync(slot, playerHand, ct);
+                _playerBackSlotsThisTurn.RemoveAt(i);
+                if (playerHand.Contains(source))
+                    playerHand.Remove(source);
+                DestroyCardDataInstance(source);
+                return;
+            }
+
+            int idx = playerHand.IndexOf(source);
+            if (idx >= 0)
+                await InterventionReplaceFaceUpPlayerSlotAsync(idx, source, playerHand, ct);
+
+            if (playerHand.Contains(source))
+                playerHand.Remove(source);
+            DestroyCardDataInstance(source);
+        }
+        else
+        {
+            if (enemyHand == null || !enemyHand.Contains(source)) return;
+
+            _enemyUsedCardsThisTurn.RemoveAll(c => c != null && c.GetInstanceID() == source.GetInstanceID());
+
+            int idx = enemyHand.IndexOf(source);
+            if (idx >= 0)
+            {
+                var newCard = DrawRandomCard();
+                if (newCard != null)
+                {
+                    enemyHand[idx] = newCard;
+                    Debug.Log($"[HandRefillService] 介入: 敵手札置換 {source.cardName} → {newCard.cardName} (index={idx})");
+                }
+                else
+                    Debug.LogWarning($"[HandRefillService] 介入: 敵のドロー失敗 ({source.cardName})");
+
+                await Task.Delay(50, ct);
+            }
+
+            if (enemyHand.Contains(source))
+                enemyHand.Remove(source);
+            DestroyCardDataInstance(source);
+        }
+    }
+
+    private static void DestroyCardDataInstance(CardData card)
+    {
+        if (card == null) return;
+        UnityEngine.Object.Destroy(card);
+    }
+
+    /// <summary>介入で RecordPlayerUseSlot されていない表向きカードを、TurnEnd 補充と同様に置き換え。</summary>
+    private async Task InterventionReplaceFaceUpPlayerSlotAsync(
+        int handIndex,
+        CardData source,
+        List<CardData> playerHand,
+        CancellationToken ct)
+    {
+        CardUI ui = source?.cardUI;
+        if (ui == null && handPanel != null && handIndex >= 0 && handIndex < handPanel.childCount)
+            ui = handPanel.GetChild(handIndex)?.GetComponent<CardUI>();
+
+        var newCard = DrawRandomCard();
+        if (newCard == null)
+        {
+            Debug.LogWarning($"[HandRefillService] 介入: プレイヤー表向きカードの置換に失敗 ({source?.cardName})");
+            return;
+        }
+
+        playerHand[handIndex] = newCard;
+        newCard.cardUI = ui;
+        if (ui != null)
+        {
+            ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
+            if (ui.GetCardData() != newCard)
+                ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
+            ui.button.interactable = true;
+            await Task.Delay(150, ct);
+            CardDealAudio.Play(newCard);
+            ui.Reveal();
+            await Task.Delay(100, ct);
+        }
+    }
+
+    private async Task ReplacePlayerBackSlotAsync(BackSlot slot, List<CardData> playerHand, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested) return;
+
+        if (slot.ui == null) return;
+
+        var newCard = DrawRandomCard();
+        if (newCard == null)
+        {
+            Debug.LogWarning("[HandRefillService] カードの取得に失敗しました（裏向きスロット）");
+            slot.ui.gameObject.SetActive(false);
+            return;
+        }
+
+        if (slot.usedCard != null && playerHand != null)
+        {
+            int index = playerHand.IndexOf(slot.usedCard);
+            if (index >= 0)
+            {
+                playerHand[index] = newCard;
+                Debug.Log($"[HandRefillService] 使用済みカードを新しいカードで置き換え: {slot.usedCard?.cardName ?? "null"} → {newCard?.cardName ?? "null"} (インデックス: {index})");
+            }
+            else
+            {
+                Debug.LogError($"[HandRefillService] 使用済みカードが見つかりません: {slot.usedCard?.cardName ?? "null"} (手札枚数: {playerHand.Count})");
+            }
+        }
+        else
+        {
+            Debug.LogError($"[HandRefillService] 使用済みカードが記録されていません (手札枚数: {playerHand?.Count ?? 0})");
+        }
+
+        newCard.cardUI = slot.ui;
+        slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
+        if (slot.ui.GetCardData() != newCard)
+        {
+            Debug.LogWarning("[HandRefillService] CardUIのcardDataが新しいカードと一致しません。再設定します。");
+            slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
+        }
+
+        slot.ui.button.interactable = true;
+
+        await Task.Delay(150, ct);
+        CardDealAudio.Play(newCard);
+        slot.ui.Reveal();
+        await Task.Delay(100, ct);
     }
 
     // TurnEnd：裏向きスロットを新カードに置き換え（1枚ずつ順次処理）、敵も使用済みカードを新しいカードで置き換え
@@ -88,64 +247,7 @@ public class HandRefillService : MonoBehaviour
             if (ct.IsCancellationRequested) return;
 
             var slot = _playerBackSlotsThisTurn[i];
-            if (slot.ui == null) continue;
-
-            var newCard = DrawRandomCard();
-            if (newCard == null)
-            {
-                // カードが取得できない場合は、スロットを無効化
-                Debug.LogWarning($"[HandRefillService] カードの取得に失敗しました (スロット {i})");
-                slot.ui.gameObject.SetActive(false);
-                continue;
-            }
-
-            // 通常のカード使用時は手札枚数は変動しない
-            // 使用済みカードを新しいカードで置き換える（削除も追加もしない）
-            if (slot.usedCard != null && playerHand != null)
-            {
-                int index = playerHand.IndexOf(slot.usedCard);
-                if (index >= 0)
-                {
-                    // 使用済みカードを新しいカードで置き換え（手札枚数は変わらない）
-                    playerHand[index] = newCard;
-                    Debug.Log($"[HandRefillService] 使用済みカードを新しいカードで置き換え: {slot.usedCard?.cardName ?? "null"} → {newCard?.cardName ?? "null"} (インデックス: {index})");
-                }
-                else
-                {
-                    // 使用済みカードが見つからない場合（エラー）
-                    // 手札枚数を変えないため、追加しない
-                    Debug.LogError($"[HandRefillService] 使用済みカードが見つかりません: {slot.usedCard?.cardName ?? "null"} (手札枚数: {playerHand.Count})");
-                }
-            }
-            else
-            {
-                // 使用済みカードが記録されていない場合（エラー）
-                // 手札枚数を変えないため、追加しない
-                Debug.LogError($"[HandRefillService] 使用済みカードが記録されていません (手札枚数: {playerHand?.Count ?? 0})");
-            }
-
-            // 新しいカードのcardUIを先に設定（Setupの前に設定する必要がある）
-            newCard.cardUI = slot.ui;
-
-            // 裏向きのUIに新しいカードをセットアップ
-            // これにより、CardUIのcardDataが新しいカードに更新される
-            slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
-            
-            // 念のため、CardUIのcardDataが新しいカードを参照していることを確認
-            if (slot.ui.GetCardData() != newCard)
-            {
-                Debug.LogWarning($"[HandRefillService] CardUIのcardDataが新しいカードと一致しません。再設定します。");
-                slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
-            }
-            
-            slot.ui.button.interactable = true; // 新しいカードは使用可能にする
-
-            await Task.Delay(150, ct);
-            CardDealAudio.Play(newCard);
-
-            slot.ui.Reveal();       // 表向きに
-
-            await Task.Delay(100, ct);
+            await ReplacePlayerBackSlotAsync(slot, playerHand, ct);
         }
         _playerBackSlotsThisTurn.Clear();
 
@@ -176,9 +278,9 @@ public class HandRefillService : MonoBehaviour
                 }
                 else
                 {
-                    // 使用済みカードが見つからない場合（エラー）
-                    // 手札枚数を変えないため、追加しない
-                    Debug.LogError($"[HandRefillService] 敵の使用済みカードが見つかりません: {usedCard?.cardName ?? "null"} (手札枚数: {enemyHand.Count})");
+                    // 既に先の処理で置換済み、または重複記録の残り（敵は同一防御を複数回参照しうる）
+                    Debug.LogWarning(
+                        $"[HandRefillService] 敵の使用済みカードが手札にありません（スキップ）: {usedCard?.cardName ?? "null"} (手札枚数: {enemyHand.Count})");
                 }
             }
 

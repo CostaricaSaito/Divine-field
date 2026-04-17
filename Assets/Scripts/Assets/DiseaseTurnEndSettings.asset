@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -13,7 +13,11 @@ MonoBehaviour:
   m_Name: DiseaseTurnEndSettings
   m_EditorClassIdentifier: 
   worsenChance: 0.05
+  debugAlwaysWorsenNaturalProgress: 1
   ecstasyChance: 0.1
   paradiseHealAmount: 5
   paradiseEcstasyShatterDelayMs: 400
   paradiseEcstasyShatterDurationMs: 600
+  diseaseWorsenPhase1FloatSeconds: 1
+  diseaseWorsenReelDurationSeconds: 0.35
+  diseaseWorsenPauseBeforeReelSeconds: 0.3

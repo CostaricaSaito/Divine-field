@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -69,6 +70,13 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private CardLayoutManager cardLayoutManager;
     [SerializeField] private CardSelectionManager cardSelectionManager;
 
+    [Header("拘束：防御フェーズ「体が重い」")]
+    [Tooltip("未指定なら CardLayoutManager と同じ計算で2枚目スロット相当に配置。環境でずれる場合のみ指定。")]
+    [SerializeField] private RectTransform restraintHeavySlotPlayerOverride;
+    [SerializeField] private RectTransform restraintHeavySlotEnemyOverride;
+    private GameObject restraintHeavyGoPlayer;
+    private GameObject restraintHeavyGoEnemy;
+
     [Header("経済アクション")]
     [SerializeField] private Button buyButton;
     [SerializeField] private Button sellButton;
@@ -91,6 +99,8 @@ public class BattleUIManager : MonoBehaviour
     private bool isHandInputBlocked = false;
     private bool isBuyPopupOpen = false;
     private GameObject currentBuyPopup = null; // 購入確認ポップアップの参照
+
+    private Coroutine _fogVisionAfterPopupCoroutine;
 
     //==== 初期化 =====
     void Awake()
@@ -170,6 +180,12 @@ public class BattleUIManager : MonoBehaviour
 
             // 合算属性・TotalATKDEF の色を選択内容に同期
             BattleManager.I?.UpdateTotalATKDEFDisplay();
+
+            if (side == Side.Player
+                && BattleManager.I != null
+                && (BattleManager.I.CurrentState == GameState.DefenseSelect
+                    || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())))
+                BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
         }
     }
 
@@ -183,6 +199,7 @@ public class BattleUIManager : MonoBehaviour
         cardSelectionManager.ClearAllSelections();
         UpdateHandCardHighlights();
         BattleManager.I?.ClearSelectedCards();
+        HideRestraintHeavyOverlays();
     }
 
     /// <summary>
@@ -329,6 +346,122 @@ public class BattleUIManager : MonoBehaviour
         UpdateHandInteractivity(hand, defenseCards);
         SetUseButtonLabel("許す");
         SetUseButtonInteractable(true);
+        SyncRestraintHeavyOverlay();
+    }
+
+    /// <summary>
+    /// 防御側が拘束中のとき、カード表示パネル上の「体が重い」枠を表示（2枚目スロット相当またはオーバーライドRect）。
+    /// </summary>
+    public void SyncRestraintHeavyOverlay()
+    {
+        HideRestraintHeavyOverlays();
+        if (BattleManager.I == null) return;
+        if (BattleManager.I.CurrentState != GameState.DefenseSelect) return;
+
+        var bm = BattleManager.I;
+        if (bm.DefenderPublic == PlayerType.Player && bm.GetPlayerStatus().HasRestraintEffect())
+            ShowRestraintHeavyOverlay(Side.Player);
+        else if (bm.DefenderPublic == PlayerType.Enemy && bm.GetEnemyStatus().HasRestraintEffect())
+            ShowRestraintHeavyOverlay(Side.Enemy);
+    }
+
+    private void HideRestraintHeavyOverlays()
+    {
+        if (restraintHeavyGoPlayer != null) restraintHeavyGoPlayer.SetActive(false);
+        if (restraintHeavyGoEnemy != null) restraintHeavyGoEnemy.SetActive(false);
+    }
+
+    private void ShowRestraintHeavyOverlay(Side side)
+    {
+        var go = GetOrCreateRestraintHeavyOverlay(side);
+        if (go == null) return;
+        LayoutRestraintHeavyOverlay(go, side);
+        go.SetActive(true);
+    }
+
+    private GameObject GetOrCreateRestraintHeavyOverlay(Side side)
+    {
+        if (side == Side.Player)
+        {
+            if (restraintHeavyGoPlayer == null)
+                restraintHeavyGoPlayer = BuildRestraintHeavyOverlay(Side.Player);
+            return restraintHeavyGoPlayer;
+        }
+        if (restraintHeavyGoEnemy == null)
+            restraintHeavyGoEnemy = BuildRestraintHeavyOverlay(Side.Enemy);
+        return restraintHeavyGoEnemy;
+    }
+
+    private GameObject BuildRestraintHeavyOverlay(Side side)
+    {
+        var go = new GameObject("RestraintHeavyOverlay");
+        var img = go.AddComponent<Image>();
+        img.color = new Color(0.07f, 0.1f, 0.18f, 0.9f);
+        img.raycastTarget = false;
+
+        var labelGo = new GameObject("Label");
+        labelGo.transform.SetParent(go.transform, false);
+        var lrt = labelGo.AddComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+        var tmp = labelGo.AddComponent<TextMeshProUGUI>();
+        tmp.text = "体が重い";
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = new Color(0.9f, 0.91f, 0.96f);
+        if (useButtonLabelTMP != null && useButtonLabelTMP.font != null)
+            tmp.font = useButtonLabelTMP.font;
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = 18f;
+        tmp.fontSizeMax = 96f;
+        tmp.fontSize = 72f;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+        tmp.raycastTarget = false;
+
+        return go;
+    }
+
+    private void LayoutRestraintHeavyOverlay(GameObject go, Side side)
+    {
+        var rt = go.GetComponent<RectTransform>();
+        if (rt == null) rt = go.AddComponent<RectTransform>();
+
+        RectTransform anchor = side == Side.Player ? restraintHeavySlotPlayerOverride : restraintHeavySlotEnemyOverride;
+        Transform panel = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        var panelRt = panel as RectTransform;
+
+        if (anchor != null)
+        {
+            go.transform.SetParent(anchor, false);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.localScale = Vector3.one;
+            go.transform.SetAsLastSibling();
+            return;
+        }
+
+        if (panelRt == null) return;
+
+        float panelHeight = panelRt.rect.height;
+        float cardH = cardLayoutManager != null ? cardLayoutManager.LayoutCardHeight : 120f;
+        float topY = cardLayoutManager != null
+            ? cardLayoutManager.GetSecondSlotTopYForPanelHeight(panelHeight)
+            : -cardH - 10f;
+
+        // 上端・左右は2枚目スロット上端に合わせ、下端だけ CardDisplayPanel の底まで伸ばす
+        float bottomY = -panelHeight;
+
+        go.transform.SetParent(panelRt, false);
+        rt.anchorMin = new Vector2(0, 1f);
+        rt.anchorMax = new Vector2(1, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.offsetMin = new Vector2(0, bottomY);
+        rt.offsetMax = new Vector2(0, topY);
+        rt.localScale = Vector3.one;
+        go.transform.SetAsLastSibling();
     }
 
     /// <summary>
@@ -336,6 +469,7 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public void SetIntroModeUI(List<CardData> hand)
     {
+        HideRestraintHeavyOverlays();
         SetUseButtonLabel("使用");
         SetHandInteractivity(hand, true); // すべてのカードを有効にする（グレーアウトなし）
     }
@@ -418,9 +552,35 @@ public class BattleUIManager : MonoBehaviour
             SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
             damageText.SetupStatusAilmentGrant(name, bg, fg);
             Debug.Log($"[BattleUIManager] 状態異常ポップアップ: {name}");
+
+            // 濃霧：付与ポップアップの表示完了＋規定インターバル後まで、画面の濃霧演出（背景・オーバーレイ・パネル）を遅延する
+            if (type == StatusEffectType.Fog
+                && BattleManager.I != null
+                && target == BattleManager.I.GetPlayerStatus()
+                && statusUI != null)
+            {
+                statusUI.SetDeferFogVisionVisuals(true);
+                if (_fogVisionAfterPopupCoroutine != null)
+                    StopCoroutine(_fogVisionAfterPopupCoroutine);
+                float waitSec = damageText.fadeDuration + DamagePopup.PostPopupIntervalMs / 1000f;
+                _fogVisionAfterPopupCoroutine = StartCoroutine(CoRevealFogVisionVisualsAfterStatusPopup(waitSec));
+            }
         }
         else
             Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+    }
+
+    /// <summary>
+    /// 濃霧ポップアップ寿命（fade）と <see cref="DamagePopup.PostPopupIntervalMs"/> 経過後に濃霧画面演出を有効化。
+    /// </summary>
+    private IEnumerator CoRevealFogVisionVisualsAfterStatusPopup(float waitSeconds)
+    {
+        yield return new WaitForSeconds(waitSeconds);
+        _fogVisionAfterPopupCoroutine = null;
+        if (statusUI != null)
+            statusUI.SetDeferFogVisionVisuals(false);
+        if (BattleManager.I != null)
+            UpdateStatus(BattleManager.I.GetPlayerStatus(), BattleManager.I.GetEnemyStatus());
     }
 
     /// <summary>
@@ -512,6 +672,13 @@ public class BattleUIManager : MonoBehaviour
             damageText.Setup(message, color);
         else
             Debug.LogWarning("[BattleUIManager] ShowMessagePopupForTarget: DamagePopup がありません");
+    }
+
+    /// <summary>対象のカードパネル中央にポップアップを生成し <see cref="DamagePopup"/> を返す（病系シーケンス用）。</summary>
+    public DamagePopup SpawnDamagePopupForTarget(PlayerStatus target)
+    {
+        var go = SpawnPopupFor(target);
+        return go != null ? go.GetComponent<DamagePopup>() : null;
     }
 
     /// <summary>
@@ -714,7 +881,8 @@ public class BattleUIManager : MonoBehaviour
             if (cardObj == null) continue;
 
             var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
-            if (cardDisplay != null && cardDisplay.GetCardData() == card)
+            var displayed = cardDisplay?.GetCardData();
+            if (displayed != null && card != null && displayed.GetInstanceID() == card.GetInstanceID())
             {
                 Destroy(cardObj);
                 activeCardSheets.RemoveAt(i);
@@ -728,6 +896,19 @@ public class BattleUIManager : MonoBehaviour
         if (cardSelectionManager.HasNoSelectedCards())
         {
             BattleManager.I?.ClearSelectedCards();
+            // 選択が空になった直後も手札のグレーアウトを戻す（拘束で1枚だけ許可→キャンセル時にここが無いと他防御が復帰しない）
+            if (BattleManager.I != null)
+            {
+                if (BattleManager.I.CurrentState == GameState.DefenseSelect
+                    || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
+                    BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
+                else if (BattleManager.I.CurrentState == GameState.AttackSelect
+                         && BattleManager.I.CurrentTurnOwner == PlayerType.Player)
+                {
+                    var hand = BattleManager.I.playerHand;
+                    RefreshAttackInteractivity(hand, CardRules.GetAttackChoices(hand));
+                }
+            }
         }
         else if (BattleManager.I != null)
         {
@@ -743,10 +924,12 @@ public class BattleUIManager : MonoBehaviour
                     BattleManager.I.UpdateTotalATKDEFDisplay();
                 }
             }
-            else if (BattleManager.I.CurrentState == GameState.DefenseSelect)
+            else if (BattleManager.I.CurrentState == GameState.DefenseSelect
+                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
             {
                 BattleManager.I.UpdateTotalATKDEFDisplay();
                 UpdateDefenseButtonLabel();
+                BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
             }
         }
     }
@@ -756,7 +939,11 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public void UpdateDefenseButtonLabel()
     {
-        if (BattleManager.I?.CurrentState != GameState.DefenseSelect) return;
+        var bm = BattleManager.I;
+        if (bm == null) return;
+        if (bm.CurrentState != GameState.DefenseSelect
+            && !(bm.CurrentState == GameState.TurnEnd && bm.IsInterventionDefenseWaitActive()))
+            return;
 
         var selectedDefenseCards = GetSelectedDefenseCards();
         if (selectedDefenseCards.Count > 0)
@@ -768,6 +955,43 @@ public class BattleUIManager : MonoBehaviour
             SetUseButtonLabel("許す");
         }
         SetUseButtonInteractable(true);
+    }
+
+    /// <summary>介入発動時のメッセージ（病系処理より前）。</summary>
+    public void ShowInterventionIntroPopup(PlayerStatus attackerStatus)
+    {
+        if (attackerStatus == null) return;
+        SoundEffectPlayer.I?.Play("Assets/SE/介入.mp3");
+        StatusEffectPresentation.GetPopupColors(StatusEffectType.Intervention, out _, out Color textColor);
+        ShowMessagePopupForTarget(attackerStatus, "未知の力が\n放たれる", textColor);
+    }
+
+    /// <summary>介入攻撃カードを表示パネル先頭に出す（選択マネージャには載せない）。</summary>
+    public void ShowInterventionAttackSheet(CardData card, Side side)
+    {
+        if (card == null) return;
+        Transform parent = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (cardSheetPrefab == null || parent == null) return;
+
+        var go = Instantiate(cardSheetPrefab, parent);
+        if (!parent.gameObject.activeSelf) parent.gameObject.SetActive(true);
+        if (!go.activeSelf) go.SetActive(true);
+
+        var display = go.GetComponent<CardSheetDisplay>();
+        if (display != null)
+        {
+            PlayerStatus mpOwner = side == Side.Player
+                ? BattleManager.I?.GetPlayerStatus()
+                : BattleManager.I?.GetEnemyStatus();
+            display.Setup(card, mpOwner);
+        }
+
+        activeCardSheets.Add(go);
+        var single = new List<CardData> { card };
+        cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+        cardLayoutManager.SetSelectedCards(single);
+        cardLayoutManager.SetupCardPosition(go, parent);
+        UpdateHandCardHighlights();
     }
 
     /// <summary>

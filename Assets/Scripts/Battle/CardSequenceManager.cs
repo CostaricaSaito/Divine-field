@@ -137,10 +137,11 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// プレイヤー攻撃：カード消費後に命中→（的中演出）→敵防御→戦闘。ミス時は TurnEnd まで。
+    /// プレイヤー攻撃：命中→（的中演出）→敵防御→戦闘。ミス時は TurnEnd まで。
+    /// 介入など、通常の攻撃シーケンス外からも呼べる。
     /// </summary>
     /// <returns>通常終了で true。ミスで TurnEnd 済みのとき false。</returns>
-    private async Task<bool> ResolvePlayerAttackCombatAsync(
+    public async Task<bool> ResolvePlayerAttackCombatAsync(
         List<CardData> attackCards,
         PlayerStatus atk,
         PlayerStatus def,
@@ -148,7 +149,7 @@ public class CardSequenceManager : MonoBehaviour
         CancellationToken cancellationToken)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, atk);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, atk, def);
         bool hit = HitRateRules.RollHit(finalPct);
 
         if (!hit)
@@ -176,7 +177,7 @@ public class CardSequenceManager : MonoBehaviour
             await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
         }
 
-        await battleManager.PickAndDisplayEnemyDefenseAfterPlayerHitAsync();
+        await battleManager.PickAndDisplayEnemyDefenseAfterPlayerHitAsync(attackCards);
 
         var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
         bool showYurusuDuringCombat =
@@ -192,6 +193,12 @@ public class CardSequenceManager : MonoBehaviour
         {
             if (showYurusuDuringCombat)
                 BattleUIManager.I?.HideYurusuButton();
+        }
+
+        if (selectedDefenseCard != null)
+        {
+            handRefill?.RecordEnemyUse(selectedDefenseCard);
+            battleProcessor.UseCard(selectedDefenseCard, defHand);
         }
 
         return true;
