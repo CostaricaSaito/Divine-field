@@ -2,6 +2,17 @@
 using System.Threading;
 using UnityEngine;
 
+/// <summary>インスペクターで先攻・後攻をデバッグ指定するときのモード。</summary>
+public enum OpeningTurnOwnerDebugMode
+{
+    /// <summary>毎回ランダム（50% / 50%）。</summary>
+    Random = 0,
+    /// <summary>プレイヤーが必ず先攻。</summary>
+    PlayerFirst = 1,
+    /// <summary>敵が必ず先攻。</summary>
+    EnemyFirst = 2,
+}
+
 /// <summary>
 /// バトル用デバッグ。コンポーネント右クリックのコンテキストメニュー、およびインスペクターで有効化した OnGUI パネル（Editor のみ）から実行する。
 /// </summary>
@@ -18,6 +29,18 @@ public class BattleDebugTools : MonoBehaviour
     [SerializeField] private bool overrideEnemyInitialSummon;
     [SerializeField] private SummonData debugEnemyInitialSummon;
 
+    [Header("先攻・後攻（開幕・Intro 終了時）")]
+    [Tooltip("Random: ランダム。PlayerFirst / EnemyFirst: 常にその側が先攻。")]
+    [SerializeField] private OpeningTurnOwnerDebugMode openingTurnOwnerMode = OpeningTurnOwnerDebugMode.Random;
+
+    [Header("GameState デバッグ（再生中・右上）")]
+    [Tooltip("現在の GameState と手番をリアルタイム表示。Editor / Development ビルドのみ。")]
+    [SerializeField] private bool showGameStateDebugBox = true;
+    [SerializeField] private float gameStateDebugBoxWidth = 380f;
+    [SerializeField] private float gameStateDebugBoxHeight = 96f;
+    [Tooltip("ラベルのフォントサイズ（既定 16）")]
+    [SerializeField] [Range(10, 36)] private int gameStateDebugFontSize = 16;
+
     [Header("状態異常デバッグ（再生中・左上）")]
     [Tooltip("オンにすると15種の付与ボタンを表示。Factory未実装の4種はプレースホルダーで付与。")]
     [SerializeField] private bool showAilmentDebugPanel = true;
@@ -26,6 +49,7 @@ public class BattleDebugTools : MonoBehaviour
     [SerializeField] private Rect ailmentDebugPanelRect = new Rect(8, 8, 300, 540);
 
     private Vector2 _ailmentScroll;
+    private GUIStyle _gameStateDebugLabelStyle;
 
     [ContextMenu("デバッグ：プレイヤーHPを10に設定")]
     public void SetPlayerHPTo10()
@@ -98,10 +122,41 @@ public class BattleDebugTools : MonoBehaviour
         Debug.Log("[BattleDebugTools] プレイヤーに「楽園病」を付与。");
     }
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void OnGUI()
     {
-        if (!showAilmentDebugPanel || !Application.isPlaying || battleManager == null)
+        if (!Application.isPlaying || battleManager == null)
+            return;
+
+        if (showGameStateDebugBox)
+        {
+            float gw = Mathf.Max(120f, gameStateDebugBoxWidth);
+            float gh = Mathf.Max(48f, gameStateDebugBoxHeight);
+            float gx = Screen.width - gw - 8f;
+            float gy = 8f;
+
+            if (_gameStateDebugLabelStyle == null)
+            {
+                _gameStateDebugLabelStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = gameStateDebugFontSize,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.UpperLeft,
+                    wordWrap = true,
+                };
+                _gameStateDebugLabelStyle.normal.textColor = Color.white;
+            }
+            else
+                _gameStateDebugLabelStyle.fontSize = gameStateDebugFontSize;
+
+            GUILayout.BeginArea(new Rect(gx, gy, gw, gh), GUI.skin.box);
+            GUILayout.Label($"GameState: {battleManager.CurrentState}", _gameStateDebugLabelStyle);
+            GUILayout.Label($"TurnOwner: {battleManager.CurrentTurnOwner}", _gameStateDebugLabelStyle);
+            GUILayout.EndArea();
+        }
+
+#if UNITY_EDITOR
+        if (!showAilmentDebugPanel)
             return;
 
         GUILayout.BeginArea(ailmentDebugPanelRect, GUI.skin.box);
@@ -158,6 +213,7 @@ public class BattleDebugTools : MonoBehaviour
 #endif
 
         GUILayout.EndArea();
+#endif
     }
 #endif
 
@@ -173,6 +229,22 @@ public class BattleDebugTools : MonoBehaviour
             player.summonData = debugPlayerInitialSummon;
         if (enemy != null && overrideEnemyInitialSummon && debugEnemyInitialSummon != null)
             enemy.summonData = debugEnemyInitialSummon;
+    }
+
+    /// <summary>
+    /// <see cref="BattleManager"/> の開幕先攻決定で使用。Random はその場で 50/50。
+    /// </summary>
+    public PlayerType ResolveOpeningTurnOwner()
+    {
+        switch (openingTurnOwnerMode)
+        {
+            case OpeningTurnOwnerDebugMode.PlayerFirst:
+                return PlayerType.Player;
+            case OpeningTurnOwnerDebugMode.EnemyFirst:
+                return PlayerType.Enemy;
+            default:
+                return UnityEngine.Random.Range(0, 2) == 0 ? PlayerType.Player : PlayerType.Enemy;
+        }
     }
 
     [ContextMenu("デバッグ：プレイヤー召喚をガルーダに切替")]

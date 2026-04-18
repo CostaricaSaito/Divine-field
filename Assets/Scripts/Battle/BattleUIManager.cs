@@ -101,6 +101,13 @@ public class BattleUIManager : MonoBehaviour
     private readonly List<GameObject> activeCardSheets = new();
     private enum UseButtonMode { Use, Allow, Pray, MpShortage }
 
+    private Color _defaultUseButtonLabelColor = Color.white;
+    private Sprite _cachedUseButtonSprite;
+    private bool _useButtonHasRainbowGeneratedSprite;
+    private Texture2D _rainbowUseButtonTexture;
+    private Sprite _rainbowUseButtonSprite;
+    private GameObject _fullscreenWhiteFlashGo;
+
     // ポップアップ状態管理
     private bool isHandInputBlocked = false;
     private bool isBuyPopupOpen = false;
@@ -125,6 +132,11 @@ public class BattleUIManager : MonoBehaviour
 
         if (yurusuDisplay != null)
             yurusuDisplay.SetActive(false);
+
+        if (useButtonLabelTMP != null)
+            _defaultUseButtonLabelColor = useButtonLabelTMP.color;
+        if (useButtonImage != null)
+            _cachedUseButtonSprite = useButtonImage.sprite;
     }
 
     /// <summary>
@@ -212,6 +224,8 @@ public class BattleUIManager : MonoBehaviour
                 && (BattleManager.I.CurrentState == GameState.DefenseSelect
                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
+            else if (side == Side.Player && BattleManager.I != null && BattleManager.I.IsReflectionChainDefensePending())
+                UpdateDefenseButtonLabel();
         }
     }
 
@@ -268,8 +282,13 @@ public class BattleUIManager : MonoBehaviour
     {
         if (useButton == null) return;
 
+        RestoreUseButtonFromReflectionRainbowIfNeeded();
+
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
+
+        if (useButtonLabelTMP != null) useButtonLabelTMP.color = _defaultUseButtonLabelColor;
+        if (useButtonLabelUGUI != null) useButtonLabelUGUI.color = _defaultUseButtonLabelColor;
 
         var mode = text == "許す" ? UseButtonMode.Allow
                  : text == "祈り" ? UseButtonMode.Pray
@@ -534,6 +553,7 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public float ShowReflectionBouncePopup(PlayerStatus target)
     {
+        StartCoroutine(CoFullscreenWhiteFlashMs(50f));
         SoundEffectPlayer.I?.Play("Assets/SE/power32(DF弾く).wav");
         var popup = SpawnPopupFor(target);
         if (popup == null)
@@ -614,8 +634,11 @@ public class BattleUIManager : MonoBehaviour
             yield break;
         }
 
-        var srcRt = sourcePanel as RectTransform;
         var dstRt = targetPanel as RectTransform;
+        if (cardLayoutManager != null && dstRt != null)
+            cardLayoutManager.SetLayoutPanelRect(dstRt);
+
+        var srcRt = sourcePanel as RectTransform;
         Vector3 delta = dstRt.position - srcRt.position;
         delta.y = 0f;
         delta.z = 0f;
@@ -1057,6 +1080,21 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 表示中のカードシート（CardDisplay / EnemyDisplay のいずれか）を CardData で特定して破棄。反射「弾き返す」ポップアップ消滅後など。
+    /// </summary>
+    public void DestroyCardSheetForCardData(CardData card)
+    {
+        if (card == null) return;
+        RemoveCardFromDisplay(card);
+        if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
+            cardSelectionManager.CancelCardSelection(card);
+        cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
+        cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
+        cardLayoutManager?.HandleCardCancellation();
+        UpdateHandCardHighlights();
+    }
+
     private void UpdateBattleManagerAfterCancel()
     {
         if (cardSelectionManager.HasNoSelectedCards())
@@ -1065,7 +1103,9 @@ public class BattleUIManager : MonoBehaviour
             // 選択が空になった直後も手札のグレーアウトを戻す（拘束で1枚だけ許可→キャンセル時にここが無いと他防御が復帰しない）
             if (BattleManager.I != null)
             {
-                if (BattleManager.I.CurrentState == GameState.DefenseSelect
+                if (BattleManager.I.IsReflectionChainDefensePending())
+                    BattleManager.I.RefreshReflectionChainInteractivityIfPending();
+                else if (BattleManager.I.CurrentState == GameState.DefenseSelect
                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
                     BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
                 else if (BattleManager.I.CurrentState == GameState.AttackSelect
@@ -1078,7 +1118,8 @@ public class BattleUIManager : MonoBehaviour
         }
         else if (BattleManager.I != null)
         {
-            if (BattleManager.I.CurrentState == GameState.AttackSelect)
+            if (BattleManager.I.CurrentState == GameState.AttackSelect
+                && !BattleManager.I.IsReflectionChainDefensePending())
             {
                 var selectedAttackCards = GetSelectedAttackCards();
                 if (selectedAttackCards.Count == 0)
@@ -1091,11 +1132,15 @@ public class BattleUIManager : MonoBehaviour
                 }
             }
             else if (BattleManager.I.CurrentState == GameState.DefenseSelect
-                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
+                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())
+                     || BattleManager.I.IsReflectionChainDefensePending())
             {
                 BattleManager.I.UpdateTotalATKDEFDisplay();
                 UpdateDefenseButtonLabel();
-                BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
+                if (BattleManager.I.IsReflectionChainDefensePending())
+                    BattleManager.I.RefreshReflectionChainInteractivityIfPending();
+                else
+                    BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
             }
         }
     }
@@ -1107,20 +1152,148 @@ public class BattleUIManager : MonoBehaviour
     {
         var bm = BattleManager.I;
         if (bm == null) return;
-        if (bm.CurrentState != GameState.DefenseSelect
-            && !(bm.CurrentState == GameState.TurnEnd && bm.IsInterventionDefenseWaitActive()))
+        bool defenseUi = bm.CurrentState == GameState.DefenseSelect && bm.DefenderPublic == PlayerType.Player;
+        bool interventionDefense = bm.CurrentState == GameState.TurnEnd && bm.IsInterventionDefenseWaitActive();
+        bool reflectionChainWait = bm.IsReflectionChainDefensePending();
+        if (!defenseUi && !interventionDefense && !reflectionChainWait)
             return;
 
         var selectedDefenseCards = GetSelectedDefenseCards();
+
+        List<CardData> incomingAttack = null;
+        if (defenseUi)
+            incomingAttack = bm.GetAttackCardsForCombatPublic();
+        else if (interventionDefense)
+            incomingAttack = bm.GetInterventionDefenseAttackSnapshot() ?? bm.GetAttackCardsForCombatPublic();
+        else if (reflectionChainWait)
+            incomingAttack = bm.GetReflectionChainAttackSnapshot();
+
+        bool showBounce = incomingAttack != null && incomingAttack.Count > 0
+            && selectedDefenseCards.Count == 1
+            && selectedDefenseCards[0] != null
+            && ReflectionRules.IsPhysicalReflectionCard(selectedDefenseCards[0])
+            && ReflectionRules.CanReflectPhysical(incomingAttack);
+
+        if (showBounce)
+        {
+            ApplyReflectionBounceUseButtonStyle();
+            SetUseButtonInteractable(true);
+            return;
+        }
+
         if (selectedDefenseCards.Count > 0)
-        {
             SetUseButtonLabel("使用");
-        }
         else
-        {
             SetUseButtonLabel("許す");
-        }
         SetUseButtonInteractable(true);
+    }
+
+    private void ApplyReflectionBounceUseButtonStyle()
+    {
+        if (useButton == null) return;
+
+        EnsureRainbowUseButtonSprite();
+
+        var img = useButtonImage ?? (useButton.targetGraphic as Image);
+        if (img != null && _rainbowUseButtonSprite != null)
+        {
+            img.sprite = _rainbowUseButtonSprite;
+            img.color = Color.white;
+            _useButtonHasRainbowGeneratedSprite = true;
+        }
+
+        if (useButtonLabelTMP != null)
+        {
+            useButtonLabelTMP.text = "弾き返す";
+            useButtonLabelTMP.color = Color.white;
+        }
+
+        if (useButtonLabelUGUI != null)
+        {
+            useButtonLabelUGUI.text = "弾き返す";
+            useButtonLabelUGUI.color = Color.white;
+        }
+    }
+
+    private void EnsureRainbowUseButtonSprite()
+    {
+        if (_rainbowUseButtonSprite != null) return;
+
+        const int w = 256;
+        const int h = 256;
+        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+
+        for (int y = 0; y < h; y++)
+        {
+            float fy = h <= 1 ? 0.5f : y / (float)(h - 1);
+            for (int x = 0; x < w; x++)
+            {
+                float fx = w <= 1 ? 0.5f : x / (float)(w - 1);
+                float t = Mathf.Clamp01((fx + (1f - fy)) * 0.5f);
+                float hue = Mathf.Repeat(t * 0.95f + 0.72f, 1f);
+                tex.SetPixel(x, y, Color.HSVToRGB(hue, 0.68f, 1f));
+            }
+        }
+
+        tex.Apply();
+        _rainbowUseButtonTexture = tex;
+        _rainbowUseButtonSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private void RestoreUseButtonFromReflectionRainbowIfNeeded()
+    {
+        if (!_useButtonHasRainbowGeneratedSprite) return;
+
+        var img = useButtonImage ?? (useButton?.targetGraphic as Image);
+        if (img != null)
+        {
+            img.sprite = _cachedUseButtonSprite;
+            img.color = Color.white;
+        }
+
+        if (_rainbowUseButtonTexture != null)
+        {
+            Destroy(_rainbowUseButtonTexture);
+            _rainbowUseButtonTexture = null;
+        }
+
+        if (_rainbowUseButtonSprite != null)
+        {
+            Destroy(_rainbowUseButtonSprite);
+            _rainbowUseButtonSprite = null;
+        }
+
+        _useButtonHasRainbowGeneratedSprite = false;
+    }
+
+    private IEnumerator CoFullscreenWhiteFlashMs(float durationMs)
+    {
+        if (uiCanvas == null) yield break;
+
+        if (_fullscreenWhiteFlashGo == null)
+        {
+            var go = new GameObject("FullscreenWhiteFlash");
+            go.transform.SetParent(uiCanvas.transform, false);
+            var img = go.AddComponent<Image>();
+            img.color = Color.white;
+            img.raycastTarget = false;
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = Vector2.zero;
+            r.anchorMax = Vector2.one;
+            r.offsetMin = Vector2.zero;
+            r.offsetMax = Vector2.zero;
+            _fullscreenWhiteFlashGo = go;
+        }
+
+        _fullscreenWhiteFlashGo.transform.SetAsLastSibling();
+        _fullscreenWhiteFlashGo.SetActive(true);
+        yield return new WaitForSecondsRealtime(durationMs * 0.001f);
+        if (_fullscreenWhiteFlashGo != null)
+            _fullscreenWhiteFlashGo.SetActive(false);
     }
 
     /// <summary>介入発動時のメッセージ（病系処理より前）。</summary>

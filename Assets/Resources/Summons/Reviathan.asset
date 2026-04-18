@@ -19,7 +19,7 @@ MonoBehaviour:
   characterSprite: {fileID: 21300000, guid: 9e6f17ed708a06f4382cc6d62928e32a, type: 3}
   backgroundSprite: {fileID: 21300000, guid: ba97bad97db82b546ae45a54e47b4461, type: 3}
   foregroundSprite: {fileID: 0}
-  summonIcon: {fileID: 21300000, guid: facb334afb0e2124db1ab7121bc70256, type: 3}
+  summonIcon: {fileID: 21300000, guid: d30b54125d230cd4c960b04f92197125, type: 3}
   summonSE: {fileID: 8300000, guid: ab28d954e36fcd140a086450939f19b2, type: 3}
   nameStyle:
     fontColor: {r: 0, g: 0.2333653, b: 1, a: 1}
@@ -73,3 +73,4 @@ MonoBehaviour:
     faceDilate: 0
   specialSkillCutInSprite: {fileID: 21300000, guid: facb334afb0e2124db1ab7121bc70256, type: 3}
   specialSkillSE: {fileID: 8300000, guid: ab28d954e36fcd140a086450939f19b2, type: 3}
+  passiveBlessingMode: 4

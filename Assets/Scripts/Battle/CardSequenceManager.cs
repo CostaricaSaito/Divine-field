@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -126,6 +126,7 @@ public class CardSequenceManager : MonoBehaviour
                     handRefill,
                     battleManager.GetEnemyAI(),
                     attackCards,
+                    selectedCards[0],
                     cancellationToken);
             }
             else
@@ -201,9 +202,27 @@ public class CardSequenceManager : MonoBehaviour
         if (showYurusuDuringCombat)
             BattleUIManager.I.ShowYurusuDisplay();
 
+        bool enemyPhysicalReflect = selectedDefenseCard != null
+            && ReflectionRules.IsPhysicalReflectionCard(selectedDefenseCard)
+            && ReflectionRules.CanReflectPhysical(attackCards);
+
         try
         {
-            await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
+            if (enemyPhysicalReflect)
+            {
+                await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    battleManager.GetEnemyAI(),
+                    attackCards,
+                    selectedDefenseCard,
+                    cancellationToken);
+            }
+            else
+            {
+                await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
+            }
         }
         finally
         {
@@ -211,7 +230,7 @@ public class CardSequenceManager : MonoBehaviour
                 BattleUIManager.I?.HideYurusuButton();
         }
 
-        if (selectedDefenseCard != null)
+        if (selectedDefenseCard != null && !enemyPhysicalReflect)
         {
             handRefill?.RecordEnemyUse(selectedDefenseCard);
             battleProcessor.UseCard(selectedDefenseCard, defHand);

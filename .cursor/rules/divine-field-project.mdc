@@ -1,0 +1,76 @@
+﻿---
+description: ディヴァインフィールド（Divine2）の世界観・設計・用語のたたき台（プロジェクト共通）
+alwaysApply: true
+---
+
+1. ゲームの概要
+
+- ゲームの名前：ディヴァインフィールド（リポジトリ名：Divine2）-
+- 媒体：iOS/Android向けのスマートフォンゲームを予定している
+- 開発環境：Unity
+- ジャンル：ターン制の **2Dカードバトル**（Unity）。
+- データ駆動:カード・召喚は主に **ScriptableObject**（`CardData` = `DivineField/Card`、`SummonData` = `DivineField/SummonData`）
+- 簡単なルール：デッキ構築制ではなく、全てのカードからランダムに手札が配られる。相手のHPを0にするか、特殊勝利条件を満たすことで勝利。
+
+2. 設計の柱
+
+1. **フェーズ制バトル**: `GameState` で全体遷移。攻撃側は `AttackSelect` → `AttackConfirm`、防御側は `DefenseSelect` → `DefenseConfirm`。解決・ターン締めは `DamageResolve` / `TurnEnd` など。
+
+2. **属性**:
+ `ElementType`で定義される9個の属性が存在する（無・火・水・風・雷・鋼・氷・闇・光）
+ 属性攻撃は同じ属性の防御カードでしか防ぐことができない。
+ 複数枚の合算は `ElementHelper.GetCombinedElement` のルールに従う（非光が混ざると無属性になるなど）。
+ また、闇属性の攻撃は特殊で、全ての属性の防御カードで防ぐことが出来るが、ダメージが1でも発生した場合、即死する。
+
+3. **状態異常**
+ `IStatusEffect` + `StatusEffectType`（公式 ID 付き）。病系は段階進行など、種類ごとに処理が分かれる。
+ 付与タイミングは `StatusEffectApplyTiming`（ダメージ通過時 / カード効果解決時）で区別。
+
+4. **召喚獣**:
+ 各プレイヤーは事前に「召喚獣」を設定する。召喚獣は複数種類存在し、それぞれ「顕現スキル（スペシャルスキル）」と、「加護スキル（パッシブスキル」が存在しており、各プレイヤーに有益な効果をもたらす。
+ `SummonData` にパッシブ説明・**顕現（スペシャル）**・**加護（ランタイム）**（`SummonPassiveBlessing*`）。
+ 例えばガルーダは `SummonGarudaLifecycle` 等でターン／ドローと連動。
+
+5. **反射**: 
+`ReflectionKind`（物理 / 魔法 / 完全）。物理反射の詳細ルール・フローは `Battle/Reflection/` と `ReflectionImplementation.md` を正とする。
+6. **経済アクション**: バトル中の **買う / 売る / 両替** など（`BuyFeature` / `SellFeature` / `ExchangeFeature`、`EconomicAction`）。クールダウンはプレイヤーターン開始で更新。
+
+7. **魔法**: MP コスト・`MagicPoolManager`・プール済みカード選択。`CardData.maxUses` 等で回数管理。
+
+3.リソース（ステータス）
+
+- **HP / MP / GP**:
+ HP/MP/GPの3つのステータスが存在する。それぞれ99が上限で、下限は0。 `PlayerStatus`（`max*` / `current*`）で定義。
+ HPは体力を示し、これが0になるとゲームの敗北となる。
+ MPは魔力を示し、魔法カードの使用に必要となる。
+ GPはお金を示し、経済アクションの「買う」に必要となる。
+- ダメージは状態異常で **被ダメ補正**・**与ダメ補正**（`ModifyDamage` / `ApplyOutgoingDamageModifiers`）が入る。
+
+## カードまわりの用語
+
+- **`CardType`**: Attack / Defense / Magic / Recovery / Special。
+- **`SelectionRole`**: 同一フェーズの複数選択の **衝突解決**（単独・追加可否など）。`CardSelectionManager` の競合チェック用。フェーズ可否そのものは `CardRules` 系と独立。
+- **`isPrimaryAttack` / `isAdditionalAttack` / `isPrimaryDefense` / `isCounterAttack`**: 行動分類。反射・カウンターは防御フェーズでも扱う。
+- **カードアセット配置**: `Resources/Cards/` 下を `01_ATTACK` / `02_MAGIC` / `03_DEFENCE` などに分類。
+
+## 状態異常（公式 ID の一部・会話用）
+
+病系 1〜4（病→…→楽園病）、衰弱 5、眼精疲労 6、群発頭痛 7、煙幕 8、不運 9、封印 10、濃霧 11、混乱 12、介入 13、呪縛 14、拘束 15。詳細は `StatusEffectType` と各 `*Effect.cs`。
+
+## 主要クラス（責務の目安）
+
+| クラス | 役割の目安 |
+|--------|------------|
+| `BattleManager` | バトル開始・終了、`GameState` 遷移、手札・ターン・敵 AI との接続 |
+| `BattleProcessor` | 戦闘計算・命中・ダメージ解決の実行 |
+| `BattleUIManager` | 手札 UI・ボタン・表示更新の集約 |
+| `CardSequenceManager` | カード選択後の演出・解決シーケンス |
+| `CardSelectionManager` | 選択ルール・グレーアウト |
+| `HandRefillService` | 手札補充 |
+| `EnemyAI` | 敵のカード選択 |
+
+## AI への期待
+
+- 新機能は **既存の enum / 状態遷移 / ScriptableObject パターン** に合わせる。
+- 反射・属性合算・状態異常 ID は **コードと `ReflectionImplementation.md` を優先**し、会話の略称だけで上書きしない。
+- 用語は **プレイヤー向け表記（ディヴァインフィールド）** と **リポジトリ名（Divine2）** を混同しない。

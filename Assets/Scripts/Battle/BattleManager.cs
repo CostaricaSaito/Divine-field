@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
@@ -143,6 +143,7 @@ public class BattleManager : MonoBehaviour
     private CardData selectedCard;
     private CardData selectedDefenseCard;
     private TaskCompletionSource<List<CardData>> _reflectionChainDefenseTcs;
+    private List<CardData> _reflectionChainAttackSnapshot;
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
     private bool isProcessingUseButton;
@@ -297,13 +298,41 @@ public class BattleManager : MonoBehaviour
             playerStatus != null && playerStatus.HasRestraintEffect());
 
         BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
+        BattleUIManager.I.UpdateDefenseButtonLabel();
     }
 
     /// <summary>連鎖反射でプレイヤーが再防御を選ぶまで待つ（許す＝空リスト）。</summary>
+    /// <summary>連鎖反射の防御入力待ち中か（UI「弾き返す」判定用）。</summary>
+    public bool IsReflectionChainDefensePending()
+    {
+        return _reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted;
+    }
+
+    /// <summary>連鎖反射時の攻撃カードスナップショット（可否判定用）。</summary>
+    public List<CardData> GetReflectionChainAttackSnapshot()
+    {
+        return _reflectionChainAttackSnapshot;
+    }
+
+    /// <summary>介入の防御入力待ち時の攻撃カード（UI 用）。</summary>
+    public List<CardData> GetInterventionDefenseAttackSnapshot()
+    {
+        return _interventionAttackForDefenseUi;
+    }
+
+    /// <summary>防御 UI から現在の攻撃カード一覧を参照（物理反射ボタン表示など）。</summary>
+    public List<CardData> GetAttackCardsForCombatPublic()
+    {
+        return GetAttackCardsForCombat();
+    }
+
     public async Task<List<CardData>> WaitForReflectionChainDefenseAsync(
         List<CardData> attackSnapshot,
         CancellationToken cancellationToken)
     {
+        _reflectionChainAttackSnapshot = attackSnapshot != null
+            ? new List<CardData>(attackSnapshot)
+            : new List<CardData>();
         _reflectionChainDefenseTcs = new TaskCompletionSource<List<CardData>>(TaskCreationOptions.RunContinuationsAsynchronously);
         isProcessingUseButton = false;
         BattleUIManager.I?.SetUseButtonInteractable(true);
@@ -327,9 +356,17 @@ public class BattleManager : MonoBehaviour
         }
         finally
         {
+            _reflectionChainAttackSnapshot = null;
             _reflectionChainDefenseTcs = null;
             BattleUIManager.I?.SetHandClickable(false);
         }
+    }
+
+    /// <summary>選択変更後に連鎖反射の手札グレーアウトを更新（<see cref="BattleUIManager"/> から呼ぶ）。</summary>
+    public void RefreshReflectionChainInteractivityIfPending()
+    {
+        if (_reflectionChainAttackSnapshot != null)
+            RefreshReflectionChainInteractivity(_reflectionChainAttackSnapshot);
     }
 
     private void RefreshReflectionChainInteractivity(List<CardData> attackSnapshot)
@@ -358,6 +395,7 @@ public class BattleManager : MonoBehaviour
             playerStatus != null && playerStatus.HasRestraintEffect());
 
         BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
+        BattleUIManager.I.UpdateDefenseButtonLabel();
     }
 
     private void Awake()
@@ -536,8 +574,32 @@ public class BattleManager : MonoBehaviour
         
         // Intro時点ではカードをグレーアウトしない
         BattleUIManager.I?.SetIntroModeUI(playerHand);
-        
+
+        DetermineOpeningFirstTurn();
+
         SetGameState(GameState.TurnStart);
+    }
+
+    /// <summary>
+    /// 開幕の先攻・後攻。既定は 50/50。Editor / Development では <see cref="BattleDebugTools"/> で固定可。
+    /// </summary>
+    private void DetermineOpeningFirstTurn()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        var dbg = FindObjectOfType<BattleDebugTools>();
+        if (dbg != null)
+            CurrentTurnOwner = dbg.ResolveOpeningTurnOwner();
+        else
+            CurrentTurnOwner = RollRandomOpeningTurnOwner();
+#else
+        CurrentTurnOwner = RollRandomOpeningTurnOwner();
+#endif
+        Debug.Log($"[BattleManager] 先攻: {CurrentTurnOwner}");
+    }
+
+    private static PlayerType RollRandomOpeningTurnOwner()
+    {
+        return UnityEngine.Random.Range(0, 2) == 0 ? PlayerType.Player : PlayerType.Enemy;
     }
 
     private void OnTurnStart()
@@ -963,6 +1025,22 @@ public class BattleManager : MonoBehaviour
         var card = ui.GetCardData();
         if (card == null) return;
 
+        // 連鎖反射：GameState は AttackSelect のままだが、防御カード選択として扱う
+        if (IsReflectionChainDefensePending())
+        {
+            if (!CardRules.IsUsableInDefensePhase(card))
+            {
+                Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
+                return;
+            }
+            selectedDefenseCard = card;
+            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            UpdateTotalATKDEFDisplay();
+            BattleUIManager.I?.UpdateDefenseButtonLabel();
+            return;
+        }
+
         if (CurrentState == GameState.AttackSelect && Attacker == PlayerType.Player)
         {
             // 売却モードが有効な場合は、売却処理に委譲
@@ -1034,7 +1112,12 @@ public class BattleManager : MonoBehaviour
         {
             case GameState.AttackSelect:
                 if (Attacker == PlayerType.Player)
-                    HandleAttackUse();
+                {
+                    if (IsReflectionChainDefensePending())
+                        HandleDefenseUse();
+                    else
+                        HandleAttackUse();
+                }
                 else
                     isProcessingUseButton = false;
                 break;
@@ -1208,8 +1291,7 @@ public class BattleManager : MonoBehaviour
 
         if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
         {
-            if (Defender == PlayerType.Player
-                && playerStatus != null
+            if (playerStatus != null
                 && playerStatus.HasRestraintEffect()
                 && selectedDefenseCards.Count > 1)
             {

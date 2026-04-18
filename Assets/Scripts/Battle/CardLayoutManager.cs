@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
@@ -46,6 +46,13 @@ public class CardLayoutManager : MonoBehaviour
         selectedCards = cards;
     }
     
+    /// <summary>反射スライド後など、レイアウト基準パネルを明示するときに使用。</summary>
+    public void SetLayoutPanelRect(RectTransform panel)
+    {
+        if (panel != null)
+            panelRectTransform = panel;
+    }
+
     /// <summary>
     /// カードの位置を設定（カード追加時に全カードを再配置）
     /// </summary>

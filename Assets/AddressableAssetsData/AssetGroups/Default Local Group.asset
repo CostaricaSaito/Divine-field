@@ -117,6 +117,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ced398edf6f779d45911ab7cd8fd50fa
+    m_Address: "Assets/SE/power32(DF\u5F3E\u304F).wav"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d33f01de98af2414697a0116a1a15a75
     m_Address: "Assets/SE/\u304D\u3089\u30FC\u30931.mp3"
     m_ReadOnly: 0
@@ -139,6 +144,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: efc39af3a87c2f041b8978d5daab6a9b
     m_Address: "Assets/SE/\u75C5\u30C0\u30E1\u30FC\u30B8.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f62b1af42bdf1d44c81c29f603c09396
+    m_Address: "Assets/SE/\u30B8\u30E3\u30F3\u30D7.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
