@@ -1,5 +1,7 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -47,6 +49,10 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private TMP_Text useButtonLabelTMP;
     [SerializeField] private Text useButtonLabelUGUI;
     [SerializeField] private Image useButtonImage;
+
+    [Header("ターン表示（Canvas の TurnCount / TurnCountText）")]
+    [SerializeField] private TMP_Text turnCountText;
+    private bool _turnCountTextStyled;
 
     [Header("ポップアップ")]
     [SerializeField] private GameObject damagePopupPrefab;
@@ -119,6 +125,26 @@ public class BattleUIManager : MonoBehaviour
 
         if (yurusuDisplay != null)
             yurusuDisplay.SetActive(false);
+    }
+
+    /// <summary>
+    /// <see cref="SummonTurnCounterState"/> に基づき「ターンN」を表示。黒字・白アウトラインは初回のみ適用。
+    /// </summary>
+    public void RefreshTurnCountDisplay(SummonTurnCounterState counters)
+    {
+        if (turnCountText == null || counters == null) return;
+        EnsureTurnCountTextStyle();
+        turnCountText.text = $"ターン{counters.CurrentBattleTurnDisplay}";
+    }
+
+    private void EnsureTurnCountTextStyle()
+    {
+        if (_turnCountTextStyled || turnCountText == null) return;
+        turnCountText.color = Color.black;
+        if (turnCountText.outlineWidth < 0.08f)
+            turnCountText.outlineWidth = 0.22f;
+        turnCountText.outlineColor = Color.white;
+        _turnCountTextStyled = true;
     }
 
     /// <summary>
@@ -478,7 +504,10 @@ public class BattleUIManager : MonoBehaviour
     /// <returns>表示したポップアップが Destroy されるまでの秒数（<see cref="DamagePopup.fadeDuration"/>）。生成失敗時は 0。</returns>
     public float ShowDamagePopup(int amount, PlayerStatus target)
     {
-        Debug.Log($"[BattleUIManager] ダメージポップアップ表示: {amount}ダメージ 対象 {target?.DisplayName ?? "null"}");
+        if (amount > 0)
+            Debug.Log($"[BattleUIManager] ダメージポップアップ表示: {amount}ダメージ 対象 {target?.DisplayName ?? "null"}");
+        else
+            Debug.Log($"[BattleUIManager] ダメージポップアップ表示: 無傷 対象 {target?.DisplayName ?? "null"}");
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
@@ -498,6 +527,138 @@ public class BattleUIManager : MonoBehaviour
 
         Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
         return 0f;
+    }
+
+    /// <summary>
+    /// 物理反射「弾き返す」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。
+    /// </summary>
+    public float ShowReflectionBouncePopup(PlayerStatus target)
+    {
+        SoundEffectPlayer.I?.Play("Assets/SE/power32(DF弾く).wav");
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattleUIManager] 反射ポップアップ生成に失敗");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            damageText.SetupReflectionBounce();
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattleUIManager] DamagePopup が見つかりません（反射）");
+        return 0f;
+    }
+
+    /// <summary>
+    /// 反射で表示中の攻撃カードシートを、パネル間で横スライド（線形・既定500ms）する。
+    /// </summary>
+    public Task SlideReflectionAttackSheetsAsync(
+        List<CardData> attackCards,
+        bool slideTowardPlayer,
+        float durationSec,
+        CancellationToken cancellationToken = default)
+    {
+        if (attackCards == null || attackCards.Count == 0 || cardLayoutManager == null)
+            return Task.CompletedTask;
+
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        StartCoroutine(CoSlideReflectionAttackSheets(attackCards, slideTowardPlayer, durationSec, cancellationToken, () =>
+        {
+            if (!tcs.Task.IsCompleted)
+                tcs.TrySetResult(true);
+        }));
+        return tcs.Task;
+    }
+
+    private IEnumerator CoSlideReflectionAttackSheets(
+        List<CardData> attackCards,
+        bool slideTowardPlayer,
+        float durationSec,
+        CancellationToken cancellationToken,
+        System.Action onComplete)
+    {
+        Transform sourcePanel = slideTowardPlayer ? enemyCardDisplayPanel : playerCardDisplayPanel;
+        Transform targetPanel = slideTowardPlayer ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (sourcePanel == null || targetPanel == null)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        var sheetsOrdered = new List<GameObject>();
+        foreach (var ac in attackCards)
+        {
+            if (ac == null) continue;
+            GameObject found = null;
+            foreach (var go in activeCardSheets)
+            {
+                if (go == null) continue;
+                var disp = go.GetComponent<CardSheetDisplay>();
+                if (disp != null && disp.GetCardData() == ac)
+                {
+                    found = go;
+                    break;
+                }
+            }
+            if (found != null)
+                sheetsOrdered.Add(found);
+        }
+
+        if (sheetsOrdered.Count == 0)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        var srcRt = sourcePanel as RectTransform;
+        var dstRt = targetPanel as RectTransform;
+        Vector3 delta = dstRt.position - srcRt.position;
+        delta.y = 0f;
+        delta.z = 0f;
+
+        var starts = new Vector3[sheetsOrdered.Count];
+        var ends = new Vector3[sheetsOrdered.Count];
+        for (int i = 0; i < sheetsOrdered.Count; i++)
+        {
+            var rt = sheetsOrdered[i].transform as RectTransform;
+            if (rt == null) continue;
+            starts[i] = rt.position;
+            ends[i] = starts[i] + delta;
+        }
+
+        float dur = Mathf.Max(0.02f, durationSec);
+        float elapsed = 0f;
+        while (elapsed < dur)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+            for (int i = 0; i < sheetsOrdered.Count; i++)
+            {
+                var go = sheetsOrdered[i];
+                if (go == null) continue;
+                var rt = go.transform as RectTransform;
+                if (rt == null) continue;
+                rt.position = Vector3.Lerp(starts[i], ends[i], t);
+            }
+            yield return null;
+        }
+
+        cardLayoutManager.SetSelectedCards(attackCards);
+        cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+        foreach (var go in sheetsOrdered)
+        {
+            if (go == null) continue;
+            go.transform.SetParent(targetPanel, false);
+            cardLayoutManager.SetupCardPosition(go, targetPanel);
+        }
+
+        onComplete?.Invoke();
     }
 
     /// <summary>
@@ -656,22 +817,27 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// ステータス付近に任意メッセージのポップアップ（病系は改行入りで2行表示等）。
     /// </summary>
-    public void ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
+    /// <returns>ポップアップの <see cref="DamagePopup.fadeDuration"/>（秒）。失敗時は 0。</returns>
+    public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
     {
-        if (target == null || string.IsNullOrEmpty(message)) return;
+        if (target == null || string.IsNullOrEmpty(message)) return 0f;
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
         {
             Debug.LogWarning("[BattleUIManager] ShowMessagePopupForTarget: ポップアップ生成に失敗");
-            return;
+            return 0f;
         }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
+        {
             damageText.Setup(message, color);
-        else
-            Debug.LogWarning("[BattleUIManager] ShowMessagePopupForTarget: DamagePopup がありません");
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattleUIManager] ShowMessagePopupForTarget: DamagePopup がありません");
+        return 0f;
     }
 
     /// <summary>対象のカードパネル中央にポップアップを生成し <see cref="DamagePopup"/> を返す（病系シーケンス用）。</summary>

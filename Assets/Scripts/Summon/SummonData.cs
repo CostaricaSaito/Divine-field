@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using TMPro;
 
 [System.Serializable]
@@ -16,7 +16,7 @@ public class SummonTextStyle
 [CreateAssetMenu(fileName = "NewSummonData", menuName = "DivineField/SummonData")]
 public class SummonData : ScriptableObject
 {
-    [TextArea(2, 4)] 
+    [TextArea(2, 4)]
     public string summonName;
 
     [TextArea(2, 4)]
@@ -31,17 +31,27 @@ public class SummonData : ScriptableObject
     public Sprite characterSprite;
     public Sprite backgroundSprite;
     public Sprite foregroundSprite;
-    public Sprite summonIcon; // © ‚±‚ê’Ç‰Á‚µ‚Ä‚ËI
+
+    [Tooltip("æˆ¦é—˜ä¸­ã® PlayerSummon / EnemySummon ç”¨ã®æ­£æ–¹å½¢ã‚¢ã‚¤ã‚³ãƒ³ï¼ˆImages/01_å¬å–šç£ã‚¢ã‚¤ã‚³ãƒ³ç”¨ ãªã©ï¼‰ã€‚æœªè¨­å®šæ™‚ã¯ Character Sprite ã‚’ä½¿ç”¨ã—ã¾ã™ã€‚")]
+    public Sprite summonIcon;
     public AudioClip summonSE;
 
+    /// <summary>
+    /// æˆ¦é—˜ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹è¡Œã®ã‚¢ã‚¤ã‚³ãƒ³ã€‚ã‚¤ãƒ³ã‚¹ãƒšã‚¯ã‚¿ãƒ¼ã§ <see cref="summonIcon"/> ã‚’æŒ‡å®šã—ã¦ã„ã‚Œã°ãã‚Œã‚’ã€ç„¡ã‘ã‚Œã° <see cref="characterSprite"/> ã‚’è¿”ã™ã€‚
+    /// </summary>
+    public Sprite GetBattleStatusIconSprite()
+    {
+        return summonIcon != null ? summonIcon : characterSprite;
+    }
 
-    [Header("¢Š«b‘I‘ğ‰æ–Ê‚Å‚ÌƒeƒLƒXƒgƒXƒ^ƒCƒ‹")]
+
+    [Header("å¬å–šç£é¸æŠç”»é¢ã§ã®ãƒ†ã‚­ã‚¹ãƒˆã‚¹ã‚¿ã‚¤ãƒ«")]
     public SummonTextStyle nameStyle;
     public SummonTextStyle descriptionStyle;
     public SummonTextStyle passiveSkillStyle;
     public SummonTextStyle activeSkillStyle;
 
-    [Header("ƒXƒyƒVƒƒƒ‹ƒXƒLƒ‹")]
+    [Header("ã‚¹ãƒšã‚·ãƒ£ãƒ«ã‚¹ã‚­ãƒ«")]
     public string specialSkillName;
 
     [TextArea(2, 4)]
@@ -50,21 +60,43 @@ public class SummonData : ScriptableObject
     public SummonTextStyle popupSkillNameStyle;
     public SummonTextStyle popupSkillDescStyle;
 
-    public Sprite specialSkillCutInSprite;  // ‘S‰æ–Ê‰‰o—pƒCƒ‰ƒXƒg
-    public AudioClip specialSkillSE;        // ”­“®‚ÌSEi”CˆÓj
+    public Sprite specialSkillCutInSprite;  // å…¨ç”»é¢æ¼”å‡ºç”¨ã‚¤ãƒ©ã‚¹ãƒˆ
+    public AudioClip specialSkillSE;        // ç™ºå‹•æ™‚ã®SEï¼ˆä»»æ„ï¼‰
+
+    [Header("åŠ è­·ï¼ˆãƒ‘ãƒƒã‚·ãƒ–ãƒ»ãƒ©ãƒ³ã‚¿ã‚¤ãƒ ï¼‰")]
+    [SerializeField]
+    [Tooltip("Auto: ã‚¢ã‚»ãƒƒãƒˆåï¼ˆIfrit ç­‰ï¼‰ã§åŠ è­·ã‚’æ±ºå®šã€‚None ã§ç„¡åŠ¹ã€Ifrit ã§æ˜ç¤ºã€‚")]
+    private SummonPassiveBlessingMode passiveBlessingMode = SummonPassiveBlessingMode.AutoByAssetName;
 
     /// <summary>
-    /// Œ°Œ»ƒXƒLƒ‹‚ÌŒø‰Ê‚ğ‚±‚±‚É‘‚­i—áFƒCƒtƒŠ[ƒg ¨ “G‚É30ƒ_ƒ[ƒWj
+    /// <see cref="passiveBlessingMode"/> ã«å¿œã˜ãŸåŠ è­·ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
+    /// </summary>
+    public SummonPassiveBlessing GetEffectivePassiveBlessing()
+    {
+        return SummonPassiveBlessingFallback.ResolveMode(passiveBlessingMode, name);
+    }
+
+    /// <summary>
+    /// ã‚¬ãƒ«ãƒ¼ãƒ€ã®é–‹å§‹æ™‚ï¼‹5nã‚¿ãƒ¼ãƒ³çµ‚äº†ãƒ‰ãƒ­ãƒ¼ç­‰ã®ãƒ©ã‚¤ãƒ•ã‚µã‚¤ã‚¯ãƒ«å¯¾è±¡ã‹ï¼ˆæ”»æ’ƒåŠ è­·ã®æœ‰ç„¡ã¨ã¯ç‹¬ç«‹ï¼‰ã€‚
+    /// </summary>
+    public bool IsGarudaLifecycle()
+    {
+        if (passiveBlessingMode == SummonPassiveBlessingMode.Garuda) return true;
+        return name == "Garuda";
+    }
+
+    /// <summary>
+    /// é¡•ç¾ã‚¹ã‚­ãƒ«ã®åŠ¹æœã‚’ã“ã“ã«æ›¸ãï¼ˆä¾‹ï¼šã‚¤ãƒ•ãƒªãƒ¼ãƒˆ â†’ æ•µã«30ãƒ€ãƒ¡ãƒ¼ã‚¸ï¼‰
     /// </summary>
     public void ActivateSpecialSkill(PlayerStatus self, PlayerStatus opponent)
     {
-        if (summonName == "ƒCƒtƒŠ[ƒg")
+        if (name == "Ifrit")
         {
             opponent.TakeDamage(30);
-            Debug.Log("ƒCƒtƒŠ[ƒg‚ÌŒ°Œ»ƒXƒLƒ‹‚ª³í‚É”­“®I“G‚É30ƒ_ƒ[ƒWI");
+            Debug.Log("ã‚¤ãƒ•ãƒªãƒ¼ãƒˆã®é¡•ç¾ã‚¹ã‚­ãƒ«ãŒæ­£å¸¸ã«ç™ºå‹•ï¼æ•µã«30ãƒ€ãƒ¡ãƒ¼ã‚¸ï¼");
         }
 
-        // ‘¼‚Ì¢Š«b‚Í‚±‚±‚É’Ç‰Á‚µ‚Ä‚¢‚­
+        // ä»–ã®å¬å–šç£ã¯ã“ã“ã«è¿½åŠ ã—ã¦ã„ã
     }
 
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)

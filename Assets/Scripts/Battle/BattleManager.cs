@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
@@ -37,8 +37,15 @@ public class BattleManager : MonoBehaviour
 {
     public static BattleManager I;
 
+    /// <summary>手札・敵手札リストの論理上限（スロットが多い場合でもこの枚数まで）。</summary>
+    public const int MaxHandCards = 18;
+
     // グレーアウト制御フラグ
     private bool shouldGrayOutCards = false;
+
+    private readonly SummonTurnCounterState _summonTurnCounters = new();
+    /// <summary>召喚ライフサイクル用：各側が自分のターンを終えた回数（UI表示などに使用可）。</summary>
+    public SummonTurnCounterState SummonTurnCounters => _summonTurnCounters;
 
     [Header("バトルUI")]
     public BattleStatusUI statusUI;
@@ -70,6 +77,9 @@ public class BattleManager : MonoBehaviour
     public CardSequenceManager Sequences => cardSequenceManager;
     [SerializeField] private MagicPoolManager magicPoolManager;
     private EnemyAI enemyAI = new EnemyAI();
+
+    /// <summary>反射連鎖で敵の防御選択に使用する。</summary>
+    public EnemyAI GetEnemyAI() => enemyAI;
     private BuyFeature buyFeature = new BuyFeature();
     private SellFeature sellFeature = new SellFeature();
     [SerializeField] private ExchangeFeature exchangeFeature;
@@ -132,6 +142,7 @@ public class BattleManager : MonoBehaviour
     }
     private CardData selectedCard;
     private CardData selectedDefenseCard;
+    private TaskCompletionSource<List<CardData>> _reflectionChainDefenseTcs;
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
     private bool isProcessingUseButton;
@@ -154,7 +165,7 @@ public class BattleManager : MonoBehaviour
     public async Task PickAndDisplayEnemyDefenseAfterPlayerHitAsync(List<CardData> playerAttackCards)
     {
         ElementType attackElement = ElementHelper.GetCombinedElement(playerAttackCards);
-        selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement);
+        selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement, playerAttackCards);
         cardStatsDisplay?.UpdateDisplay();
         if (selectedDefenseCard != null)
         {
@@ -266,6 +277,80 @@ public class BattleManager : MonoBehaviour
 
         ElementType attackElement = ElementHelper.GetCombinedElement(attackSource);
         var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+        if (ReflectionRules.CanReflectPhysical(attackSource))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
+        }
+
+        var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
+        defenseChoices = CardRules.ApplyRestraintDefenseFilter(
+            defenseChoices,
+            selectedDefense,
+            playerStatus != null && playerStatus.HasRestraintEffect());
+
+        BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
+    }
+
+    /// <summary>連鎖反射でプレイヤーが再防御を選ぶまで待つ（許す＝空リスト）。</summary>
+    public async Task<List<CardData>> WaitForReflectionChainDefenseAsync(
+        List<CardData> attackSnapshot,
+        CancellationToken cancellationToken)
+    {
+        _reflectionChainDefenseTcs = new TaskCompletionSource<List<CardData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        isProcessingUseButton = false;
+        BattleUIManager.I?.SetUseButtonInteractable(true);
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.SetUseButtonLabel("許す");
+        BattleUIManager.I?.ClearAllSelections();
+        ClearSelectedCards();
+        RefreshReflectionChainInteractivity(attackSnapshot);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+
+        try
+        {
+            using (cancellationToken.Register(() =>
+                   {
+                       if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
+                           _reflectionChainDefenseTcs.TrySetCanceled();
+                   }))
+            {
+                return await _reflectionChainDefenseTcs.Task;
+            }
+        }
+        finally
+        {
+            _reflectionChainDefenseTcs = null;
+            BattleUIManager.I?.SetHandClickable(false);
+        }
+    }
+
+    private void RefreshReflectionChainInteractivity(List<CardData> attackSnapshot)
+    {
+        if (BattleUIManager.I == null || attackSnapshot == null) return;
+
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackSnapshot);
+        var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+        if (ReflectionRules.CanReflectPhysical(attackSnapshot))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
+        }
+
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
@@ -296,9 +381,22 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            playerStatus.summonData = Resources.Load<SummonData>("Summons/Ifrit");
-            enemyStatus.summonData = Resources.Load<SummonData>("Summons/Ifrit");
+            // 召喚選択シーンを経由しない実行時の既定（デバッグはガルーダ）
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var fallback = Resources.Load<SummonData>("Summons/Garuda");
+#else
+            SummonData fallback = null;
+#endif
+            if (fallback == null)
+                fallback = Resources.Load<SummonData>("Summons/Ifrit");
+            playerStatus.summonData = fallback;
+            enemyStatus.summonData = fallback;
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        var battleDebug = FindObjectOfType<BattleDebugTools>();
+        battleDebug?.ApplyInitialSummonOverrides(playerStatus, enemyStatus);
+#endif
 
         summonSkillButton.SetStatus(playerStatus, enemyStatus);
 
@@ -420,10 +518,12 @@ public class BattleManager : MonoBehaviour
     //================ バトル開始 ================
     IEnumerator BattleStartSequence()
     {
-        yield return StartCoroutine(cardDealer.DealCards(playerHand, cpuHand, 10));
+        SummonGarudaLifecycle.GetOpeningHandTargets(playerStatus, enemyStatus, out int openingPlayer, out int openingCpu);
+        yield return StartCoroutine(cardDealer.DealOpeningHands(playerHand, cpuHand, openingPlayer, openingCpu));
 
         // 手札が配られた後にステータスを更新
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
 
         yield return new WaitForSeconds(cutInDelay);
         bool done = false;
@@ -443,6 +543,7 @@ public class BattleManager : MonoBehaviour
     private void OnTurnStart()
     {
         BattleUIManager.I?.HideYurusuButton();
+        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
 
         if (CurrentTurnOwner == PlayerType.Player)
         {
@@ -553,7 +654,7 @@ public class BattleManager : MonoBehaviour
             {
                 // EnemyAIで防御選択を実行（攻撃属性はプレイヤー攻撃カードから合算）
                 ElementType attackElement = ElementHelper.GetCombinedElement(GetAttackCardsForCombat());
-                selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement);
+                selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement, GetAttackCardsForCombat());
 
                 cardStatsDisplay?.UpdateDisplay();
 
@@ -713,6 +814,22 @@ public class BattleManager : MonoBehaviour
             catch (OperationCanceledException)
             {
                 Debug.Log("[BattleManager] DiseaseTurnEndProcessor: キャンセル（TurnEnd 続行を試みます）");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+            }
+
+            if (CurrentState != GameState.TurnEnd) return;
+
+            // ガルーダ：5n ターン終了時はメッセージ → インターバル → 裏向きドロー → 表向け（Refill より前）
+            try
+            {
+                await SummonGarudaLifecycle.ProcessTurnEndBonusAsync(this, _summonTurnCounters, phaseToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("[BattleManager] SummonGarudaLifecycle: キャンセル");
             }
             catch (Exception ex)
             {
@@ -969,6 +1086,49 @@ public class BattleManager : MonoBehaviour
         SetGameState(GameState.TurnEnd);
     }
 
+    /// <summary>
+    /// 攻撃フェーズで単体の即時カードを処理する。魔法のときは MP 消費・手札→MagicPanel 演出・MagicPool 登録を
+    /// <see cref="CardSequenceManager"/> 経由と揃える。
+    /// </summary>
+    private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex)
+    {
+        bool isMagic = card != null && card.cardType == CardType.Magic;
+
+        if (isMagic && MagicPoolManager.I != null)
+        {
+            if (playerStatus != null && card.mpCost > 0)
+            {
+                int pay = playerStatus.GetEffectiveMagicMpCost(card.mpCost);
+                playerStatus.UseMP(pay);
+                BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            }
+
+            RectTransform handRt = card.cardUI != null ? card.cardUI.transform as RectTransform : null;
+            if (handRt != null && BattleUIManager.I != null && card.cardImage != null)
+            {
+                int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
+                await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, handRt, slot);
+            }
+
+            battleProcessor.UseCard(card, playerHand);
+
+            System.Action drawCb = () => DrawOneCard();
+            MagicPoolManager.I.TryUseMagicCard(card, playerHand, GetHandMaxCount(), drawCb);
+        }
+        else
+        {
+            battleProcessor.UseCard(card, playerHand);
+        }
+
+        BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+
+        selectedCard = null;
+        BattleUIManager.I?.ClearAllSelections();
+        UpdateTotalATKDEFDisplay();
+
+        await ResolveImmediateEffectAsync(card, slotIndex);
+    }
+
     private void HandleAttackUse()
     {
         var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
@@ -1003,24 +1163,16 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // 即時効果（回復など）の場合は通常処理
+        // 即時効果（回復・OnCardEffectResolve の状態異常など）の場合は通常処理
+        // ※魔法カードはここでも MagicPool へ登録する（従来は即時分岐のみだと CardSequenceManager を経由せずプールに載らなかった）
         if (selectedAttackCards.Count == 1 && CardRules.IsImmediateAction(selectedAttackCards[0]))
         {
             var card = selectedAttackCards[0];
             int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
-            
-            // RecordPlayerUseSlotはUseCardの前に呼ぶ必要がある（UseCardでcardDataがnullになるため）
+
             if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
-            
-            battleProcessor.UseCard(card, playerHand);
-            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-            
-            // 選択状態をクリア
-            selectedCard = null;
-            BattleUIManager.I?.ClearAllSelections();
-            UpdateTotalATKDEFDisplay();
-            
-            _ = ResolveImmediateEffectAsync(card, slotIndex);
+
+            _ = RunImmediateAttackSingleCardAsync(card, slotIndex);
             return;
         }
 
@@ -1040,9 +1192,34 @@ public class BattleManager : MonoBehaviour
         var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
         if (selectedDefenseCards == null || selectedDefenseCards.Count == 0)
         {
+            if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
+            {
+                _reflectionChainDefenseTcs.TrySetResult(new List<CardData>());
+                BattleUIManager.I?.ClearAllSelections();
+                UpdateTotalATKDEFDisplay();
+                return;
+            }
+
             // 防御カードを1枚も使わない場合（「許す」）
             Debug.Log("[BattleManager] 防御カードを使用せずにダメージを受ける（許す）");
             HandleNoDefenseCard();
+            return;
+        }
+
+        if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
+        {
+            if (Defender == PlayerType.Player
+                && playerStatus != null
+                && playerStatus.HasRestraintEffect()
+                && selectedDefenseCards.Count > 1)
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+                return;
+            }
+
+            _reflectionChainDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
+            BattleUIManager.I?.ClearAllSelections();
+            UpdateTotalATKDEFDisplay();
             return;
         }
 
@@ -1165,14 +1342,13 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 手札の上限枚数を返す（MagicPoolManager で手札追加可否の判定に使用）
+    /// 手札の上限枚数を返す（MagicPoolManager で手札追加可否の判定に使用）。
+    /// カード UI は配布のたびに Instantiate されるため <see cref="handPanel"/> の子数は現在枚数と一致し、上限には使わない。
     /// </summary>
-    public int GetHandMaxCount()
-    {
-        // handPanel の子オブジェクト数 = スロット数（構造上の最大手札杖数）
-        if (handPanel != null) return handPanel.childCount;
-        return 10; // デフォルト値
-    }
+    public int GetHandMaxCount() => MaxHandCards;
+
+    /// <summary>敵手札リストの論理上限（UI スロットは無いが枚数はプレイヤーと同じ 18 を上限とする）。</summary>
+    public int GetEnemyHandCapacity() => MaxHandCards;
 
     public bool IsSellProcessActive()
     {

@@ -27,6 +27,7 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  clearsRestraintOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
   isPrimaryAttack: 0
@@ -37,6 +38,9 @@ MonoBehaviour:
   isSpecialEffect: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
+  statusEffectToApply: 0
+  statusEffectApplyTiming: 0
   cardValue: 5
+  isRare: 0
   attackPhaseRole: 3
   defensePhaseRole: 0

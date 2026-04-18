@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -228,7 +228,7 @@ public class BattleProcessor : MonoBehaviour
         Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName} vs 防御者: {defender.DisplayName}");
 
         // 攻撃力・防御力の計算
-        int attackPower = CalculateTotalAttackPower(attackCards, attacker);
+        int attackPower = CalculateTotalAttackPower(attackCards, attacker, defender);
         int defensePower = CalculateTotalDefensePower(defenseCard, defender);
 
         // 属性マッチング: 属性が一致しない防御は無効
@@ -256,6 +256,60 @@ public class BattleProcessor : MonoBehaviour
         }
 
         await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
+    }
+
+    /// <summary>
+    /// 反射で跳ね返す攻撃の「既存パイプライン適用後」の攻撃力（加護・防御側抑制まで）。
+    /// 元の攻撃者／防御者（例：敵がプレイヤーを狙ったとき）で計算する。
+    /// </summary>
+    public int ComputeReflectionIncomingAttackPower(
+        List<CardData> attackCards,
+        PlayerStatus originalAttacker,
+        PlayerStatus originalDefender)
+    {
+        return CalculateTotalAttackPower(attackCards, originalAttacker, originalDefender);
+    }
+
+    /// <summary>
+    /// 反射ダメージ解決。攻撃力は <paramref name="incomingAttackPower"/> をそのまま用いる（再計算しない）。
+    /// </summary>
+    public async Task ResolveReflectedCombatAsync(
+        List<CardData> attackCards,
+        int incomingAttackPower,
+        CardData defenseCard,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        List<CardData> defenderHand,
+        bool skipHitCheck = true)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
+        {
+            Debug.LogWarning("[BattleProcessor] ResolveReflectedCombatAsync: 無効なパラメータ");
+            return;
+        }
+
+        int defensePower = CalculateTotalDefensePower(defenseCard, defender);
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
+        if (attackElement != ElementType.None && defenseCard != null
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
+        {
+            defensePower = 0;
+        }
+
+        if (!skipHitCheck)
+        {
+            bool hit = CheckHit(attackCards, attacker, defender);
+            if (!hit)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+                BattleUIManager.I?.ShowMissPopup(defender);
+                return;
+            }
+        }
+
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards, attackElement, attacker, defender, incomingAttackPower, defensePower);
     }
 
     //========================
@@ -294,9 +348,9 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 複数カードの合計攻撃力を計算する
+    /// 複数カードの合計攻撃力を計算する（攻撃側加護の後に防御側の攻撃力抑制を適用）。
     /// </summary>
-    private int CalculateTotalAttackPower(List<CardData> attackCards, PlayerStatus attacker)
+    private int CalculateTotalAttackPower(List<CardData> attackCards, PlayerStatus attacker, PlayerStatus defender)
     {
         if (attackCards == null || attackCards.Count == 0 || attacker == null) 
         {
@@ -322,8 +376,12 @@ public class BattleProcessor : MonoBehaviour
                 Debug.LogWarning($"[BattleProcessor] [{i+1}] カードがnullです");
             }
         }
-        
-        Debug.Log($"[BattleProcessor] ===== 最終攻撃力: {totalAttackPower} =====");
+
+        totalAttackPower = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, attackCards, totalAttackPower);
+        totalAttackPower = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
+            attacker, defender, attackCards, totalAttackPower);
+
+        Debug.Log($"[BattleProcessor] ===== 最終攻撃力（防御側抑制後）: {totalAttackPower} =====");
         return totalAttackPower;
     }
     
@@ -555,7 +613,7 @@ public class BattleProcessor : MonoBehaviour
         Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName} vs 防御者: {defender.DisplayName}");
 
         // 攻撃力・防御力の計算
-        int attackPower = CalculateTotalAttackPower(attackCards, attacker);
+        int attackPower = CalculateTotalAttackPower(attackCards, attacker, defender);
         int defensePower = CalculateTotalDefensePower(defenseCards, defender);
 
         // 属性マッチング: 防御の合算属性が攻撃属性と一致しなければ防御力0
@@ -603,7 +661,7 @@ public class BattleProcessor : MonoBehaviour
 
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
-        Debug.Log($"[BattleProcessor] 第1段（超過）: {firstPhaseDamage}");
+        Debug.Log($"[BattleProcessor] 第1段（超過・与ダメ補正後）: {firstPhaseDamage}");
 
         await Task.Delay(500);
 

@@ -1,0 +1,16 @@
+/// <summary>
+/// <see cref="SummonData"/> の加護の決め方。SerializeReference の代わりにインスペクター互換の enum で指定する。
+/// </summary>
+public enum SummonPassiveBlessingMode
+{
+    /// <summary>アセット名（Ifrit など）から <see cref="SummonPassiveBlessingFallback"/> で決定</summary>
+    AutoByAssetName = 0,
+    /// <summary>加護なし（検証用）</summary>
+    None = 1,
+    /// <summary>イフリートの加護を明示指定</summary>
+    Ifrit = 2,
+    /// <summary>ガルーダ（開始時・ターン終了ライフサイクル。攻撃加護は別）</summary>
+    Garuda = 3,
+    /// <summary>リヴァイアサン（被ダメージ軽減。攻撃加護は別）</summary>
+    Leviathan = 4,
+}

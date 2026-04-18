@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -48,6 +48,32 @@ public class CardSelectionManager : MonoBehaviour
                 if (already.Count >= 1 && !sameAsSelected)
                 {
                     BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+                    return false;
+                }
+            }
+        }
+
+        // ===== 防御：物理反射は他カードと併選不可 =====
+        if (BattleManager.I != null
+            && (BattleManager.I.CurrentState == GameState.DefenseSelect
+                || BattleManager.I.CurrentState == GameState.DefenseConfirm)
+            && IsDefenseCard(card))
+        {
+            foreach (var sel in selectedCards)
+            {
+                if (sel == null) continue;
+                if (!ReflectionRules.IsPhysicalReflectionCard(sel)) continue;
+                if (card.GetInstanceID() == sel.GetInstanceID()) continue;
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
+                return false;
+            }
+            if (ReflectionRules.IsPhysicalReflectionCard(card))
+            {
+                foreach (var sel in selectedCards)
+                {
+                    if (sel == null) continue;
+                    if (ReflectionRules.IsPhysicalReflectionCard(sel)) continue;
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
                     return false;
                 }
             }

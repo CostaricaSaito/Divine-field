@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -115,9 +115,25 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            // 防御カードの場合、複数防御カード対応（敵の攻撃は既に命中判定済み）
-            bool skipHit = battleManager.AttackerPublic == PlayerType.Enemy;
-            await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand, skipHit);
+            if (selectedCards.Count == 1
+                && ReflectionRules.IsPhysicalReflectionCard(selectedCards[0])
+                && battleManager.DefenderPublic == PlayerType.Player
+                && ReflectionRules.CanReflectPhysical(attackCards))
+            {
+                await PhysicalReflectionFlow.RunPlayerInitiatedAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    battleManager.GetEnemyAI(),
+                    attackCards,
+                    cancellationToken);
+            }
+            else
+            {
+                // 防御カードの場合、複数防御カード対応（敵の攻撃は既に命中判定済み）
+                bool skipHit = battleManager.AttackerPublic == PlayerType.Enemy;
+                await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand, skipHit);
+            }
         }
 
         if (cancellationToken.IsCancellationRequested) return;

@@ -92,43 +92,77 @@ public class CardDealer : MonoBehaviour
     /// </summary>
     /// <param name="playerHand">プレイヤーの手札</param>
     /// <param name="cpuHand">CPUの手札</param>
-    /// <param name="count">配布枚数</param>
+    /// <param name="count">配布枚数（プレイヤー・CPU 同数）</param>
     /// <returns>配布完了まで待機</returns>
     public IEnumerator DealCards(List<CardData> playerHand, List<CardData> cpuHand, int count)
     {
-        // 既存UIクリア
+        yield return DealOpeningHands(playerHand, cpuHand, count, count);
+    }
+
+    /// <summary>
+    /// 開幕手札を配る。プレイヤー／CPU で枚数が違ってもよい（ガルーダで 12 vs 10 など）。
+    /// すべて配り終えてから一斉表向け・バトル開始 SE を行う。
+    /// </summary>
+    public IEnumerator DealOpeningHands(List<CardData> playerHand, List<CardData> cpuHand, int playerTarget, int cpuTarget)
+    {
         ClearPlayerHandUI();
         activeCardUIs.Clear();
         playerHand.Clear();
         cpuHand.Clear();
 
-        // 配布ループ
-        for (int i = 0; i < count; i++)
+        while (playerHand.Count < playerTarget || cpuHand.Count < cpuTarget)
         {
-            // カードインスタンスの生成（各プレイヤー用に独立した cardUI を生成するように）
-            var playerCardInstance = DrawRandomCardInstance();
-            var enemyCardInstance = DrawRandomCardInstance();
-
-            playerHand.Add(playerCardInstance);
-            cpuHand.Add(enemyCardInstance);
-
-            // プレイヤー用 UI 生成
-            var ui = CreateCardUIForHand(playerCardInstance);
-            if (ui != null) activeCardUIs.Add(ui);
-
-            // 手札枚数をリアルタイム更新
-            BattleUIManager.I?.UpdateStatus(
-                BattleManager.I?.GetPlayerStatus(), 
-                BattleManager.I?.GetEnemyStatus()
-            );
-
-            // 自分の手札に裏向きで入ったタイミングのSE（レア切り替え）
-            CardDealAudio.Play(playerCardInstance);
+            if (playerHand.Count < playerTarget && cpuHand.Count < cpuTarget)
+            {
+                var playerCardInstance = DrawRandomCardInstance();
+                var enemyCardInstance = DrawRandomCardInstance();
+                if (playerCardInstance == null || enemyCardInstance == null)
+                {
+                    Debug.LogError("[CardDealer] DealOpeningHands: カード生成に失敗しました");
+                    yield break;
+                }
+                playerHand.Add(playerCardInstance);
+                cpuHand.Add(enemyCardInstance);
+                var ui = CreateCardUIForHand(playerCardInstance);
+                if (ui != null) activeCardUIs.Add(ui);
+                BattleUIManager.I?.UpdateStatus(
+                    BattleManager.I?.GetPlayerStatus(),
+                    BattleManager.I?.GetEnemyStatus());
+                CardDealAudio.Play(playerCardInstance);
+            }
+            else if (playerHand.Count < playerTarget)
+            {
+                var playerCardInstance = DrawRandomCardInstance();
+                if (playerCardInstance == null)
+                {
+                    Debug.LogError("[CardDealer] DealOpeningHands: プレイヤーカード生成に失敗しました");
+                    yield break;
+                }
+                playerHand.Add(playerCardInstance);
+                var ui = CreateCardUIForHand(playerCardInstance);
+                if (ui != null) activeCardUIs.Add(ui);
+                BattleUIManager.I?.UpdateStatus(
+                    BattleManager.I?.GetPlayerStatus(),
+                    BattleManager.I?.GetEnemyStatus());
+                CardDealAudio.Play(playerCardInstance);
+            }
+            else
+            {
+                var enemyCardInstance = DrawRandomCardInstance();
+                if (enemyCardInstance == null)
+                {
+                    Debug.LogError("[CardDealer] DealOpeningHands: CPUカード生成に失敗しました");
+                    yield break;
+                }
+                cpuHand.Add(enemyCardInstance);
+                BattleUIManager.I?.UpdateStatus(
+                    BattleManager.I?.GetPlayerStatus(),
+                    BattleManager.I?.GetEnemyStatus());
+            }
 
             yield return new WaitForSeconds(0.15f);
         }
 
-        // 表示演出：一斉めくり＋ バトル開始SE を1回（レア有無は問わない）
         yield return new WaitForSeconds(0.5f);
         foreach (var ui in activeCardUIs)
             ui?.Reveal();

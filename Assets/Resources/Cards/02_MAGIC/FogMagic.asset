@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
-  m_Name: WeakenMagic
+  m_Name: FogMagic
   m_EditorClassIdentifier: 
   cardName: "\u6FC3\u9727\u4ED8\u4E0E"
   cardType: 2
@@ -20,16 +20,17 @@ MonoBehaviour:
   defensePower: 0
   element: 0
   hitRate: 100
-  mpCost: 0
+  mpCost: 5
   maxUses: 3
   isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  clearsRestraintOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
-  isPrimaryAttack: 0
+  isPrimaryAttack: 1
   isAdditionalAttack: 0
   isPrimaryDefense: 0
   isCounterAttack: 0

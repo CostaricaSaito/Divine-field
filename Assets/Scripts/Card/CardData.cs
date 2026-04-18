@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 
 
@@ -23,6 +23,17 @@ public enum ElementType
     Dark,
     Light,
     
+}
+
+/// <summary>
+/// 反射カードの種別（<see cref="CardData.reflectionKind"/>）。
+/// </summary>
+public enum ReflectionKind
+{
+    None = 0,
+    Physical = 1,
+    Magic = 2,
+    Full = 3,
 }
 
 /// <summary>
@@ -128,6 +139,9 @@ public class CardData : ScriptableObject
     public SelectionRole attackPhaseRole = SelectionRole.None;
     [Tooltip("防御選択時の複数枚衝突解決。None は既選択を消さずに追加しやすい。")]
     public SelectionRole defensePhaseRole = SelectionRole.None;
+
+    [Header("反射")]
+    public ReflectionKind reflectionKind = ReflectionKind.None;
 
     [Header("UI参照（非表示）")]
     [System.NonSerialized] public CardUI cardUI;

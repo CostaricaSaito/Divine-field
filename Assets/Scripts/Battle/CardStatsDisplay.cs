@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -158,7 +158,7 @@ public class CardStatsDisplay : MonoBehaviour
         {
             if (currentSequenceType == "攻撃")
             {
-                int totalAttack = CalculateTotalAttackPower(currentSequenceCards);
+                int totalAttack = GetDisplayedAttackStrength(currentSequenceCards, battleManager.GetPlayerStatus());
                 if (totalAttack <= 0) return true;
                 return false;
             }
@@ -180,7 +180,7 @@ public class CardStatsDisplay : MonoBehaviour
                 // 複数選択時は合計攻撃力をチェック
                 if (selectedAttackCards.Count > 1)
                 {
-                    int totalAttack = CalculateTotalAttackPower(selectedAttackCards);
+                    int totalAttack = GetDisplayedAttackStrength(selectedAttackCards, battleManager.GetPlayerStatus());
                     if (totalAttack <= 0) return true;
                     return false;
                 }
@@ -188,7 +188,8 @@ public class CardStatsDisplay : MonoBehaviour
                 // 単一選択の場合
                 var card = selectedAttackCards[0];
                 if (CardRules.IsImmediateAction(card)) return true;
-                if (card.attackPower <= 0) return true;
+                var oneAtk = new List<CardData> { card };
+                if (GetDisplayedAttackStrength(oneAtk, battleManager.GetPlayerStatus()) <= 0) return true;
                 return false;
             }
 
@@ -246,7 +247,8 @@ public class CardStatsDisplay : MonoBehaviour
             if (currentAttackCard != null)
             {
                 if (CardRules.IsImmediateAction(currentAttackCard)) return true;
-                if (currentAttackCard.attackPower <= 0) return true;
+                var one = new List<CardData> { currentAttackCard };
+                if (GetDisplayedAttackStrength(one, battleManager.GetEnemyStatus()) <= 0) return true;
                 return false;
             }
             return true;
@@ -445,12 +447,26 @@ public class CardStatsDisplay : MonoBehaviour
     }
 
     /// <summary>
-    /// TotalATK 表示用。衰弱時は与ダメ補正（魔法単体攻撃は除外）を反映。
+    /// TotalATK 表示用。攻撃側加護 → 防御側の攻撃力抑制（リヴァイアサン等）→ 衰弱時は与ダメ補正（魔法単体攻撃は除外）。
     /// </summary>
     private int GetDisplayedAttackStrength(List<CardData> cards, PlayerStatus attacker)
     {
         if (cards == null || cards.Count == 0) return 0;
         int raw = CalculateTotalAttackPower(cards);
+        if (attacker != null && raw > 0)
+            raw = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, raw);
+        if (attacker != null && raw > 0)
+        {
+            var bm = BattleManager.I;
+            PlayerStatus defender = null;
+            if (bm != null)
+            {
+                var p = bm.GetPlayerStatus();
+                var e = bm.GetEnemyStatus();
+                defender = attacker == p ? e : (attacker == e ? p : null);
+            }
+            raw = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(attacker, defender, cards, raw);
+        }
         if (attacker == null || raw <= 0) return raw;
         if (CardRules.IsMagicOnlyAttackCombo(cards)) return raw;
         return attacker.ApplyOutgoingDamageModifiers(raw);

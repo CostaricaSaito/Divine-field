@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -221,11 +221,32 @@ public class EnemyAI
     /// 敵の防御選択を実行する
     /// </summary>
     /// <param name="attackElement">攻撃側の合算属性（<see cref="ElementHelper.GetCombinedElement"/> と一致させる）</param>
-    public async Task<CardData> ExecuteDefenseSelectAsync(List<CardData> cpuHand, ElementType attackElement)
+    /// <param name="incomingForReflection">反射可否判定用の攻撃カード一覧（null なら反射優先なし）</param>
+    public async Task<CardData> ExecuteDefenseSelectAsync(
+        List<CardData> cpuHand,
+        ElementType attackElement,
+        List<CardData> incomingForReflection = null)
     {
         Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
 
-        var defenseCard = SelectDefenseCard(cpuHand, attackElement);
+        CardData defenseCard = null;
+        if (incomingForReflection != null && incomingForReflection.Count > 0
+            && ReflectionRules.CanReflectPhysical(incomingForReflection)
+            && cpuHand != null)
+        {
+            foreach (var c in cpuHand)
+            {
+                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c))
+                {
+                    defenseCard = c;
+                    Debug.Log($"[EnemyAI] 物理反射を優先: {defenseCard.cardName}");
+                    break;
+                }
+            }
+        }
+
+        if (defenseCard == null)
+            defenseCard = SelectDefenseCard(cpuHand, attackElement);
 
         if (defenseCard != null)
         {

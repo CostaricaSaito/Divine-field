@@ -1,15 +1,22 @@
-﻿// BattleDebugTools.cs
+// BattleDebugTools.cs
 using System.Threading;
 using UnityEngine;
 
-#if UNITY_EDITOR
 /// <summary>
-/// バトル用デバッグ。コンポーネント右クリックのコンテキストメニュー、およびインスペクターで有効化した OnGUI パネルから実行する。
+/// バトル用デバッグ。コンポーネント右クリックのコンテキストメニュー、およびインスペクターで有効化した OnGUI パネル（Editor のみ）から実行する。
 /// </summary>
 public class BattleDebugTools : MonoBehaviour
 {
     [Header("バトルコンポーネント参照")]
     public BattleManager battleManager;
+
+    [Header("初期召喚獣（デバッグ・バトル開始時）")]
+    [Tooltip("オン時、SummonSelectionManager／既定より優先してプレイヤーに割り当てます。")]
+    [SerializeField] private bool overridePlayerInitialSummon;
+    [SerializeField] private SummonData debugPlayerInitialSummon;
+    [Tooltip("オン時、敵のランダム召喚より優先します。")]
+    [SerializeField] private bool overrideEnemyInitialSummon;
+    [SerializeField] private SummonData debugEnemyInitialSummon;
 
     [Header("状態異常デバッグ（再生中・左上）")]
     [Tooltip("オンにすると15種の付与ボタンを表示。Factory未実装の4種はプレースホルダーで付与。")]
@@ -91,6 +98,7 @@ public class BattleDebugTools : MonoBehaviour
         Debug.Log("[BattleDebugTools] プレイヤーに「楽園病」を付与。");
     }
 
+#if UNITY_EDITOR
     private void OnGUI()
     {
         if (!showAilmentDebugPanel || !Application.isPlaying || battleManager == null)
@@ -127,6 +135,19 @@ public class BattleDebugTools : MonoBehaviour
         GUILayout.EndScrollView();
 
         GUILayout.Space(6);
+        GUILayout.Label("召喚（デバッグ）", GUI.skin.box);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("プレイヤー→ガルーダ"))
+        {
+            DebugSetPlayerSummonGaruda();
+        }
+        if (GUILayout.Button("敵→ガルーダ"))
+        {
+            DebugSetEnemySummonGaruda();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6);
         GUILayout.Label("状態異常13（介入）", GUI.skin.box);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         InterventionTurnEndProcessor.DebugForceInterventionChance100 = GUILayout.Toggle(
@@ -137,6 +158,51 @@ public class BattleDebugTools : MonoBehaviour
 #endif
 
         GUILayout.EndArea();
+    }
+#endif
+
+    /// <summary>
+    /// <see cref="BattleManager.Start"/> で通常の召喚割当の直後に呼ぶ。Editor / Development ビルドのみ有効。
+    /// </summary>
+    public void ApplyInitialSummonOverrides(PlayerStatus player, PlayerStatus enemy)
+    {
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+        return;
+#endif
+        if (player != null && overridePlayerInitialSummon && debugPlayerInitialSummon != null)
+            player.summonData = debugPlayerInitialSummon;
+        if (enemy != null && overrideEnemyInitialSummon && debugEnemyInitialSummon != null)
+            enemy.summonData = debugEnemyInitialSummon;
+    }
+
+    [ContextMenu("デバッグ：プレイヤー召喚をガルーダに切替")]
+    public void DebugSetPlayerSummonGaruda()
+    {
+        if (!EnsurePlaying()) return;
+        var g = Resources.Load<SummonData>("Summons/Garuda");
+        if (g == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] Resources/Summons/Garuda が見つかりません。");
+            return;
+        }
+        battleManager.GetPlayerStatus().summonData = g;
+        RefreshStatusUi();
+        Debug.Log("[BattleDebugTools] プレイヤー召喚をガルーダに設定しました。");
+    }
+
+    [ContextMenu("デバッグ：敵召喚をガルーダに切替")]
+    public void DebugSetEnemySummonGaruda()
+    {
+        if (!EnsurePlaying()) return;
+        var g = Resources.Load<SummonData>("Summons/Garuda");
+        if (g == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] Resources/Summons/Garuda が見つかりません。");
+            return;
+        }
+        battleManager.GetEnemyStatus().summonData = g;
+        RefreshStatusUi();
+        Debug.Log("[BattleDebugTools] 敵召喚をガルーダに設定しました。");
     }
 
     [ContextMenu("デバッグ：介入(13) 発生率100%をトグル")]
@@ -211,4 +277,3 @@ public class BattleDebugTools : MonoBehaviour
             battleManager.statusUI.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
     }
 }
-#endif

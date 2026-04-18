@@ -107,7 +107,7 @@ public class BattleStatusUI : MonoBehaviour
 
         if (player != null)
         {
-            playerSummonIcon.sprite = player.summonData.characterSprite;
+            playerSummonIcon.sprite = player.summonData != null ? player.summonData.GetBattleStatusIconSprite() : null;
             playerNameText.text = player.DisplayName;
 
             if (viewerUnderFog)
@@ -129,7 +129,7 @@ public class BattleStatusUI : MonoBehaviour
 
         if (enemy != null)
         {
-            enemySummonIcon.sprite = enemy.summonData.characterSprite;
+            enemySummonIcon.sprite = enemy.summonData != null ? enemy.summonData.GetBattleStatusIconSprite() : null;
             enemyNameText.text = enemy.DisplayName;
 
             if (viewerUnderFog)

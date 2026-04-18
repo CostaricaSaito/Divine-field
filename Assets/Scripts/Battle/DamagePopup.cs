@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -6,48 +7,48 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// ”’lƒ_ƒ[ƒW•\¦‚Ì”zFiƒeƒLƒXƒgE‰E”wŒãƒpƒlƒ‹jBƒpƒlƒ‹‚ÍƒAƒ‹ƒtƒ@0‚Ì‚Æ‚« Setup ‚Å•ÏX‚µ‚È‚¢B
+/// æ•°å€¤ãƒ€ãƒ¡ãƒ¼ã‚¸è¡¨ç¤ºã®é…è‰²ï¼ˆãƒ†ã‚­ã‚¹ãƒˆãƒ»ç¸ãƒ»èƒŒå¾Œãƒ‘ãƒãƒ«ï¼‰ã€‚ãƒ‘ãƒãƒ«ã¯ã‚¢ãƒ«ãƒ•ã‚¡0ã®ã¨ã Setup ã§å¤‰æ›´ã—ãªã„ã€‚
 /// </summary>
 [System.Serializable]
 public struct DamagePopupNumericAppearance
 {
-    [Tooltip("”šEuƒ_ƒ[ƒWvƒ‰ƒxƒ‹‚Ì“h‚è")]
+    [Tooltip("æ•°å­—ãƒ»ã€Œãƒ€ãƒ¡ãƒ¼ã‚¸ã€ãƒ©ãƒ™ãƒ«ã®å¡—ã‚Š")]
     public Color textFill;
-    [Tooltip("TMP ƒAƒEƒgƒ‰ƒCƒ“i‰j")]
+    [Tooltip("TMP ã‚¢ã‚¦ãƒˆãƒ©ã‚¤ãƒ³ï¼ˆç¸ï¼‰")]
     public Color outlineColor;
-    [Tooltip("ƒ‹[ƒg Image ‚Ö‚Ì’…FiƒAƒ‹ƒtƒ@0‚È‚ç”’lƒ_ƒ[ƒW‚Í”wŒi‚ğ•Ï‚¦‚È‚¢j")]
+    [Tooltip("ãƒ«ãƒ¼ãƒˆ Image ã¸ã®ç€è‰²ï¼ˆã‚¢ãƒ«ãƒ•ã‚¡0ãªã‚‰æ•°å€¤ãƒ€ãƒ¡ãƒ¼ã‚¸æ™‚ã¯èƒŒæ™¯ã‚’å¤‰ãˆãªã„ï¼‰")]
     public Color panelBackground;
 }
 
 /// <summary>
-/// ƒ_ƒ[ƒW^‰ñ•œ^ƒƒbƒZ[ƒW—pƒtƒ[ƒeƒBƒ“ƒOƒeƒLƒXƒgB
-/// ƒŒƒCƒAƒEƒgiƒpƒlƒ‹“àˆÊ’uERectj‚Í BattleUIManager ‚ÆƒvƒŒƒnƒu‘¤B‚±‚ÌƒNƒ‰ƒX‚Íå‚É•¶Œ¾EFE•‚‚«^ƒtƒF[ƒhB
+/// ãƒ€ãƒ¡ãƒ¼ã‚¸ï¼å›å¾©ï¼ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ç”¨ãƒ•ãƒ­ãƒ¼ãƒ†ã‚£ãƒ³ã‚°ãƒ†ã‚­ã‚¹ãƒˆã€‚
+/// ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆï¼ˆãƒ‘ãƒãƒ«å†…ä½ç½®ãƒ»Rectï¼‰ã¯ BattleUIManager ã¨ãƒ—ãƒ¬ãƒãƒ–å´ã€‚ã“ã®ã‚¯ãƒ©ã‚¹ã¯ä¸»ã«æ–‡è¨€ãƒ»è‰²ãƒ»æµ®ãï¼ãƒ•ã‚§ãƒ¼ãƒ‰ã€‚
 /// </summary>
 public class DamagePopup : MonoBehaviour
 {
-    // --- QÆiÀs‚Éƒ‹[ƒg‚©‚çæ“¾BƒvƒŒƒnƒu‚Ìƒ‹[ƒg‚É Image ‚ª–³‚¢ê‡‚Íƒpƒlƒ‹’…F‚È‚µj---
+    // --- å‚ç…§ï¼ˆå®Ÿè¡Œæ™‚ã«ãƒ«ãƒ¼ãƒˆã‹ã‚‰å–å¾—ã€‚ãƒ—ãƒ¬ãƒãƒ–ã®ãƒ«ãƒ¼ãƒˆã« Image ãŒç„¡ã„å ´åˆã¯ãƒ‘ãƒãƒ«ç€è‰²ãªã—ï¼‰---
     private Image _rootPanelImage;
-    // valueTextiDamageValuejc ƒ_ƒ[ƒW”’li1’i–Ú‚Ì‘å‚«‚¢”šjê—pBƒŒƒCƒAƒEƒg‚Í”šŒü‚¯B
+    // valueTextï¼ˆDamageValueï¼‰â€¦ ãƒ€ãƒ¡ãƒ¼ã‚¸æ•°å€¤ï¼ˆ1æ®µç›®ã®å¤§ãã„æ•°å­—ï¼‰å°‚ç”¨ã€‚ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã¯æ•°å­—å‘ã‘ã€‚
     [SerializeField] private TMP_Text valueText;
-    // labelText c uƒ_ƒ[ƒWv‚Ì¬‚³‚¢si”’lƒ_ƒ[ƒW‚Ì‚İjB
+    // labelText â€¦ ã€Œãƒ€ãƒ¡ãƒ¼ã‚¸ã€ã®å°ã•ã„è¡Œï¼ˆæ•°å€¤ãƒ€ãƒ¡ãƒ¼ã‚¸æ™‚ã®ã¿ï¼‰ã€‚
     [SerializeField] private TMP_Text labelText;
-    // messageTextiMessagejc u–³vuŠãv‚È‚ÇŒê‹åEó‘ÔˆÙí–¼BDamageValue ‚Æ‚Í•Ê Rect ‚Å’†‰›Šñ‚¹‚µ‚â‚·‚­‚·‚éB
+    // messageTextï¼ˆMessageï¼‰â€¦ ã€Œç„¡å‚·ã€ã€Œè¡°å¼±ã€ãªã©èªå¥ãƒ»çŠ¶æ…‹ç•°å¸¸åã€‚DamageValue ã¨ã¯åˆ¥ Rect ã§ä¸­å¤®å¯„ã›ã—ã‚„ã™ãã™ã‚‹ã€‚
     [SerializeField] private TMP_Text messageText;
 
-    [Header("MessageiTextMeshPro Auto Sizej")]
-    [Tooltip("’·‚¢•¶Œ¾‚Í‚±‚Ì”ÍˆÍ‚Åk¬‚³‚êARect “à‚Éû‚Ü‚è‚â‚·‚­‚È‚è‚Ü‚·BƒvƒŒƒnƒu‚Ì Message ‚Ì Rect •E‚‚³‚àŠm”F‚µ‚Ä‚­‚¾‚³‚¢B")]
+    [Header("Messageï¼ˆTextMeshPro Auto Sizeï¼‰")]
+    [Tooltip("é•·ã„æ–‡è¨€ã¯ã“ã®ç¯„å›²ã§ç¸®å°ã•ã‚Œã€Rect å†…ã«åã¾ã‚Šã‚„ã™ããªã‚Šã¾ã™ã€‚ãƒ—ãƒ¬ãƒãƒ–ã® Message ã® Rect å¹…ãƒ»é«˜ã•ã‚‚ç¢ºèªã—ã¦ãã ã•ã„ã€‚")]
     [SerializeField] [Range(8f, 80f)] private float messageFontSizeMin = 22f;
     [SerializeField] [Range(40f, 200f)] private float messageFontSizeMax = 160f;
 
-    [Header("”’lƒ_ƒ[ƒW‚Ì”zF")]
-    [Tooltip("‘ÎÛ‚ªƒvƒŒƒCƒ„[i©•ª‚ªH‚ç‚¤j‚Æ‚«B]—ˆ: ƒVƒAƒ“Œn{”’‰")]
+    [Header("æ•°å€¤ãƒ€ãƒ¡ãƒ¼ã‚¸ã®é…è‰²")]
+    [Tooltip("å¯¾è±¡ãŒãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ï¼ˆè‡ªåˆ†ãŒé£Ÿã‚‰ã†ï¼‰ã¨ãã€‚å¾“æ¥: ã‚·ã‚¢ãƒ³ç³»ï¼‹ç™½ç¸")]
     [SerializeField] private DamagePopupNumericAppearance damageWhenPlayerIsTarget = new DamagePopupNumericAppearance
     {
         textFill = new Color(0.25f, 0.95f, 1f),
         outlineColor = Color.white,
         panelBackground = new Color(0f, 0f, 0f, 0f)
     };
-    [Tooltip("‘ÎÛ‚ª“Gi‘Šè‚ªH‚ç‚¤j‚Æ‚«B]—ˆ: Ô{”’‰")]
+    [Tooltip("å¯¾è±¡ãŒæ•µï¼ˆç›¸æ‰‹ãŒé£Ÿã‚‰ã†ï¼‰ã¨ãã€‚å¾“æ¥: èµ¤ï¼‹ç™½ç¸")]
     [SerializeField] private DamagePopupNumericAppearance damageWhenEnemyIsTarget = new DamagePopupNumericAppearance
     {
         textFill = new Color(0.92f, 0.12f, 0.18f),
@@ -55,7 +56,7 @@ public class DamagePopup : MonoBehaviour
         panelBackground = new Color(0f, 0f, 0f, 0f)
     };
 
-    [Header("ƒ_ƒ[ƒW0u–³v")]
+    [Header("ãƒ€ãƒ¡ãƒ¼ã‚¸0ã€Œç„¡å‚·ã€")]
     [SerializeField] private DamagePopupNumericAppearance noDamageAppearance = new DamagePopupNumericAppearance
     {
         textFill = new Color(1f, 0.92f, 0.15f),
@@ -63,26 +64,29 @@ public class DamagePopup : MonoBehaviour
         panelBackground = new Color(0f, 0f, 0f, 0f)
     };
 
-    [Header("ˆÅ‘®«E‘æ2’ii”’l‚ÌF‚Íã‚ÌƒvƒŒƒCƒ„[^“G‚Æ“¯‚¶B‚±‚±‚Íƒpƒlƒ‹‚Ì‚İj")]
+    [Header("é—‡å±æ€§ãƒ»ç¬¬2æ®µï¼ˆæ•°å€¤ã®è‰²ã¯ä¸Šã®ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ï¼æ•µã¨åŒã˜ã€‚ã“ã“ã¯ãƒ‘ãƒãƒ«ã®ã¿ï¼‰")]
     [SerializeField] private Color darkFollowupPanelBackground = new Color(0.28f, 0.1f, 0.42f, 0.94f);
 
-    [Header("’PƒƒƒbƒZ[ƒW Setupiƒ~ƒXE‰ñ•œ•¶Œ¾‚È‚Çj‚ÌƒfƒtƒHƒ‹ƒg‰F")]
+    [Header("å˜ç´”ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ Setupï¼ˆãƒŸã‚¹ãƒ»å›å¾©æ–‡è¨€ãªã©ï¼‰ã®ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆç¸è‰²")]
     [SerializeField] private Color defaultOutlineForSimpleMessage = Color.white;
 
-    // --- ‰‰oƒpƒ‰ƒ[ƒ^iInspector ‚©‚ç‚à•ÏX‰Âj---
-    // floatSpeed c ã•ûŒü‚É•Y‚¤‘¬“xB‘å‚«‚¢‚Ù‚Ç‘¬‚­ã‚É”²‚¯‚éiƒ[ƒ‹ƒh^ƒ[ƒJƒ‹‚Íe‚ÌŒü‚«ˆË‘¶B’Êí‚Íã‚ÖjB
+    [Header("åå°„ãƒ»å¼¾ãè¿”ã—")]
+    [SerializeField] private Color reflectionPanelBackground = new Color(0.82f, 0.08f, 0.1f, 0.96f);
+
+    // --- æ¼”å‡ºãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ï¼ˆInspector ã‹ã‚‰ã‚‚å¤‰æ›´å¯ï¼‰---
+    // floatSpeed â€¦ ä¸Šæ–¹å‘ã«æ¼‚ã†é€Ÿåº¦ã€‚å¤§ãã„ã»ã©é€Ÿãä¸Šã«æŠœã‘ã‚‹ï¼ˆãƒ¯ãƒ¼ãƒ«ãƒ‰ï¼ãƒ­ãƒ¼ã‚«ãƒ«ã¯è¦ªã®å‘ãä¾å­˜ã€‚é€šå¸¸ã¯ä¸Šã¸ï¼‰ã€‚
     public float floatSpeed = 30f;
-    // fadeDuration c ‰½•b‚©‚¯‚Ä“§–¾‚É‚È‚é‚©B‘å‚«‚¢‚Ù‚Ç’·‚­c‚éBDestroy ‚à‚±‚Ì•bŒãB
+    // fadeDuration â€¦ ä½•ç§’ã‹ã‘ã¦é€æ˜ã«ãªã‚‹ã‹ã€‚å¤§ãã„ã»ã©é•·ãæ®‹ã‚‹ã€‚Destroy ã‚‚ã“ã®ç§’å¾Œã€‚
     public float fadeDuration = 1f;
 
-    /// <summary>UI ¶¬‚É¸”s‚µ‚½‚Æ‚«‚È‚ÇAˆÅƒtƒHƒ[‘O‚Ì‘Ò‚¿‚Ég‚¤Šù’è•b”i<see cref="fadeDuration"/> ‚ÌƒfƒtƒHƒ‹ƒg‚Æˆê’vjB</summary>
+    /// <summary>UI ç”Ÿæˆã«å¤±æ•—ã—ãŸã¨ããªã©ã€é—‡ãƒ•ã‚©ãƒ­ãƒ¼å‰ã®å¾…ã¡ã«ä½¿ã†æ—¢å®šç§’æ•°ï¼ˆ<see cref="fadeDuration"/> ã®ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã¨ä¸€è‡´ï¼‰ã€‚</summary>
     public const float DefaultFadeDurationIfUnknown = 1f;
 
-    /// <summary>ƒ|ƒbƒvƒAƒbƒvÁ–ÅŒã?Ÿˆ—‚Ü‚Å‚Ì•W€ƒCƒ“ƒ^[ƒoƒ‹imsjBõ–½‚Í <see cref="fadeDuration"/> ‚Æ•Ê“r‘Ò‚ÂB</summary>
+    /// <summary>ãƒãƒƒãƒ—ã‚¢ãƒƒãƒ—æ¶ˆæ»…å¾Œ?æ¬¡å‡¦ç†ã¾ã§ã®æ¨™æº–ã‚¤ãƒ³ã‚¿ãƒ¼ãƒãƒ«ï¼ˆmsï¼‰ã€‚å¯¿å‘½ã¯ <see cref="fadeDuration"/> ã¨åˆ¥é€”å¾…ã¤ã€‚</summary>
     public const int PostPopupIntervalMs = 500;
 
     private float timer;
-    // CanvasGroup c ‚È‚¢ê‡‚ÍƒtƒF[ƒh‚È‚µi“§–¾“x‚Í•Ï‚í‚ç‚¸A‚»‚Ì‚Ü‚ÜÁ‚¦‚é‚Ü‚Å•\¦jB
+    // CanvasGroup â€¦ ãªã„å ´åˆã¯ãƒ•ã‚§ãƒ¼ãƒ‰ãªã—ï¼ˆé€æ˜åº¦ã¯å¤‰ã‚ã‚‰ãšã€ãã®ã¾ã¾æ¶ˆãˆã‚‹ã¾ã§è¡¨ç¤ºï¼‰ã€‚
     private CanvasGroup canvasGroup;
 
     private enum PopupRunMode
@@ -98,13 +102,13 @@ public class DamagePopup : MonoBehaviour
 
     private void Awake()
     {
-        // valueText –¢Š„‚è“–‚Ä‚Ì•ÛŒ¯Fq‚Ì TMP ‚ğ1‚ÂE‚¤iMessage ’Ç‰ÁŒã‚Í Inspector Š„‚è“–‚Ä„§jB
+        // valueText æœªå‰²ã‚Šå½“ã¦æ™‚ã®ä¿é™ºï¼šå­ã® TMP ã‚’1ã¤æ‹¾ã†ï¼ˆMessage è¿½åŠ å¾Œã¯ Inspector å‰²ã‚Šå½“ã¦æ¨å¥¨ï¼‰ã€‚
         if (valueText == null)
             valueText = GetComponentInChildren<TMP_Text>(true);
         _rootPanelImage = GetComponent<Image>();
     }
 
-    /// <summary>”’lƒ_ƒ[ƒW—pFDamageValue ‚ğ•\¦‚µ Message ‚Í‰B‚·iƒ‰ƒxƒ‹‚ÍŒÄ‚Ño‚µ‘¤‚Åuƒ_ƒ[ƒWv‚É•\¦jB</summary>
+    /// <summary>æ•°å€¤ãƒ€ãƒ¡ãƒ¼ã‚¸ç”¨ï¼šDamageValue ã‚’è¡¨ç¤ºã— Message ã¯éš ã™ï¼ˆãƒ©ãƒ™ãƒ«ã¯å‘¼ã³å‡ºã—å´ã§ã€Œãƒ€ãƒ¡ãƒ¼ã‚¸ã€æ™‚ã«è¡¨ç¤ºï¼‰ã€‚</summary>
     private void PrepareDamageNumberLayout()
     {
         if (messageText != null)
@@ -113,7 +117,7 @@ public class DamagePopup : MonoBehaviour
             valueText.gameObject.SetActive(true);
     }
 
-    /// <summary>Œê‹åEó‘ÔˆÙíE–³‚È‚Ç Message ‚Ì‚İBDamageValue^ƒ‰ƒxƒ‹‚Í‰B‚·B</summary>
+    /// <summary>èªå¥ãƒ»çŠ¶æ…‹ç•°å¸¸ãƒ»ç„¡å‚·ãªã© Message ã®ã¿ã€‚DamageValueï¼ãƒ©ãƒ™ãƒ«ã¯éš ã™ã€‚</summary>
     private void ShowMessageLayout(string text, Color fillColor, Color outlineColor, bool statusAilmentAutoSize)
     {
         if (labelText != null)
@@ -132,7 +136,7 @@ public class DamagePopup : MonoBehaviour
         {
             if (statusAilmentAutoSize)
             {
-                // ó‘ÔˆÙí–¼F1s‚ğ‘å‚«‚­i]—ˆ‚Ç‚¨‚èÜ‚è•Ô‚µ‚È‚µj
+                // çŠ¶æ…‹ç•°å¸¸åï¼š1è¡Œã‚’å¤§ããï¼ˆå¾“æ¥ã©ãŠã‚ŠæŠ˜ã‚Šè¿”ã—ãªã—ï¼‰
                 target.enableWordWrapping = false;
                 target.overflowMode = TextOverflowModes.Overflow;
                 target.enableAutoSizing = true;
@@ -142,19 +146,19 @@ public class DamagePopup : MonoBehaviour
             }
             else
             {
-                // •aŒnEƒ~ƒXE–³‚È‚ÇFRect “à‚Éû‚Ü‚é‚æ‚¤ Auto Size
+                // ç—…ç³»ãƒ»ãƒŸã‚¹ãƒ»ç„¡å‚·ãªã©ï¼šRect å†…ã«åã¾ã‚‹ã‚ˆã† Auto Size
                 ApplyMessageAutoSizeForPopup(target);
             }
         }
         else
         {
-            // Message –¢İ’è‚Ì‹ŒƒvƒŒƒnƒuFvalueText ‚Ì‚İ
+            // Message æœªè¨­å®šã®æ—§ãƒ—ãƒ¬ãƒãƒ–ï¼švalueText ã®ã¿
             ApplyMessageAutoSizeForPopup(target);
         }
     }
 
     /// <summary>
-    /// <see cref="Setup(string, Color)"/> “™FƒvƒŒƒnƒu‚Ì Message Rect “à‚Éû‚Ü‚é‚æ‚¤ TMP ‚Ì Auto Size ‚ğg—pB
+    /// <see cref="Setup(string, Color)"/> ç­‰ï¼šãƒ—ãƒ¬ãƒãƒ–ã® Message Rect å†…ã«åã¾ã‚‹ã‚ˆã† TMP ã® Auto Size ã‚’ä½¿ç”¨ã€‚
     /// </summary>
     private void ApplyMessageAutoSizeForPopup(TMP_Text target)
     {
@@ -170,27 +174,27 @@ public class DamagePopup : MonoBehaviour
 
     private void Start()
     {
-        // ƒtƒF[ƒh—pFƒ‹[ƒg‚É–³‚¯‚ê‚Îqi“à‘¤ Canvas ‚È‚Çj‚ğ’T‚·B
+        // ãƒ•ã‚§ãƒ¼ãƒ‰ç”¨ï¼šãƒ«ãƒ¼ãƒˆã«ç„¡ã‘ã‚Œã°å­ï¼ˆå†…å´ Canvas ãªã©ï¼‰ã‚’æ¢ã™ã€‚
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null)
             canvasGroup = GetComponentInChildren<CanvasGroup>(true);
     }
 
     /// <summary>
-    /// ‰ñ•œEƒ~ƒXE•aŒnƒƒbƒZ[ƒWE—¼‘Ö•\¦‚È‚Çu1ƒuƒƒbƒN‚Ì•¶š—ñvŒü‚¯B
+    /// å›å¾©ãƒ»ãƒŸã‚¹ãƒ»ç—…ç³»ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ãƒ»ä¸¡æ›¿è¡¨ç¤ºãªã©ã€Œ1ãƒ–ãƒ­ãƒƒã‚¯ã®æ–‡å­—åˆ—ã€å‘ã‘ã€‚
     /// </summary>
-    /// <param name="message">‚»‚Ì‚Ü‚Ü•\¦‚·‚é‘S•¶B</param>
-    /// <param name="fillColor">•¶š‚Ì“h‚è‚Â‚Ô‚µFi‰‚Í ApplyFillAndOutline QÆjB</param>
+    /// <param name="message">ãã®ã¾ã¾è¡¨ç¤ºã™ã‚‹å…¨æ–‡ã€‚</param>
+    /// <param name="fillColor">æ–‡å­—ã®å¡—ã‚Šã¤ã¶ã—è‰²ï¼ˆç¸ã¯ ApplyFillAndOutline å‚ç…§ï¼‰ã€‚</param>
     public void Setup(string message, Color fillColor)
     {
         ShowMessageLayout(message, fillColor, defaultOutlineForSimpleMessage, statusAilmentAutoSize: false);
     }
 
     /// <summary>
-    /// í“¬ƒ_ƒ[ƒW•\¦Fƒ_ƒ[ƒW‚ ‚è‚Í”š{uƒ_ƒ[ƒWvA0 ‚Ì‚Æ‚«‚Í1si–³j‚È‚ÇB
+    /// æˆ¦é—˜ãƒ€ãƒ¡ãƒ¼ã‚¸è¡¨ç¤ºï¼šãƒ€ãƒ¡ãƒ¼ã‚¸ã‚ã‚Šã¯æ•°å­—ï¼‹ã€Œãƒ€ãƒ¡ãƒ¼ã‚¸ã€ã€0 ã®ã¨ãã¯1è¡Œï¼ˆç„¡å‚·ï¼‰ãªã©ã€‚
     /// </summary>
-    /// <param name="amount">—^ƒ_ƒB0 ˆÈ‰º‚Í else ‘¤‚ÌŒ©‚½–ÚB</param>
-    /// <param name="damageHitsPlayer">trueƒvƒŒƒCƒ„[‚ªH‚ç‚¤Afalse“G‚ªH‚ç‚¤BF‚Í Inspector ‚Ì”zF‚ğQÆB</param>
+    /// <param name="amount">ä¸ãƒ€ãƒ¡ã€‚0 ä»¥ä¸‹ã¯ else å´ã®è¦‹ãŸç›®ã€‚</param>
+    /// <param name="damageHitsPlayer">trueï¼ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ãŒé£Ÿã‚‰ã†ã€falseï¼æ•µãŒé£Ÿã‚‰ã†ã€‚è‰²ã¯ Inspector ã®é…è‰²ã‚’å‚ç…§ã€‚</param>
     public void SetupDamage(int amount, bool damageHitsPlayer)
     {
         if (amount > 0)
@@ -201,14 +205,14 @@ public class DamagePopup : MonoBehaviour
             ApplyPanelBackgroundIfSpecified(style.panelBackground);
 
             PrepareDamageNumberLayout();
-            // ”š‚ÌŒ©‚½–ÚFƒvƒŒƒnƒu‚Ì fontSize ‚æ‚è‚±‚±‚ª—Dæ‚³‚ê‚éB
+            // æ•°å­—ã®è¦‹ãŸç›®ï¼šãƒ—ãƒ¬ãƒãƒ–ã® fontSize ã‚ˆã‚Šã“ã“ãŒå„ªå…ˆã•ã‚Œã‚‹ã€‚
             valueText.enableAutoSizing = false;
             valueText.fontSize = 160f;
             valueText.text = amount.ToString();
             if (labelText != null)
             {
                 labelText.gameObject.SetActive(true);
-                labelText.text = "ƒ_ƒ[ƒW";
+                labelText.text = "ãƒ€ãƒ¡ãƒ¼ã‚¸";
             }
             ApplyFillAndOutline(valueText, style.textFill, style.outlineColor);
             if (labelText != null)
@@ -216,19 +220,19 @@ public class DamagePopup : MonoBehaviour
         }
         else
         {
-            // 0 ƒ_ƒ[ƒWu–³v‚Í Message —p RectiDamageValue ‚Í”šŒü‚¯ƒŒƒCƒAƒEƒg‚Ì‚½‚ßg‚í‚È‚¢jB
+            // 0 ãƒ€ãƒ¡ãƒ¼ã‚¸ã€Œç„¡å‚·ã€ã¯ Message ç”¨ Rectï¼ˆDamageValue ã¯æ•°å­—å‘ã‘ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã®ãŸã‚ä½¿ã‚ãªã„ï¼‰ã€‚
             var nd = noDamageAppearance;
             ApplyPanelBackgroundIfSpecified(nd.panelBackground);
             if (messageText != null)
             {
-                ShowMessageLayout("–³", nd.textFill, nd.outlineColor, statusAilmentAutoSize: false);
+                ShowMessageLayout("ç„¡å‚·", nd.textFill, nd.outlineColor, statusAilmentAutoSize: false);
             }
             else if (valueText != null)
             {
                 if (labelText != null)
                     labelText.gameObject.SetActive(false);
                 valueText.gameObject.SetActive(true);
-                valueText.text = "–³";
+                valueText.text = "ç„¡å‚·";
                 ApplyMessageAutoSizeForPopup(valueText);
                 ApplyFillAndOutline(valueText, nd.textFill, nd.outlineColor);
             }
@@ -236,7 +240,7 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
-    /// ˆÅ‘®«‚Ì‘æ2’ii’´‰ßƒ_ƒ[ƒW“K—pŒã‚ÌcHP•ªjB”wŒi‚ğ‡Œn‚É‚µA”š‚Í’Êí‚Ì SetupDamage ‚Æ“¯‚¶”zFB
+    /// é—‡å±æ€§ã®ç¬¬2æ®µï¼ˆè¶…éãƒ€ãƒ¡ãƒ¼ã‚¸é©ç”¨å¾Œã®æ®‹HPåˆ†ï¼‰ã€‚èƒŒæ™¯ã‚’ç´«ç³»ã«ã—ã€æ•°å­—ã¯é€šå¸¸ã® SetupDamage ã¨åŒã˜é…è‰²ã€‚
     /// </summary>
     public void SetupDarkFollowupDamage(int amount, bool damageHitsPlayer)
     {
@@ -245,7 +249,7 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
-    /// ó‘ÔˆÙí•t—^•\¦FŒö®–¼‚ğƒI[ƒgƒTƒCƒY‚Å‘å‚«‚­•\¦Bƒ‰ƒxƒ‹s‚Íg‚í‚È‚¢B
+    /// çŠ¶æ…‹ç•°å¸¸ä»˜ä¸è¡¨ç¤ºï¼šå…¬å¼åã‚’ã‚ªãƒ¼ãƒˆã‚µã‚¤ã‚ºã§å¤§ããè¡¨ç¤ºã€‚ãƒ©ãƒ™ãƒ«è¡Œã¯ä½¿ã‚ãªã„ã€‚
     /// </summary>
     public void SetupStatusAilmentGrant(string ailmentDisplayName, Color panelBackgroundColor, Color textFillColor)
     {
@@ -271,6 +275,58 @@ public class DamagePopup : MonoBehaviour
         }
     }
 
+    /// <summary>ç‰©ç†åå°„ï¼šèµ¤èƒŒæ™¯ãƒ»è™¹è‰²æ–‡å­—ã®ã€Œå¼¾ãè¿”ã™ã€ã€‚</summary>
+    public void SetupReflectionBounce(string message = "å¼¾ãè¿”ã™")
+    {
+        if (_rootPanelImage != null)
+            _rootPanelImage.color = reflectionPanelBackground;
+
+        var target = messageText != null ? messageText : valueText;
+        if (target == null) return;
+
+        if (labelText != null)
+            labelText.gameObject.SetActive(false);
+        if (valueText != null && messageText != null)
+            valueText.gameObject.SetActive(false);
+
+        target.gameObject.SetActive(true);
+        target.richText = true;
+        target.text = BuildRainbowRichText(string.IsNullOrEmpty(message) ? "å¼¾ãè¿”ã™" : message);
+        target.enableWordWrapping = false;
+        target.overflowMode = TextOverflowModes.Overflow;
+        target.enableAutoSizing = true;
+        target.fontSizeMin = messageFontSizeMin;
+        target.fontSizeMax = messageFontSizeMax;
+        target.alignment = TextAlignmentOptions.Center;
+        ApplyFillAndOutline(target, Color.white, defaultOutlineForSimpleMessage);
+    }
+
+    private static string BuildRainbowRichText(string s)
+    {
+        var palette = new[]
+        {
+            new Color32(255, 90, 90, 255),
+            new Color32(255, 200, 80, 255),
+            new Color32(255, 255, 120, 255),
+            new Color32(120, 255, 160, 255),
+            new Color32(100, 220, 255, 255),
+            new Color32(220, 140, 255, 255),
+        };
+        var sb = new StringBuilder();
+        for (int i = 0; i < s.Length; i++)
+        {
+            var c = palette[i % palette.Length];
+            sb.Append("<color=#");
+            sb.Append(c.r.ToString("X2"));
+            sb.Append(c.g.ToString("X2"));
+            sb.Append(c.b.ToString("X2"));
+            sb.Append(">");
+            sb.Append(s[i]);
+            sb.Append("</color>");
+        }
+        return sb.ToString();
+    }
+
     private void ApplyPanelBackgroundIfSpecified(Color c)
     {
         if (_rootPanelImage == null) return;
@@ -279,7 +335,7 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
-    /// •aŒnE©‘RisF‘æ1•¶Œ¾u•a‚ª‘Ì‚ğI‚ŞvB<paramref name="phase1FloatSeconds"/> Œo‰ß‚ÅˆÚ“®‚ª~‚Ü‚èA–ß‚è’l‚Ì Task ‚ªŠ®—¹‚·‚éB
+    /// ç—…ç³»ãƒ»è‡ªç„¶é€²è¡Œï¼šç¬¬1æ–‡è¨€ã€Œç—…ãŒä½“ã‚’è•ã‚€ã€ã€‚<paramref name="phase1FloatSeconds"/> çµŒéã§ç§»å‹•ãŒæ­¢ã¾ã‚Šã€æˆ»ã‚Šå€¤ã® Task ãŒå®Œäº†ã™ã‚‹ã€‚
     /// </summary>
     public Task BeginDiseaseWorsenPhase1AndGetTask(string message, Color color, float phase1FloatSeconds)
     {
@@ -292,7 +348,7 @@ public class DamagePopup : MonoBehaviour
         return _diseasePhase1Tcs.Task;
     }
 
-    /// <summary>‘æ1•¶Œ¾’â~ŒãAƒŠ[ƒ‹‚Å‘æ2•¶Œ¾‚Ö·‚µ‘Ö‚¦A‹K’èƒCƒ“ƒ^[ƒoƒ‹Œã‚É‚±‚ÌƒCƒ“ƒXƒ^ƒ“ƒX‚ğ”jŠü‚·‚éB</summary>
+    /// <summary>ç¬¬1æ–‡è¨€åœæ­¢å¾Œã€ãƒªãƒ¼ãƒ«ã§ç¬¬2æ–‡è¨€ã¸å·®ã—æ›¿ãˆã€è¦å®šã‚¤ãƒ³ã‚¿ãƒ¼ãƒãƒ«å¾Œã«ã“ã®ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’ç ´æ£„ã™ã‚‹ã€‚</summary>
     public Task RunDiseaseReelSecondLinePostIntervalAndDestroyAsync(
         string secondMessage,
         Color secondColor,
@@ -306,7 +362,7 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
-    /// ƒŠ[ƒ‹‚Å•¶Œ¾‚ªƒ‹[ƒg‹éŒ`‚©‚ç‚Í‚İo‚µ‚Ä‚àAƒCƒ‰ƒXƒg‚ÌƒNƒŠƒbƒsƒ“ƒO‚Ì‚æ‚¤‚É˜gŠO‚ğ•`‰æ‚µ‚È‚¢i<see cref="RectMask2D"/>jB
+    /// ãƒªãƒ¼ãƒ«ã§æ–‡è¨€ãŒãƒ«ãƒ¼ãƒˆçŸ©å½¢ã‹ã‚‰ã¯ã¿å‡ºã—ã¦ã‚‚ã€ã‚¤ãƒ©ã‚¹ãƒˆã®ã‚¯ãƒªãƒƒãƒ”ãƒ³ã‚°ã®ã‚ˆã†ã«æ å¤–ã‚’æç”»ã—ãªã„ï¼ˆ<see cref="RectMask2D"/>ï¼‰ã€‚
     /// </summary>
     private void EnsureDiseaseReelClippingMask()
     {
@@ -381,7 +437,7 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
-    /// •¶š‚Ìu“h‚èv‚Æ TMP ‚ÌƒAƒEƒgƒ‰ƒCƒ“i‰j‚ğ‚Ü‚Æ‚ß‚Ä“K—pB
+    /// æ–‡å­—ã®ã€Œå¡—ã‚Šã€ã¨ TMP ã®ã‚¢ã‚¦ãƒˆãƒ©ã‚¤ãƒ³ï¼ˆç¸ï¼‰ã‚’ã¾ã¨ã‚ã¦é©ç”¨ã€‚
     /// </summary>
     private void ApplyFillAndOutline(TMP_Text t, Color fill, Color outlineColor)
     {
@@ -417,14 +473,14 @@ public class DamagePopup : MonoBehaviour
 
         timer += Time.deltaTime;
 
-        // e‚ÌÀ•WŒn‚Åã•ûŒü‚ÖˆÚ“®BÎ‚ß‚É‚µ‚½‚¢‚È‚ç Vector3.up ‚ğ•Ï‚¦‚é‚©ARectTransform.anchoredPosition ‚ğ‚¢‚¶‚é•û®‚É•ÏXB
+        // è¦ªã®åº§æ¨™ç³»ã§ä¸Šæ–¹å‘ã¸ç§»å‹•ã€‚æ–œã‚ã«ã—ãŸã„ãªã‚‰ Vector3.up ã‚’å¤‰ãˆã‚‹ã‹ã€RectTransform.anchoredPosition ã‚’ã„ã˜ã‚‹æ–¹å¼ã«å¤‰æ›´ã€‚
         transform.Translate(Vector3.up * (floatSpeed * Time.deltaTime));
 
-        // ƒtƒF[ƒhFcanvasGroup ‚ª–³‚¢‚Æ‰½‚à‚µ‚È‚¢ií‚É•s“§–¾‚Ì‚Ü‚ÜÁ–Å‚Ü‚ÅjB
+        // ãƒ•ã‚§ãƒ¼ãƒ‰ï¼šcanvasGroup ãŒç„¡ã„ã¨ä½•ã‚‚ã—ãªã„ï¼ˆå¸¸ã«ä¸é€æ˜ã®ã¾ã¾æ¶ˆæ»…ã¾ã§ï¼‰ã€‚
         if (canvasGroup != null)
             canvasGroup.alpha = Mathf.Lerp(1f, 0f, timer / fadeDuration);
 
-        // •\¦ŠÔfadeDuration •bŒã‚É”jŠüB’·‚­Œ©‚¹‚½‚¢‚È‚ç fadeDuration ‚ğL‚Î‚·B
+        // è¡¨ç¤ºæ™‚é–“ï¼fadeDuration ç§’å¾Œã«ç ´æ£„ã€‚é•·ãè¦‹ã›ãŸã„ãªã‚‰ fadeDuration ã‚’ä¼¸ã°ã™ã€‚
         if (timer >= fadeDuration)
             Destroy(gameObject);
     }
