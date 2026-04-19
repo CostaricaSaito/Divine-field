@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -52,7 +52,7 @@ public class BuyFeature
             return false;
         }
 
-        if (battleManager.CurrentState != GameState.AttackSelect)
+        if (battleManager.CurrentState != GameState.AttackPhase)
         {
             Debug.LogWarning("[BuyFeature] 攻撃フェーズ以外では買うアクションは使用できません");
             return false;
@@ -97,7 +97,7 @@ public class BuyFeature
         BattleUIManager.I?.UpdateEconomicActionButtons();
 
         // 防御フェーズに移行（跳ね返し対応）
-        battleManager.SetGameState(GameState.DefenseSelect);
+        battleManager.SetGameState(GameState.DefensePhase);
 
         return true;
     }
@@ -223,7 +223,7 @@ public class BuyFeature
                 // 即座に表向きにする
                 ui.Reveal();
                 
-                CardDealAudio.Play(targetBuyCard);
+                CardDealAudio.Play(targetBuyCard, true);
             }
         }
     }
@@ -249,10 +249,10 @@ public class BuyFeature
         // カード表示をリセット
         BattleUIManager.I?.HideAllCardDetails();
         // AttackSelect 状態に戻す
-        if (battleManager != null && battleManager.CurrentState != GameState.AttackSelect)
+        if (battleManager != null && battleManager.CurrentState != GameState.AttackPhase)
         {
             battleManager.SetCurrentAttackCard(null);
-            battleManager.SetGameState(GameState.AttackSelect);
+            battleManager.SetGameState(GameState.AttackPhase);
         }
         BattleUIManager.I?.UpdateEconomicActionButtons();
     }

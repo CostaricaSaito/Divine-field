@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// 介入（公式13番）：攻撃フェーズを終えた側（TurnEnd 突入時点の <see cref="BattleManager.CurrentTurnOwner"/>）が
+/// 介入（公式13番）：攻撃フェーズを終えた側（<see cref="BattleManager.RunCombatResolvePhaseAsync"/> 突入時点の <see cref="BattleManager.CurrentTurnOwner"/>）が
 /// 病系処理より前に一定確率で、攻撃フェーズ使用可カードから1枚を追加発動する。
 /// MP・MagicPool 回数は消費しない。使用されたカードは手札から破棄（プールのみの候補はプールを変更しない）。
 /// ファイル名: <c>13_InterventionTurnEndProcessor.cs</c>（<see cref="StatusEffectType.Intervention"/>）。
@@ -31,7 +31,7 @@ public static class InterventionTurnEndProcessor
     }
 
     /// <summary>
-    /// 病系 TurnEnd 処理の直前に呼ぶ。
+    /// 病系処理（<see cref="BattleManager.RunEndPhaseAsync"/>）の直前、CombatResolve で呼ぶ。
     /// </summary>
     public static async Task ProcessIfNeededAsync(BattleManager bm, CancellationToken ct)
     {

@@ -55,7 +55,7 @@ public class ExchangeFeature : MonoBehaviour
     /// </summary>
     public async Task ExecuteExchangeActionAsync()
     {
-        if (battleManager == null || battleManager.CurrentState != GameState.AttackSelect)
+        if (battleManager == null || battleManager.CurrentState != GameState.AttackPhase)
         {
             Debug.LogWarning("[ExchangeFeature] 両替アクションは AttackSelect フェーズ以外では実行できません");
             return;
@@ -151,7 +151,7 @@ public class ExchangeFeature : MonoBehaviour
         if (playerStatus.currentHP <= 0)
         {
             Debug.Log("[ExchangeFeature] 両替により HP が 0 になりました。敗北処理へ");
-            battleManager.SetGameState(GameState.BattleEnd);
+            battleManager.SetGameState(GameState.BattleEndPhase);
             return;
         }
 
@@ -232,7 +232,7 @@ public class ExchangeFeature : MonoBehaviour
         EconomicAction.I?.SetExchangeCooldown();
         BattleUIManager.I?.UpdateEconomicActionButtons();
         Debug.Log("[ExchangeFeature] 両替完了。ターン終了へ移行します");
-        battleManager.SetGameState(GameState.TurnEnd);
+        battleManager.SetGameState(GameState.CombatResolvePhase);
     }
 
     // ===== 状態確認 =====

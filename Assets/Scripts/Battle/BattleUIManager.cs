@@ -104,6 +104,7 @@ public class BattleUIManager : MonoBehaviour
     private Color _defaultUseButtonLabelColor = Color.white;
     private Sprite _cachedUseButtonSprite;
     private bool _useButtonHasRainbowGeneratedSprite;
+    private bool _useButtonHasBlockingSilverStyle;
     private Texture2D _rainbowUseButtonTexture;
     private Sprite _rainbowUseButtonSprite;
     private GameObject _fullscreenWhiteFlashGo;
@@ -181,8 +182,6 @@ public class BattleUIManager : MonoBehaviour
         int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
         int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
 
-        Debug.Log($"[BattleUIManager] 手札枚数 - プレイヤー: {playerHandCount}, 敵: {enemyHandCount}");
-
         statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount);
     }
 
@@ -221,8 +220,8 @@ public class BattleUIManager : MonoBehaviour
 
             if (side == Side.Player
                 && BattleManager.I != null
-                && (BattleManager.I.CurrentState == GameState.DefenseSelect
-                    || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())))
+                && (BattleManager.I.CurrentState == GameState.DefensePhase
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
             else if (side == Side.Player && BattleManager.I != null && BattleManager.I.IsReflectionChainDefensePending())
                 UpdateDefenseButtonLabel();
@@ -283,6 +282,7 @@ public class BattleUIManager : MonoBehaviour
         if (useButton == null) return;
 
         RestoreUseButtonFromReflectionRainbowIfNeeded();
+        RestoreUseButtonFromBlockingSilverIfNeeded();
 
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
@@ -401,7 +401,7 @@ public class BattleUIManager : MonoBehaviour
     {
         HideRestraintHeavyOverlays();
         if (BattleManager.I == null) return;
-        if (BattleManager.I.CurrentState != GameState.DefenseSelect) return;
+        if (BattleManager.I.CurrentState != GameState.DefensePhase) return;
 
         var bm = BattleManager.I;
         if (bm.DefenderPublic == PlayerType.Player && bm.GetPlayerStatus().HasRestraintEffect())
@@ -549,12 +549,13 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 物理反射「弾き返す」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。
+    /// 物理／魔法反射「弾き返す」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。
     /// </summary>
-    public float ShowReflectionBouncePopup(PlayerStatus target)
+    /// <param name="magicReflection">魔法反射時は <see cref="ReflectionBounceAudio.Magic"/> を再生。</param>
+    public float ShowReflectionBouncePopup(PlayerStatus target, bool magicReflection = false)
     {
         StartCoroutine(CoFullscreenWhiteFlashMs(50f));
-        SoundEffectPlayer.I?.Play("Assets/SE/power32(DF弾く).wav");
+        SoundEffectPlayer.I?.Play(magicReflection ? ReflectionBounceAudio.Magic : ReflectionBounceAudio.Physical);
         var popup = SpawnPopupFor(target);
         if (popup == null)
         {
@@ -570,6 +571,29 @@ public class BattleUIManager : MonoBehaviour
         }
 
         Debug.LogWarning("[BattleUIManager] DamagePopup が見つかりません（反射）");
+        return 0f;
+    }
+
+    /// <summary>無効化「護身」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。</summary>
+    public float ShowBlockingNullifyPopup(PlayerStatus target)
+    {
+        StartCoroutine(CoFullscreenWhiteFlashMs(50f));
+        SoundEffectPlayer.I?.Play(BlockingNullifyAudio.Physical);
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattleUIManager] 無効化ポップアップ生成に失敗");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            damageText.SetupBlockingNullify();
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattleUIManager] DamagePopup が見つかりません（無効化）");
         return 0f;
     }
 
@@ -909,7 +933,7 @@ public class BattleUIManager : MonoBehaviour
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
         // 攻撃フェーズでカードが0枚になったら UseButton を無効化
-        if (BattleManager.I?.CurrentState == GameState.AttackSelect
+        if (BattleManager.I?.CurrentState == GameState.AttackPhase
             && cardSelectionManager.SelectedCardCount == 0)
         {
             SetUseButtonInteractable(false);
@@ -1064,6 +1088,8 @@ public class BattleUIManager : MonoBehaviour
     //==== プライベートメソッド：ヘルパー =====
     private void RemoveCardFromDisplay(CardData card)
     {
+        if (card == null) return;
+        int id = card.GetInstanceID();
         for (int i = activeCardSheets.Count - 1; i >= 0; i--)
         {
             var cardObj = activeCardSheets[i];
@@ -1071,11 +1097,10 @@ public class BattleUIManager : MonoBehaviour
 
             var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
             var displayed = cardDisplay?.GetCardData();
-            if (displayed != null && card != null && displayed.GetInstanceID() == card.GetInstanceID())
+            if (displayed != null && displayed.GetInstanceID() == id)
             {
                 Destroy(cardObj);
                 activeCardSheets.RemoveAt(i);
-                break;
             }
         }
     }
@@ -1105,10 +1130,10 @@ public class BattleUIManager : MonoBehaviour
             {
                 if (BattleManager.I.IsReflectionChainDefensePending())
                     BattleManager.I.RefreshReflectionChainInteractivityIfPending();
-                else if (BattleManager.I.CurrentState == GameState.DefenseSelect
-                    || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive()))
+                else if (BattleManager.I.CurrentState == GameState.DefensePhase
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive()))
                     BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
-                else if (BattleManager.I.CurrentState == GameState.AttackSelect
+                else if (BattleManager.I.CurrentState == GameState.AttackPhase
                          && BattleManager.I.CurrentTurnOwner == PlayerType.Player)
                 {
                     var hand = BattleManager.I.playerHand;
@@ -1118,7 +1143,7 @@ public class BattleUIManager : MonoBehaviour
         }
         else if (BattleManager.I != null)
         {
-            if (BattleManager.I.CurrentState == GameState.AttackSelect
+            if (BattleManager.I.CurrentState == GameState.AttackPhase
                 && !BattleManager.I.IsReflectionChainDefensePending())
             {
                 var selectedAttackCards = GetSelectedAttackCards();
@@ -1131,8 +1156,8 @@ public class BattleUIManager : MonoBehaviour
                     BattleManager.I.UpdateTotalATKDEFDisplay();
                 }
             }
-            else if (BattleManager.I.CurrentState == GameState.DefenseSelect
-                     || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())
+            else if (BattleManager.I.CurrentState == GameState.DefensePhase
+                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
                      || BattleManager.I.IsReflectionChainDefensePending())
             {
                 BattleManager.I.UpdateTotalATKDEFDisplay();
@@ -1152,8 +1177,8 @@ public class BattleUIManager : MonoBehaviour
     {
         var bm = BattleManager.I;
         if (bm == null) return;
-        bool defenseUi = bm.CurrentState == GameState.DefenseSelect && bm.DefenderPublic == PlayerType.Player;
-        bool interventionDefense = bm.CurrentState == GameState.TurnEnd && bm.IsInterventionDefenseWaitActive();
+        bool defenseUi = bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player;
+        bool interventionDefense = bm.CurrentState == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive();
         bool reflectionChainWait = bm.IsReflectionChainDefensePending();
         if (!defenseUi && !interventionDefense && !reflectionChainWait)
             return;
@@ -1171,12 +1196,23 @@ public class BattleUIManager : MonoBehaviour
         bool showBounce = incomingAttack != null && incomingAttack.Count > 0
             && selectedDefenseCards.Count == 1
             && selectedDefenseCards[0] != null
-            && ReflectionRules.IsPhysicalReflectionCard(selectedDefenseCards[0])
-            && ReflectionRules.CanReflectPhysical(incomingAttack);
+            && ReflectionRules.RequiresReflectionExclusiveLock(selectedDefenseCards[0], incomingAttack);
 
         if (showBounce)
         {
             ApplyReflectionBounceUseButtonStyle();
+            SetUseButtonInteractable(true);
+            return;
+        }
+
+        bool showBlockingNullify = incomingAttack != null && incomingAttack.Count > 0
+            && selectedDefenseCards.Count == 1
+            && selectedDefenseCards[0] != null
+            && BlockingRules.RequiresBlockingExclusiveLock(selectedDefenseCards[0], incomingAttack);
+
+        if (showBlockingNullify)
+        {
+            ApplyBlockingNullifyUseButtonStyle();
             SetUseButtonInteractable(true);
             return;
         }
@@ -1191,6 +1227,8 @@ public class BattleUIManager : MonoBehaviour
     private void ApplyReflectionBounceUseButtonStyle()
     {
         if (useButton == null) return;
+
+        RestoreUseButtonFromBlockingSilverIfNeeded();
 
         EnsureRainbowUseButtonSprite();
 
@@ -1213,6 +1251,50 @@ public class BattleUIManager : MonoBehaviour
             useButtonLabelUGUI.text = "弾き返す";
             useButtonLabelUGUI.color = Color.white;
         }
+    }
+
+    /// <summary>無効化が有効なとき：灰色のボタン＋黒字の「防衛」。</summary>
+    private void ApplyBlockingNullifyUseButtonStyle()
+    {
+        if (useButton == null) return;
+
+        RestoreUseButtonFromReflectionRainbowIfNeeded();
+
+        var img = useButtonImage ?? (useButton.targetGraphic as Image);
+        if (img != null)
+        {
+            if (_cachedUseButtonSprite != null)
+                img.sprite = _cachedUseButtonSprite;
+            img.color = new Color(0.72f, 0.72f, 0.76f, 1f);
+        }
+
+        _useButtonHasBlockingSilverStyle = true;
+
+        if (useButtonLabelTMP != null)
+        {
+            useButtonLabelTMP.text = "防衛";
+            useButtonLabelTMP.color = Color.black;
+        }
+
+        if (useButtonLabelUGUI != null)
+        {
+            useButtonLabelUGUI.text = "防衛";
+            useButtonLabelUGUI.color = Color.black;
+        }
+    }
+
+    private void RestoreUseButtonFromBlockingSilverIfNeeded()
+    {
+        if (!_useButtonHasBlockingSilverStyle) return;
+
+        var img = useButtonImage ?? (useButton?.targetGraphic as Image);
+        if (img != null)
+        {
+            img.sprite = _cachedUseButtonSprite;
+            ApplyUseButtonMode(UseButtonMode.Use);
+        }
+
+        _useButtonHasBlockingSilverStyle = false;
     }
 
     private void EnsureRainbowUseButtonSprite()
@@ -1268,6 +1350,12 @@ public class BattleUIManager : MonoBehaviour
         }
 
         _useButtonHasRainbowGeneratedSprite = false;
+    }
+
+    /// <summary>反射の弾き返しと同じ全画面白フラッシュ（ミリ秒）。劣勢時レアドロー等からも利用。</summary>
+    public void PlayFullscreenWhiteFlashMs(float durationMs)
+    {
+        StartCoroutine(CoFullscreenWhiteFlashMs(durationMs));
     }
 
     private IEnumerator CoFullscreenWhiteFlashMs(float durationMs)
@@ -1341,7 +1429,7 @@ public class BattleUIManager : MonoBehaviour
         if (useButton == null || BattleManager.I == null || cardSelectionManager == null) return;
 
         var bm = BattleManager.I;
-        if (bm.CurrentState != GameState.AttackSelect || bm.CurrentTurnOwner != PlayerType.Player)
+        if (bm.CurrentState != GameState.AttackPhase || bm.CurrentTurnOwner != PlayerType.Player)
             return;
 
         if (bm.IsUseButtonLocked)
@@ -1721,7 +1809,7 @@ public class BattleUIManager : MonoBehaviour
     {
         if (magicPanelUI == null) return;
         bool interactable = BattleManager.I != null
-            && BattleManager.I.CurrentState == GameState.AttackSelect
+            && BattleManager.I.CurrentState == GameState.AttackPhase
             && !isHandInputBlocked;
         magicPanelUI.SetAllInteractable(interactable);
     }

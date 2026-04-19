@@ -88,8 +88,6 @@ public class BattleStatusUI : MonoBehaviour
 
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, int playerHandCount = 0, int enemyHandCount = 0)
     {
-        Debug.Log($"[BattleStatusUI] UpdateStatus呼び出し - プレイヤー手札: {playerHandCount}, 敵手札: {enemyHandCount}");
-
         // 濃霧の「視界」は人間プレイヤー（player）に付与されたときだけ。敵だけ濃霧なら見た目は一切変えない。
         // 付与ポップアップ表示〜規定インターバルまでは _deferFogVisionVisuals で演出を遅延。
         bool viewerUnderFog = player != null && player.HasFogEffect() && !_deferFogVisionVisuals;
@@ -148,16 +146,19 @@ public class BattleStatusUI : MonoBehaviour
         {
             RefreshAilmentIconRow(enemyAilmentIconRow, null, false);
         }
+
+        if (player != null)
+            BattleBgmController.Instance?.SyncFromPlayer(player);
     }
 
-    /// <summary>低HP時の召喚アイコン虹演出。濃霧視点（人間に濃霧）のときは停止。</summary>
+    /// <summary>劣勢時（HP+MP+GP 合計が閾値以下）の召喚アイコン虹演出。濃霧視点（人間に濃霧）のときは停止。</summary>
     private static void UpdateRainbowLowHpOverlay(Image summonIcon, PlayerStatus ps, bool viewerUnderFog)
     {
         if (summonIcon == null || ps == null) return;
         Transform overlay = summonIcon.transform.Find("RainbowOverlay");
         if (overlay == null) return;
 
-        if (!viewerUnderFog && ps.currentHP <= 10)
+        if (!viewerUnderFog && DisadvantageRules.IsDisadvantaged(ps))
         {
             if (!overlay.GetComponent<RainbowOutline>())
                 overlay.gameObject.AddComponent<RainbowOutline>();

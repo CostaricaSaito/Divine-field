@@ -19,7 +19,7 @@ MonoBehaviour:
   characterSprite: {fileID: 21300000, guid: 35924ee5ff9542749a33dd8fca6d8ea9, type: 3}
   backgroundSprite: {fileID: 21300000, guid: 666edbae3f828e64d9a9994b2ec25971, type: 3}
   foregroundSprite: {fileID: 0}
-  summonIcon: {fileID: 21300000, guid: da733353f8a13874099ebc175a148207, type: 3}
+  summonIcon: {fileID: 21300000, guid: 4076a95ba3bc3e042a56cbc13026ec17, type: 3}
   summonSE: {fileID: 8300000, guid: f2e91ac562d3a8a4983c8b7bcc8e8924, type: 3}
   nameStyle:
     fontColor: {r: 0, g: 1, b: 0.07667947, a: 1}

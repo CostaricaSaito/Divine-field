@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -90,7 +89,7 @@ public class BattleManager : MonoBehaviour
     public List<CardData> cpuHand = new();
     
 
-    public GameState CurrentState { get; private set; } = GameState.Intro;
+    public GameState CurrentState { get; private set; } = GameState.OpeningPhase;
     public PlayerType CurrentTurnOwner { get; private set; } = PlayerType.Player;
 
     private CardData currentAttackCard;
@@ -127,7 +126,7 @@ public class BattleManager : MonoBehaviour
     {
         if (card == null) return;
 
-        if (CurrentState != GameState.AttackSelect || Attacker != PlayerType.Player)
+        if (CurrentState != GameState.AttackPhase || Attacker != PlayerType.Player)
         {
             Debug.Log($"[BattleManager] MagicPanel カード選択不可: 現在のState={CurrentState}");
             return;
@@ -144,6 +143,12 @@ public class BattleManager : MonoBehaviour
     private CardData selectedDefenseCard;
     private TaskCompletionSource<List<CardData>> _reflectionChainDefenseTcs;
     private List<CardData> _reflectionChainAttackSnapshot;
+
+    /// <summary>反射スライド後：TOTAL ATK を攻撃側から反射側へ移した表示用（<see cref="SetReflectionAttackTotalDisplayAfterSlide"/>）。</summary>
+    private bool _reflectionAtkTotalActive;
+    /// <summary>true のときプレイヤー側パネルに ATK、false のとき敵側パネルに ATK。</summary>
+    private bool _reflectionAtkTotalOnPlayerSide;
+    private readonly List<CardData> _reflectionAtkCardsForTotalDisplay = new();
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
     private bool isProcessingUseButton;
@@ -204,7 +209,7 @@ public class BattleManager : MonoBehaviour
     /// <summary>
     /// 防御フェーズ・プレイヤー防御側の手札グレーアウト（拘束時は選択済み1枚のみ）と「体が重い」オーバーレイを更新。
     /// </summary>
-    /// <summary>TurnEnd 中、敵介入のプレイヤー防御入力待ちか。</summary>
+    /// <summary>CombatResolvePhase 中、敵介入のプレイヤー防御入力待ちか。</summary>
     public bool IsInterventionDefenseWaitActive()
     {
         return _interventionDefenseSubmitTcs != null && !_interventionDefenseSubmitTcs.Task.IsCompleted;
@@ -262,16 +267,16 @@ public class BattleManager : MonoBehaviour
 
     public void RefreshPlayerDefensePhaseInteractivity()
     {
-        bool interventionDefense = CurrentState == GameState.TurnEnd && IsInterventionDefenseWaitActive();
+        bool interventionDefense = CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive();
 
-        if (!(CurrentState == GameState.DefenseSelect && Defender == PlayerType.Player) && !interventionDefense)
+        if (!(CurrentState == GameState.DefensePhase && Defender == PlayerType.Player) && !interventionDefense)
             return;
         if (BattleUIManager.I == null) return;
 
         List<CardData> attackSource;
         if (interventionDefense && _interventionAttackForDefenseUi != null)
             attackSource = _interventionAttackForDefenseUi;
-        else if (CurrentState == GameState.DefenseSelect)
+        else if (CurrentState == GameState.DefensePhase)
             attackSource = GetAttackCardsForCombat();
         else
             return;
@@ -289,6 +294,28 @@ public class BattleManager : MonoBehaviour
         else
         {
             defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
+        }
+
+        if (ReflectionRules.CanReflectMagic(attackSource))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && ReflectionRules.IsMagicReflectionCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+
+        if (BlockingRules.CanBlockPhysical(attackSource))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && BlockingRules.IsPhysicalBlockingCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
         }
 
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
@@ -326,6 +353,45 @@ public class BattleManager : MonoBehaviour
         return GetAttackCardsForCombat();
     }
 
+    /// <summary>デバッグ UI 用：Layer1 Turn（手番の短い表記）。</summary>
+    public string GetBattleTurnDebugLabel()
+    {
+        return CurrentTurnOwner == PlayerType.Player ? "プレイヤー" : "敵";
+    }
+
+    /// <summary>Layer3 Step（反射連鎖・介入待ちは <see cref="GameState"/> より優先して解決）。</summary>
+    public BattleStep CurrentBattleStep => ResolveCurrentBattleStep();
+
+    private BattleStep ResolveCurrentBattleStep()
+    {
+        if (IsReflectionChainDefensePending())
+            return BattleStep.ReflectionChainDefenseSelect;
+        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive())
+            return BattleStep.InterventionDefenseSelect;
+
+        switch (CurrentState)
+        {
+            case GameState.OpeningPhase:
+                return BattleStep.OpeningSequence;
+            case GameState.StandByPhase:
+                return BattleStep.StandBy;
+            case GameState.AttackPhase:
+                return BattleStep.MainActionSelect;
+            case GameState.DefensePhase:
+                return BattleStep.DefenseSelect;
+            case GameState.DefenseConfirmPhase:
+                return BattleStep.CombatSequenceResolve;
+            case GameState.CombatResolvePhase:
+                return BattleStep.CombatResolveProcessing;
+            case GameState.EndPhase:
+                return BattleStep.EndPhaseProcessing;
+            case GameState.BattleEndPhase:
+                return BattleStep.BattleResult;
+            default:
+                return BattleStep.Unknown;
+        }
+    }
+
     public async Task<List<CardData>> WaitForReflectionChainDefenseAsync(
         List<CardData> attackSnapshot,
         CancellationToken cancellationToken)
@@ -340,6 +406,7 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.SetUseButtonLabel("許す");
         BattleUIManager.I?.ClearAllSelections();
         ClearSelectedCards();
+        ClearStatsDisplaySequenceCards();
         RefreshReflectionChainInteractivity(attackSnapshot);
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
 
@@ -388,6 +455,28 @@ public class BattleManager : MonoBehaviour
             defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
         }
 
+        if (ReflectionRules.CanReflectMagic(attackSnapshot))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && ReflectionRules.IsMagicReflectionCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+
+        if (BlockingRules.CanBlockPhysical(attackSnapshot))
+        {
+            foreach (var c in playerHand)
+            {
+                if (c != null && BlockingRules.IsPhysicalBlockingCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        }
+
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
@@ -398,9 +487,42 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I.UpdateDefenseButtonLabel();
     }
 
+    /// <summary>
+    /// 防御 UI・併用不可判定用の現在の攻撃スナップショット（反射連鎖／介入／通常防御）。</summary>
+    public List<CardData> GetIncomingAttackSnapshotForDefenseUi()
+    {
+        if (IsReflectionChainDefensePending())
+        {
+            if (_reflectionChainAttackSnapshot == null || _reflectionChainAttackSnapshot.Count == 0)
+                return null;
+            return new List<CardData>(_reflectionChainAttackSnapshot);
+        }
+
+        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive())
+        {
+            if (_interventionAttackForDefenseUi == null || _interventionAttackForDefenseUi.Count == 0)
+                return null;
+            return new List<CardData>(_interventionAttackForDefenseUi);
+        }
+
+        if ((CurrentState == GameState.DefensePhase || CurrentState == GameState.DefenseConfirmPhase)
+            && DefenderPublic == PlayerType.Player)
+            return GetAttackCardsForCombat();
+
+        return null;
+    }
+
     private void Awake()
     {
         I = this;
+    }
+
+    private static void EnsureBattleBgmController()
+    {
+        if (UnityEngine.Object.FindObjectOfType<BattleBgmController>() != null) return;
+        GameObject bgmGo = GameObject.Find("BGM");
+        if (bgmGo != null && bgmGo.GetComponent<BattleBgmController>() == null)
+            bgmGo.AddComponent<BattleBgmController>();
     }
 
     void Start()
@@ -499,8 +621,10 @@ public class BattleManager : MonoBehaviour
         {
             cardStatsDisplay?.UpdateDisplay();
         }
-        
-        StartCoroutine(BattleStartSequence());
+
+        EnsureBattleBgmController();
+
+        _ = BattleStartSequenceAsync();
     }
 
     //================ 状態遷移 ================
@@ -521,63 +645,75 @@ public class BattleManager : MonoBehaviour
     {
         switch (CurrentState)
         {
-            case GameState.Intro:
+            case GameState.OpeningPhase:
                 break;
 
-            case GameState.TurnStart:
-                OnTurnStart();
+            case GameState.StandByPhase:
+                OnStandByPhaseEntered();
                 break;
 
-            case GameState.AttackSelect:
-                EnterAttackSelect();
+            case GameState.AttackPhase:
+                EnterAttackPhase();
                 break;
 
-            case GameState.AttackConfirm:
-                SetGameState(GameState.DefenseSelect);
-                break;
-
-            case GameState.DefenseSelect:
+            case GameState.DefensePhase:
                 _ = RunDefenseSelectAsync();
                 break;
 
-            case GameState.DefenseConfirm:
+            case GameState.DefenseConfirmPhase:
                 _ = RunDefenseConfirmAsync();
                 break;
 
-            case GameState.TurnEnd:
-                _ = RunTurnEndAsync();
+            case GameState.CombatResolvePhase:
+                _ = RunCombatResolvePhaseAsync();
                 break;
 
-            case GameState.BattleEnd:
+            case GameState.EndPhase:
+                _ = RunEndPhaseAsync();
+                break;
+
+            case GameState.BattleEndPhase:
                 break;
         }
     }
 
-    //================ バトル開始 ================
-    IEnumerator BattleStartSequence()
+    private System.Collections.IEnumerator OpeningDealBridge(int openingPlayer, int openingCpu, System.Action onComplete)
+    {
+        yield return StartCoroutine(cardDealer.DealOpeningHands(playerHand, cpuHand, openingPlayer, openingCpu));
+        onComplete?.Invoke();
+    }
+
+    private System.Threading.Tasks.Task RunOpeningDealAsync(int openingPlayer, int openingCpu)
+    {
+        var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+        StartCoroutine(OpeningDealBridge(openingPlayer, openingCpu, () => tcs.SetResult(true)));
+        return tcs.Task;
+    }
+
+    //================ バトル開始（Layer1: Turn 前の開幕のみ） ================
+    private async System.Threading.Tasks.Task BattleStartSequenceAsync()
     {
         SummonGarudaLifecycle.GetOpeningHandTargets(playerStatus, enemyStatus, out int openingPlayer, out int openingCpu);
-        yield return StartCoroutine(cardDealer.DealOpeningHands(playerHand, cpuHand, openingPlayer, openingCpu));
+        await RunOpeningDealAsync(openingPlayer, openingCpu);
 
-        // 手札が配られた後にステータスを更新
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
 
-        yield return new WaitForSeconds(cutInDelay);
-        bool done = false;
+        await System.Threading.Tasks.Task.Delay(System.TimeSpan.FromSeconds(cutInDelay));
+
         if (cutInController != null)
         {
-            cutInController.OnCutInComplete = () => done = true;
+            var cutInTcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            cutInController.OnCutInComplete = () => cutInTcs.TrySetResult(true);
             cutInController.PlayCutIn();
-            yield return new WaitUntil(() => done);
+            await cutInTcs.Task;
         }
-        
-        // Intro時点ではカードをグレーアウトしない
+
         BattleUIManager.I?.SetIntroModeUI(playerHand);
 
         DetermineOpeningFirstTurn();
 
-        SetGameState(GameState.TurnStart);
+        SetGameState(GameState.StandByPhase);
     }
 
     /// <summary>
@@ -602,7 +738,7 @@ public class BattleManager : MonoBehaviour
         return UnityEngine.Random.Range(0, 2) == 0 ? PlayerType.Player : PlayerType.Enemy;
     }
 
-    private void OnTurnStart()
+    private void OnStandByPhaseEntered()
     {
         BattleUIManager.I?.HideYurusuButton();
         BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
@@ -629,23 +765,25 @@ public class BattleManager : MonoBehaviour
         currentAttackCard = null;
         cardStatsDisplay?.UpdateDisplay();
 
-        // TurnStart時点ではグレーアウトしない
+        // StandBy 時点ではグレーアウトしない
         BattleUIManager.I?.SetIntroModeUI(playerHand);
         
-        // グレーアウト制御フラグを設定（AttackSelectではグレーアウトを有効にする）
+        // グレーアウト制御フラグを設定（AttackPhase でグレーアウトを有効にする）
         shouldGrayOutCards = true;
 
         if (CurrentTurnOwner == PlayerType.Player)
         {
-            SetGameState(GameState.AttackSelect);
+            SetGameState(GameState.AttackPhase);
         }
         else
         {
+            // 敵も攻撃側メインは AttackPhase（従来 StandBy のまま RunEnemyTurnAsync しており Phase とズレていた）
+            SetGameState(GameState.AttackPhase);
             _ = RunEnemyTurnAsync();
         }
     }
 
-    private void EnterAttackSelect()
+    private void EnterAttackPhase()
     {
         BattleUIManager.I?.SetHandClickable(true);
 
@@ -681,18 +819,10 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 非ターンプレイヤー（防御側）の処理
-            BattleUIManager.I?.SetUseButtonLabel("使用");
-            
-            // グレーアウト制御フラグをチェック
-            if (shouldGrayOutCards)
-            {
-                BattleUIManager.I?.RefreshDefenseInteractivity(playerHand, CardRules.GetDefenseChoices(playerHand));
-            }
-            else
-            {
-                BattleUIManager.I?.SetIntroModeUI(playerHand);
-            }
+            // 敵が攻撃側の AttackPhase：AI が攻撃を選ぶまでプレイヤーは防御選択しない（DefensePhase まで待つ）
+            BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+            BattleUIManager.I?.SetIntroModeUI(playerHand);
         }
     }
 
@@ -720,7 +850,7 @@ public class BattleManager : MonoBehaviour
 
                 cardStatsDisplay?.UpdateDisplay();
 
-                SetGameState(GameState.DefenseConfirm);
+                SetGameState(GameState.DefenseConfirmPhase);
                 reachedDefenseConfirm = true;
             }
             else
@@ -750,7 +880,7 @@ public class BattleManager : MonoBehaviour
             if (currentAttackCard == null)
             {
                 Debug.LogWarning("攻撃カードが設定されていません");
-                SetGameState(GameState.AttackSelect);
+                SetGameState(GameState.AttackPhase);
                 return;
             }
 
@@ -762,7 +892,7 @@ public class BattleManager : MonoBehaviour
                 currentAttackCard = null;
                 selectedDefenseCard = null;
                 UpdateTotalATKDEFDisplay();
-                SetGameState(GameState.TurnEnd);
+                SetGameState(GameState.CombatResolvePhase);
                 return;
             }
 
@@ -773,7 +903,7 @@ public class BattleManager : MonoBehaviour
                 currentAttackCard = null;
                 selectedDefenseCard = null;
                 UpdateTotalATKDEFDisplay();
-                SetGameState(GameState.TurnEnd);
+                SetGameState(GameState.CombatResolvePhase);
                 return;
             }
 
@@ -834,7 +964,7 @@ public class BattleManager : MonoBehaviour
                 battleProcessor.UseCard(defenseCardToDisplay, defHand);
             }
 
-            SetGameState(GameState.TurnEnd);
+            SetGameState(GameState.CombatResolvePhase);
         }
         finally
         {
@@ -843,14 +973,14 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    private async Task RunTurnEndAsync()
+    /// <summary>Layer2 CombatResolve：介入による再戦闘など。完了後に <see cref="EndPhase"/> へ。</summary>
+    private async Task RunCombatResolvePhaseAsync()
     {
-        // TurnEnd 突入時のフェーズ専用トークン（途中で SetGameState され _phaseCts が差し替わっても判定に使う）
         CancellationToken phaseToken = _phaseCts != null ? _phaseCts.Token : default;
 
         try
         {
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.CombatResolvePhase) return;
 
             try
             {
@@ -865,7 +995,25 @@ public class BattleManager : MonoBehaviour
                 Debug.LogException(ex);
             }
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.CombatResolvePhase) return;
+
+            SetGameState(GameState.EndPhase);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            TryRecoverLateTurnPhaseToStandByPhase();
+        }
+    }
+
+    /// <summary>Layer2 End：病・補充・表向き・ターン交代。</summary>
+    private async Task RunEndPhaseAsync()
+    {
+        CancellationToken phaseToken = _phaseCts != null ? _phaseCts.Token : default;
+
+        try
+        {
+            if (CurrentState != GameState.EndPhase) return;
 
             // 攻撃フェーズ終了直後：攻撃側の病系処理（補充・ドローより先）
             PlayerStatus attackerStatus = CurrentTurnOwner == PlayerType.Player ? playerStatus : enemyStatus;
@@ -875,14 +1023,14 @@ public class BattleManager : MonoBehaviour
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("[BattleManager] DiseaseTurnEndProcessor: キャンセル（TurnEnd 続行を試みます）");
+                Debug.Log("[BattleManager] DiseaseTurnEndProcessor: キャンセル（EndPhase 続行を試みます）");
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex);
             }
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
             // ガルーダ：5n ターン終了時はメッセージ → インターバル → 裏向きドロー → 表向け（Refill より前）
             try
@@ -898,7 +1046,7 @@ public class BattleManager : MonoBehaviour
                 Debug.LogException(ex);
             }
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
             if (handRefill != null)
             {
@@ -912,54 +1060,47 @@ public class BattleManager : MonoBehaviour
                 }
             }
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
-            // 経済アクション後のドロー処理
             await ProcessEconomicActionDrawAsync();
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
-            // 裏向きカードを表向きにする処理
             await RevealFaceDownCardsAsync();
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
-            // 手札枚数が正しく更新された後にステータスを更新
             BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
 
-            // ターン切り替えのインターバル中はグレーアウトしない（全てのカードを表示）
-            // グレーアウト状態の更新は次のターン開始時にEnterAttackSelectで行う
             BattleUIManager.I?.SetIntroModeUI(playerHand);
 
-            // 相手の攻撃ターン前のインターバル
             await Task.Delay(500);
 
-            if (CurrentState != GameState.TurnEnd) return;
+            if (CurrentState != GameState.EndPhase) return;
 
-            // 2ターン目以降はグレーアウトを有効にする
             shouldGrayOutCards = true;
 
             ToggleTurnOwner();
-            SetGameState(GameState.TurnStart);
+            SetGameState(GameState.StandByPhase);
         }
         catch (Exception ex)
         {
             Debug.LogException(ex);
-            TryRecoverTurnEndToTurnStart();
+            TryRecoverLateTurnPhaseToStandByPhase();
         }
     }
 
     /// <summary>
-    /// TurnEnd 処理が例外や中断で TurnStart に進めなかったときの保険。
+    /// CombatResolve / End の処理が例外や中断で StandBy に進めなかったときの保険。
     /// </summary>
-    private void TryRecoverTurnEndToTurnStart()
+    private void TryRecoverLateTurnPhaseToStandByPhase()
     {
-        if (CurrentState != GameState.TurnEnd) return;
+        if (CurrentState != GameState.EndPhase && CurrentState != GameState.CombatResolvePhase) return;
 
-        Debug.LogWarning("[BattleManager] TurnEnd から復帰できなかったため TurnStart に移行します");
+        Debug.LogWarning("[BattleManager] CombatResolve/End から復帰できなかったため StandByPhase に移行します");
         shouldGrayOutCards = true;
         ToggleTurnOwner();
-        SetGameState(GameState.TurnStart);
+        SetGameState(GameState.StandByPhase);
     }
 
     private async Task RunEnemyTurnAsync()
@@ -969,7 +1110,7 @@ public class BattleManager : MonoBehaviour
         
         if (attack == null)
         {
-            SetGameState(GameState.TurnEnd);
+            SetGameState(GameState.CombatResolvePhase);
             return;
         }
 
@@ -1002,7 +1143,7 @@ public class BattleManager : MonoBehaviour
             await Task.Delay(DamagePopup.PostPopupIntervalMs);
             BattleUIManager.I?.HideAllCardDetails();
             currentAttackCard = null;
-            SetGameState(GameState.TurnEnd);
+            SetGameState(GameState.CombatResolvePhase);
             return;
         }
 
@@ -1016,7 +1157,7 @@ public class BattleManager : MonoBehaviour
             await Task.Delay(DamagePopup.PostPopupIntervalMs);
         }
 
-        SetGameState(GameState.DefenseSelect);
+        SetGameState(GameState.DefensePhase);
     }
 
     public void SetSelectedCard(CardUI ui)
@@ -1025,7 +1166,7 @@ public class BattleManager : MonoBehaviour
         var card = ui.GetCardData();
         if (card == null) return;
 
-        // 連鎖反射：GameState は AttackSelect のままだが、防御カード選択として扱う
+        // 連鎖反射：GameState は AttackPhase のままだが、防御カード選択として扱う
         if (IsReflectionChainDefensePending())
         {
             if (!CardRules.IsUsableInDefensePhase(card))
@@ -1041,7 +1182,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        if (CurrentState == GameState.AttackSelect && Attacker == PlayerType.Player)
+        if (CurrentState == GameState.AttackPhase && Attacker == PlayerType.Player)
         {
             // 売却モードが有効な場合は、売却処理に委譲
             if (sellFeature != null && sellFeature.IsSellModeActive())
@@ -1063,7 +1204,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        if (CurrentState == GameState.DefenseSelect && Defender == PlayerType.Player)
+        if (CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
         {
             if (!CardRules.IsUsableInDefensePhase(card))
             {
@@ -1080,7 +1221,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        if (CurrentState == GameState.TurnEnd && IsInterventionDefenseWaitActive() && Defender == PlayerType.Player)
+        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive() && Defender == PlayerType.Player)
         {
             if (!CardRules.IsUsableInDefensePhase(card))
             {
@@ -1095,7 +1236,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        if (CurrentState != GameState.AttackSelect && CurrentState != GameState.DefenseSelect)
+        if (CurrentState != GameState.AttackPhase && CurrentState != GameState.DefensePhase)
         {
             Debug.Log($"カード選択は現在できません - State: {CurrentState}, Attacker: {Attacker}, Defender: {Defender}, Card: {card?.cardName}");
         }
@@ -1110,7 +1251,7 @@ public class BattleManager : MonoBehaviour
 
         switch (CurrentState)
         {
-            case GameState.AttackSelect:
+            case GameState.AttackPhase:
                 if (Attacker == PlayerType.Player)
                 {
                     if (IsReflectionChainDefensePending())
@@ -1122,14 +1263,14 @@ public class BattleManager : MonoBehaviour
                     isProcessingUseButton = false;
                 break;
 
-            case GameState.DefenseSelect:
+            case GameState.DefensePhase:
                 if (Defender == PlayerType.Player)
                     HandleDefenseUse();
                 else
                     isProcessingUseButton = false;
                 break;
 
-            case GameState.TurnEnd:
+            case GameState.CombatResolvePhase:
                 if (IsInterventionDefenseWaitActive())
                     TrySubmitInterventionPlayerDefense();
                 else
@@ -1166,7 +1307,7 @@ public class BattleManager : MonoBehaviour
         Debug.Log("[BattleManager] 回復ポップアップ表示後、0.5秒インターバル完了");
 
         // 回復カード（即時効果）の場合は防御フェーズをスキップして直接ターン終了
-        SetGameState(GameState.TurnEnd);
+        SetGameState(GameState.CombatResolvePhase);
     }
 
     /// <summary>
@@ -1354,7 +1495,7 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.HideAllCardDetails();
 
         // 防御カード確定後の処理
-        SetGameState(GameState.TurnEnd);
+        SetGameState(GameState.CombatResolvePhase);
     }
 
 
@@ -1399,6 +1540,49 @@ public class BattleManager : MonoBehaviour
         cardStatsDisplay?.UpdateDisplay();
         BattleUIManager.I?.RefreshUseButtonForMpAndSelection();
     }
+
+    /// <summary>反射連鎖など <see cref="CardSequenceManager"/> 外のカード表示に、TotalATKDEF を同期させる。</summary>
+    public void SetStatsDisplaySequenceCards(List<CardData> cards, string cardType, Side ownerSide)
+    {
+        cardStatsDisplay?.SetSequenceCards(cards, cardType, ownerSide);
+        cardStatsDisplay?.UpdateDisplay();
+    }
+
+    /// <summary>演出シーケンス終了時など、TotalATKDEF を通常ロジックへ戻す。</summary>
+    public void ClearStatsDisplaySequenceCards()
+    {
+        cardStatsDisplay?.ClearSequenceCards();
+        cardStatsDisplay?.UpdateDisplay();
+    }
+
+    /// <summary>スライドアニメ完了後：元攻撃側の TOTAL ATK を消し、反射した側のパネルに同じ攻撃 ATK を表示する。</summary>
+    /// <param name="totalAtkOnPlayerSide">スライド先がプレイヤー側なら true（敵→自分の反射で true、自分→敵なら false）。</param>
+    public void SetReflectionAttackTotalDisplayAfterSlide(List<CardData> attackCards, bool totalAtkOnPlayerSide)
+    {
+        _reflectionAtkCardsForTotalDisplay.Clear();
+        if (attackCards != null)
+            _reflectionAtkCardsForTotalDisplay.AddRange(attackCards);
+        _reflectionAtkTotalActive = _reflectionAtkCardsForTotalDisplay.Count > 0;
+        _reflectionAtkTotalOnPlayerSide = totalAtkOnPlayerSide;
+        UpdateTotalATKDEFDisplay();
+    }
+
+    /// <summary>反射ダメージ解決が終わったあと、TOTAL ATK の一時表示を通常ロジックに戻す。</summary>
+    public void ClearReflectionAttackTotalDisplay()
+    {
+        _reflectionAtkTotalActive = false;
+        _reflectionAtkCardsForTotalDisplay.Clear();
+        UpdateTotalATKDEFDisplay();
+    }
+
+    public bool IsReflectionAttackTotalDisplayActive()
+    {
+        return _reflectionAtkTotalActive && _reflectionAtkCardsForTotalDisplay.Count > 0;
+    }
+
+    public bool ReflectionAttackTotalOnPlayerSide => _reflectionAtkTotalOnPlayerSide;
+
+    public List<CardData> GetReflectionAttackCardsForTotalDisplay() => _reflectionAtkCardsForTotalDisplay;
 
     /// <summary>
     /// 手札カードを 1 枚ドローする（MagicPoolManager 経由で手札追加時に使用）
@@ -1551,7 +1735,7 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 経済アクション後のドロー処理（TurnEndフェーズで実行）
+    /// 経済アクション後のドロー処理（EndPhase で実行）
     /// </summary>
     private async Task ProcessEconomicActionDrawAsync()
     {
@@ -1596,7 +1780,7 @@ public class BattleManager : MonoBehaviour
 
                 var data = cardUI.GetCardData();
                 if (data != null)
-                    CardDealAudio.Play(data);
+                    CardDealAudio.Play(data, true);
                 await Task.Delay(50);
                 cardUI.Reveal();
                 await Task.Delay(300);

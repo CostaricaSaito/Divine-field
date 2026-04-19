@@ -184,7 +184,7 @@ public class HandRefillService : MonoBehaviour
                 ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
             ui.button.interactable = true;
             await Task.Delay(150, ct);
-            CardDealAudio.Play(newCard);
+            CardDealAudio.Play(newCard, true);
             ui.Reveal();
             await Task.Delay(100, ct);
         }
@@ -233,7 +233,7 @@ public class HandRefillService : MonoBehaviour
         slot.ui.button.interactable = true;
 
         await Task.Delay(150, ct);
-        CardDealAudio.Play(newCard);
+        CardDealAudio.Play(newCard, true);
         slot.ui.Reveal();
         await Task.Delay(100, ct);
     }
@@ -326,7 +326,7 @@ public class HandRefillService : MonoBehaviour
         }
 
         if (playSoundOnDraw)
-            CardDealAudio.Play(newCard);
+            CardDealAudio.Play(newCard, true);
 
         if (trailingDelayMs > 0)
             await Task.Delay(trailingDelayMs);
@@ -347,7 +347,7 @@ public class HandRefillService : MonoBehaviour
         await Task.Delay(150, ct);
         if (ct.IsCancellationRequested) return;
 
-        CardDealAudio.Play(card);
+        CardDealAudio.Play(card, true);
 
         card.cardUI.Reveal();
 

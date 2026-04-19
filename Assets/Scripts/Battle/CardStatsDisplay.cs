@@ -1,4 +1,6 @@
+﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using TMPro;
 
@@ -19,6 +21,13 @@ public class CardStatsDisplay : MonoBehaviour
     // 演出中のカードリスト
     private List<CardData> currentSequenceCards = new List<CardData>();
     private string currentSequenceType = "";
+    /// <summary>TotalATKDEF のどちら側にシーケンスを反映するか（反射連鎖の敵防御などで敵側に DEF を出す）。</summary>
+    private Side sequenceOwnerSide = Side.Player;
+
+    /// <summary>イフリート等の加算表示（TMP リッチテキスト）。</summary>
+    private const string IfritBonusColorHex = "#E53935";
+    /// <summary>リヴァイアサン等の抑制分表示（TMP リッチテキスト）。</summary>
+    private const string LeviathanSuppressColorHex = "#1E88E5";
 
     /// <summary>
     /// 初期化時にボタンを非表示にする
@@ -41,12 +50,19 @@ public class CardStatsDisplay : MonoBehaviour
     /// </summary>
     public void SetSequenceCards(List<CardData> cards, string cardType)
     {
+        SetSequenceCards(cards, cardType, Side.Player);
+    }
+
+    /// <param name="ownerSide">プレイヤー手札由来の演出なら <see cref="Side.Player"/>、敵のカード表示に合わせるときは <see cref="Side.Enemy"/>。</param>
+    public void SetSequenceCards(List<CardData> cards, string cardType, Side ownerSide)
+    {
         currentSequenceCards.Clear();
         if (cards != null)
         {
             currentSequenceCards.AddRange(cards);
         }
         currentSequenceType = cardType ?? "";
+        sequenceOwnerSide = ownerSide;
     }
 
     /// <summary>
@@ -56,6 +72,7 @@ public class CardStatsDisplay : MonoBehaviour
     {
         currentSequenceCards.Clear();
         currentSequenceType = "";
+        sequenceOwnerSide = Side.Player;
     }
 
     /// <summary>
@@ -104,7 +121,7 @@ public class CardStatsDisplay : MonoBehaviour
         {
             string displayText = GetPlayerDisplayText();
             atkdefText.text = displayText;
-            atkdefText.color = ElementHelper.GetElementColor(GetPlayerCombinedElement());
+            ApplyAttackLabelTextStyle(atkdefText, ElementHelper.GetElementColor(GetPlayerCombinedElement()));
         }
         else
         {
@@ -135,12 +152,77 @@ public class CardStatsDisplay : MonoBehaviour
         {
             string displayText = GetEnemyDisplayText();
             atkdefTextEnemy.text = displayText;
-            atkdefTextEnemy.color = ElementHelper.GetElementColor(GetEnemyCombinedElement());
+            ApplyAttackLabelTextStyle(atkdefTextEnemy, ElementHelper.GetElementColor(GetEnemyCombinedElement()));
         }
         else
         {
             Debug.LogWarning("[CardStatsDisplay] ATKDEFtextEnemyが設定されていません");
         }
+    }
+
+    /// <summary>
+    /// 反射スライド後の TOTAL ATK 表示：攻撃側を消し反射側のみ表示する。
+    /// </summary>
+    private bool TryGetReflectionPlayerTotalHide(out bool hide)
+    {
+        hide = true;
+        var bm = BattleManager.I;
+        if (bm == null || !bm.IsReflectionAttackTotalDisplayActive()) return false;
+
+        if (!bm.ReflectionAttackTotalOnPlayerSide)
+        {
+            // 通常防御を選んでいるときは反射用の「プレイヤー非表示」をかけない（DEF は ShouldHide 先頭で扱う）
+            if (PlayerShouldShowDefenseTotalDuringReflectionChain(bm))
+                return false;
+
+            hide = true;
+            return true;
+        }
+
+        var cards = bm.GetReflectionAttackCardsForTotalDisplay();
+        int s = GetDisplayedAttackStrength(cards, bm.GetPlayerStatus());
+        hide = s <= 0;
+        return true;
+    }
+
+    /// <summary>
+    /// 連鎖反射の防御入力中、通常防御のみ選ばれていれば TOTAL に DEF を出す。
+    /// 反射 ATK オーバーレイの有無には依存しない（演出シーケンス残りと整合させるため）。
+    /// 反射／無効化の排他のみのときは false。
+    /// </summary>
+    private bool PlayerShouldShowDefenseTotalDuringReflectionChain(BattleManager bm)
+    {
+        if (bm == null || !bm.IsReflectionChainDefensePending()) return false;
+
+        var defCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (defCards == null || defCards.Count == 0) return false;
+
+        var incoming = bm.GetIncomingAttackSnapshotForDefenseUi();
+        foreach (var c in defCards)
+        {
+            if (c != null && BlockingRules.RequiresDefenseNullifyExclusiveLock(c, incoming))
+                return false;
+        }
+
+        return CalculateTotalDefensePower(defCards) > 0;
+    }
+
+    private bool TryGetReflectionEnemyTotalHide(out bool hide)
+    {
+        hide = true;
+        var bm = BattleManager.I;
+        if (bm == null || !bm.IsReflectionAttackTotalDisplayActive()) return false;
+
+        if (bm.ReflectionAttackTotalOnPlayerSide)
+        {
+            hide = true;
+            return true;
+        }
+
+        var cards = bm.GetReflectionAttackCardsForTotalDisplay();
+        int s = GetDisplayedAttackStrength(cards, bm.GetEnemyStatus());
+        hide = s <= 0;
+        return true;
     }
 
     /// <summary>
@@ -153,8 +235,12 @@ public class CardStatsDisplay : MonoBehaviour
 
         if (battleManager.IsEconomicActionInProgress()) return true;
 
-        // 演出中のカードがある場合
-        if (currentSequenceCards.Count > 0)
+        // 連鎖反射で防御選択時は最優先で表示（古い攻撃シーケンス・反射非表示より先）
+        if (PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
+            return false;
+
+        // カード Prefab シーケンス（反射 TOTAL より先：確定後の DEF 再表示と整合）
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
         {
             if (currentSequenceType == "攻撃")
             {
@@ -170,8 +256,12 @@ public class CardStatsDisplay : MonoBehaviour
             }
         }
 
-        // 攻撃フェーズの場合
-        if (battleManager.CurrentState == GameState.AttackSelect)
+        if (TryGetReflectionPlayerTotalHide(out bool refHide))
+            return refHide;
+
+        // 攻撃フェーズのうち、プレイヤーが攻撃側のときだけ（敵ターンの AttackPhase では敵用の表示に任せる）
+        if (battleManager.CurrentState == GameState.AttackPhase
+            && battleManager.CurrentTurnOwner == PlayerType.Player)
         {
             // 複数選択を優先してチェック
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
@@ -199,7 +289,7 @@ public class CardStatsDisplay : MonoBehaviour
         }
 
         // 防御フェーズの場合
-        if (battleManager.CurrentState == GameState.DefenseSelect)
+        if (battleManager.CurrentState == GameState.DefensePhase)
         {
             // 複数選択を優先してチェック
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
@@ -238,9 +328,26 @@ public class CardStatsDisplay : MonoBehaviour
 
         if (battleManager.IsEconomicActionInProgress()) return true;
 
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
+        {
+            if (currentSequenceType == "攻撃")
+            {
+                int totalAttack = GetDisplayedAttackStrength(currentSequenceCards, battleManager.GetEnemyStatus());
+                if (totalAttack <= 0) return true;
+                return false;
+            }
+            else if (currentSequenceType == "防御")
+            {
+                int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
+                if (totalDefense <= 0) return true;
+                return false;
+            }
+        }
+
+        if (TryGetReflectionEnemyTotalHide(out bool refHideEnemy))
+            return refHideEnemy;
+
         // 敵のターン（攻撃側）: currentAttackCard が設定されていれば表示
-        // RunEnemyTurnAsync は OnTurnStart から直接呼ばれるため
-        // CurrentState が TurnStart のまま AttackSelect に遷移しないケースがある
         if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
         {
             var currentAttackCard = battleManager.GetCurrentAttackCard();
@@ -259,7 +366,7 @@ public class CardStatsDisplay : MonoBehaviour
             && battleManager.DefenderPublic == PlayerType.Enemy)
         {
             var state = battleManager.CurrentState;
-            if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm)
+            if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase)
             {
                 var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
                 if (selectedDefenseCard != null)
@@ -282,13 +389,22 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return "";
 
-        // 演出中のカードがある場合
-        if (currentSequenceCards.Count > 0)
+        // 連鎖反射の通常防御は、残った攻撃演出シーケンスより優先
+        if (PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
+        {
+            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 1)
+                return $"DEF {CalculateTotalDefensePower(selectedDefenseCards)}";
+            if (selectedDefenseCards != null && selectedDefenseCards.Count == 1)
+                return $"DEF {selectedDefenseCards[0].defensePower}";
+        }
+
+        // CardSequenceManager／反射連鎖確定後の Prefab シーケンス（反射用 TOTAL ATK より優先）
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
         {
             if (currentSequenceType == "攻撃")
             {
-                int totalAttack = GetDisplayedAttackStrength(currentSequenceCards, battleManager.GetPlayerStatus());
-                return $"ATK {totalAttack}";
+                return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetPlayerStatus());
             }
             else if (currentSequenceType == "防御")
             {
@@ -297,28 +413,34 @@ public class CardStatsDisplay : MonoBehaviour
             }
         }
 
-        if (battleManager.CurrentState == GameState.AttackSelect)
+        if (battleManager.IsReflectionAttackTotalDisplayActive() && battleManager.ReflectionAttackTotalOnPlayerSide)
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return FormatAttackPowerDisplayLabel(rc, battleManager.GetPlayerStatus());
+        }
+
+        if (battleManager.CurrentState == GameState.AttackPhase
+            && battleManager.CurrentTurnOwner == PlayerType.Player)
         {
             // 複数選択を優先してチェック（複数選択時は合計値を表示）
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
             if (selectedAttackCards != null && selectedAttackCards.Count > 1)
             {
-                int totalAttack = GetDisplayedAttackStrength(selectedAttackCards, battleManager.GetPlayerStatus());
-                return $"ATK {totalAttack}";
+                return FormatAttackPowerDisplayLabel(selectedAttackCards, battleManager.GetPlayerStatus());
             }
             
             // 単一選択の場合
             if (selectedAttackCards != null && selectedAttackCards.Count == 1)
             {
                 var one = new List<CardData> { selectedAttackCards[0] };
-                int atk = GetDisplayedAttackStrength(one, battleManager.GetPlayerStatus());
-                return $"ATK {atk}";
+                return FormatAttackPowerDisplayLabel(one, battleManager.GetPlayerStatus());
             }
             
             // CardSelectionManagerから取得した選択カードが空の場合は、空文字列を返す（表示しない）
             // BattleManagerのselectedCardは参照しない（キャンセル時にクリアされない可能性があるため）
         }
-        else if (battleManager.CurrentState == GameState.DefenseSelect)
+        else if (battleManager.CurrentState == GameState.DefensePhase)
         {
             // 複数選択を優先してチェック（複数選択時は合計値を表示）
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
@@ -349,6 +471,26 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return "";
 
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
+        {
+            if (currentSequenceType == "攻撃")
+            {
+                return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetEnemyStatus());
+            }
+            else if (currentSequenceType == "防御")
+            {
+                int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
+                return $"DEF {totalDefense}";
+            }
+        }
+
+        if (battleManager.IsReflectionAttackTotalDisplayActive() && !battleManager.ReflectionAttackTotalOnPlayerSide)
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return FormatAttackPowerDisplayLabel(rc, battleManager.GetEnemyStatus());
+        }
+
         // 敵のターン（攻撃側）: ATK を表示
         if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
         {
@@ -356,8 +498,7 @@ public class CardStatsDisplay : MonoBehaviour
             if (currentAttackCard != null)
             {
                 var one = new List<CardData> { currentAttackCard };
-                int atk = GetDisplayedAttackStrength(one, battleManager.GetEnemyStatus());
-                return $"ATK {atk}";
+                return FormatAttackPowerDisplayLabel(one, battleManager.GetEnemyStatus());
             }
         }
 
@@ -380,18 +521,35 @@ public class CardStatsDisplay : MonoBehaviour
     /// </summary>
     private ElementType GetPlayerCombinedElement()
     {
-        if (currentSequenceCards.Count > 0)
+        var battleManager = BattleManager.I;
+
+        if (battleManager != null && PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
+        {
+            var defCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (defCards != null && defCards.Count > 0)
+                return ElementHelper.GetCombinedElement(defCards);
+        }
+
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
             return ElementHelper.GetCombinedElement(currentSequenceCards);
 
-        var battleManager = BattleManager.I;
+        if (battleManager != null && battleManager.IsReflectionAttackTotalDisplayActive()
+            && battleManager.ReflectionAttackTotalOnPlayerSide)
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return ElementHelper.GetCombinedElement(rc);
+        }
+
         if (battleManager == null) return ElementType.None;
 
-        if (battleManager.CurrentState == GameState.AttackSelect)
+        if (battleManager.CurrentState == GameState.AttackPhase
+            && battleManager.CurrentTurnOwner == PlayerType.Player)
         {
             var cards = BattleUIManager.I?.GetSelectedAttackCards();
             if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
         }
-        else if (battleManager.CurrentState == GameState.DefenseSelect)
+        else if (battleManager.CurrentState == GameState.DefensePhase)
         {
             var cards = BattleUIManager.I?.GetSelectedDefenseCards();
             if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
@@ -406,6 +564,16 @@ public class CardStatsDisplay : MonoBehaviour
     {
         var battleManager = BattleManager.I;
         if (battleManager == null) return ElementType.None;
+
+        if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
+            return ElementHelper.GetCombinedElement(currentSequenceCards);
+
+        if (battleManager.IsReflectionAttackTotalDisplayActive() && !battleManager.ReflectionAttackTotalOnPlayerSide)
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return ElementHelper.GetCombinedElement(rc);
+        }
 
         if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
         {
@@ -444,6 +612,67 @@ public class CardStatsDisplay : MonoBehaviour
     public int CalculateTotalAttackPower(List<CardData> attackCards)
     {
         return CalculateTotalPower(attackCards, true);
+    }
+
+    /// <summary>
+    /// タグなし部分（「ATK 10」など）のベース色。無属性は黒、その他は <see cref="ElementHelper.GetElementColor"/>。
+    /// +n / -n はリッチテキストの &lt;color&gt; で上書き。
+    /// </summary>
+    private static void ApplyAttackLabelTextStyle(TMP_Text tmp, Color elementTint)
+    {
+        if (tmp == null) return;
+        tmp.richText = true;
+        tmp.color = elementTint;
+    }
+
+    private static PlayerStatus GetDefenderForAttackDisplay(PlayerStatus attacker)
+    {
+        var bm = BattleManager.I;
+        if (bm == null || attacker == null) return null;
+        var p = bm.GetPlayerStatus();
+        var e = bm.GetEnemyStatus();
+        return attacker == p ? e : (attacker == e ? p : null);
+    }
+
+    /// <summary>
+    /// カード合計 ATK に対し、イフリートは「ATK base +n」（+n は赤字）、リヴァイアサンは「-n」（n は青字）。
+    /// 計算値そのものは <see cref="GetDisplayedAttackStrength"/> と一致（衰弱などで最終が変わるときは → で補足）。
+    /// </summary>
+    private string FormatAttackPowerDisplayLabel(List<CardData> cards, PlayerStatus attacker)
+    {
+        if (cards == null || cards.Count == 0 || attacker == null) return "";
+
+        int baseSum = CalculateTotalAttackPower(cards);
+        if (baseSum <= 0) return "";
+
+        int afterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, baseSum);
+        int ifritDelta = afterIfrit - baseSum;
+
+        PlayerStatus defender = GetDefenderForAttackDisplay(attacker);
+        int afterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(attacker, defender, cards, afterIfrit);
+        int leviDelta = afterIfrit - afterLevi;
+
+        int final = afterLevi;
+        if (!CardRules.IsMagicOnlyAttackCombo(cards))
+            final = attacker.ApplyOutgoingDamageModifiers(afterLevi);
+
+        if (ifritDelta <= 0 && leviDelta <= 0)
+            return $"ATK {final}";
+
+        var sb = new StringBuilder(48);
+        sb.Append("ATK ").Append(baseSum);
+        if (ifritDelta > 0)
+        {
+            sb.Append(" <color=").Append(IfritBonusColorHex).Append(">+").Append(ifritDelta).Append("</color>");
+        }
+        if (leviDelta > 0)
+        {
+            sb.Append(" <color=").Append(LeviathanSuppressColorHex).Append("> -").Append(leviDelta).Append("</color>");
+        }
+        if (final != afterLevi)
+            sb.Append(" → ").Append(final);
+
+        return sb.ToString();
     }
 
     /// <summary>

@@ -17,6 +17,11 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: d84574dd1811ed642871682b9e9b708f
   m_SerializeEntries:
+  - m_GUID: 016b06f45b00b5940a0db4bf5ca3bc15
+    m_Address: "Assets/Images/02_\u80CC\u666F/\u52A3\u52E2.jpg"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 041ce1553b308774883af98392f45d67
     m_Address: "Assets/SE/\u30D4\u30B3\u30C3.mp3"
     m_ReadOnly: 0
@@ -54,6 +59,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4150a2b3db319e74d9a711a0800d5a1c
     m_Address: "Assets/SE/\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F2.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4682fc9b8edc20b49b2cb8bcedeb435c
+    m_Address: Assets/SE/BATTLE/metal38.wav
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -97,6 +107,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bbf7ea01dc4948343a67f5c76ac1db13
+    m_Address: Assets/SE/BATTLE/metal39.wav
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bbf96d7b61110254290933f23747fec1
     m_Address: "Assets/SE/\u5263\u306E\u7D20\u632F\u308A1.mp3"
     m_ReadOnly: 0
@@ -114,6 +129,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c2ef6f1ea546778489985dacf71a551e
     m_Address: "Assets/SE/\u6C7A\u5B9A\u30DC\u30BF\u30F3\u3092\u62BC\u305925.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c647f07220d0e5f4191f2edfb847edac
+    m_Address: Assets/Music/Extinguish.mp3
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

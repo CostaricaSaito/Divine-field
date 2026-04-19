@@ -1,11 +1,11 @@
-using System.Collections; // © ‚±‚ê‚ª•K—vI
+ï»¿using System.Collections; // ÂÂ© â€šÂ±â€šÃªâ€šÂªâ€¢Kâ€”vÂI
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class SummonSkillButton : MonoBehaviour
 {
-    [Header("QÆ")]
+    [Header("Å½QÂÃ†")]
     public PlayerStatus playerStatus;
     public PlayerStatus enemyStatus;
     public GameObject popupPanel;
@@ -41,28 +41,28 @@ public class SummonSkillButton : MonoBehaviour
     void OnClickSummonIcon()
     {
 
-        if (BattleManager.I.CurrentState != GameState.AttackSelect)
+        if (BattleManager.I.CurrentState != GameState.AttackPhase)
         {
-            Debug.Log("¢Š«ƒXƒLƒ‹‚Í¡g‚¦‚Ü‚¹‚ñ");
+            Debug.Log("ÂÂ¢Å Â«Æ’XÆ’LÆ’â€¹â€šÃÂÂ¡Å½gâ€šÂ¦â€šÃœâ€šÂ¹â€šÃ±");
             return;
         }
 
-        Debug.Log($"[Œ°Œ»ƒ`ƒFƒbƒN] Œ»İ‚ÌHP: {playerStatus.currentHP}");
+        Debug.Log($"[é¡•ç¾ãƒã‚§ãƒƒã‚¯] HP+MP+GP={playerStatus.currentHP + playerStatus.currentMP + playerStatus.currentGP} (åŠ£å‹¢: {DisadvantageRules.IsDisadvantaged(playerStatus)})");
 
-        if (playerStatus.currentHP > 10)
+        if (!DisadvantageRules.IsDisadvantaged(playerStatus))
         {
-            Debug.Log("Œ°Œ»ƒXƒLƒ‹‚ÌğŒ‚ğ–‚½‚µ‚Ä‚¢‚Ü‚¹‚ñ");
+            Debug.Log("é¡•ç¾ã‚¹ã‚­ãƒ«ã®æ¡ä»¶ã‚’æº€ãŸã—ã¦ã„ã¾ã›ã‚“ï¼ˆåŠ£å‹¢æ™‚ã®ã¿ï¼‰");
             return;
         }
 
         var summon = playerStatus.summonData;
 
-        // ƒ|ƒbƒvƒAƒbƒv‚ğŠJ‚¢‚Äî•ñ‚ğ•\¦
+        // Æ’|Æ’bÆ’vÆ’AÆ’bÆ’vâ€šÃ°Å Jâ€šÂ¢â€šÃ„ÂÃ®â€¢Ã±â€šÃ°â€¢\Å½Â¦
         popupPanel.SetActive(true);
         skillNameText.text = playerStatus.summonData.specialSkillName;
         skillDescText.text = playerStatus.summonData.specialSkillDescription;
 
-        // ƒXƒ^ƒCƒ‹“K—pi‚±‚±‚ªƒ|ƒCƒ“ƒgIj
+        // Æ’XÆ’^Æ’CÆ’â€¹â€œKâ€”pÂiâ€šÂ±â€šÂ±â€šÂªÆ’|Æ’CÆ’â€œÆ’gÂIÂj
         ApplyTextStyle(skillNameText, summon.popupSkillNameStyle);
         ApplyTextStyle(skillDescText, summon.popupSkillDescStyle);
 
@@ -76,13 +76,13 @@ public class SummonSkillButton : MonoBehaviour
     {
         popupPanel.SetActive(false);
 
-        // ƒJƒbƒgƒCƒ“‰‰o ¨ ƒXƒLƒ‹Œø‰Ê‚Öi‰¼j
+        // Æ’JÆ’bÆ’gÆ’CÆ’â€œâ€°â€°Âo ÂÂ¨ Æ’XÆ’LÆ’â€¹Å’Ã¸â€°ÃŠâ€šÃ–Âiâ€°Â¼Âj
         StartCoroutine(PlayCutInAndActivate());
     }
 
     IEnumerator PlayCutInAndActivate()
     {
-        // ƒJƒbƒgƒCƒ“‰‰oi”wŒiA¢Š«bAƒXƒLƒ‹–¼j
+        // Æ’JÆ’bÆ’gÆ’CÆ’â€œâ€°â€°ÂoÂiâ€wÅ’iÂAÂÂ¢Å Â«ÂbÂAÆ’XÆ’LÆ’â€¹â€“Â¼Âj
         SummonSkillCutInController.I.PlayCutIn(
             playerStatus.summonData.specialSkillCutInSprite, 
             playerStatus.summonData.specialSkillName
@@ -90,18 +90,18 @@ public class SummonSkillButton : MonoBehaviour
 
         var summon = playerStatus.summonData;
 
-        // Œø‰Ê‰¹‚ğÄ¶iAudioClip‚ªİ’è‚³‚ê‚Ä‚¢‚ê‚Îj
+        // Å’Ã¸â€°ÃŠâ€°Â¹â€šÃ°ÂÃ„ÂÂ¶ÂiAudioClipâ€šÂªÂÃâ€™Ã¨â€šÂ³â€šÃªâ€šÃ„â€šÂ¢â€šÃªâ€šÃÂj
         if (summon.specialSkillSE != null)
         {
             AudioSource.PlayClipAtPoint(summon.specialSkillSE, Camera.main.transform.position);
         }
 
-        yield return new WaitForSeconds(2f);  // ƒAƒjƒŠÔ‚É‡‚í‚¹‚Ä’²®
+        yield return new WaitForSeconds(2f);  // Æ’AÆ’jÆ’ÂÅ½Å¾Å Ã”â€šÃ‰Ââ€¡â€šÃ­â€šÂ¹â€šÃ„â€™Â²ÂÂ®
 
-        // ƒXƒLƒ‹Œø‰Êˆ—
+        // Æ’XÆ’LÆ’â€¹Å’Ã¸â€°ÃŠÂË†â€”Â
         playerStatus.summonData.ActivateSpecialSkill(playerStatus, enemyStatus);
 
-        // ƒXƒe[ƒ^ƒXUIXV
+        // Æ’XÆ’eÂ[Æ’^Æ’XUIÂXÂV
         BattleManager.I.statusUI.UpdateStatus(playerStatus, enemyStatus);
     }
 }

@@ -73,6 +73,10 @@ public class DamagePopup : MonoBehaviour
     [Header("反射・弾き返し")]
     [SerializeField] private Color reflectionPanelBackground = new Color(0.82f, 0.08f, 0.1f, 0.96f);
 
+    [Header("無効化・護身")]
+    [SerializeField] private Color blockingNullifyPanelBackground = new Color(0f, 0f, 0f, 0.96f);
+    [SerializeField] private Color blockingNullifyMessageFill = new Color(0.55f, 0.55f, 0.55f, 1f);
+
     // --- 演出パラメータ（Inspector からも変更可）---
     // floatSpeed … 上方向に漂う速度。大きいほど速く上に抜ける（ワールド／ローカルは親の向き依存。通常は上へ）。
     public float floatSpeed = 30f;
@@ -299,6 +303,16 @@ public class DamagePopup : MonoBehaviour
         target.fontSizeMax = messageFontSizeMax;
         target.alignment = TextAlignmentOptions.Center;
         ApplyFillAndOutline(target, Color.white, defaultOutlineForSimpleMessage);
+    }
+
+    /// <summary>物理無効など：黒背景・灰色字・白縁の「護身」。</summary>
+    public void SetupBlockingNullify(string message = "護身")
+    {
+        if (_rootPanelImage != null)
+            _rootPanelImage.color = blockingNullifyPanelBackground;
+
+        string text = string.IsNullOrEmpty(message) ? "護身" : message;
+        ShowMessageLayout(text, blockingNullifyMessageFill, Color.white, statusAilmentAutoSize: false);
     }
 
     private static string BuildRainbowRichText(string s)

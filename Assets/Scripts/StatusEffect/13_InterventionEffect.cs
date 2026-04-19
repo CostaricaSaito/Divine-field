@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 介入（公式13番）：攻撃フェーズ終了後の TurnEnd で、病処理より前に一定確率で追加の攻撃が発生しうる。
+/// 介入（公式13番）：攻撃フェーズ終了後の CombatResolve で、病処理より前に一定確率で追加の攻撃が発生しうる。
 /// ファイル名: <c>13_InterventionEffect.cs</c>（<see cref="StatusEffectType.Intervention"/>）。
 /// </summary>
 public sealed class InterventionEffect : IStatusEffect

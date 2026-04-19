@@ -1,4 +1,5 @@
-// BattleDebugTools.cs
+﻿// BattleDebugTools.cs
+using System;
 using System.Threading;
 using UnityEngine;
 
@@ -34,12 +35,12 @@ public class BattleDebugTools : MonoBehaviour
     [SerializeField] private OpeningTurnOwnerDebugMode openingTurnOwnerMode = OpeningTurnOwnerDebugMode.Random;
 
     [Header("GameState デバッグ（再生中・右上）")]
-    [Tooltip("現在の GameState と手番をリアルタイム表示。Editor / Development ビルドのみ。")]
+    [Tooltip("Layer1 Turn / Layer2 Phase / Layer3 Step をリアルタイム表示。Editor / Development ビルドのみ。")]
     [SerializeField] private bool showGameStateDebugBox = true;
-    [SerializeField] private float gameStateDebugBoxWidth = 380f;
-    [SerializeField] private float gameStateDebugBoxHeight = 96f;
-    [Tooltip("ラベルのフォントサイズ（既定 16）")]
-    [SerializeField] [Range(10, 36)] private int gameStateDebugFontSize = 16;
+    [SerializeField] private float gameStateDebugBoxWidth = 400f;
+    [SerializeField] private float gameStateDebugBoxHeight = 180f;
+    [Tooltip("ラベルのフォントサイズ（既定 32）")]
+    [SerializeField] [Range(10, 36)] private int gameStateDebugFontSize = 32;
 
     [Header("状態異常デバッグ（再生中・左上）")]
     [Tooltip("オンにすると15種の付与ボタンを表示。Factory未実装の4種はプレースホルダーで付与。")]
@@ -48,7 +49,18 @@ public class BattleDebugTools : MonoBehaviour
     /// <summary>左上デバッグパネル領域。高さは15種リスト＋「状態異常13（介入）」ブロックを収める。</summary>
     [SerializeField] private Rect ailmentDebugPanelRect = new Rect(8, 8, 300, 540);
 
+    [Header("手札チート（Editor / Development・再生中）")]
+    [Tooltip("オン時、右側に Resources/Cards から読み込んだ一覧でプレイヤー手札に追加できます。")]
+    [SerializeField] private bool showCardCheatPanel = true;
+    [Tooltip("幅・高さのみ参照。X は実行時に画面右寄せで上書きします。")]
+    [SerializeField] private Rect cardCheatPanelRect = new Rect(0, 8, 320, 420);
+    [Tooltip("Inspector から1枚指定してコンテキストメニューで即追加")]
+    [SerializeField] private CardData cheatCardTemplateForContextMenu;
+
     private Vector2 _ailmentScroll;
+    private Vector2 _cardCheatScroll;
+    private string _cardCheatFilter = "";
+    private static CardData[] _cachedAllCardsFromResources;
     private GUIStyle _gameStateDebugLabelStyle;
 
     [ContextMenu("デバッグ：プレイヤーHPを10に設定")]
@@ -65,6 +77,24 @@ public class BattleDebugTools : MonoBehaviour
         RefreshStatusUi();
 
         Debug.Log("[BattleDebugTools] デバッグ：プレイヤーHPを10に設定しました");
+    }
+
+    [ContextMenu("デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定")]
+    public void SetPlayerHp10Mp0Gp0()
+    {
+        if (!Application.isPlaying || battleManager == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] 再生中かつ battleManager 設定が必要です。");
+            return;
+        }
+
+        var player = battleManager.GetPlayerStatus();
+        player.currentHP = Mathf.Clamp(10, 0, player.maxHP);
+        player.currentMP = Mathf.Clamp(0, 0, player.maxMP);
+        player.currentGP = Mathf.Clamp(0, 0, player.maxGP);
+        RefreshStatusUi();
+
+        Debug.Log("[BattleDebugTools] デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定しました（合計10・劣勢境界）");
     }
 
     /// <summary>衰弱のアイコン・効果テスト用。</summary>
@@ -92,7 +122,7 @@ public class BattleDebugTools : MonoBehaviour
         if (!EnsurePlaying()) return;
         ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.Sickness);
         RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] プレイヤーに「病」を付与。攻撃フェーズ終了後の TurnEnd で病系処理が走ります。");
+        Debug.Log("[BattleDebugTools] プレイヤーに「病」を付与。攻撃フェーズ終了後の EndPhase で病系処理が走ります。");
     }
 
     [ContextMenu("テスト：プレイヤーに重病を付与")]
@@ -150,15 +180,17 @@ public class BattleDebugTools : MonoBehaviour
                 _gameStateDebugLabelStyle.fontSize = gameStateDebugFontSize;
 
             GUILayout.BeginArea(new Rect(gx, gy, gw, gh), GUI.skin.box);
-            GUILayout.Label($"GameState: {battleManager.CurrentState}", _gameStateDebugLabelStyle);
-            GUILayout.Label($"TurnOwner: {battleManager.CurrentTurnOwner}", _gameStateDebugLabelStyle);
+            GUILayout.Label($"Turn:  {battleManager.GetBattleTurnDebugLabel()}", _gameStateDebugLabelStyle);
+            GUILayout.Label($"Phase: {battleManager.CurrentState}", _gameStateDebugLabelStyle);
+            BattleStep step = battleManager.CurrentBattleStep;
+            GUILayout.Label($"Step:  {step}", _gameStateDebugLabelStyle);
+            GUILayout.Label($"      {BattleStepPresentation.GetDebugLabel(step)}", _gameStateDebugLabelStyle);
             GUILayout.EndArea();
         }
 
 #if UNITY_EDITOR
-        if (!showAilmentDebugPanel)
-            return;
-
+        if (showAilmentDebugPanel)
+        {
         GUILayout.BeginArea(ailmentDebugPanelRect, GUI.skin.box);
         GUILayout.Label("状態異常 付与（公式15種）");
         GUILayout.Label("→P=プレイヤー / →E=敵（未実装4種はプレースホルダー）", GUI.skin.box);
@@ -213,7 +245,11 @@ public class BattleDebugTools : MonoBehaviour
 #endif
 
         GUILayout.EndArea();
+        }
 #endif
+
+        if (showCardCheatPanel)
+            DrawCardCheatPanel();
     }
 #endif
 
@@ -348,4 +384,131 @@ public class BattleDebugTools : MonoBehaviour
         else if (battleManager.statusUI != null)
             battleManager.statusUI.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private void DrawCardCheatPanel()
+    {
+        float w = Mathf.Max(200f, cardCheatPanelRect.width);
+        float h = Mathf.Max(120f, cardCheatPanelRect.height);
+        float x = Mathf.Max(8f, Screen.width - w - 8f);
+        float y = cardCheatPanelRect.y;
+
+        GUILayout.BeginArea(new Rect(x, y, w, h), GUI.skin.box);
+        GUILayout.Label("手札チート（プレイヤー）");
+        GUILayout.Label($"枚数 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}");
+
+        _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", GUILayout.ExpandWidth(true));
+        GUILayout.Label("フィルタ（カード名・asset名の部分一致）");
+
+        var catalog = GetCheatCardCatalog();
+        if (catalog == null || catalog.Length == 0)
+        {
+            GUILayout.Label("Resources/Cards に CardData がありません");
+            GUILayout.EndArea();
+            return;
+        }
+
+        float scrollH = Mathf.Max(80f, h - 110f);
+        _cardCheatScroll = GUILayout.BeginScrollView(_cardCheatScroll, GUILayout.Height(scrollH));
+        string f = (_cardCheatFilter ?? "").Trim();
+        for (int i = 0; i < catalog.Length; i++)
+        {
+            CardData c = catalog[i];
+            if (c == null) continue;
+            if (f.Length > 0)
+            {
+                string disp = NameForCheatDisplay(c);
+                string asset = c.name ?? "";
+                if (disp.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0
+                    && asset.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(NameForCheatDisplay(c), GUILayout.ExpandWidth(true));
+            if (GUILayout.Button("追加", GUILayout.Width(48f)))
+                TryAddCheatCardToPlayerHand(c);
+            GUILayout.EndHorizontal();
+        }
+
+        GUILayout.EndScrollView();
+        GUILayout.EndArea();
+    }
+
+    private static string NameForCheatDisplay(CardData c)
+    {
+        if (c == null) return "";
+        return string.IsNullOrEmpty(c.cardName) ? c.name : c.cardName;
+    }
+
+    private static CardData[] GetCheatCardCatalog()
+    {
+        if (_cachedAllCardsFromResources != null && _cachedAllCardsFromResources.Length > 0)
+            return _cachedAllCardsFromResources;
+
+        var loaded = Resources.LoadAll<CardData>("Cards");
+        if (loaded == null || loaded.Length == 0)
+        {
+            _cachedAllCardsFromResources = Array.Empty<CardData>();
+            return _cachedAllCardsFromResources;
+        }
+
+        Array.Sort(loaded, (a, b) =>
+            string.CompareOrdinal(NameForCheatDisplay(a) ?? "", NameForCheatDisplay(b) ?? ""));
+        _cachedAllCardsFromResources = loaded;
+        return _cachedAllCardsFromResources;
+    }
+
+    /// <summary>Resources を再スキャンしたい場合（カード追加後など）。</summary>
+    [ContextMenu("デバッグ：手札チート用カード一覧キャッシュをクリア")]
+    public void ClearCheatCardCatalogCache()
+    {
+        _cachedAllCardsFromResources = null;
+        Debug.Log("[BattleDebugTools] 手札チートのカード一覧キャッシュをクリアしました。");
+    }
+
+    private void TryAddCheatCardToPlayerHand(CardData template)
+    {
+        if (!EnsurePlaying()) return;
+        if (template == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] テンプレートが null です");
+            return;
+        }
+
+        if (battleManager.playerHand.Count >= BattleManager.MaxHandCards)
+        {
+            Debug.LogWarning($"[BattleDebugTools] 手札上限（{BattleManager.MaxHandCards}）です");
+            return;
+        }
+
+        if (battleManager.cardDealer == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] CardDealer がありません");
+            return;
+        }
+
+        CardData instance = battleManager.cardDealer.InstantiateCardFromTemplate(template);
+        if (instance == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] カードの Instantiate に失敗しました");
+            return;
+        }
+
+        battleManager.playerHand.Add(instance);
+        battleManager.cardDealer.CreateCardUIForHand(instance);
+        battleManager.UpdateTotalATKDEFDisplay();
+        BattleUIManager.I?.RefreshMagicCardInteractivity(battleManager.playerHand);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+        battleManager.RefreshPlayerDefensePhaseInteractivity();
+
+        Debug.Log($"[BattleDebugTools] 手札に追加: {NameForCheatDisplay(instance)}");
+    }
+
+    [ContextMenu("デバッグ：Inspector の cheatCardTemplate を手札に追加")]
+    private void ContextMenuAddInspectorCheatCardToHand()
+    {
+        TryAddCheatCardToPlayerHand(cheatCardTemplateForContextMenu);
+    }
+#endif
 }

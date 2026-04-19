@@ -1,17 +1,27 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// 物理反射：反射剣確定後の臨時攻撃〜連鎖反射〜ダメージ解決。
+/// 物理・魔法反射：反射防御カード確定後の臨時攻撃〜連鎖反射〜ダメージ解決（フロー共通）。
 /// ・プレイヤー防御（敵の攻撃を跳ね返す）
 /// ・敵防御（こちらの攻撃を跳ね返す）
 /// </summary>
 public static class PhysicalReflectionFlow
 {
     private const float SlideDurationSec = 0.5f;
+
+    private static bool IsContinuingReflectionChain(CardData pick, IReadOnlyList<CardData> incomingAttackCards)
+    {
+        if (pick == null || incomingAttackCards == null || incomingAttackCards.Count == 0) return false;
+        if (ReflectionRules.IsPhysicalReflectionCard(pick) && ReflectionRules.CanReflectPhysical(incomingAttackCards))
+            return true;
+        if (ReflectionRules.IsMagicReflectionCard(pick) && ReflectionRules.CanReflectMagic(incomingAttackCards))
+            return true;
+        return false;
+    }
 
     /// <summary>
     /// プレイヤーが反射剣のみを確定し、手札から既に使用済みのときに呼ぶ（敵の攻撃を反射）。
@@ -28,13 +38,16 @@ public static class PhysicalReflectionFlow
         if (battleManager == null || battleProcessor == null || incomingAttackCards == null || incomingAttackCards.Count == 0)
             return;
 
+        battleManager.ClearReflectionAttackTotalDisplay();
+
         var player = battleManager.GetPlayerStatus();
         var enemy = battleManager.GetEnemyStatus();
         int incomingPower = battleProcessor.ComputeReflectionIncomingAttackPower(
             incomingAttackCards, enemy, player);
 
+        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingAttackCards);
         float bounceSec = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowReflectionBouncePopup(player)
+            ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
         await Task.Delay(TimeSpan.FromSeconds(bounceSec), cancellationToken);
@@ -46,16 +59,26 @@ public static class PhysicalReflectionFlow
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                 incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
+        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+        battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: true);
 
-        await RunReflectionChainLoopAsync(
-            battleManager,
-            battleProcessor,
-            handRefill,
-            enemyAI,
-            incomingAttackCards,
-            incomingPower,
-            PlayerType.Enemy,
-            cancellationToken);
+        try
+        {
+            await RunReflectionChainLoopAsync(
+                battleManager,
+                battleProcessor,
+                handRefill,
+                enemyAI,
+                incomingAttackCards,
+                incomingPower,
+                PlayerType.Enemy,
+                sessionMagic,
+                cancellationToken);
+        }
+        finally
+        {
+            battleManager.ClearReflectionAttackTotalDisplay();
+        }
     }
 
     /// <summary>
@@ -74,6 +97,8 @@ public static class PhysicalReflectionFlow
         if (battleManager == null || battleProcessor == null || incomingPlayerAttackCards == null || incomingPlayerAttackCards.Count == 0)
             return;
 
+        battleManager.ClearReflectionAttackTotalDisplay();
+
         var player = battleManager.GetPlayerStatus();
         var enemy = battleManager.GetEnemyStatus();
 
@@ -86,8 +111,9 @@ public static class PhysicalReflectionFlow
         int incomingPower = battleProcessor.ComputeReflectionIncomingAttackPower(
             incomingPlayerAttackCards, player, enemy);
 
+        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingPlayerAttackCards);
         float bounceSec = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowReflectionBouncePopup(enemy)
+            ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
         await Task.Delay(TimeSpan.FromSeconds(bounceSec), cancellationToken);
@@ -99,16 +125,26 @@ public static class PhysicalReflectionFlow
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                 incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
+        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+        battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingPlayerAttackCards, totalAtkOnPlayerSide: false);
 
-        await RunReflectionChainLoopAsync(
-            battleManager,
-            battleProcessor,
-            handRefill,
-            enemyAI,
-            incomingPlayerAttackCards,
-            incomingPower,
-            PlayerType.Player,
-            cancellationToken);
+        try
+        {
+            await RunReflectionChainLoopAsync(
+                battleManager,
+                battleProcessor,
+                handRefill,
+                enemyAI,
+                incomingPlayerAttackCards,
+                incomingPower,
+                PlayerType.Player,
+                sessionMagic,
+                cancellationToken);
+        }
+        finally
+        {
+            battleManager.ClearReflectionAttackTotalDisplay();
+        }
     }
 
     private static async Task RunReflectionChainLoopAsync(
@@ -119,6 +155,7 @@ public static class PhysicalReflectionFlow
         List<CardData> incomingAttackCards,
         int incomingPower,
         PlayerType defenderSide,
+        bool sessionMagic,
         CancellationToken cancellationToken)
     {
         var player = battleManager.GetPlayerStatus();
@@ -134,15 +171,33 @@ public static class PhysicalReflectionFlow
                 CardData pick = await enemyAI.ExecuteDefenseSelectAsync(
                     battleManager.cpuHand, atkEl, incomingAttackCards);
 
-                if (pick != null && ReflectionRules.IsPhysicalReflectionCard(pick)
-                    && ReflectionRules.CanReflectPhysical(incomingAttackCards))
+                if (pick != null && BlockingRules.IsPhysicalBlockingCard(pick)
+                    && BlockingRules.CanBlockPhysical(incomingAttackCards))
                 {
                     BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
-                    SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+                    battleManager.SetStatsDisplaySequenceCards(
+                        new List<CardData> { pick }, "防御", Side.Enemy);
+                    await Task.Delay(500, cancellationToken);
+                    await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                        battleManager,
+                        battleProcessor,
+                        handRefill,
+                        incomingAttackCards,
+                        pick,
+                        cancellationToken);
+                    battleManager.ClearStatsDisplaySequenceCards();
+                    return;
+                }
+
+                if (pick != null && IsContinuingReflectionChain(pick, incomingAttackCards))
+                {
+                    // 連鎖の各回：反射カードのシートを残さない（同一 CardData が複数あれば全削除）
+                    BattleUIManager.I?.DestroyCardSheetForCardData(pick);
+                    BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
                     await Task.Delay(500, cancellationToken);
 
                     float sec = BattleUIManager.I != null
-                        ? BattleUIManager.I.ShowReflectionBouncePopup(enemy)
+                        ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
                         : DamagePopup.DefaultFadeDurationIfUnknown;
                     if (sec <= 0f) sec = DamagePopup.DefaultFadeDurationIfUnknown;
                     await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
@@ -153,6 +208,8 @@ public static class PhysicalReflectionFlow
                     if (BattleUIManager.I != null)
                         await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                             incomingAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
+                    SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+                    battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: false);
 
                     handRefill?.RecordEnemyUse(pick);
                     battleProcessor.UseCard(pick, battleManager.cpuHand);
@@ -164,7 +221,9 @@ public static class PhysicalReflectionFlow
                 if (pick != null)
                 {
                     BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
-                    SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+                    battleManager.SetStatsDisplaySequenceCards(
+                        new List<CardData> { pick }, "防御", Side.Enemy);
+                    SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                     await Task.Delay(500, cancellationToken);
                 }
 
@@ -182,6 +241,7 @@ public static class PhysicalReflectionFlow
                     handRefill?.RecordEnemyUse(pick);
                     battleProcessor.UseCard(pick, battleManager.cpuHand);
                 }
+                battleManager.ClearStatsDisplaySequenceCards();
                 return;
             }
 
@@ -202,19 +262,19 @@ public static class PhysicalReflectionFlow
             }
 
             CardData card = picks[0];
-            if (ReflectionRules.IsPhysicalReflectionCard(card)
-                && ReflectionRules.CanReflectPhysical(incomingAttackCards))
+            if (IsContinuingReflectionChain(card, incomingAttackCards))
             {
                 int slotIndex = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
                 if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
                 battleProcessor.UseCard(card, battleManager.playerHand);
 
+                // 連鎖の各回：反射カードのシートを残さない（同一 CardData が複数あれば全削除）
+                BattleUIManager.I?.DestroyCardSheetForCardData(card);
                 BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
                 await Task.Delay(500, cancellationToken);
 
                 float sec2 = BattleUIManager.I != null
-                    ? BattleUIManager.I.ShowReflectionBouncePopup(player)
+                    ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
                     : DamagePopup.DefaultFadeDurationIfUnknown;
                 if (sec2 <= 0f) sec2 = DamagePopup.DefaultFadeDurationIfUnknown;
                 await Task.Delay(TimeSpan.FromSeconds(sec2), cancellationToken);
@@ -225,9 +285,32 @@ public static class PhysicalReflectionFlow
                 if (BattleUIManager.I != null)
                     await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                         incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
+                SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+                battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: true);
 
                 defenderSide = PlayerType.Enemy;
                 continue;
+            }
+
+            // 反射された物理攻撃に対する物理無効（ResolveReflectedCombat の通常防具扱いにしない）
+            if (BlockingRules.IsPhysicalBlockingCard(card) && BlockingRules.CanBlockPhysical(incomingAttackCards))
+            {
+                int slotB = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
+                if (slotB >= 0) handRefill?.RecordPlayerUseSlot(slotB);
+                battleProcessor.UseCard(card, battleManager.playerHand);
+
+                BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+                battleManager.SetStatsDisplaySequenceCards(
+                    new List<CardData> { card }, "防御", Side.Player);
+                await Task.Delay(500, cancellationToken);
+
+                await BlockingNullifyFlow.RunPlayerInitiatedAsync(
+                    battleManager,
+                    incomingAttackCards,
+                    card,
+                    cancellationToken);
+                battleManager.ClearStatsDisplaySequenceCards();
+                return;
             }
 
             int slot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
@@ -235,7 +318,9 @@ public static class PhysicalReflectionFlow
             battleProcessor.UseCard(card, battleManager.playerHand);
 
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            battleManager.SetStatsDisplaySequenceCards(
+                new List<CardData> { card }, "防御", Side.Player);
+            SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             await Task.Delay(500, cancellationToken);
 
             await battleProcessor.ResolveReflectedCombatAsync(
@@ -246,6 +331,7 @@ public static class PhysicalReflectionFlow
                 player,
                 battleManager.playerHand,
                 skipHitCheck: true);
+            battleManager.ClearStatsDisplaySequenceCards();
             return;
         }
     }

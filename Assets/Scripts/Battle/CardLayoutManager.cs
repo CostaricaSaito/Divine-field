@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
@@ -14,6 +14,7 @@ using System.Linq;
 /// 
 /// 【親Panelの設定】
 /// - VerticalLayoutGroupは無効化すること
+/// - 余白は本コンポーネントの Panel Padding（Inspector）で調整する
 /// 
 /// 【他のクラスとの関係】
 /// - BattleUIManager: カード配置の指示を受ける
@@ -25,6 +26,11 @@ public class CardLayoutManager : MonoBehaviour
     [Header("レイアウト設定")]
     [SerializeField] private float cardSpacing = 10f;
     [SerializeField] private float cardHeight = 120f;
+    [Tooltip("CardDisplayPanel 内の余白（手動配置のため VerticalLayoutGroup の Padding に相当）")]
+    [SerializeField] private float panelPaddingLeft = 8f;
+    [SerializeField] private float panelPaddingRight = 8f;
+    [SerializeField] private float panelPaddingTop = 8f;
+    [SerializeField] private float panelPaddingBottom = 8f;
     
     private RectTransform panelRectTransform;
     private List<GameObject> activeCardSheets = new List<GameObject>();
@@ -94,7 +100,8 @@ public class CardLayoutManager : MonoBehaviour
         
         Canvas.ForceUpdateCanvases();
         float panelHeight = panelRectTransform != null ? panelRectTransform.rect.height : 0;
-        
+        float availHeight = Mathf.Max(0f, panelHeight - panelPaddingTop - panelPaddingBottom);
+
         Debug.Log($"[CardLayoutManager] 再配置: カード数={totalCards}, パネル高さ={panelHeight}");
         
         for (int i = 0; i < selectedCards.Count; i++)
@@ -112,9 +119,9 @@ public class CardLayoutManager : MonoBehaviour
             rt.anchorMax = new Vector2(1, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
             
-            float y = CalculateCardY(i, totalCards, panelHeight);
-            rt.offsetMin = new Vector2(0, y - cardHeight);
-            rt.offsetMax = new Vector2(0, y);
+            float y = CalculateCardY(i, totalCards, panelHeight, availHeight);
+            rt.offsetMin = new Vector2(panelPaddingLeft, y - cardHeight);
+            rt.offsetMax = new Vector2(-panelPaddingRight, y);
             rt.localScale = Vector3.one;
             
             cardObj.transform.SetSiblingIndex(i);
@@ -127,20 +134,22 @@ public class CardLayoutManager : MonoBehaviour
     /// カードのY座標を計算する。
     /// パネルに収まる場合は通常Spacing、収まらない場合は均等配置。
     /// </summary>
-    private float CalculateCardY(int index, int totalCards, float panelHeight)
+    private float CalculateCardY(int index, int totalCards, float panelHeight, float availHeight)
     {
         if (totalCards <= 0) return 0;
-        if (totalCards == 1) return 0;
-        
+        if (totalCards == 1) return -panelPaddingTop;
+
         float normalTotal = totalCards * cardHeight + (totalCards - 1) * cardSpacing;
-        
-        if (panelHeight > 0 && normalTotal > panelHeight)
+        float h = availHeight > 0f ? availHeight : Mathf.Max(0f, panelHeight - panelPaddingTop - panelPaddingBottom);
+
+        if (panelHeight > 0 && normalTotal > h)
         {
-            float interval = (panelHeight - cardHeight) / (totalCards - 1);
-            return -index * interval;
+            float denom = Mathf.Max(1, totalCards - 1);
+            float interval = (h - cardHeight) / denom;
+            return -panelPaddingTop - index * interval;
         }
-        
-        return -index * (cardHeight + cardSpacing);
+
+        return -panelPaddingTop - index * (cardHeight + cardSpacing);
     }
 
     /// <summary>
@@ -148,7 +157,8 @@ public class CardLayoutManager : MonoBehaviour
     /// </summary>
     public float GetSecondSlotTopYForPanelHeight(float panelHeight)
     {
-        return CalculateCardY(1, 2, panelHeight);
+        float avail = Mathf.Max(0f, panelHeight - panelPaddingTop - panelPaddingBottom);
+        return CalculateCardY(1, 2, panelHeight, avail);
     }
 
     public float LayoutCardHeight => cardHeight;

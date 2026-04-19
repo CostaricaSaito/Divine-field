@@ -1,30 +1,108 @@
+ï»¿/// <summary>
+/// ãƒãƒˆãƒ«é€²è¡Œã® Phaseï¼ˆä¸»ã« Layer2ï¼‰ã€‚Turnï¼ˆLayer1ï¼‰ã¯ <see cref="BattleManager.CurrentTurnOwner"/> ã§è¡¨ã™ã€‚
+/// ç´°ã‹ã„æ‰‹é †ã¯ Layer3 ã® <see cref="BattleStep"/>ï¼ˆãŠã‚ˆã³ <see cref="BattleManager.CurrentBattleStep"/>ï¼‰ã§æ‰±ã†ã€‚
+/// </summary>
 public enum GameState
 {
-    // ‡@ ƒoƒgƒ‹€”õE‰‰o
-    Intro,              // ‰ŠúèD”z•zA¢Š«bƒJƒbƒgƒCƒ“AæUŒãUŒˆ’è‚È‚Ç
+    /// <summary>Layer2: é–‹å¹•ã®ã¿ï¼ˆæ‰‹æœ­é…å¸ƒãƒ»ã‚«ãƒƒãƒˆã‚¤ãƒ³ãƒ»å…ˆæ”»æ±ºå®šï¼‰ã€‚é€šå¸¸ã‚¿ãƒ¼ãƒ³ã§ã¯å†å…¥ã—ãªã„ã€‚</summary>
+    OpeningPhase,
 
-    // ‡A æUƒvƒŒƒCƒ„[‚Ìs“®‘I‘ğ
-    TurnStart,                // ƒXƒe[ƒ^ƒXXV‚È‚Ç‚Ìƒ^[ƒ“ŠJnˆ—
-    AttackSelect,             // UŒ‚/–‚–@/“ÁêƒJ[ƒh/ŒoÏƒAƒNƒVƒ‡ƒ“‘I‘ğ
-    AttackConfirm,            // UŒ‚ƒJ[ƒhŠm’èA‰‰o•t‚«•\¦i‘Šè‚É‚àŒ©‚¦‚éj
+    /// <summary>Layer2: ã‚¹ã‚¿ãƒ³ãƒã‚¤ï¼ˆã‚¿ãƒ¼ãƒ³é–‹å§‹å‡¦ç†ãƒ»UI åˆæœŸåŒ–ï¼‰ã€‚</summary>
+    StandByPhase,
 
-    // ‡C ŒãUƒvƒŒƒCƒ„[‚Ì–hŒä‘I‘ğ
-    DefenseSelect,            // –hŒäƒJ[ƒhE”½Œ‚ƒJ[ƒh‚È‚Ç‘I‘ğ
-    DefenseConfirm,           // –hŒäƒJ[ƒhŠm’èA‰‰o•t‚«•\¦
+    /// <summary>Layer2: æ”»æ’ƒå´ãƒ¡ã‚¤ãƒ³ï¼ˆæ”»æ’ƒï¼å›å¾©ï¼çµŒæ¸ˆï¼é¡•ç¾ãªã©ã€ãƒ¡ã‚¤ãƒ³è¡Œå‹•ã¯1å›ï¼‰ã€‚</summary>
+    AttackPhase,
 
-    // ‡D í“¬ˆ—EŸ”s”»’è
-    DamageResolve,            // ƒ_ƒ[ƒWŒvZAó‘ÔˆÙí•t—^AHP/MP/GP‚Ì•Ï“®
-    TurnEnd,                   // ƒ^[ƒ“I—¹ˆ—Aƒ^[ƒ“Œğ‘ã
+    /// <summary>Layer2: é˜²å¾¡å´ã®é¸æŠã€‚</summary>
+    DefensePhase,
 
-    // ‡E ”s–k’¼‘Oˆ—i”­“®Œ^‚ÌŒø‰Ê‚È‚Çj
-    DefeatEffect,        // “¹‚Ã‚êƒJ[ƒh‚â•œŠˆƒAƒCƒeƒ€‚È‚Ç
+    /// <summary>Layer2: é˜²å¾¡ç¢ºå®šã‹ã‚‰æˆ¦é—˜æ¼”å‡ºãƒ»è§£æ±ºã¸ã€‚</summary>
+    DefenseConfirmPhase,
 
-    // I—¹
-    BattleEnd,                // —¼Ò‚ÉŒ‹‰Ê’Ê’mE•ñV‰æ–Ê‚È‚Ç
+    /// <summary>Layer2: ã‚¿ãƒ¼ãƒ³çµ‚äº†å‰ã®æˆ¦é—˜è§£æ±ºï¼ˆä»‹å…¥ãƒ»åå°„é€£é–ã®å†é˜²å¾¡ãªã©ï¼‰ã€‚çµ‚äº†å¾Œã« <see cref="EndPhase"/> ã¸ã€‚</summary>
+    CombatResolvePhase,
+
+    /// <summary>Layer2: ã‚¿ãƒ¼ãƒ³çµ‚äº†ï¼ˆç—…ãƒ»è£œå……ãƒ»è¡¨å‘ããªã©ï¼‰ã€‚</summary>
+    EndPhase,
+
+    /// <summary>çµæœè¡¨ç¤ºãƒ»ãƒ¡ã‚¤ãƒ³ã¸æˆ»ã‚‹å‰ã€‚</summary>
+    BattleEndPhase,
 }
 
 public enum PlayerType
 {
-    Player,     // ©•ª
-    Enemy       // ‘ŠèiCPU or ƒlƒbƒg‘Îí‘Šèj
+    Player,
+    Enemy
+}
+
+/// <summary>
+/// Layer3 Stepï¼ˆ<see cref="GameState"/> ã‚ˆã‚Šç´°ã‹ã„åŒºé–“ï¼‰ã€‚åŒä¸€ Phase å†…ã§åå°„ãƒ»ä»‹å…¥ãªã©ã«å¿œã˜ã¦åˆ‡ã‚Šæ›¿ã‚ã‚‹ã€‚
+/// </summary>
+public enum BattleStep
+{
+    /// <summary>åˆæœŸå€¤ãƒ»æƒ³å®šå¤–ã€‚</summary>
+    Unknown = 0,
+
+    /// <summary>é–‹å¹•ï¼ˆé…å¸ƒãƒ»ã‚«ãƒƒãƒˆã‚¤ãƒ³ãƒ»å…ˆæ”»ï¼‰ã€‚</summary>
+    OpeningSequence,
+
+    /// <summary>ã‚¹ã‚¿ãƒ³ãƒã‚¤ï¼ˆã‚¿ãƒ¼ãƒ³é–‹å§‹å‡¦ç†ï¼‰ã€‚</summary>
+    StandBy,
+
+    /// <summary>ãƒ¡ã‚¤ãƒ³è¡Œå‹•é¸æŠï¼ˆæ”»æ’ƒï¼å›å¾©ï¼çµŒæ¸ˆãªã©ï¼‰ã€‚</summary>
+    MainActionSelect,
+
+    /// <summary>é˜²å¾¡ã‚«ãƒ¼ãƒ‰é¸æŠã€‚</summary>
+    DefenseSelect,
+
+    /// <summary>é˜²å¾¡ç¢ºå®šå¾Œã®æˆ¦é—˜æ¼”å‡ºãƒ»è§£æ±ºã€‚</summary>
+    CombatSequenceResolve,
+
+    /// <summary>åå°„é€£é–ä¸­ã®å†é˜²å¾¡é¸æŠï¼ˆPhase ã¯ <see cref="GameState.AttackPhase"/> ã®ã¾ã¾ï¼‰ã€‚</summary>
+    ReflectionChainDefenseSelect,
+
+    /// <summary>ä»‹å…¥ã«ã‚ˆã‚‹å†é˜²å¾¡é¸æŠï¼ˆPhase ã¯ <see cref="GameState.CombatResolvePhase"/>ï¼‰ã€‚</summary>
+    InterventionDefenseSelect,
+
+    /// <summary>ä»‹å…¥æŠ½é¸ãƒ»å†æˆ¦é—˜è§£æ±ºãªã©ï¼ˆé˜²å¾¡å…¥åŠ›å¾…ã¡ä»¥å¤–ï¼‰ã€‚</summary>
+    CombatResolveProcessing,
+
+    /// <summary>ç—…ãƒ»è£œå……ãƒ»è¡¨å‘ããƒ»ã‚¿ãƒ¼ãƒ³äº¤ä»£ã€‚</summary>
+    EndPhaseProcessing,
+
+    /// <summary>ãƒªã‚¶ãƒ«ãƒˆã€‚</summary>
+    BattleResult,
+}
+
+/// <summary><see cref="BattleStep"/> ã® UIãƒ»ãƒ‡ãƒãƒƒã‚°ç”¨ãƒ©ãƒ™ãƒ«ã€‚</summary>
+public static class BattleStepPresentation
+{
+    public static string GetDebugLabel(BattleStep step)
+    {
+        switch (step)
+        {
+            case BattleStep.OpeningSequence:
+                return "é–‹å¹•ï¼ˆé…å¸ƒãƒ»ã‚«ãƒƒãƒˆã‚¤ãƒ³ãƒ»å…ˆæ”»ï¼‰";
+            case BattleStep.StandBy:
+                return "ã‚¹ã‚¿ãƒ³ãƒã‚¤";
+            case BattleStep.MainActionSelect:
+                return "ãƒ¡ã‚¤ãƒ³è¡Œå‹•é¸æŠ";
+            case BattleStep.DefenseSelect:
+                return "é˜²å¾¡é¸æŠ";
+            case BattleStep.CombatSequenceResolve:
+                return "æˆ¦é—˜æ¼”å‡ºãƒ»è§£æ±º";
+            case BattleStep.ReflectionChainDefenseSelect:
+                return "åå°„é€£é–: é˜²å¾¡é¸æŠ";
+            case BattleStep.InterventionDefenseSelect:
+                return "ä»‹å…¥: é˜²å¾¡é¸æŠ";
+            case BattleStep.CombatResolveProcessing:
+                return "ä»‹å…¥æŠ½é¸ãƒ»å†æˆ¦é—˜è§£æ±º";
+            case BattleStep.EndPhaseProcessing:
+                return "ç—…ãƒ»è£œå……ãƒ»è¡¨å‘ããƒ»äº¤ä»£";
+            case BattleStep.BattleResult:
+                return "ãƒªã‚¶ãƒ«ãƒˆ";
+            default:
+                return "â€”";
+        }
+    }
 }

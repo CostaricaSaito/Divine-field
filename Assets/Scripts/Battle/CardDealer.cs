@@ -128,7 +128,7 @@ public class CardDealer : MonoBehaviour
                 BattleUIManager.I?.UpdateStatus(
                     BattleManager.I?.GetPlayerStatus(),
                     BattleManager.I?.GetEnemyStatus());
-                CardDealAudio.Play(playerCardInstance);
+                CardDealAudio.Play(playerCardInstance, true);
             }
             else if (playerHand.Count < playerTarget)
             {
@@ -144,7 +144,7 @@ public class CardDealer : MonoBehaviour
                 BattleUIManager.I?.UpdateStatus(
                     BattleManager.I?.GetPlayerStatus(),
                     BattleManager.I?.GetEnemyStatus());
-                CardDealAudio.Play(playerCardInstance);
+                CardDealAudio.Play(playerCardInstance, true);
             }
             else
             {
@@ -227,6 +227,18 @@ public class CardDealer : MonoBehaviour
         }
         
         instance.cardUI = null; // UIは後で生成
+        return instance;
+    }
+
+    /// <summary>
+    /// テンプレート（ScriptableObject アセット）からランタイム用の複製を生成。手札追加・デバッグ用。
+    /// </summary>
+    public CardData InstantiateCardFromTemplate(CardData template)
+    {
+        if (template == null) return null;
+        var instance = ScriptableObject.Instantiate(template);
+        instance.name = template.name;
+        instance.cardUI = null;
         return instance;
     }
 

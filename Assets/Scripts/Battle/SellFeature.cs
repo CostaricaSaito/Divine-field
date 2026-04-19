@@ -49,7 +49,7 @@ public class SellFeature
 
     public async Task<bool> ExecuteSellActionAsync()
     {
-        if (battleManager == null || battleManager.CurrentState != GameState.AttackSelect)
+        if (battleManager == null || battleManager.CurrentState != GameState.AttackPhase)
         {
             return false;
         }
@@ -231,11 +231,11 @@ public class SellFeature
         var isPlayerAttacker = (currentTurnOwner == PlayerType.Player);
         var isPlayerDefender = (currentTurnOwner != PlayerType.Player);
 
-        if (battleManager.CurrentState == GameState.AttackSelect && isPlayerAttacker)
+        if (battleManager.CurrentState == GameState.AttackPhase && isPlayerAttacker)
         {
             BattleUIManager.I.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
         }
-        else if (battleManager.CurrentState == GameState.DefenseSelect && isPlayerDefender)
+        else if (battleManager.CurrentState == GameState.DefensePhase && isPlayerDefender)
         {
             battleManager.RefreshPlayerDefensePhaseInteractivity();
         }
@@ -311,7 +311,7 @@ public class SellFeature
         dummyCard.cardName = "経済アクション（売却）";
         dummyCard.cardType = CardType.Attack;
         battleManager.SetCurrentAttackCard(dummyCard);
-        battleManager.SetGameState(GameState.DefenseSelect);
+        battleManager.SetGameState(GameState.DefensePhase);
     }
 
     private void OnCancelSell()
@@ -323,7 +323,7 @@ public class SellFeature
         targetSellCard = null;
         CardSelectionManager.I?.ClearAllSelections();
         battleManager.SetCurrentAttackCard(null);
-        battleManager.SetGameState(GameState.AttackSelect);
+        battleManager.SetGameState(GameState.AttackPhase);
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
         // 攻撃フェーズの状態に戻す（攻撃可能なカード以外はグレーアウト）

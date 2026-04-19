@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -135,6 +135,11 @@ public class EnemyAI
         if (choices == null || choices.Count == 0)
             return null;
 
+        // 物理無効カードは通常防御候補に含めない（無効化ルート専用）
+        choices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        if (choices.Count == 0)
+            return null;
+
         foreach (var c in choices)
         {
             if (c != null && CardRules.IsUsableInDefensePhase(c)
@@ -230,17 +235,43 @@ public class EnemyAI
         Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
 
         CardData defenseCard = null;
-        if (incomingForReflection != null && incomingForReflection.Count > 0
-            && ReflectionRules.CanReflectPhysical(incomingForReflection)
-            && cpuHand != null)
+        if (incomingForReflection != null && incomingForReflection.Count > 0 && cpuHand != null)
         {
-            foreach (var c in cpuHand)
+            if (ReflectionRules.CanReflectPhysical(incomingForReflection))
             {
-                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c))
+                foreach (var c in cpuHand)
                 {
-                    defenseCard = c;
-                    Debug.Log($"[EnemyAI] 物理反射を優先: {defenseCard.cardName}");
-                    break;
+                    if (c != null && ReflectionRules.IsPhysicalReflectionCard(c))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 物理反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
+                }
+            }
+            else if (ReflectionRules.CanReflectMagic(incomingForReflection))
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (c != null && ReflectionRules.IsMagicReflectionCard(c))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 魔法反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
+                }
+            }
+
+            if (defenseCard == null && BlockingRules.CanBlockPhysical(incomingForReflection))
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (c != null && BlockingRules.IsPhysicalBlockingCard(c))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 物理無効を優先: {defenseCard.cardName}");
+                        break;
+                    }
                 }
             }
         }

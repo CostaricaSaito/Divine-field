@@ -37,6 +37,17 @@ public enum ReflectionKind
 }
 
 /// <summary>
+/// 無効化（ブロッキング）防御カードの種別（<see cref="CardData.blockingKind"/>）。
+/// </summary>
+public enum BlockingKind
+{
+    None = 0,
+    Physical = 1,
+    Magic = 2,
+    Full = 3,
+}
+
+/// <summary>
 /// 同一フェーズで複数枚選ぶときの「衝突解決」用。実装は <see cref="CardSelectionManager"/> の競合チェックのみ。
 /// <see cref="CardRules"/> のフェーズ可否とは独立。
 /// </summary>
@@ -143,6 +154,9 @@ public class CardData : ScriptableObject
     [Header("反射")]
     public ReflectionKind reflectionKind = ReflectionKind.None;
 
+    [Header("無効化（ブロッキング）")]
+    public BlockingKind blockingKind = BlockingKind.None;
+
     [Header("UI参照（非表示）")]
     [System.NonSerialized] public CardUI cardUI;
 
@@ -156,9 +170,16 @@ public static class CardDealAudio
     public const string NormalPath = "Assets/SE/普通カード.mp3";
     public const string RarePath = "Assets/SE/レアカード.mp3";
 
-    public static void Play(CardData card)
+    public static void Play(CardData card) => Play(card, false);
+
+    /// <param name="isPlayerHandDeal">プレイヤー手札への配布・表向け時のみ true（劣勢時レアの白フラッシュ対象）。</param>
+    public static void Play(CardData card, bool isPlayerHandDeal)
     {
         string path = (card != null && card.isRare) ? RarePath : NormalPath;
         SoundEffectPlayer.I?.Play(path);
+        if (!isPlayerHandDeal || card == null || !card.isRare) return;
+        if (BattleManager.I == null) return;
+        if (!DisadvantageRules.IsDisadvantaged(BattleManager.I.GetPlayerStatus())) return;
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
     }
 }

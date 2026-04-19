@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -26,8 +26,8 @@ public class CardSelectionManager : MonoBehaviour
 
         // ===== 防御フェーズ：拘束中は防御カードを2枚目まで選べない =====
         if (BattleManager.I != null
-            && (BattleManager.I.CurrentState == GameState.DefenseSelect
-                || (BattleManager.I.CurrentState == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())
+            && (BattleManager.I.CurrentState == GameState.DefensePhase
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending())
             && IsDefenseCard(card))
         {
@@ -54,28 +54,32 @@ public class CardSelectionManager : MonoBehaviour
             }
         }
 
-        // ===== 防御：物理反射は他カードと併選不可 =====
+        // ===== 防御：物理／魔法反射は攻撃に応じて他カードと併選不可 =====
         if (BattleManager.I != null
-            && (BattleManager.I.CurrentState == GameState.DefenseSelect
-                || BattleManager.I.CurrentState == GameState.DefenseConfirm
+            && (BattleManager.I.CurrentState == GameState.DefensePhase
+                || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending())
             && IsDefenseCard(card))
         {
+            var incoming = BattleManager.I.GetIncomingAttackSnapshotForDefenseUi();
+
             foreach (var sel in selectedCards)
             {
                 if (sel == null) continue;
-                if (!ReflectionRules.IsPhysicalReflectionCard(sel)) continue;
+                if (!BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
                 if (card.GetInstanceID() == sel.GetInstanceID()) continue;
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射・無効化は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
                 return false;
             }
-            if (ReflectionRules.IsPhysicalReflectionCard(card))
+
+            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(card, incoming))
             {
                 foreach (var sel in selectedCards)
                 {
                     if (sel == null) continue;
-                    if (ReflectionRules.IsPhysicalReflectionCard(sel)) continue;
-                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
+                    if (BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射・無効化は他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
                     return false;
                 }
             }
@@ -219,9 +223,10 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I == null) return card.attackPhaseRole;
 
         var state = BattleManager.I.CurrentState;
-        if (state == GameState.DefenseSelect || state == GameState.DefenseConfirm
-            || (state == GameState.TurnEnd && BattleManager.I.IsInterventionDefenseWaitActive())
-            || (state == GameState.AttackSelect && BattleManager.I.IsReflectionChainDefensePending()))
+        if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsReflectionChainDefensePending())
+            || (state == GameState.AttackPhase && BattleManager.I.IsReflectionChainDefensePending()))
             return card.defensePhaseRole;
 
         return card.attackPhaseRole;

@@ -30,13 +30,13 @@ public static class SummonGarudaLifecycle
     }
 
     /// <summary>
-    /// <see cref="BattleManager.RunTurnEndAsync"/> 内、病系処理の直後・Refill より前。
+    /// <see cref="BattleManager.RunEndPhaseAsync"/> 内、病系処理の直後・Refill より前。
     /// メッセージ → 規定インターバル → 裏向きドロー → 表向け。
     /// </summary>
     public static async Task ProcessTurnEndBonusAsync(BattleManager bm, SummonTurnCounterState ctr, CancellationToken ct)
     {
         if (bm == null || ctr == null) return;
-        if (ct.IsCancellationRequested || bm.CurrentState != GameState.TurnEnd) return;
+        if (ct.IsCancellationRequested || bm.CurrentState != GameState.EndPhase) return;
 
         bool isPlayerTurn = bm.CurrentTurnOwner == PlayerType.Player;
         if (isPlayerTurn)

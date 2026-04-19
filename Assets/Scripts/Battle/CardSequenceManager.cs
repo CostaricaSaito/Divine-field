@@ -115,16 +115,34 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            if (selectedCards.Count == 1
+            bool playerPhysicalReflect = selectedCards.Count == 1
                 && ReflectionRules.IsPhysicalReflectionCard(selectedCards[0])
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ReflectionRules.CanReflectPhysical(attackCards))
+                && ReflectionRules.CanReflectPhysical(attackCards);
+            bool playerMagicReflect = selectedCards.Count == 1
+                && ReflectionRules.IsMagicReflectionCard(selectedCards[0])
+                && battleManager.DefenderPublic == PlayerType.Player
+                && ReflectionRules.CanReflectMagic(attackCards);
+            bool playerPhysicalBlock = selectedCards.Count == 1
+                && BlockingRules.IsPhysicalBlockingCard(selectedCards[0])
+                && battleManager.DefenderPublic == PlayerType.Player
+                && BlockingRules.CanBlockPhysical(attackCards);
+
+            if (playerPhysicalReflect || playerMagicReflect)
             {
                 await PhysicalReflectionFlow.RunPlayerInitiatedAsync(
                     battleManager,
                     battleProcessor,
                     handRefill,
                     battleManager.GetEnemyAI(),
+                    attackCards,
+                    selectedCards[0],
+                    cancellationToken);
+            }
+            else if (playerPhysicalBlock)
+            {
+                await BlockingNullifyFlow.RunPlayerInitiatedAsync(
+                    battleManager,
                     attackCards,
                     selectedCards[0],
                     cancellationToken);
@@ -150,7 +168,7 @@ public class CardSequenceManager : MonoBehaviour
         cardStatsDisplay?.UpdateDisplay();
 
         // カード確定後の処理
-        battleManager.SetGameState(GameState.TurnEnd);
+        battleManager.SetGameState(GameState.CombatResolvePhase);
     }
 
     /// <summary>
@@ -180,7 +198,7 @@ public class CardSequenceManager : MonoBehaviour
             cardStatsDisplay?.ClearSequenceCards();
             battleManager.SetCurrentAttackCard(null);
             cardStatsDisplay?.UpdateDisplay();
-            battleManager.SetGameState(GameState.TurnEnd);
+            battleManager.SetGameState(GameState.CombatResolvePhase);
             return false;
         }
 
@@ -205,16 +223,32 @@ public class CardSequenceManager : MonoBehaviour
         bool enemyPhysicalReflect = selectedDefenseCard != null
             && ReflectionRules.IsPhysicalReflectionCard(selectedDefenseCard)
             && ReflectionRules.CanReflectPhysical(attackCards);
+        bool enemyMagicReflect = selectedDefenseCard != null
+            && ReflectionRules.IsMagicReflectionCard(selectedDefenseCard)
+            && ReflectionRules.CanReflectMagic(attackCards);
+        bool enemyPhysicalBlock = selectedDefenseCard != null
+            && BlockingRules.IsPhysicalBlockingCard(selectedDefenseCard)
+            && BlockingRules.CanBlockPhysical(attackCards);
 
         try
         {
-            if (enemyPhysicalReflect)
+            if (enemyPhysicalReflect || enemyMagicReflect)
             {
                 await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
                     battleManager,
                     battleProcessor,
                     handRefill,
                     battleManager.GetEnemyAI(),
+                    attackCards,
+                    selectedDefenseCard,
+                    cancellationToken);
+            }
+            else if (enemyPhysicalBlock)
+            {
+                await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
                     attackCards,
                     selectedDefenseCard,
                     cancellationToken);
@@ -230,7 +264,7 @@ public class CardSequenceManager : MonoBehaviour
                 BattleUIManager.I?.HideYurusuButton();
         }
 
-        if (selectedDefenseCard != null && !enemyPhysicalReflect)
+        if (selectedDefenseCard != null && !enemyPhysicalReflect && !enemyMagicReflect && !enemyPhysicalBlock)
         {
             handRefill?.RecordEnemyUse(selectedDefenseCard);
             battleProcessor.UseCard(selectedDefenseCard, defHand);
