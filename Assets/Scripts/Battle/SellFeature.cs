@@ -264,6 +264,8 @@ public class SellFeature
             return;
         }
 
+        BattleManager.I?.ClearPlayerSelfAttackTargetMode();
+
         // 既存のポップアップを破棄
         if (currentPopup != null)
         {

@@ -14,6 +14,31 @@ public enum OpeningTurnOwnerDebugMode
     EnemyFirst = 2,
 }
 
+/// <summary>IMGUI デバッグパネルの初期配置。再生中はウィンドウをドラッグして移動できる。</summary>
+public enum BattleDebugPanelPlacement
+{
+    /// <summary>positionX/Y を画面左上からの座標として使う。</summary>
+    Custom = 0,
+    /// <summary>幅・高さに基づき画面中央。</summary>
+    Center = 1,
+    /// <summary>右上基準。positionX=右端からの余白、positionY=上端からの余白。</summary>
+    TopRight = 2,
+}
+
+/// <summary>各デバッグウィンドウのサイズ・位置・フォント（Inspector で変更可能）。</summary>
+[Serializable]
+public class BattleDebugPanelLayout
+{
+    public BattleDebugPanelPlacement placement = BattleDebugPanelPlacement.Center;
+    [Min(50f)] public float width = 720f;
+    [Min(50f)] public float height = 700f;
+    [Tooltip("Custom: 左上 X。TopRight: 右端からの余白。")]
+    public float positionX = 8f;
+    [Tooltip("Custom: 左上 Y。TopRight: 上端からの余白。")]
+    public float positionY = 8f;
+    [Range(8, 48)] public int fontSize = 18;
+}
+
 /// <summary>
 /// バトル用デバッグ。コンポーネント右クリックのコンテキストメニュー、およびインスペクターで有効化した OnGUI パネル（Editor のみ）から実行する。
 /// </summary>
@@ -34,34 +59,85 @@ public class BattleDebugTools : MonoBehaviour
     [Tooltip("Random: ランダム。PlayerFirst / EnemyFirst: 常にその側が先攻。")]
     [SerializeField] private OpeningTurnOwnerDebugMode openingTurnOwnerMode = OpeningTurnOwnerDebugMode.Random;
 
-    [Header("GameState デバッグ（再生中・右上）")]
+    [Header("GameState デバッグ")]
     [Tooltip("Layer1 Turn / Layer2 Phase / Layer3 Step をリアルタイム表示。Editor / Development ビルドのみ。")]
     [SerializeField] private bool showGameStateDebugBox = true;
-    [SerializeField] private float gameStateDebugBoxWidth = 400f;
-    [SerializeField] private float gameStateDebugBoxHeight = 180f;
-    [Tooltip("ラベルのフォントサイズ（既定 32）")]
-    [SerializeField] [Range(10, 36)] private int gameStateDebugFontSize = 32;
+    [SerializeField] private BattleDebugPanelLayout gameStatePanelLayout = new BattleDebugPanelLayout
+    {
+        placement = BattleDebugPanelPlacement.TopRight,
+        width = 400f,
+        height = 180f,
+        positionX = 8f,
+        positionY = 8f,
+        fontSize = 32,
+    };
 
-    [Header("状態異常デバッグ（再生中・左上）")]
+    [Header("状態異常デバッグ（Editor・再生中）")]
     [Tooltip("オンにすると15種の付与ボタンを表示。Factory未実装の4種はプレースホルダーで付与。")]
     [SerializeField] private bool showAilmentDebugPanel = true;
-
-    /// <summary>左上デバッグパネル領域。高さは15種リスト＋「状態異常13（介入）」ブロックを収める。</summary>
-    [SerializeField] private Rect ailmentDebugPanelRect = new Rect(8, 8, 300, 540);
+    [SerializeField] private BattleDebugPanelLayout ailmentPanelLayout = new BattleDebugPanelLayout
+    {
+        placement = BattleDebugPanelPlacement.Center,
+        width = 760f,
+        height = 880f,
+        positionX = 0f,
+        positionY = 0f,
+        fontSize = 18,
+    };
 
     [Header("手札チート（Editor / Development・再生中）")]
-    [Tooltip("オン時、右側に Resources/Cards から読み込んだ一覧でプレイヤー手札に追加できます。")]
+    [Tooltip("オン時、Resources/Cards から読み込んだ一覧でプレイヤー手札に追加できます。")]
     [SerializeField] private bool showCardCheatPanel = true;
-    [Tooltip("幅・高さのみ参照。X は実行時に画面右寄せで上書きします。")]
-    [SerializeField] private Rect cardCheatPanelRect = new Rect(0, 8, 320, 420);
+    [SerializeField] private BattleDebugPanelLayout cardCheatPanelLayout = new BattleDebugPanelLayout
+    {
+        placement = BattleDebugPanelPlacement.Center,
+        width = 720f,
+        height = 640f,
+        positionX = 0f,
+        positionY = 0f,
+        fontSize = 16,
+    };
+
+    [Header("敵手札リアルタイム（Editor / Development・再生中）")]
+    [Tooltip("cpuHand の一覧を表示。使用・消費の確認用。")]
+    [SerializeField] private bool showEnemyHandDebugPanel = true;
+    [SerializeField] private BattleDebugPanelLayout enemyHandPanelLayout = new BattleDebugPanelLayout
+    {
+        placement = BattleDebugPanelPlacement.Custom,
+        width = 520f,
+        height = 420f,
+        positionX = 8f,
+        positionY = 200f,
+        fontSize = 16,
+    };
+
     [Tooltip("Inspector から1枚指定してコンテキストメニューで即追加")]
     [SerializeField] private CardData cheatCardTemplateForContextMenu;
 
     private Vector2 _ailmentScroll;
     private Vector2 _cardCheatScroll;
+    private Vector2 _enemyHandScroll;
     private string _cardCheatFilter = "";
     private static CardData[] _cachedAllCardsFromResources;
     private GUIStyle _gameStateDebugLabelStyle;
+    private GUIStyle _ailmentLineStyle;
+    private GUIStyle _cardCheatLineStyle;
+    private GUIStyle _enemyHandLineStyle;
+    private int _ailmentStyleFontCached = -1;
+    private int _cardCheatStyleFontCached = -1;
+    private int _enemyHandStyleFontCached = -1;
+
+    private const int WindowIdGameState = 21001;
+    private const int WindowIdAilment = 21002;
+    private const int WindowIdCardCheat = 21003;
+    private const int WindowIdEnemyHand = 21004;
+    private const float WindowDragTitleHeight = 22f;
+
+    private Rect _gameStateWindowRect;
+    private Rect _ailmentWindowRect;
+    private Rect _cardCheatWindowRect;
+    private Rect _enemyHandWindowRect;
+    private bool _debugPanelRectsInitialized;
 
     [ContextMenu("デバッグ：プレイヤーHPを10に設定")]
     public void SetPlayerHPTo10()
@@ -153,104 +229,301 @@ public class BattleDebugTools : MonoBehaviour
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private void OnEnable()
+    {
+        _debugPanelRectsInitialized = false;
+    }
+
     private void OnGUI()
     {
         if (!Application.isPlaying || battleManager == null)
             return;
 
-        if (showGameStateDebugBox)
-        {
-            float gw = Mathf.Max(120f, gameStateDebugBoxWidth);
-            float gh = Mathf.Max(48f, gameStateDebugBoxHeight);
-            float gx = Screen.width - gw - 8f;
-            float gy = 8f;
+        EnsureDebugPanelRects();
 
-            if (_gameStateDebugLabelStyle == null)
-            {
-                _gameStateDebugLabelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = gameStateDebugFontSize,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.UpperLeft,
-                    wordWrap = true,
-                };
-                _gameStateDebugLabelStyle.normal.textColor = Color.white;
-            }
-            else
-                _gameStateDebugLabelStyle.fontSize = gameStateDebugFontSize;
-
-            GUILayout.BeginArea(new Rect(gx, gy, gw, gh), GUI.skin.box);
-            GUILayout.Label($"Turn:  {battleManager.GetBattleTurnDebugLabel()}", _gameStateDebugLabelStyle);
-            GUILayout.Label($"Phase: {battleManager.CurrentState}", _gameStateDebugLabelStyle);
-            BattleStep step = battleManager.CurrentBattleStep;
-            GUILayout.Label($"Step:  {step}", _gameStateDebugLabelStyle);
-            GUILayout.Label($"      {BattleStepPresentation.GetDebugLabel(step)}", _gameStateDebugLabelStyle);
-            GUILayout.EndArea();
-        }
-
+        // 後に描いたウィンドウが手前（重なり時は GameState を最前面に）
 #if UNITY_EDITOR
         if (showAilmentDebugPanel)
         {
-        GUILayout.BeginArea(ailmentDebugPanelRect, GUI.skin.box);
-        GUILayout.Label("状態異常 付与（公式15種）");
+            _ailmentWindowRect = GUILayout.Window(
+                WindowIdAilment,
+                _ailmentWindowRect,
+                DrawAilmentDebugWindow,
+                "状態異常デバッグ");
+        }
+#endif
+
+        if (showCardCheatPanel)
+        {
+            _cardCheatWindowRect = GUILayout.Window(
+                WindowIdCardCheat,
+                _cardCheatWindowRect,
+                DrawCardCheatDebugWindow,
+                "手札チート");
+        }
+
+        if (showEnemyHandDebugPanel)
+        {
+            _enemyHandWindowRect = GUILayout.Window(
+                WindowIdEnemyHand,
+                _enemyHandWindowRect,
+                DrawEnemyHandDebugWindow,
+                "敵手札（CPU・リアルタイム）");
+        }
+
+        if (showGameStateDebugBox)
+        {
+            _gameStateWindowRect = GUILayout.Window(
+                WindowIdGameState,
+                _gameStateWindowRect,
+                DrawGameStateDebugWindow,
+                "GameState");
+        }
+    }
+
+    private void EnsureDebugPanelRects()
+    {
+        if (_debugPanelRectsInitialized)
+            return;
+
+        _gameStateWindowRect = ComputeInitialRect(gameStatePanelLayout);
+        _ailmentWindowRect = ComputeInitialRect(ailmentPanelLayout);
+        _cardCheatWindowRect = ComputeInitialRect(cardCheatPanelLayout);
+        _enemyHandWindowRect = ComputeInitialRect(enemyHandPanelLayout);
+        _debugPanelRectsInitialized = true;
+    }
+
+    private static Rect ComputeInitialRect(BattleDebugPanelLayout layout)
+    {
+        float w = Mathf.Max(50f, layout.width);
+        float h = Mathf.Max(50f, layout.height);
+        switch (layout.placement)
+        {
+            case BattleDebugPanelPlacement.Center:
+                return new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
+            case BattleDebugPanelPlacement.TopRight:
+                return new Rect(Screen.width - w - layout.positionX, layout.positionY, w, h);
+            case BattleDebugPanelPlacement.Custom:
+            default:
+                return new Rect(layout.positionX, layout.positionY, w, h);
+        }
+    }
+
+    private void DrawGameStateDebugWindow(int windowId)
+    {
+        int fs = Mathf.Clamp(gameStatePanelLayout.fontSize, 8, 48);
+        if (_gameStateDebugLabelStyle == null)
+        {
+            _gameStateDebugLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.UpperLeft,
+                wordWrap = true,
+            };
+            _gameStateDebugLabelStyle.normal.textColor = Color.white;
+        }
+
+        _gameStateDebugLabelStyle.fontSize = fs;
+
+        GUILayout.Label($"Turn:  {battleManager.GetBattleTurnDebugLabel()}", _gameStateDebugLabelStyle);
+        GUILayout.Label($"Phase: {battleManager.CurrentState}", _gameStateDebugLabelStyle);
+        BattleStep step = battleManager.CurrentBattleStep;
+        GUILayout.Label($"Step:  {step}", _gameStateDebugLabelStyle);
+        GUILayout.Label($"      {BattleStepPresentation.GetDebugLabel(step)}", _gameStateDebugLabelStyle);
+
+        GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+    }
+
+#if UNITY_EDITOR
+    private void DrawAilmentDebugWindow(int windowId)
+    {
+        int fs = Mathf.Clamp(ailmentPanelLayout.fontSize, 8, 48);
+        if (_ailmentLineStyle == null || _ailmentStyleFontCached != fs)
+        {
+            _ailmentLineStyle = new GUIStyle(GUI.skin.label) { fontSize = fs, wordWrap = false };
+            _ailmentLineStyle.normal.textColor = Color.white;
+            _ailmentStyleFontCached = fs;
+        }
+
+        float btnW = Mathf.Max(40f, fs * 2.2f);
+        GUILayout.Label("状態異常 付与（公式15種）", _ailmentLineStyle);
         GUILayout.Label("→P=プレイヤー / →E=敵（未実装4種はプレースホルダー）", GUI.skin.box);
 
-        // 上部2行ラベル＋下部「状態異常13（介入）」ブロック分を除いた残りをスクロールに割り当てる（はみ出しで介入が見えなくなるのを防ぐ）
         const float reservedForHeaderAndIntervention = 118f;
-        _ailmentScroll = GUILayout.BeginScrollView(
-            _ailmentScroll,
-            GUILayout.Height(Mathf.Max(80f, ailmentDebugPanelRect.height - reservedForHeaderAndIntervention)));
+        float scrollH = Mathf.Max(80f, _ailmentWindowRect.height - reservedForHeaderAndIntervention);
+        _ailmentScroll = GUILayout.BeginScrollView(_ailmentScroll, GUILayout.Height(scrollH));
         var all = StatusEffectCatalog.AllAilments;
         for (int i = 0; i < all.Length; i++)
         {
             var t = all[i];
             string label = $"{i + 1:D2}. {StatusEffectCatalog.OfficialDisplayNames[i]}";
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("→P", GUILayout.Width(40)))
+            if (GUILayout.Button("→P", GUILayout.Width(btnW)))
             {
                 ApplyGrantForDebug(battleManager.GetPlayerStatus(), t);
                 RefreshStatusUi();
             }
-            if (GUILayout.Button("→E", GUILayout.Width(40)))
+
+            if (GUILayout.Button("→E", GUILayout.Width(btnW)))
             {
                 ApplyGrantForDebug(battleManager.GetEnemyStatus(), t);
                 RefreshStatusUi();
             }
-            GUILayout.Label(label);
+
+            GUILayout.Label(label, _ailmentLineStyle);
             GUILayout.EndHorizontal();
         }
+
         GUILayout.EndScrollView();
 
         GUILayout.Space(6);
         GUILayout.Label("召喚（デバッグ）", GUI.skin.box);
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("プレイヤー→ガルーダ"))
-        {
             DebugSetPlayerSummonGaruda();
-        }
         if (GUILayout.Button("敵→ガルーダ"))
-        {
             DebugSetEnemySummonGaruda();
-        }
         GUILayout.EndHorizontal();
 
         GUILayout.Space(6);
         GUILayout.Label("状態異常13（介入）", GUI.skin.box);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         InterventionTurnEndProcessor.DebugForceInterventionChance100 = GUILayout.Toggle(
             InterventionTurnEndProcessor.DebugForceInterventionChance100,
             "介入発生率100%（デバッグ）");
-#else
-        GUILayout.Label("介入デバッグは Editor / Development のみ");
-#endif
 
-        GUILayout.EndArea();
-        }
-#endif
-
-        if (showCardCheatPanel)
-            DrawCardCheatPanel();
+        GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
     }
+#endif
+
+    private void DrawCardCheatDebugWindow(int windowId)
+    {
+        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 8, 48);
+        if (_cardCheatLineStyle == null || _cardCheatStyleFontCached != fs)
+        {
+            _cardCheatLineStyle = new GUIStyle(GUI.skin.label) { fontSize = fs, wordWrap = false };
+            _cardCheatLineStyle.normal.textColor = Color.white;
+            _cardCheatStyleFontCached = fs;
+        }
+
+        GUILayout.Label("手札チート（プレイヤー）", _cardCheatLineStyle);
+        GUILayout.Label($"枚数 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}", _cardCheatLineStyle);
+
+        _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", GUILayout.ExpandWidth(true));
+        GUILayout.Label("フィルタ（カード名・asset名の部分一致）", _cardCheatLineStyle);
+
+        var catalog = GetCheatCardCatalog();
+        if (catalog == null || catalog.Length == 0)
+        {
+            GUILayout.Label("Resources/Cards に CardData がありません", _cardCheatLineStyle);
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+            return;
+        }
+
+        float scrollH = Mathf.Max(80f, _cardCheatWindowRect.height - 110f);
+        _cardCheatScroll = GUILayout.BeginScrollView(_cardCheatScroll, GUILayout.Height(scrollH));
+        string f = (_cardCheatFilter ?? "").Trim();
+        for (int i = 0; i < catalog.Length; i++)
+        {
+            CardData c = catalog[i];
+            if (c == null) continue;
+            if (f.Length > 0)
+            {
+                string disp = NameForCheatDisplay(c);
+                string asset = c.name ?? "";
+                if (disp.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0
+                    && asset.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(NameForCheatDisplay(c), _cardCheatLineStyle, GUILayout.ExpandWidth(true));
+            if (GUILayout.Button("追加", GUILayout.Width(Mathf.Max(48f, fs * 2.5f))))
+                TryAddCheatCardToPlayerHand(c);
+            GUILayout.EndHorizontal();
+        }
+
+        GUILayout.EndScrollView();
+
+        GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+    }
+
+    private void DrawEnemyHandDebugWindow(int windowId)
+    {
+        int fs = Mathf.Clamp(enemyHandPanelLayout.fontSize, 8, 48);
+        if (_enemyHandLineStyle == null || _enemyHandStyleFontCached != fs)
+        {
+            _enemyHandLineStyle = new GUIStyle(GUI.skin.label) { fontSize = fs, wordWrap = false };
+            _enemyHandLineStyle.normal.textColor = Color.white;
+            _enemyHandStyleFontCached = fs;
+        }
+
+        var cpu = battleManager.cpuHand;
+        int count = cpu?.Count ?? 0;
+        GUILayout.Label($"枚数 {count} / {BattleManager.MaxHandCards}（BattleManager.cpuHand）", _enemyHandLineStyle);
+        GUILayout.Label("インデックス順。使用・消費後にリストから消えているか確認できます。", _enemyHandLineStyle);
+
+        if (cpu == null || count == 0)
+        {
+            GUILayout.Label(count == 0 ? "手札が空です。" : "cpuHand が null です。", _enemyHandLineStyle);
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+            return;
+        }
+
+        float scrollH = Mathf.Max(80f, _enemyHandWindowRect.height - 72f);
+        _enemyHandScroll = GUILayout.BeginScrollView(_enemyHandScroll, GUILayout.Height(scrollH));
+        for (int i = 0; i < cpu.Count; i++)
+        {
+            CardData c = cpu[i];
+            if (c == null)
+            {
+                GUILayout.Label($"[{i}] (null)", _enemyHandLineStyle);
+                continue;
+            }
+
+            string disp = NameForCheatDisplay(c);
+            string asset = string.IsNullOrEmpty(c.name) ? "?" : c.name;
+            GUILayout.Label($"[{i}] {disp}  ({asset})", _enemyHandLineStyle);
+        }
+
+        GUILayout.EndScrollView();
+
+        GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+    }
+
+#if UNITY_EDITOR
+    [ContextMenu("デバッグ：ウィンドウ位置・サイズを Inspector に書き戻し（再生中）")]
+    private void WriteBackDebugWindowLayoutsToInspector()
+    {
+        if (!Application.isPlaying)
+            return;
+
+        gameStatePanelLayout.placement = BattleDebugPanelPlacement.Custom;
+        gameStatePanelLayout.positionX = _gameStateWindowRect.x;
+        gameStatePanelLayout.positionY = _gameStateWindowRect.y;
+        gameStatePanelLayout.width = _gameStateWindowRect.width;
+        gameStatePanelLayout.height = _gameStateWindowRect.height;
+
+        ailmentPanelLayout.placement = BattleDebugPanelPlacement.Custom;
+        ailmentPanelLayout.positionX = _ailmentWindowRect.x;
+        ailmentPanelLayout.positionY = _ailmentWindowRect.y;
+        ailmentPanelLayout.width = _ailmentWindowRect.width;
+        ailmentPanelLayout.height = _ailmentWindowRect.height;
+
+        cardCheatPanelLayout.placement = BattleDebugPanelPlacement.Custom;
+        cardCheatPanelLayout.positionX = _cardCheatWindowRect.x;
+        cardCheatPanelLayout.positionY = _cardCheatWindowRect.y;
+        cardCheatPanelLayout.width = _cardCheatWindowRect.width;
+        cardCheatPanelLayout.height = _cardCheatWindowRect.height;
+
+        enemyHandPanelLayout.placement = BattleDebugPanelPlacement.Custom;
+        enemyHandPanelLayout.positionX = _enemyHandWindowRect.x;
+        enemyHandPanelLayout.positionY = _enemyHandWindowRect.y;
+        enemyHandPanelLayout.width = _enemyHandWindowRect.width;
+        enemyHandPanelLayout.height = _enemyHandWindowRect.height;
+
+        UnityEditor.EditorUtility.SetDirty(this);
+    }
+#endif
 #endif
 
     /// <summary>
@@ -363,7 +636,7 @@ public class BattleDebugTools : MonoBehaviour
     /// <summary><see cref="StatusEffectFactory"/> の default 枝に該当する列挙値（実装追加時にここから外す）。</summary>
     private static bool UsesDebugPlaceholderOnly(StatusEffectType type)
     {
-        return type == StatusEffectType.Confusion;
+        return false;
     }
 
     private bool EnsurePlaying()
@@ -385,55 +658,6 @@ public class BattleDebugTools : MonoBehaviour
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-    private void DrawCardCheatPanel()
-    {
-        float w = Mathf.Max(200f, cardCheatPanelRect.width);
-        float h = Mathf.Max(120f, cardCheatPanelRect.height);
-        float x = Mathf.Max(8f, Screen.width - w - 8f);
-        float y = cardCheatPanelRect.y;
-
-        GUILayout.BeginArea(new Rect(x, y, w, h), GUI.skin.box);
-        GUILayout.Label("手札チート（プレイヤー）");
-        GUILayout.Label($"枚数 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}");
-
-        _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", GUILayout.ExpandWidth(true));
-        GUILayout.Label("フィルタ（カード名・asset名の部分一致）");
-
-        var catalog = GetCheatCardCatalog();
-        if (catalog == null || catalog.Length == 0)
-        {
-            GUILayout.Label("Resources/Cards に CardData がありません");
-            GUILayout.EndArea();
-            return;
-        }
-
-        float scrollH = Mathf.Max(80f, h - 110f);
-        _cardCheatScroll = GUILayout.BeginScrollView(_cardCheatScroll, GUILayout.Height(scrollH));
-        string f = (_cardCheatFilter ?? "").Trim();
-        for (int i = 0; i < catalog.Length; i++)
-        {
-            CardData c = catalog[i];
-            if (c == null) continue;
-            if (f.Length > 0)
-            {
-                string disp = NameForCheatDisplay(c);
-                string asset = c.name ?? "";
-                if (disp.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0
-                    && asset.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-            }
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(NameForCheatDisplay(c), GUILayout.ExpandWidth(true));
-            if (GUILayout.Button("追加", GUILayout.Width(48f)))
-                TryAddCheatCardToPlayerHand(c);
-            GUILayout.EndHorizontal();
-        }
-
-        GUILayout.EndScrollView();
-        GUILayout.EndArea();
-    }
-
     private static string NameForCheatDisplay(CardData c)
     {
         if (c == null) return "";
@@ -496,6 +720,10 @@ public class BattleDebugTools : MonoBehaviour
 
         battleManager.playerHand.Add(instance);
         battleManager.cardDealer.CreateCardUIForHand(instance);
+        // 通常のドローは裏面から始まり Reveal で表向け。デバッグ入手は最初から表向きにする。
+        if (instance.cardUI != null)
+            instance.cardUI.Reveal();
+
         battleManager.UpdateTotalATKDEFDisplay();
         BattleUIManager.I?.RefreshMagicCardInteractivity(battleManager.playerHand);
         BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());

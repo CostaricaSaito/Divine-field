@@ -77,6 +77,7 @@ public class BuyFeature
         Debug.Log($"[BuyFeature] 購入対象カード: {targetBuyCard.cardName} (価値: {targetBuyCard.cardValue})");
 
         isBuyModeActive = true;
+        BattleManager.I?.ClearPlayerSelfAttackTargetMode();
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
         // 0.5秒インターバル（承諾後の待機）

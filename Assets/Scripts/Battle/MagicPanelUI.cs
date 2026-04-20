@@ -191,6 +191,10 @@ public class MagicCardSlot
                 cardUI.button.interactable = interactable;
             }
 
+            // プール表示中の CardData は Magic スロットの CardUI を指す（手札側参照のままだと発動が手札登録扱いになる）
+            if (entry.cardData != null)
+                entry.cardData.cardUI = cardUI;
+
             foreach (var cg in cardUI.GetComponentsInParent<CanvasGroup>(true))
             {
                 if (!cg.blocksRaycasts || !cg.interactable)
@@ -210,6 +214,12 @@ public class MagicCardSlot
     /// </summary>
     public void Hide()
     {
+        if (currentEntry?.cardData != null && cardUI != null
+            && ReferenceEquals(currentEntry.cardData.cardUI, cardUI))
+        {
+            currentEntry.cardData.cardUI = null;
+        }
+
         currentEntry = null;
         isSetUp = false;
         if (slotRoot != null) slotRoot.SetActive(false);

@@ -88,8 +88,6 @@ public class CardSelectionManager : MonoBehaviour
         // ===== 魔法カードの事前ガード =====
         if (card.cardType == CardType.Magic)
         {
-            bool isFromPool = card.cardUI == null;
-
             var playerStatus = BattleManager.I?.GetPlayerStatus();
             if (playerStatus != null && playerStatus.IsMagicUseForbidden())
             {
@@ -99,8 +97,11 @@ public class CardSelectionManager : MonoBehaviour
 
             // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。ここでは単体MP不足で弾かない。
 
-            // MagicPool 容量チェック（手札からの使用のみ）
-            if (!isFromPool && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card))
+            // MagicPool 容量チェックは「手札からプールへ載せる」場合のみ。MagicPanel 表示中のカードは既にプール内。
+            bool capacityApplies = card.cardUI == null
+                || BattleUIManager.I == null
+                || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
+            if (capacityApplies && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card))
             {
                 Debug.Log($"[CardSelectionManager] MagicPool 満杯のため {card.cardName} は選択不可");
                 BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法容量不足！", new Color(1f, 0.5f, 0f));
@@ -110,6 +111,21 @@ public class CardSelectionManager : MonoBehaviour
 
         // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
         CheckCardConflicts(card);
+
+        // ===== 攻撃フェーズ：組み合わせ専用（先に攻撃カード1枚以上） =====
+        if (BattleManager.I != null
+            && BattleManager.I.CurrentState == GameState.AttackPhase
+            && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+            && !BattleManager.I.IsReflectionChainDefensePending()
+            && card.attackComboPickRule == AttackComboPickRule.ComboAttachmentOnly)
+        {
+            var attackSoFar = GetSelectedAttackCards();
+            if (!AttackComboSelectionRules.CanPickAttackCardNow(card, attackSoFar))
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("先に攻撃カードを選んでください", new Color(0.85f, 0.35f, 0.15f));
+                return false;
+            }
+        }
 
         // 同じカードが既に選択されている場合は追加しない（参照が別でも同じ SO なら弾く）
         int pickId = card.GetInstanceID();

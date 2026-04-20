@@ -42,3 +42,4 @@ MonoBehaviour:
   cardValue: 0
   attackPhaseRole: 3
   defensePhaseRole: 0
+  attackComboPickRule: 1

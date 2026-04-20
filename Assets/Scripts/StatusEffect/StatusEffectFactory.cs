@@ -44,6 +44,9 @@ public static class StatusEffectFactory
             case StatusEffectType.CurseBind:
                 return new CurseBindEffect();
 
+            case StatusEffectType.Confusion:
+                return new ConfusionEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

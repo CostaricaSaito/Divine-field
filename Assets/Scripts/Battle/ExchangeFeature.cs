@@ -81,6 +81,7 @@ public class ExchangeFeature : MonoBehaviour
         }
 
         isExchangeProcessActive = true;
+        battleManager?.ClearPlayerSelfAttackTargetMode();
         Debug.Log("[ExchangeFeature] 両替アクション開始");
 
         // ポップアップを開く

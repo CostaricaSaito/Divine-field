@@ -48,6 +48,17 @@ public enum BlockingKind
 }
 
 /// <summary>
+/// 攻撃フェーズで手札から選ぶときの可否（組み合わせ魔法・複数枚攻撃用）。
+/// </summary>
+public enum AttackComboPickRule
+{
+    /// <summary>単独から選べる（ファイアボール等）。既定。</summary>
+    StandaloneAllowed = 0,
+    /// <summary>攻撃カードがすでに1枚以上選ばれているときのみ選べる（ゴッドレイジ等）。</summary>
+    ComboAttachmentOnly = 1,
+}
+
+/// <summary>
 /// 同一フェーズで複数枚選ぶときの「衝突解決」用。実装は <see cref="CardSelectionManager"/> の競合チェックのみ。
 /// <see cref="CardRules"/> のフェーズ可否とは独立。
 /// </summary>
@@ -131,7 +142,7 @@ public class CardData : ScriptableObject
     public bool isRecovery = false;              // 例：回復草
     public bool isSpecialEffect = false;         // 例：精霊のぬいぐるみ
 
-    [Header("特殊効果（任意）")]
+    [Header("特殊効果")]
     public bool canApplyStatusEffect = false;
     [Range(0, 100)] public int statusEffectChance = 0;
     public StatusEffectType statusEffectToApply = StatusEffectType.None;
@@ -151,10 +162,14 @@ public class CardData : ScriptableObject
     [Tooltip("防御選択時の複数枚衝突解決。None は既選択を消さずに追加しやすい。")]
     public SelectionRole defensePhaseRole = SelectionRole.None;
 
+    [Header("攻撃・組み合わせ選択")]
+    [Tooltip("StandaloneAllowed: 手札から単独で選び始めてよい。ComboAttachmentOnly: 攻撃として他に1枚以上選ばれたあとでないと選べない。")]
+    public AttackComboPickRule attackComboPickRule = AttackComboPickRule.StandaloneAllowed;
+
     [Header("反射")]
     public ReflectionKind reflectionKind = ReflectionKind.None;
 
-    [Header("無効化（ブロッキング）")]
+    [Header("無効化")]
     public BlockingKind blockingKind = BlockingKind.None;
 
     [Header("UI参照（非表示）")]

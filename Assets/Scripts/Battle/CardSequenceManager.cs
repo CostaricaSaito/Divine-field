@@ -51,6 +51,8 @@ public class CardSequenceManager : MonoBehaviour
     {
         Debug.Log($"[CardSequenceManager] {cardType}カード演出開始: {selectedCards.Count}枚");
 
+        battleManager.ClearConfusionAttackTargetResolvedForDisplay();
+
         _magicPanelBonusDrawsPendingReveal.Clear();
 
         // 演出中のカードリストを初期化
@@ -101,15 +103,70 @@ public class CardSequenceManager : MonoBehaviour
         cardStatsDisplay?.UpdateDisplay();
 
         // ④戦闘解決処理
-        var atk = (battleManager.AttackerPublic == PlayerType.Player) ? battleManager.GetPlayerStatus() : battleManager.GetEnemyStatus();
-        var def = (battleManager.DefenderPublic == PlayerType.Player) ? battleManager.GetPlayerStatus() : battleManager.GetEnemyStatus();
-        var defHand = (battleManager.DefenderPublic == PlayerType.Player) ? battleManager.playerHand : battleManager.cpuHand;
+        PlayerStatus atk;
+        PlayerStatus def;
+        List<CardData> defHand;
+
+        PlayerStatus player = battleManager.GetPlayerStatus();
+        PlayerStatus enemy = battleManager.GetEnemyStatus();
+        atk = battleManager.AttackerPublic == PlayerType.Player ? player : enemy;
+
+        if (cardType == "攻撃" && atk != null && atk.HasConfusionEffect())
+        {
+            battleManager.ClearPlayerSelfAttackTargetMode();
+            bool targetSelf = UnityEngine.Random.Range(0, 2) == 0;
+            battleManager.SetConfusionAttackTargetResolvedForDisplay(targetSelf);
+            if (targetSelf)
+            {
+                def = atk;
+                defHand = ReferenceEquals(atk, player) ? battleManager.playerHand : battleManager.cpuHand;
+            }
+            else
+            {
+                def = ReferenceEquals(atk, player) ? enemy : player;
+                defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
+            }
+        }
+        else if (cardType == "攻撃"
+            && battleManager.AttackerPublic == PlayerType.Player
+            && battleManager.IsPlayerSelfAttackTargetMode)
+        {
+            atk = player;
+            def = player;
+            defHand = battleManager.playerHand;
+        }
+        else
+        {
+            atk = battleManager.AttackerPublic == PlayerType.Player ? player : enemy;
+            def = battleManager.DefenderPublic == PlayerType.Player ? player : enemy;
+            defHand = battleManager.DefenderPublic == PlayerType.Player ? battleManager.playerHand : battleManager.cpuHand;
+        }
+
+        if (cardType == "攻撃" && atk != null && atk.HasConfusionEffect())
+        {
+            cardStatsDisplay?.UpdateDisplay();
+            battleManager.UpdateTotalATKDEFDisplay();
+            await Task.Delay(500, cancellationToken);
+            if (ReferenceEquals(atk, def) && atk == player)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/ヒヨコが頭の上を回る.mp3");
+                DamagePopup confusionPopup = BattleUIManager.I != null
+                    ? BattleUIManager.I.ShowInfoPopupOnCardPanel("わけがわからない！", new Color(0.95f, 0.85f, 0.35f))
+                    : null;
+                float popupLifetimeSec = confusionPopup != null
+                    ? confusionPopup.fadeDuration
+                    : DamagePopup.DefaultFadeDurationIfUnknown;
+                await Task.Delay(TimeSpan.FromSeconds(popupLifetimeSec), cancellationToken);
+                await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+            }
+        }
 
         List<CardData> attackCards = GetAttackCardsForCombat(selectedCards);
 
         if (cardType == "攻撃")
         {
             bool finished = await ResolvePlayerAttackCombatAsync(attackCards, atk, def, defHand, cancellationToken);
+            battleManager.ClearPlayerSelfAttackTargetMode();
             if (!finished)
                 return;
         }
@@ -212,6 +269,23 @@ public class CardSequenceManager : MonoBehaviour
             await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
         }
 
+        if (GodRageRules.IsGodRageDoublingCombo(attackCards)
+            && atk == battleManager.GetPlayerStatus()
+            && cardStatsDisplay != null)
+        {
+            await Task.Delay(500, cancellationToken);
+            int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
+            int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
+            await cardStatsDisplay.PlayGodRageAttackRampAsync(attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
+        }
+
+        bool selfAttack = ReferenceEquals(atk, def);
+        if (selfAttack)
+        {
+            await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHitCheck: true);
+            return true;
+        }
+
         await battleManager.PickAndDisplayEnemyDefenseAfterPlayerHitAsync(attackCards);
 
         var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
@@ -302,7 +376,8 @@ public class CardSequenceManager : MonoBehaviour
         // 魔法カードのプール処理
         foreach (var magic in magicCards)
         {
-            bool isFromHand = battleManager.playerHand.Contains(magic);
+            bool isFromHand = BattleUIManager.I == null
+                || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
             await ApplyMagicCardToPoolAsync(magic, isFromHand);
             Debug.Log($"[CardSequenceManager] 魔法カード {magic.cardName} をプール処理 (fromHand={isFromHand}, combination={magic.isCombinationMagic})");
         }
@@ -336,7 +411,8 @@ public class CardSequenceManager : MonoBehaviour
         if (card.cardType == CardType.Magic)
         {
             Debug.Log($"[CardSequenceManager] 魔法カード処理: {card.cardName} (組み合わせ={card.isCombinationMagic})");
-            bool isFromHand = battleManager.playerHand.Contains(card);
+            bool isFromHand = BattleUIManager.I == null
+                || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
             await ApplyMagicCardToPoolAsync(card, isFromHand);
             battleManager.SetCurrentAttackCard(card);
             return;

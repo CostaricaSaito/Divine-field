@@ -47,6 +47,8 @@ public class SummonSkillButton : MonoBehaviour
             return;
         }
 
+        BattleManager.I?.ClearPlayerSelfAttackTargetMode();
+
         Debug.Log($"[顕現チェック] HP+MP+GP={playerStatus.currentHP + playerStatus.currentMP + playerStatus.currentGP} (劣勢: {DisadvantageRules.IsDisadvantaged(playerStatus)})");
 
         if (!DisadvantageRules.IsDisadvantaged(playerStatus))

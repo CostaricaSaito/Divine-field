@@ -220,6 +220,15 @@ public class BattleUIManager : MonoBehaviour
 
             if (side == Side.Player
                 && BattleManager.I != null
+                && BattleManager.I.CurrentState == GameState.AttackPhase
+                && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+                && !BattleManager.I.IsReflectionChainDefensePending())
+            {
+                var h = BattleManager.I.playerHand;
+                RefreshAttackInteractivity(h, CardRules.GetAttackChoices(h));
+            }
+            else if (side == Side.Player
+                && BattleManager.I != null
                 && (BattleManager.I.CurrentState == GameState.DefensePhase
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
@@ -382,7 +391,10 @@ public class BattleUIManager : MonoBehaviour
 
     public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
     {
-        UpdateHandInteractivity(hand, attackableCards);
+        var currentAttack = GetSelectedAttackCards();
+        var filtered = AttackComboSelectionRules.FilterAttackChoicesForCurrentSelection(
+            attackableCards, currentAttack);
+        UpdateHandInteractivity(hand, filtered);
         SetUseButtonLabel("使用");
     }
 
@@ -898,15 +910,17 @@ public class BattleUIManager : MonoBehaviour
     /// プレイヤーの CardDisplayPanel 中央に情報ポップアップを表示
     /// （MP不足、魔法容量不足など）
     /// </summary>
-    public void ShowInfoPopupOnCardPanel(string message, Color color)
+    /// <returns>生成した <see cref="DamagePopup"/>（失敗時は null。非同期で寿命 <see cref="DamagePopup.fadeDuration"/> を待つ用途に使う）</returns>
+    public DamagePopup ShowInfoPopupOnCardPanel(string message, Color color)
     {
-        if (damagePopupPrefab == null || playerCardDisplayPanel == null) return;
+        if (damagePopupPrefab == null || playerCardDisplayPanel == null) return null;
 
         var go = Instantiate(damagePopupPrefab, playerCardDisplayPanel, false);
         ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
 
         var popup = go.GetComponent<DamagePopup>();
         if (popup != null) popup.Setup(message, color);
+        return popup;
     }
 
     //==== プライベートメソッド：カード選択管理 =====
@@ -1211,6 +1225,11 @@ public class BattleUIManager : MonoBehaviour
             if (BattleManager.I.CurrentState == GameState.AttackPhase
                 && !BattleManager.I.IsReflectionChainDefensePending())
             {
+                if (BattleManager.I.CurrentTurnOwner == PlayerType.Player)
+                {
+                    var hand = BattleManager.I.playerHand;
+                    RefreshAttackInteractivity(hand, CardRules.GetAttackChoices(hand));
+                }
                 var selectedAttackCards = GetSelectedAttackCards();
                 if (selectedAttackCards.Count == 0)
                 {
@@ -1818,6 +1837,17 @@ public class BattleUIManager : MonoBehaviour
     {
         if (magicPanelUI == null || MagicPoolManager.I == null) return;
         magicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries());
+    }
+
+    /// <summary>
+    /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。
+    /// 手札に同種カードが残っていても、スロットに載っている参照と一致する場合のみ true（プールからの発動）。
+    /// </summary>
+    public bool IsPlayerMagicCardUiOnMagicPanel(CardData card)
+    {
+        if (card == null || card.cardType != CardType.Magic || magicPanelUI == null) return false;
+        CardUI poolSlotUi = magicPanelUI.GetCardUI(card);
+        return poolSlotUi != null && card.cardUI != null && ReferenceEquals(card.cardUI, poolSlotUi);
     }
 
     /// <summary>

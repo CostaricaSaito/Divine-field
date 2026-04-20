@@ -153,6 +153,14 @@ public class PlayerStatus
         return false;
     }
 
+    /// <summary>混乱が付与されているか（攻撃対象ランダム・TotalATKDEF 黄色）。</summary>
+    public bool HasConfusionEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Confusion) return true;
+        return false;
+    }
+
     /// <summary>指定タイプの状態異常をすべて除去（回復による拘束解除など）。</summary>
     public bool RemoveStatusEffectsOfType(StatusEffectType type)
     {

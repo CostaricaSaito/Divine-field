@@ -73,7 +73,8 @@ public static class PhysicalReflectionFlow
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                 incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-        battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: true);
+        battleManager.SetReflectionAttackTotalDisplayAfterSlide(
+            incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy);
 
         try
         {
@@ -86,7 +87,9 @@ public static class PhysicalReflectionFlow
                 incomingPower,
                 PlayerType.Enemy,
                 sessionMagic,
-                cancellationToken);
+                cancellationToken,
+                enemy,
+                enemy);
         }
         finally
         {
@@ -139,7 +142,8 @@ public static class PhysicalReflectionFlow
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                 incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-        battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingPlayerAttackCards, totalAtkOnPlayerSide: false);
+        battleManager.SetReflectionAttackTotalDisplayAfterSlide(
+            incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player);
 
         try
         {
@@ -152,7 +156,9 @@ public static class PhysicalReflectionFlow
                 incomingPower,
                 PlayerType.Player,
                 sessionMagic,
-                cancellationToken);
+                cancellationToken,
+                player,
+                player);
         }
         finally
         {
@@ -169,7 +175,9 @@ public static class PhysicalReflectionFlow
         int incomingPower,
         PlayerType defenderSide,
         bool sessionMagic,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        PlayerStatus reflectionBlessingAttacker,
+        PlayerStatus reflectionBlessingDefender)
     {
         var player = battleManager.GetPlayerStatus();
         var enemy = battleManager.GetEnemyStatus();
@@ -222,7 +230,8 @@ public static class PhysicalReflectionFlow
                         await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                             incomingAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
                     SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-                    battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: false);
+                    battleManager.SetReflectionAttackTotalDisplayAfterSlide(
+                        incomingAttackCards, totalAtkOnPlayerSide: false, reflectionBlessingAttacker, reflectionBlessingDefender);
 
                     handRefill?.RecordEnemyUse(pick);
                     battleProcessor.UseCard(pick, battleManager.cpuHand);
@@ -301,7 +310,8 @@ public static class PhysicalReflectionFlow
                     await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
                         incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-                battleManager.SetReflectionAttackTotalDisplayAfterSlide(incomingAttackCards, totalAtkOnPlayerSide: true);
+                battleManager.SetReflectionAttackTotalDisplayAfterSlide(
+                    incomingAttackCards, totalAtkOnPlayerSide: true, reflectionBlessingAttacker, reflectionBlessingDefender);
 
                 defenderSide = PlayerType.Enemy;
                 continue;

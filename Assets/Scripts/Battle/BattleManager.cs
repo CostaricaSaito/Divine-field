@@ -93,6 +93,55 @@ public class BattleManager : MonoBehaviour
     public PlayerType CurrentTurnOwner { get; private set; } = PlayerType.Player;
 
     private CardData currentAttackCard;
+
+    /// <summary>攻撃フェーズでプレイヤーが「自分自身」を攻撃対象にするモード（TotalATK/DEF タップで切替）。</summary>
+    private bool _playerSelfAttackTargetMode;
+
+    /// <summary>自分自身への攻撃を確定するモードか（CPUは使用しない）。</summary>
+    public bool IsPlayerSelfAttackTargetMode => _playerSelfAttackTargetMode;
+
+    public void SetPlayerSelfAttackTargetMode(bool value)
+    {
+        if (_playerSelfAttackTargetMode == value) return;
+        _playerSelfAttackTargetMode = value;
+        UpdateTotalATKDEFDisplay();
+    }
+
+    public void TogglePlayerSelfAttackTargetMode()
+    {
+        if (CurrentState != GameState.AttackPhase || CurrentTurnOwner != PlayerType.Player)
+            return;
+        SetPlayerSelfAttackTargetMode(!_playerSelfAttackTargetMode);
+    }
+
+    public void ClearPlayerSelfAttackTargetMode() => SetPlayerSelfAttackTargetMode(false);
+
+    /// <summary>混乱時、攻撃のランダム対象が確定したあとの表示用（未確定時は相手命中想定で表示）。</summary>
+    private bool _confusionAttackTargetResolved;
+    private bool _confusionAttackTargetsSelf;
+
+    public void SetConfusionAttackTargetResolvedForDisplay(bool targetsSelf)
+    {
+        _confusionAttackTargetResolved = true;
+        _confusionAttackTargetsSelf = targetsSelf;
+    }
+
+    public void ClearConfusionAttackTargetResolvedForDisplay()
+    {
+        _confusionAttackTargetResolved = false;
+    }
+
+    public bool TryGetConfusionAttackTargetResolved(out bool targetsSelf)
+    {
+        if (_confusionAttackTargetResolved)
+        {
+            targetsSelf = _confusionAttackTargetsSelf;
+            return true;
+        }
+
+        targetsSelf = false;
+        return false;
+    }
     
     /// <summary>
     /// 現在の攻撃カードを設定（BuyFeature、CardSequenceManagerから使用）
@@ -148,6 +197,10 @@ public class BattleManager : MonoBehaviour
     private bool _reflectionAtkTotalActive;
     /// <summary>true のときプレイヤー側パネルに ATK、false のとき敵側パネルに ATK。</summary>
     private bool _reflectionAtkTotalOnPlayerSide;
+    /// <summary>反射 TOTAL の加護表示用。カードの元攻撃者（イフリート等）。</summary>
+    private PlayerStatus _reflectionAtkBlessAttacker;
+    /// <summary>反射 TOTAL の加護表示用。跳ね返されたダメージの受け手側視点の抑制（リヴァイアサン等）。</summary>
+    private PlayerStatus _reflectionAtkBlessDefender;
     private readonly List<CardData> _reflectionAtkCardsForTotalDisplay = new();
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
@@ -669,6 +722,9 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case GameState.EndPhase:
+                // TurnEnd 中は TOTALATKDEF を出さない。シーケンス／反射オーバーレイの残りで空パネルだけ残るのを防ぐ。
+                cardStatsDisplay?.ClearSequenceCards();
+                ClearReflectionAttackTotalDisplay();
                 _ = RunEndPhaseAsync();
                 break;
 
@@ -785,10 +841,13 @@ public class BattleManager : MonoBehaviour
 
     private void EnterAttackPhase()
     {
+        ClearConfusionAttackTargetResolvedForDisplay();
+        cardStatsDisplay?.ClearGodRagePlayerAttackDisplayLock();
         BattleUIManager.I?.SetHandClickable(true);
 
         if (Attacker == PlayerType.Player)
         {
+            ClearPlayerSelfAttackTargetMode();
             // ターンプレイヤー（攻撃側）の処理
             var attackables = CardRules.GetAttackChoices(playerHand);
             if (attackables.Count == 0)
@@ -1132,6 +1191,36 @@ public class BattleManager : MonoBehaviour
         await Task.Delay(1000);
 
         var atkList = new List<CardData> { attack };
+        bool confusedEnemy = enemyStatus != null && enemyStatus.HasConfusionEffect();
+        bool confusionTargetSelf = confusedEnemy && UnityEngine.Random.Range(0, 2) == 0;
+        if (confusedEnemy)
+            SetConfusionAttackTargetResolvedForDisplay(confusionTargetSelf);
+
+        if (confusionTargetSelf)
+        {
+            cardStatsDisplay?.UpdateDisplay();
+            await Task.Delay(500);
+            if (cardSequenceManager != null)
+            {
+                var token = _phaseCts != null ? _phaseCts.Token : default;
+                bool finished = await cardSequenceManager.ResolvePlayerAttackCombatAsync(atkList, enemyStatus, enemyStatus, cpuHand, token);
+                BattleUIManager.I?.HideAllCardDetails();
+                currentAttackCard = null;
+                cardStatsDisplay?.UpdateDisplay();
+                if (!finished)
+                    return;
+                SetGameState(GameState.CombatResolvePhase);
+                return;
+            }
+
+            Debug.LogError("[BattleManager] CardSequenceManager が未設定のため、混乱時の自分攻撃を解決できません");
+            SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        if (confusedEnemy)
+            cardStatsDisplay?.UpdateDisplay();
+
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
         int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus, playerStatus);
         bool rolledHit = HitRateRules.RollHit(finalPct);
@@ -1295,8 +1384,20 @@ public class BattleManager : MonoBehaviour
         // RecordPlayerUseSlotは既にHandleAttackUseで呼ばれている（UseCardの前）
         // ここでは呼ばない（二重呼び出しを防ぐ）
         
-        await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, enemyStatus);
+        PlayerStatus effectTarget;
+        if (playerStatus != null && playerStatus.HasConfusionEffect())
+        {
+            ClearPlayerSelfAttackTargetMode();
+            effectTarget = UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+        }
+        else
+        {
+            effectTarget = _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
+        }
 
+        await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, effectTarget);
+
+        ClearPlayerSelfAttackTargetMode();
         selectedCard = null;
         BattleUIManager.I?.HideAllCardDetails();
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
@@ -1317,8 +1418,11 @@ public class BattleManager : MonoBehaviour
     private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex)
     {
         bool isMagic = card != null && card.cardType == CardType.Magic;
+        bool useMagicPanel = isMagic && MagicPoolManager.I != null;
+        bool fromMagicPanel =
+            useMagicPanel && BattleUIManager.I != null && BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
 
-        if (isMagic && MagicPoolManager.I != null)
+        if (useMagicPanel)
         {
             if (playerStatus != null && card.mpCost > 0)
             {
@@ -1327,17 +1431,28 @@ public class BattleManager : MonoBehaviour
                 BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
             }
 
-            RectTransform handRt = card.cardUI != null ? card.cardUI.transform as RectTransform : null;
-            if (handRt != null && BattleUIManager.I != null && card.cardImage != null)
+            if (fromMagicPanel)
             {
-                int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
-                await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, handRt, slot);
+                // MagicPanel からの発動：手札→パネル演出・TryUseMagicCard（同種加算）は行わず ConsumeUse のみ
+                MagicPoolManager.I.ConsumeUse(card);
+                var drawn = await DrawOneCardAsync(trailingDelayMs: 0, playSoundOnDraw: false);
+                if (drawn != null && handRefill != null)
+                    await handRefill.RevealDrawnCardAfterCombatAsync(drawn);
             }
+            else
+            {
+                RectTransform handRt = card.cardUI != null ? card.cardUI.transform as RectTransform : null;
+                if (handRt != null && BattleUIManager.I != null && card.cardImage != null)
+                {
+                    int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
+                    await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, handRt, slot);
+                }
 
-            battleProcessor.UseCard(card, playerHand);
+                battleProcessor.UseCard(card, playerHand);
 
-            System.Action drawCb = () => DrawOneCard();
-            MagicPoolManager.I.TryUseMagicCard(card, playerHand, GetHandMaxCount(), drawCb);
+                System.Action drawCb = () => DrawOneCard();
+                MagicPoolManager.I.TryUseMagicCard(card, playerHand, GetHandMaxCount(), drawCb);
+            }
         }
         else
         {
@@ -1394,7 +1509,11 @@ public class BattleManager : MonoBehaviour
             var card = selectedAttackCards[0];
             int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
 
-            if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
+            bool magicFromMagicPanel = card.cardType == CardType.Magic
+                && BattleUIManager.I != null
+                && BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
+            if (slotIndex >= 0 && !magicFromMagicPanel)
+                handRefill?.RecordPlayerUseSlot(slotIndex);
 
             _ = RunImmediateAttackSingleCardAsync(card, slotIndex);
             return;
@@ -1557,13 +1676,21 @@ public class BattleManager : MonoBehaviour
 
     /// <summary>スライドアニメ完了後：元攻撃側の TOTAL ATK を消し、反射した側のパネルに同じ攻撃 ATK を表示する。</summary>
     /// <param name="totalAtkOnPlayerSide">スライド先がプレイヤー側なら true（敵→自分の反射で true、自分→敵なら false）。</param>
-    public void SetReflectionAttackTotalDisplayAfterSlide(List<CardData> attackCards, bool totalAtkOnPlayerSide)
+    /// <param name="reflectionBlessingsAttacker">加護・カード参照の攻撃側（カード保持者）。</param>
+    /// <param name="reflectionBlessingsDefender">跳ね返り後に受ける側視点の抑制（リヴァ等）。プレイヤー攻撃が跳ね返って自分に来るなら自分自身。</param>
+    public void SetReflectionAttackTotalDisplayAfterSlide(
+        List<CardData> attackCards,
+        bool totalAtkOnPlayerSide,
+        PlayerStatus reflectionBlessingsAttacker,
+        PlayerStatus reflectionBlessingsDefender)
     {
         _reflectionAtkCardsForTotalDisplay.Clear();
         if (attackCards != null)
             _reflectionAtkCardsForTotalDisplay.AddRange(attackCards);
         _reflectionAtkTotalActive = _reflectionAtkCardsForTotalDisplay.Count > 0;
         _reflectionAtkTotalOnPlayerSide = totalAtkOnPlayerSide;
+        _reflectionAtkBlessAttacker = reflectionBlessingsAttacker;
+        _reflectionAtkBlessDefender = reflectionBlessingsDefender;
         UpdateTotalATKDEFDisplay();
     }
 
@@ -1572,8 +1699,14 @@ public class BattleManager : MonoBehaviour
     {
         _reflectionAtkTotalActive = false;
         _reflectionAtkCardsForTotalDisplay.Clear();
+        _reflectionAtkBlessAttacker = null;
+        _reflectionAtkBlessDefender = null;
         UpdateTotalATKDEFDisplay();
     }
+
+    public PlayerStatus GetReflectionAttackBlessingAttacker() => _reflectionAtkBlessAttacker;
+
+    public PlayerStatus GetReflectionAttackBlessingDefender() => _reflectionAtkBlessDefender;
 
     public bool IsReflectionAttackTotalDisplayActive()
     {

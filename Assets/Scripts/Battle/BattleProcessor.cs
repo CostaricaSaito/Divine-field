@@ -406,6 +406,12 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
+        if (GodRageRules.IsGodRageDoublingCombo(attackCards))
+        {
+            totalAttackPower *= 2;
+            Debug.Log($"[BattleProcessor] ゴッドレイジ: カード合計を2倍したあとに加護・抑制を適用 → 合計 {totalAttackPower}");
+        }
+
         totalAttackPower = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, attackCards, totalAttackPower);
         totalAttackPower = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
             attacker, defender, attackCards, totalAttackPower);
