@@ -124,14 +124,17 @@ public class EnemyAI
     }
 
     /// <summary>
-    /// 防御カードの選び方。プレイヤーと同じく <see cref="CardRules.GetDefenseChoicesForElement"/> の候補のみから、
+    /// 防御カードの選び方。プレイヤーと同じく属性＋濃霧付与などの攻撃内容を考慮した候補から、
     /// PrimaryDefense／Defense型を優先して選ぶ。候補がなければ null（許す）。
     /// </summary>
-    public CardData SelectDefenseCard(List<CardData> enemyHand, ElementType attackElement)
+    public CardData SelectDefenseCard(
+        List<CardData> enemyHand,
+        ElementType attackElement,
+        IReadOnlyList<CardData> attackCards = null)
     {
         if (enemyHand == null || enemyHand.Count == 0) return null;
 
-        var choices = CardRules.GetDefenseChoicesForElement(enemyHand, attackElement);
+        var choices = CardRules.GetDefenseChoicesAgainstAttack(enemyHand, attackElement, attackCards);
         if (choices == null || choices.Count == 0)
             return null;
 
@@ -277,7 +280,7 @@ public class EnemyAI
         }
 
         if (defenseCard == null)
-            defenseCard = SelectDefenseCard(cpuHand, attackElement);
+            defenseCard = SelectDefenseCard(cpuHand, attackElement, incomingForReflection);
 
         if (defenseCard != null)
         {

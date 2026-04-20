@@ -86,6 +86,16 @@ public class SummonData : ScriptableObject
     }
 
     /// <summary>
+    /// ディアボロス「ダークプリパレーション」：開幕手札の1枚目を闇属性から抽選。メッセージは配布完了後・表向け前。
+    /// 戦闘中の数値加護は <see cref="GetEffectivePassiveBlessing"/> とは別（ガルーダと同様ライフサイクル側）。
+    /// </summary>
+    public bool IsDiabolosDarkPreparation()
+    {
+        if (passiveBlessingMode == SummonPassiveBlessingMode.Diabolos) return true;
+        return name == "Diabolos";
+    }
+
+    /// <summary>
     /// 顕現スキルの効果をここに書く（例：イフリート → 敵に30ダメージ）
     /// </summary>
     public void ActivateSpecialSkill(PlayerStatus self, PlayerStatus opponent)

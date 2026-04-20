@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -43,6 +43,9 @@ public class CardDealer : MonoBehaviour
     //========================
     [SerializeField] private CardData[] allCards; // 全カードの読み込み済み配列
 
+    /// <summary>element が闇のテンプレートのみ（ダークプリパレーション抽選用）。</summary>
+    private CardData[] _darkCardTemplates;
+
     //========================
     // UI管理
     //========================
@@ -78,6 +81,22 @@ public class CardDealer : MonoBehaviour
             Debug.LogError("[CardDealer] Cards フォルダから CardData を読み込めませんでした");
         else
             Debug.Log($"[CardDealer] 読み込まれたカード数: {allCards.Length}");
+
+        BuildDarkCardTemplatePool();
+    }
+
+    private void BuildDarkCardTemplatePool()
+    {
+        if (allCards == null || allCards.Length == 0)
+        {
+            _darkCardTemplates = System.Array.Empty<CardData>();
+            return;
+        }
+        _darkCardTemplates = allCards.Where(c => c != null && c.element == ElementType.Dark).ToArray();
+        if (_darkCardTemplates.Length == 0)
+            Debug.LogWarning("[CardDealer] 闇属性の CardData がありません。ダークプリパレーションは通常抽選にフォールバックします。");
+        else
+            Debug.Log($"[CardDealer] 闇属性カード（開幕1枚目抽選用）: {_darkCardTemplates.Length} 種");
     }
 
     /// <summary>
@@ -110,12 +129,17 @@ public class CardDealer : MonoBehaviour
         playerHand.Clear();
         cpuHand.Clear();
 
+        bool playerDarkPrep = playerStatus != null && playerStatus.summonData != null
+            && playerStatus.summonData.IsDiabolosDarkPreparation();
+        bool enemyDarkPrep = enemyStatus != null && enemyStatus.summonData != null
+            && enemyStatus.summonData.IsDiabolosDarkPreparation();
+
         while (playerHand.Count < playerTarget || cpuHand.Count < cpuTarget)
         {
             if (playerHand.Count < playerTarget && cpuHand.Count < cpuTarget)
             {
-                var playerCardInstance = DrawRandomCardInstance();
-                var enemyCardInstance = DrawRandomCardInstance();
+                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep);
+                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep);
                 if (playerCardInstance == null || enemyCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: カード生成に失敗しました");
@@ -132,7 +156,7 @@ public class CardDealer : MonoBehaviour
             }
             else if (playerHand.Count < playerTarget)
             {
-                var playerCardInstance = DrawRandomCardInstance();
+                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep);
                 if (playerCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: プレイヤーカード生成に失敗しました");
@@ -148,7 +172,7 @@ public class CardDealer : MonoBehaviour
             }
             else
             {
-                var enemyCardInstance = DrawRandomCardInstance();
+                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep);
                 if (enemyCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: CPUカード生成に失敗しました");
@@ -162,6 +186,9 @@ public class CardDealer : MonoBehaviour
 
             yield return new WaitForSeconds(0.15f);
         }
+
+        if (playerDarkPrep || enemyDarkPrep)
+            yield return SummonDiabolosOpening.RunAfterDealBeforeRevealRoutine(playerStatus, enemyStatus);
 
         yield return new WaitForSeconds(0.5f);
         foreach (var ui in activeCardUIs)
@@ -183,6 +210,14 @@ public class CardDealer : MonoBehaviour
             Destroy(handPanel.GetChild(i).gameObject);
     }
 
+    /// <summary>開幕1枚目：ダークプリパレーションなら闇プール、それ以外は通常。</summary>
+    private CardData DrawOpeningCardInstance(bool useDarkPoolFirst)
+    {
+        if (useDarkPoolFirst)
+            return DrawRandomDarkCardInstance();
+        return DrawRandomCardInstance();
+    }
+
     /// <summary>
     /// カードデータから1枚ランダムに選んでカードインスタンスを返す
     /// </summary>
@@ -197,6 +232,21 @@ public class CardDealer : MonoBehaviour
         var instance = ScriptableObject.Instantiate(template);
         instance.name = template.name; // デバッグしやすく
         instance.cardUI = null;          // 重要：後でUIを生成する際の重複を防ぐ
+        return instance;
+    }
+
+    /// <summary>闇属性（<see cref="CardData.element"/> == Dark）のテンプレートから1枚。プールが空なら通常抽選。</summary>
+    private CardData DrawRandomDarkCardInstance()
+    {
+        if (_darkCardTemplates == null || _darkCardTemplates.Length == 0)
+            return DrawRandomCardInstance();
+
+        var template = _darkCardTemplates[Random.Range(0, _darkCardTemplates.Length)];
+        if (template == null) return DrawRandomCardInstance();
+
+        var instance = ScriptableObject.Instantiate(template);
+        instance.name = template.name;
+        instance.cardUI = null;
         return instance;
     }
 

@@ -282,7 +282,7 @@ public class BattleManager : MonoBehaviour
             return;
 
         ElementType attackElement = ElementHelper.GetCombinedElement(attackSource);
-        var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+        var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSource);
         if (ReflectionRules.CanReflectPhysical(attackSource))
         {
             foreach (var c in playerHand)
@@ -441,7 +441,7 @@ public class BattleManager : MonoBehaviour
         if (BattleUIManager.I == null || attackSnapshot == null) return;
 
         ElementType attackElement = ElementHelper.GetCombinedElement(attackSnapshot);
-        var defenseChoices = CardRules.GetDefenseChoicesForElement(playerHand, attackElement);
+        var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSnapshot);
         if (ReflectionRules.CanReflectPhysical(attackSnapshot))
         {
             foreach (var c in playerHand)

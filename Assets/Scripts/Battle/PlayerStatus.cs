@@ -137,6 +137,14 @@ public class PlayerStatus
         return false;
     }
 
+    /// <summary>呪縛が付与されているか（加護パッシブ無効・ガルーダ5n等のスキップ判定）。</summary>
+    public bool HasCurseBindEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.CurseBind) return true;
+        return false;
+    }
+
     /// <summary>介入が付与されているか（TurnEnd で追加攻撃抽選の対象）。</summary>
     public bool HasInterventionEffect()
     {
@@ -188,8 +196,12 @@ public class PlayerStatus
     /// <summary>
     /// 段階型・排他型（病・眼精／群発・封印）と単純付与（衰弱など）を統合した付与API。
     /// </summary>
+    /// <param name="suppressGrantPopupAndSound">true のとき付与ポップアップと SE を出さない（デバッグ付与など）。</param>
     /// <returns>強制絶頂が必要な場合は <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>。呼び出し側で非同期処理すること。</returns>
-    public ProgressiveApplyResult TryApplyStatusEffect(StatusEffectType type, StatusProgressionConfig config)
+    public ProgressiveApplyResult TryApplyStatusEffect(
+        StatusEffectType type,
+        StatusProgressionConfig config,
+        bool suppressGrantPopupAndSound = false)
     {
         if (type == StatusEffectType.None)
             return ProgressiveApplyResult.NoChange;
@@ -201,13 +213,29 @@ public class PlayerStatus
             || type == StatusEffectType.EyeStrain
             || type == StatusEffectType.ClusterHeadache)
         {
-            return ProgressiveStatusApplicator.Apply(this, type, config);
+            var complex = ProgressiveStatusApplicator.Apply(this, type, config);
+            if (suppressGrantPopupAndSound) return complex;
+            return NotifyApplyFeedbackAndReturn(type, complex);
         }
 
         if (ProgressiveStatusApplicator.TryAddSimpleEffect(this, type, config))
-            return ProgressiveApplyResult.Applied;
+        {
+            if (suppressGrantPopupAndSound) return ProgressiveApplyResult.Applied;
+            return NotifyApplyFeedbackAndReturn(type, ProgressiveApplyResult.Applied);
+        }
 
         return ProgressiveApplyResult.NoChange;
+    }
+
+    private ProgressiveApplyResult NotifyApplyFeedbackAndReturn(StatusEffectType requested, ProgressiveApplyResult result)
+    {
+        if (StatusEffectApplyFeedback.ShouldShowGrantPopup(result))
+        {
+            var popupType = StatusEffectApplyFeedback.GetGrantPopupEffectType(this, requested, result);
+            BattleUIManager.I?.ShowStatusAilmentGrantPopup(popupType, this);
+        }
+
+        return result;
     }
 
     /// <summary>従来の単純付与。内部で <see cref="TryApplyStatusEffect"/> を使用。</summary>

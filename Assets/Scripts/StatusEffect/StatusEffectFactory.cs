@@ -41,6 +41,9 @@ public static class StatusEffectFactory
             case StatusEffectType.Intervention:
                 return new InterventionEffect();
 
+            case StatusEffectType.CurseBind:
+                return new CurseBindEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

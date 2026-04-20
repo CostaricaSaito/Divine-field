@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 
@@ -135,7 +135,7 @@ public class CardData : ScriptableObject
     public bool canApplyStatusEffect = false;
     [Range(0, 100)] public int statusEffectChance = 0;
     public StatusEffectType statusEffectToApply = StatusEffectType.None;
-    [Tooltip("①ダメージが通ったときのみ / ②カード解決時（ダメージ不要）。攻撃力では分けない（Inspectorで明示）。")]
+    [Tooltip("①ダメージが通ったときのみ（将来：ダメージ系攻撃魔法＋付与） / ②解決時のみ（濃霧付与など ATK0・ダメージなし）。攻撃力では分けない（Inspectorで明示）。")]
     public StatusEffectApplyTiming statusEffectApplyTiming = StatusEffectApplyTiming.WithDamageThrough;
 
     [Header("経済パラメータ")]

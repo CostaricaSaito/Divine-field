@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -174,10 +174,10 @@ public class BattleProcessor : MonoBehaviour
             {
                 var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
                 var result = target.TryApplyStatusEffect(card.statusEffectToApply, cfg);
-                if (ShouldShowStatusAilmentGrantPopup(result))
-                    BattleUIManager.I?.ShowStatusAilmentGrantPopup(card.statusEffectToApply, target);
                 if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
                     await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(target, CancellationToken.None);
+                else if (result == ProgressiveApplyResult.NoChange)
+                    await ShowUnharmedPopupForNoProgressStatusAsync(target);
             }
         }
 
@@ -255,7 +255,11 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
-        await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
+        IReadOnlyList<CardData> defenseList = defenseCard != null
+            ? new List<CardData> { defenseCard }
+            : null;
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseList);
     }
 
     /// <summary>
@@ -308,8 +312,11 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
+        IReadOnlyList<CardData> defenseList = defenseCard != null
+            ? new List<CardData> { defenseCard }
+            : null;
         await ApplyCombatDamageSequenceAfterHitAsync(
-            attackCards, attackElement, attacker, defender, incomingAttackPower, defensePower);
+            attackCards, attackElement, attacker, defender, incomingAttackPower, defensePower, defenseList);
     }
 
     //========================
@@ -317,9 +324,18 @@ public class BattleProcessor : MonoBehaviour
     //========================
 
     /// <param name="finalDamage">命中後の最終ダメージ。①は1以上のときのみ付与。②は0でも付与（ミス時は呼ばれない）。</param>
-    private async Task TryApplyAttackCardStatusEffectsAsync(List<CardData> attackCards, PlayerStatus defender, int finalDamage)
+    /// <param name="defenseCards">濃霧付与など A 系魔法のとき、通常防具が誤選択されていれば付与を抑止するために渡す。</param>
+    private async Task TryApplyAttackCardStatusEffectsAsync(
+        List<CardData> attackCards,
+        PlayerStatus defender,
+        int finalDamage,
+        IReadOnlyList<CardData> defenseCards = null)
     {
         if (attackCards == null || defender == null) return;
+
+        if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards)
+            && CardRules.DefenseContainsNormalPhysicalArmor(defenseCards))
+            return;
 
         var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
         foreach (var card in attackCards)
@@ -331,20 +347,33 @@ public class BattleProcessor : MonoBehaviour
             if (Random.Range(0, 100) >= card.statusEffectChance) continue;
 
             var result = defender.TryApplyStatusEffect(card.statusEffectToApply, cfg);
-            if (ShouldShowStatusAilmentGrantPopup(result))
-                BattleUIManager.I?.ShowStatusAilmentGrantPopup(card.statusEffectToApply, defender);
             if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
                 await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(defender, CancellationToken.None);
+            else if (result == ProgressiveApplyResult.NoChange)
+                await ShowUnharmedPopupForNoProgressStatusAsync(defender);
 
             UpdateStatusDisplay();
         }
     }
 
-    private static bool ShouldShowStatusAilmentGrantPopup(ProgressiveApplyResult result)
+    /// <summary>
+    /// 重複・段階進行なしなどで <see cref="ProgressiveApplyResult.NoChange"/> となったときの「無傷」表示と、
+    /// フェード後の規定 <see cref="DamagePopup.PostPopupIntervalMs"/> 待機。
+    /// </summary>
+    private async Task ShowUnharmedPopupForNoProgressStatusAsync(PlayerStatus target)
     {
-        return result == ProgressiveApplyResult.Applied
-            || result == ProgressiveApplyResult.DiseaseProgressed
-            || result == ProgressiveApplyResult.ForcedParadiseEcstasy;
+        if (target == null) return;
+
+        float fadeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+        if (BattleUIManager.I != null)
+        {
+            fadeSec = BattleUIManager.I.ShowDamagePopup(0, target);
+            if (fadeSec <= 0f) fadeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+        }
+
+        PlayDamagePopupCompanionSound(0);
+        await Task.Delay(System.TimeSpan.FromSeconds(fadeSec));
+        await Task.Delay(DamagePopup.PostPopupIntervalMs);
     }
 
     /// <summary>
@@ -640,7 +669,8 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
-        await ApplyCombatDamageSequenceAfterHitAsync(attackCards, attackElement, attacker, defender, attackPower, defensePower);
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseCards);
     }
 
     /// <summary>
@@ -652,8 +682,20 @@ public class BattleProcessor : MonoBehaviour
         PlayerStatus attacker,
         PlayerStatus defender,
         int attackPower,
-        int defensePower)
+        int defensePower,
+        IReadOnlyList<CardData> defenseCardsForStatusRule = null)
     {
+        if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
+        {
+            int stripNormalArmor = 0;
+            foreach (var c in defenseCardsForStatusRule)
+            {
+                if (c != null && CardRules.IsNormalPhysicalDefenseCard(c))
+                    stripNormalArmor += c.defensePower;
+            }
+            defensePower = Mathf.Max(0, defensePower - stripNormalArmor);
+        }
+
         int baseDamage = attackPower - defensePower;
         int firstPhaseDamage = Mathf.Max(0, baseDamage);
         if (!CardRules.IsMagicOnlyAttackCombo(attackCards))
@@ -707,7 +749,8 @@ public class BattleProcessor : MonoBehaviour
         if (firstPhaseDamage > 0 && anyWithDamageThrough)
             await Task.Delay(1000);
 
-        await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage);
+        await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage, defenseCardsForStatusRule);
+        await Task.Delay(DamagePopup.PostPopupIntervalMs);
 
         if (IsDead(attacker) || IsDead(defender))
             Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 
+/// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
 {
     // �U���t�F�[�Y�Ŏg���邩
@@ -162,5 +163,71 @@ public static class CardRules
                 return false;
         }
         return any;
+    }
+
+    /// <summary>
+    /// A: ダメージを与えず <see cref="StatusEffectApplyTiming.OnCardEffectResolve"/> のみの魔法（濃霧付与など。ATK0）。
+    /// B（将来）: ダメージあり＋<see cref="StatusEffectApplyTiming.WithDamageThrough"/> はここでは false。
+    /// </summary>
+    public static bool IsStatusOnlyMagicCard(CardData c)
+    {
+        if (c == null || c.cardType != CardType.Magic || c.isRecovery) return false;
+        if (!c.canApplyStatusEffect || c.statusEffectToApply == StatusEffectType.None) return false;
+        if (c.statusEffectApplyTiming != StatusEffectApplyTiming.OnCardEffectResolve) return false;
+        return c.attackPower <= 0;
+    }
+
+    /// <summary>攻撃コンボがすべて A（状態異常のみ魔法）か。</summary>
+    public static bool IsStatusOnlyMagicAttackCombo(IReadOnlyList<CardData> cards)
+    {
+        if (cards == null || cards.Count == 0) return false;
+        foreach (var c in cards)
+        {
+            if (c == null) return false;
+            if (!IsStatusOnlyMagicCard(c)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>反射・ブロッキングではない通常の盾防御（濃霧付与などでは防げない）。</summary>
+    public static bool IsNormalPhysicalDefenseCard(CardData c)
+    {
+        if (c == null || c.cardType != CardType.Defense) return false;
+        if (c.reflectionKind != ReflectionKind.None) return false;
+        if (c.blockingKind != BlockingKind.None) return false;
+        return true;
+    }
+
+    /// <summary>防御リストに通常防具が含まれるか（誤選択時の状態異常抑止用）。</summary>
+    public static bool DefenseContainsNormalPhysicalArmor(IReadOnlyList<CardData> defenseCards)
+    {
+        if (defenseCards == null) return false;
+        foreach (var c in defenseCards)
+        {
+            if (c != null && IsNormalPhysicalDefenseCard(c)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="GetDefenseChoicesForElement"/> の結果から、攻撃が濃霧付与系のときは通常防具を除く。
+    /// </summary>
+    public static List<CardData> GetDefenseChoicesAgainstAttack(
+        List<CardData> hand,
+        ElementType attackElement,
+        IReadOnlyList<CardData> attackCards)
+    {
+        var baseList = GetDefenseChoicesForElement(hand, attackElement);
+        if (attackCards == null || !IsStatusOnlyMagicAttackCombo(attackCards))
+            return baseList;
+
+        var filtered = new List<CardData>();
+        foreach (var c in baseList)
+        {
+            if (c == null) continue;
+            if (IsNormalPhysicalDefenseCard(c)) continue;
+            filtered.Add(c);
+        }
+        return filtered;
     }
 }

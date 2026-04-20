@@ -757,7 +757,7 @@ public class BattleUIManager : MonoBehaviour
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
+            SoundEffectPlayer.I?.Play(StatusEffectApplyFeedback.GrantSoundAddress);
             damageText.SetupStatusAilmentGrant(name, bg, fg);
             Debug.Log($"[BattleUIManager] 状態異常ポップアップ: {name}");
 
@@ -1118,6 +1118,71 @@ public class BattleUIManager : MonoBehaviour
         cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
         cardLayoutManager?.HandleCardCancellation();
         UpdateHandCardHighlights();
+    }
+
+    /// <summary>
+    /// 指定パネル上の該当 CardData のシートだけを破棄。攻撃表示と同一インスタンスの反射カードで
+    /// <see cref="DestroyCardSheetForCardData"/> を呼ぶと跳ね返し前の攻撃シートまで消えるのを防ぐ。
+    /// </summary>
+    public void DestroyCardSheetsForCardDataOnPanel(CardData card, Side side)
+    {
+        if (card == null) return;
+        Transform panel = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (panel == null) return;
+        int id = card.GetInstanceID();
+        bool removed = false;
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var cardObj = activeCardSheets[i];
+            if (cardObj == null) continue;
+            if (cardObj.transform.parent != panel) continue;
+            var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
+            var displayed = cardDisplay?.GetCardData();
+            if (displayed != null && displayed.GetInstanceID() == id)
+            {
+                Destroy(cardObj);
+                activeCardSheets.RemoveAt(i);
+                removed = true;
+            }
+        }
+        if (!removed) return;
+        if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
+            cardSelectionManager.CancelCardSelection(card);
+        cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
+        cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
+        cardLayoutManager?.HandleCardCancellation();
+        UpdateHandCardHighlights();
+    }
+
+    /// <summary>
+    /// 同一パネルに同じ CardData のシートが複数あるとき、<see cref="activeCardSheets"/> 上で最後に追加された1枚だけ破棄（反射バウンスの重複除去）。
+    /// </summary>
+    public void DestroyMostRecentCardSheetOnPanelForCardData(CardData card, Side side)
+    {
+        if (card == null) return;
+        Transform panel = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (panel == null) return;
+        int id = card.GetInstanceID();
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var cardObj = activeCardSheets[i];
+            if (cardObj == null) continue;
+            if (cardObj.transform.parent != panel) continue;
+            var cardDisplay = cardObj.GetComponent<CardSheetDisplay>();
+            var displayed = cardDisplay?.GetCardData();
+            if (displayed != null && displayed.GetInstanceID() == id)
+            {
+                Destroy(cardObj);
+                activeCardSheets.RemoveAt(i);
+                if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
+                    cardSelectionManager.CancelCardSelection(card);
+                cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
+                cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
+                cardLayoutManager?.HandleCardCancellation();
+                UpdateHandCardHighlights();
+                return;
+            }
+        }
     }
 
     private void UpdateBattleManagerAfterCancel()

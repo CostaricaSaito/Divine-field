@@ -6,6 +6,7 @@ using UnityEngine;
 
 /// <summary>
 /// ガルーダ：開幕手札 +2（合計12枚側）、自分のターン終了時に 5,10,15… 回目で最大2枚ドロー（手札上限18まで）。
+/// 将来的にインドラ等のターン起因加護を足す場合は、共通の Summon ライフサイクル層へ寄せる想定。
 /// </summary>
 public static class SummonGarudaLifecycle
 {
@@ -45,7 +46,10 @@ public static class SummonGarudaLifecycle
             if (ctr.PlayerOwnTurnsEnded % 5 != 0) return;
             var sd = bm.GetPlayerStatus()?.summonData;
             if (sd == null || !sd.IsGarudaLifecycle()) return;
-            await RunGarudaTurnEndDrawSequenceAsync(bm, bm.GetPlayerStatus(), bm.playerHand, isPlayerHand: true, ct);
+            var owner = bm.GetPlayerStatus();
+            // 呪縛中は 5n ボーナスのみスキップ（カウンタは既に進行済み）。開幕12枚は別経路のため対象外。
+            if (owner != null && !owner.HasCurseBindEffect())
+                await RunGarudaTurnEndDrawSequenceAsync(bm, owner, bm.playerHand, isPlayerHand: true, ct);
         }
         else
         {
@@ -53,7 +57,9 @@ public static class SummonGarudaLifecycle
             if (ctr.EnemyOwnTurnsEnded % 5 != 0) return;
             var sd = bm.GetEnemyStatus()?.summonData;
             if (sd == null || !sd.IsGarudaLifecycle()) return;
-            await RunGarudaTurnEndDrawSequenceAsync(bm, bm.GetEnemyStatus(), bm.cpuHand, isPlayerHand: false, ct);
+            var owner = bm.GetEnemyStatus();
+            if (owner != null && !owner.HasCurseBindEffect())
+                await RunGarudaTurnEndDrawSequenceAsync(bm, owner, bm.cpuHand, isPlayerHand: false, ct);
         }
 
         if (ct.IsCancellationRequested) return;

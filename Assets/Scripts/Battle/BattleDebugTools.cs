@@ -327,13 +327,13 @@ public class BattleDebugTools : MonoBehaviour
 
     /// <summary>
     /// <see cref="StatusEffectFactory"/> で実体が作れるものは <see cref="PlayerStatus.TryApplyStatusEffect"/>。
-    /// 未実装の4種は <see cref="PlaceholderStatusEffect"/>。
+    /// 未実装でプレースホルダー経由のみのものは <see cref="PlaceholderStatusEffect"/>。
     /// </summary>
     public static void ApplyGrantForDebug(PlayerStatus target, StatusEffectType type)
     {
         if (target == null || type == StatusEffectType.None) return;
 
-        // Factory 未実装の4種は TryApply しない（警告ログを出さずプレースホルダーのみ）
+        // Factory 未実装でプレースホルダーのみ（TryApply しない）
         if (UsesDebugPlaceholderOnly(type))
         {
             if (!HasActiveEffect(target, type))
@@ -345,7 +345,7 @@ public class BattleDebugTools : MonoBehaviour
         }
 
         var cfg = StatusProgressionConfig.GetRuntimeFallback();
-        var result = target.TryApplyStatusEffect(type, cfg);
+        var result = target.TryApplyStatusEffect(type, cfg, suppressGrantPopupAndSound: true);
         if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
             _ = DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(target, CancellationToken.None);
     }
@@ -363,8 +363,7 @@ public class BattleDebugTools : MonoBehaviour
     /// <summary><see cref="StatusEffectFactory"/> の default 枝に該当する列挙値（実装追加時にここから外す）。</summary>
     private static bool UsesDebugPlaceholderOnly(StatusEffectType type)
     {
-        return type == StatusEffectType.Confusion
-            || type == StatusEffectType.CurseBind;
+        return type == StatusEffectType.Confusion;
     }
 
     private bool EnsurePlaying()

@@ -24,6 +24,19 @@ public static class PhysicalReflectionFlow
     }
 
     /// <summary>
+    /// 跳ね返し対象の攻撃カードと同一 CardData 参照か。全シート削除すると攻撃表示まで消えるため判定に使う。
+    /// </summary>
+    private static bool IncomingAttackContainsCardReference(IReadOnlyList<CardData> incoming, CardData card)
+    {
+        if (incoming == null || card == null) return false;
+        for (int i = 0; i < incoming.Count; i++)
+        {
+            if (ReferenceEquals(incoming[i], card)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// プレイヤーが反射剣のみを確定し、手札から既に使用済みのときに呼ぶ（敵の攻撃を反射）。
     /// </summary>
     public static async Task RunPlayerInitiatedAsync(
@@ -191,8 +204,8 @@ public static class PhysicalReflectionFlow
 
                 if (pick != null && IsContinuingReflectionChain(pick, incomingAttackCards))
                 {
-                    // 連鎖の各回：反射カードのシートを残さない（同一 CardData が複数あれば全削除）
-                    BattleUIManager.I?.DestroyCardSheetForCardData(pick);
+                    // 敵側パネルのみ削除（攻撃シートは反対側。同一 CardData で DestroyCardSheetForCardData すると攻撃も消える）
+                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
                     BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
                     await Task.Delay(500, cancellationToken);
 
@@ -203,7 +216,7 @@ public static class PhysicalReflectionFlow
                     await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
                     await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
 
-                    BattleUIManager.I?.DestroyCardSheetForCardData(pick);
+                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
 
                     if (BattleUIManager.I != null)
                         await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
@@ -268,8 +281,10 @@ public static class PhysicalReflectionFlow
                 if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
                 battleProcessor.UseCard(card, battleManager.playerHand);
 
-                // 連鎖の各回：反射カードのシートを残さない（同一 CardData が複数あれば全削除）
-                BattleUIManager.I?.DestroyCardSheetForCardData(card);
+                // 攻撃と同一 CardData のときは全削除しない（攻撃シートが消える）。同パネル重複はバウンス直後に「最後の1枚」だけ消す。
+                if (!IncomingAttackContainsCardReference(incomingAttackCards, card))
+                    BattleUIManager.I?.DestroyCardSheetForCardData(card);
+
                 BattleUIManager.I?.ShowCardDetail(card, Side.Player);
                 await Task.Delay(500, cancellationToken);
 
@@ -280,7 +295,7 @@ public static class PhysicalReflectionFlow
                 await Task.Delay(TimeSpan.FromSeconds(sec2), cancellationToken);
                 await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
 
-                BattleUIManager.I?.DestroyCardSheetForCardData(card);
+                BattleUIManager.I?.DestroyMostRecentCardSheetOnPanelForCardData(card, Side.Player);
 
                 if (BattleUIManager.I != null)
                     await BattleUIManager.I.SlideReflectionAttackSheetsAsync(

@@ -33,4 +33,21 @@ public static class BlockingRules
         return ReflectionRules.RequiresReflectionExclusiveLock(card, incomingAttack)
             || RequiresBlockingExclusiveLock(card, incomingAttack);
     }
+
+    /// <summary>
+    /// いずれかの防御カードが、与えられた攻撃に対して反射（物理／魔法）または無効化として解決されるか。
+    /// TotalATK/DEF に DEF を出さない判定などに使う。
+    /// </summary>
+    public static bool AnyDefenseCardResolvesAsReflectionOrNullify(
+        IReadOnlyList<CardData> defenseCards,
+        IReadOnlyList<CardData> incomingAttack)
+    {
+        if (defenseCards == null || incomingAttack == null || incomingAttack.Count == 0) return false;
+        foreach (var c in defenseCards)
+        {
+            if (c != null && RequiresDefenseNullifyExclusiveLock(c, incomingAttack))
+                return true;
+        }
+        return false;
+    }
 }

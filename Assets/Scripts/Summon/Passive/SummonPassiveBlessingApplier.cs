@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 /// <summary>
 /// <see cref="SummonData"/> に紐づく加護を、攻撃力合計に適用する（攻撃側・防御側）。
@@ -11,6 +11,9 @@ public static class SummonPassiveBlessingApplier
     public static int ApplyAttackPowerBonus(PlayerStatus attacker, List<CardData> attackCards, int sumOfCardAttackPower)
     {
         if (attacker == null || attackCards == null || attackCards.Count == 0)
+            return sumOfCardAttackPower;
+
+        if (attacker.HasCurseBindEffect())
             return sumOfCardAttackPower;
 
         var data = attacker.summonData;
@@ -33,6 +36,9 @@ public static class SummonPassiveBlessingApplier
         int attackPowerAfterAttackerSideModifiers)
     {
         if (defender == null || attackCards == null || attackCards.Count == 0)
+            return attackPowerAfterAttackerSideModifiers;
+
+        if (defender.HasCurseBindEffect())
             return attackPowerAfterAttackerSideModifiers;
 
         var data = defender.summonData;

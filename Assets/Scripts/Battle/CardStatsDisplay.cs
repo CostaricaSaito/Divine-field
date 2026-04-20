@@ -186,6 +186,22 @@ public class CardStatsDisplay : MonoBehaviour
     }
 
     /// <summary>
+    /// 反射（物理／魔法）または無効化として解決される防御なら、TotalATK/DEF に数値を出さない。
+    /// 判定本体は <see cref="BlockingRules.AnyDefenseCardResolvesAsReflectionOrNullify"/>。
+    /// </summary>
+    private static bool IsReflectionOrNullifyDefenseRoute(BattleManager bm, List<CardData> defenseCards)
+    {
+        if (bm == null || defenseCards == null || defenseCards.Count == 0) return false;
+
+        var incoming = bm.GetIncomingAttackSnapshotForDefenseUi();
+        if (incoming == null || incoming.Count == 0)
+            incoming = bm.GetAttackCardsForCombatPublic();
+        if (incoming == null || incoming.Count == 0) return false;
+
+        return BlockingRules.AnyDefenseCardResolvesAsReflectionOrNullify(defenseCards, incoming);
+    }
+
+    /// <summary>
     /// 連鎖反射の防御入力中、通常防御のみ選ばれていれば TOTAL に DEF を出す。
     /// 反射 ATK オーバーレイの有無には依存しない（演出シーケンス残りと整合させるため）。
     /// 反射／無効化の排他のみのときは false。
@@ -198,11 +214,12 @@ public class CardStatsDisplay : MonoBehaviour
         if (defCards == null || defCards.Count == 0) return false;
 
         var incoming = bm.GetIncomingAttackSnapshotForDefenseUi();
-        foreach (var c in defCards)
-        {
-            if (c != null && BlockingRules.RequiresDefenseNullifyExclusiveLock(c, incoming))
-                return false;
-        }
+        if (incoming == null || incoming.Count == 0)
+            incoming = bm.GetAttackCardsForCombatPublic();
+        if (incoming == null || incoming.Count == 0) return false;
+
+        if (BlockingRules.AnyDefenseCardResolvesAsReflectionOrNullify(defCards, incoming))
+            return false;
 
         return CalculateTotalDefensePower(defCards) > 0;
     }
@@ -250,6 +267,7 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return true;
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 if (totalDefense <= 0) return true;
                 return false;
@@ -289,12 +307,14 @@ public class CardStatsDisplay : MonoBehaviour
         }
 
         // 防御フェーズの場合
-        if (battleManager.CurrentState == GameState.DefensePhase)
+        if (battleManager.CurrentState == GameState.DefensePhase
+            || battleManager.CurrentState == GameState.DefenseConfirmPhase)
         {
             // 複数選択を優先してチェック
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
             if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
             {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards)) return true;
                 // 複数選択時は合計防御力をチェック
                 if (selectedDefenseCards.Count > 1)
                 {
@@ -338,6 +358,7 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return true;
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 if (totalDefense <= 0) return true;
                 return false;
@@ -371,6 +392,8 @@ public class CardStatsDisplay : MonoBehaviour
                 var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
                 if (selectedDefenseCard != null)
                 {
+                    var oneDef = new List<CardData> { selectedDefenseCard };
+                    if (IsReflectionOrNullifyDefenseRoute(battleManager, oneDef)) return true;
                     if (selectedDefenseCard.defensePower <= 0) return true;
                     return false;
                 }
@@ -393,6 +416,8 @@ public class CardStatsDisplay : MonoBehaviour
         if (PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
         {
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards))
+                return "";
             if (selectedDefenseCards != null && selectedDefenseCards.Count > 1)
                 return $"DEF {CalculateTotalDefensePower(selectedDefenseCards)}";
             if (selectedDefenseCards != null && selectedDefenseCards.Count == 1)
@@ -408,6 +433,7 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return "";
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 return $"DEF {totalDefense}";
             }
@@ -440,10 +466,14 @@ public class CardStatsDisplay : MonoBehaviour
             // CardSelectionManagerから取得した選択カードが空の場合は、空文字列を返す（表示しない）
             // BattleManagerのselectedCardは参照しない（キャンセル時にクリアされない可能性があるため）
         }
-        else if (battleManager.CurrentState == GameState.DefensePhase)
+        else if (battleManager.CurrentState == GameState.DefensePhase
+            || battleManager.CurrentState == GameState.DefenseConfirmPhase)
         {
             // 複数選択を優先してチェック（複数選択時は合計値を表示）
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0
+                && IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards))
+                return "";
             if (selectedDefenseCards != null && selectedDefenseCards.Count > 1)
             {
                 int totalDefense = CalculateTotalDefensePower(selectedDefenseCards);
@@ -479,6 +509,7 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return "";
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 return $"DEF {totalDefense}";
             }
@@ -509,6 +540,8 @@ public class CardStatsDisplay : MonoBehaviour
             var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
             if (selectedDefenseCard != null)
             {
+                var oneDef = new List<CardData> { selectedDefenseCard };
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, oneDef)) return "";
                 return $"DEF {selectedDefenseCard.defensePower}";
             }
         }
@@ -549,7 +582,8 @@ public class CardStatsDisplay : MonoBehaviour
             var cards = BattleUIManager.I?.GetSelectedAttackCards();
             if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
         }
-        else if (battleManager.CurrentState == GameState.DefensePhase)
+        else if (battleManager.CurrentState == GameState.DefensePhase
+            || battleManager.CurrentState == GameState.DefenseConfirmPhase)
         {
             var cards = BattleUIManager.I?.GetSelectedDefenseCards();
             if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
