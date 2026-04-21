@@ -9,6 +9,11 @@ public enum CardType
     Magic = 2,
     Recovery = 3,
     Special = 4,
+    /// <summary>
+    /// 大魔法。詠唱ターンを経て発動する単独使用カード。MagicPanel に行かず、他カードと併用不可。
+    /// 反射・無効化を受けない。<see cref="ArchMagicRuleSO"/> と連携。
+    /// </summary>
+    ArchMagic = 5,
 }
 
 public enum ElementType
@@ -173,7 +178,7 @@ public class CardData : ScriptableObject
     public BlockingKind blockingKind = BlockingKind.None;
 
     [Header("特殊攻撃ルール（任意・B案）")]
-    [Tooltip("マジカルエクスプロージョン等。未設定なら従来どおりカード数値のみ。")]
+    [Tooltip("マジカルエクスプロージョン・ゴッドレイジ・大魔法等。未設定なら従来どおりカード数値のみ。")]
     public SpecialAttackRuleSO specialAttackRule;
 
     [Header("UI参照（非表示）")]

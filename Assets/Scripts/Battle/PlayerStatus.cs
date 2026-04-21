@@ -34,6 +34,37 @@ public class PlayerStatus
 
     public List<IStatusEffect> activeEffects = new List<IStatusEffect>(); // 状態異常一覧
 
+    // ===== 大魔法（ArchMagic）詠唱状態 =====
+    /// <summary>詠唱中の大魔法カード。null のとき詠唱していない。</summary>
+    public CardData archMagicCastingCard { get; private set; }
+    /// <summary>残り詠唱ターン数。0 になった自分の攻撃フェーズで発動する。</summary>
+    public int archMagicRemainingTurns { get; private set; }
+    /// <summary>直近 <see cref="TakeDamage"/> 中にダメージを受けたことで詠唱がキャンセルされたか（BattleManager が消費）。</summary>
+    public bool archMagicCancelPending;
+
+    public bool IsCastingArchMagic => archMagicCastingCard != null;
+
+    public void BeginArchMagicCasting(CardData card, int turns)
+    {
+        archMagicCastingCard = card;
+        archMagicRemainingTurns = Mathf.Max(1, turns);
+        archMagicCancelPending = false;
+    }
+
+    /// <summary>自分の攻撃フェーズでの残りターン減算。0 になったとき発動可能。</summary>
+    public void DecrementArchMagicRemainingTurns()
+    {
+        if (!IsCastingArchMagic) return;
+        archMagicRemainingTurns = Mathf.Max(0, archMagicRemainingTurns - 1);
+    }
+
+    public void ClearArchMagicCastingState()
+    {
+        archMagicCastingCard = null;
+        archMagicRemainingTurns = 0;
+        archMagicCancelPending = false;
+    }
+
     /// <summary>
     /// UI 用：現在かかっている状態異常の種類（重複なし・公式ID順）。
     /// </summary>
@@ -68,6 +99,15 @@ public class PlayerStatus
 
         currentHP = Mathf.Max(currentHP - modifiedAmount, 0);
         Debug.Log($"{DisplayName} に {modifiedAmount} ダメージ（元値: {amount}）");
+
+        // 大魔法詠唱中に 1 でもダメージを受けたらキャンセル確定（MP は返らない）。
+        // 実際のキャンセル演出（ポップアップ・背景復帰）は BattleManager が次の安全地帯で消費する。
+        if (modifiedAmount > 0 && IsCastingArchMagic)
+        {
+            archMagicCancelPending = true;
+            archMagicCastingCard = null;
+            archMagicRemainingTurns = 0;
+        }
     }
 
     /// <summary>

@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
   m_Name: MagicalExplosion
   m_EditorClassIdentifier: 
-  cardName: "\u53CD\u5C04\u5263"
+  cardName: "\u30DE\u30B8\u30AB\u30EB\u30A8\u30AF\u30B9\u30D7\u30ED\u30FC\u30B8\u30E7\u30F3"
   cardType: 0
-  cardImage: {fileID: 21300000, guid: 76836da5233d7d94a99c261dbe19afba, type: 3}
-  description: "\u8DF3\u306D\u8FD4\u3059\uFF01"
-  attackPower: 10
+  cardImage: {fileID: 21300000, guid: 438323f306c06f247a7cb32ecf3b8c78, type: 3}
+  description: "\u5148\u653B\u30EF\u30F3\u30AD\u30EB"
+  attackPower: 0
   defensePower: 0
   element: 0
   hitRate: 100
@@ -29,19 +29,22 @@ MonoBehaviour:
   healsGP: 0
   clearsRestraintOnUse: 0
   usableInAttackPhase: 1
-  usableInDefensePhase: 1
+  usableInDefensePhase: 0
   isPrimaryAttack: 1
   isAdditionalAttack: 0
   isPrimaryDefense: 0
-  isCounterAttack: 1
+  isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
   statusEffectToApply: 0
   statusEffectApplyTiming: 0
-  cardValue: 3
+  cardValue: 10
   isRare: 0
   attackPhaseRole: 2
-  defensePhaseRole: 1
-  reflectionKind: 1
+  defensePhaseRole: 0
+  attackComboPickRule: 0
+  reflectionKind: 0
+  blockingKind: 0
+  specialAttackRule: {fileID: 11400000, guid: 4ba1a1f9acb54a749a7a7547e4d91eb2, type: 2}

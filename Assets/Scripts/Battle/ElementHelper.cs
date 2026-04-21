@@ -60,7 +60,7 @@ public static class ElementHelper
         if (cards == null || cards.Count == 0) return ElementType.None;
 
         // ゴッドレイジと他カードの組み合わせ：ダメージは 2 倍だが合算属性は無属性
-        if (GodRageRules.IsGodRageDoublingCombo(cards))
+        if (GodrageRules.IsGodrageDoublingCombo(cards))
             return ElementType.None;
 
         if (MagicalExplosionRules.ContainsMagicalExplosion(cards) && cards.Count >= 2)

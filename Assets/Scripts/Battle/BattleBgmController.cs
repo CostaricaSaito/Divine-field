@@ -1,4 +1,6 @@
 ﻿using System.Collections;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -203,6 +205,78 @@ public class BattleBgmController : MonoBehaviour
         if (battleBackgroundImage == null) return;
         battleBackgroundImage.color = _backgroundBaseColor;
     }
+
+    // ===== 大魔法（ArchMagic）用 背景差し替え =====
+    private Sprite _archMagicOverrideBaselineSprite;
+    private bool _archMagicOverrideActive;
+
+    /// <summary>大魔法詠唱中の背景差し替え。復帰用に現在のスプライトを保存する。</summary>
+    public void SetArchMagicBackgroundOverride(Sprite overrideSprite)
+    {
+        if (battleBackgroundImage == null || overrideSprite == null) return;
+        if (!_archMagicOverrideActive)
+        {
+            _archMagicOverrideBaselineSprite = battleBackgroundImage.sprite;
+            _archMagicOverrideActive = true;
+        }
+        battleBackgroundImage.sprite = overrideSprite;
+    }
+
+    /// <summary>大魔法背景を解除して元のスプライトへ復帰する。</summary>
+    public void ClearArchMagicBackgroundOverride()
+    {
+        if (!_archMagicOverrideActive) return;
+        if (battleBackgroundImage != null)
+        {
+            battleBackgroundImage.sprite = _archMagicOverrideBaselineSprite;
+            battleBackgroundImage.color = _backgroundBaseColor;
+        }
+        _archMagicOverrideActive = false;
+        _archMagicOverrideBaselineSprite = null;
+    }
+
+    /// <summary>大魔法背景をアルファでフェードしながら <paramref name="durationMs"/> かけて差し替える。</summary>
+    public async Task CrossfadeToArchMagicBackgroundAsync(Sprite overrideSprite, int durationMs, CancellationToken ct)
+    {
+        if (battleBackgroundImage == null || overrideSprite == null) return;
+
+        if (!_archMagicOverrideActive)
+        {
+            _archMagicOverrideBaselineSprite = battleBackgroundImage.sprite;
+            _archMagicOverrideActive = true;
+        }
+
+        var img = battleBackgroundImage;
+        Color baseCol = _backgroundBaseColor;
+        int halfMs = Mathf.Max(1, durationMs / 2);
+        const int steps = 26;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            float u = i / (float)steps;
+            var c = baseCol;
+            c.a = baseCol.a * (1f - u);
+            img.color = c;
+            await Task.Delay(halfMs / steps, ct);
+        }
+
+        img.sprite = overrideSprite;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            float u = i / (float)steps;
+            var c = baseCol;
+            c.a = baseCol.a * u;
+            img.color = c;
+            await Task.Delay(halfMs / steps, ct);
+        }
+
+        img.color = baseCol;
+    }
+
+    public bool IsArchMagicBackgroundOverrideActive => _archMagicOverrideActive;
 
     private IEnumerator LoadSpriteToField(string address, System.Action<Sprite> assign)
     {

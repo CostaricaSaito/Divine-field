@@ -309,7 +309,7 @@ public class CardStatsDisplay : MonoBehaviour
         var rDef = bm.GetReflectionAttackBlessingDefender();
         if (rAtk != null && rDef != null)
         {
-            if (GodRageRules.IsGodRageDoublingCombo(rc))
+            if (GodrageRules.IsGodrageDoublingCombo(rc))
                 return FormatGodRageDoubledAttackPowerDisplayLabel(rc, rAtk, rDef);
             return FormatAttackPowerDisplayLabel(rc, rAtk, rDef);
         }
@@ -1021,7 +1021,7 @@ public class CardStatsDisplay : MonoBehaviour
         int rawCombo = CalculateTotalAttackPower(cards, attacker);
         if (rawCombo <= 0) return "";
 
-        bool applyGodDouble = GodRageRules.IsGodRageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble;
+        bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble;
         if (_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
             applyGodDouble = false;
         int baseForBlessings = applyGodDouble ? rawCombo * 2 : rawCombo;
@@ -1112,7 +1112,7 @@ public class CardStatsDisplay : MonoBehaviour
     {
         if (cards == null || cards.Count == 0) return 0;
         int sum = CalculateTotalAttackPower(cards, attacker);
-        bool godDouble = GodRageRules.IsGodRageDoublingCombo(cards)
+        bool godDouble = GodrageRules.IsGodrageDoublingCombo(cards)
             && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards));
         if (godDouble)
             sum *= 2;
@@ -1148,7 +1148,7 @@ public class CardStatsDisplay : MonoBehaviour
     public int ComputeGodRageRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
     {
         int sum = CalculateTotalAttackPower(cards, attacker);
-        if (GodRageRules.IsGodRageDoublingCombo(cards))
+        if (GodrageRules.IsGodrageDoublingCombo(cards))
             sum *= 2;
         return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
     }

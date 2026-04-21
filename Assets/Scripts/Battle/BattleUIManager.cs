@@ -56,6 +56,8 @@ public class BattleUIManager : MonoBehaviour
 
     [Header("ポップアップ")]
     [SerializeField] private GameObject damagePopupPrefab;
+    [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
+    [SerializeField] private GameObject importantPopupPrefab;
     [SerializeField] private Canvas uiCanvas;
 
     [Header("カード詳細表示")]
@@ -66,6 +68,10 @@ public class BattleUIManager : MonoBehaviour
 
     [Header("魔法：手札→MagicPanel 飛行アニメ")]
     [SerializeField] private float magicHandToPanelDuration = 0.2f;
+
+    [Header("大魔法（ArchMagic）詠唱カウントダウン")]
+    [Tooltip("未設定時は TMP 既定フォント。推奨: Assets/TextMesh Pro/Fonts/DFSoge9 SDF")]
+    [SerializeField] private TMPro.TMP_FontAsset archMagicCastCountdownFont;
 
     [Header("Use ボタン設定")]
     [SerializeField] private Color useButtonNormalColor = new Color(0.2f, 0.5f, 1f, 1f);
@@ -105,8 +111,13 @@ public class BattleUIManager : MonoBehaviour
     private Sprite _cachedUseButtonSprite;
     private bool _useButtonHasRainbowGeneratedSprite;
     private bool _useButtonHasBlockingSilverStyle;
+    private bool _useButtonHasArchMagicCastStyle;
     private Texture2D _rainbowUseButtonTexture;
     private Sprite _rainbowUseButtonSprite;
+    private Texture2D _archMagicUseButtonTexture;
+    private Sprite _archMagicUseButtonSprite;
+    private float _defaultUseButtonLabelOutlineWidth;
+    private Color _defaultUseButtonLabelOutlineColor = Color.black;
     private GameObject _fullscreenWhiteFlashGo;
 
     // ポップアップ状態管理
@@ -135,7 +146,11 @@ public class BattleUIManager : MonoBehaviour
             yurusuDisplay.SetActive(false);
 
         if (useButtonLabelTMP != null)
+        {
             _defaultUseButtonLabelColor = useButtonLabelTMP.color;
+            _defaultUseButtonLabelOutlineWidth = useButtonLabelTMP.outlineWidth;
+            _defaultUseButtonLabelOutlineColor = useButtonLabelTMP.outlineColor;
+        }
         if (useButtonImage != null)
             _cachedUseButtonSprite = useButtonImage.sprite;
     }
@@ -313,9 +328,18 @@ public class BattleUIManager : MonoBehaviour
 
         RestoreUseButtonFromReflectionRainbowIfNeeded();
         RestoreUseButtonFromBlockingSilverIfNeeded();
+        if (text != "詠唱開始")
+            RestoreUseButtonFromArchMagicCastIfNeeded();
 
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
+
+        // 大魔法：ピンク字・白縁・紫→水色グラデーション背景
+        if (text == "詠唱開始")
+        {
+            ApplyArchMagicCastUseButtonStyle();
+            return;
+        }
 
         if (useButtonLabelTMP != null) useButtonLabelTMP.color = _defaultUseButtonLabelColor;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.color = _defaultUseButtonLabelColor;
@@ -545,10 +569,19 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// Intro 時点でのカード表示（グレーアウトなし）
     /// </summary>
-    public void SetIntroModeUI(List<CardData> hand)
+    /// <param name="archMagicChantUseButtonLabel">
+    /// true のとき「詠唱開始」のまま（大魔法詠唱中の攻撃フェーズ差し替え時など。「使用」に戻さない）。
+    /// </param>
+    public void SetIntroModeUI(List<CardData> hand, bool archMagicChantUseButtonLabel = false)
     {
         HideRestraintHeavyOverlays();
-        SetUseButtonLabel("使用");
+        if (archMagicChantUseButtonLabel)
+        {
+            SetUseButtonLabel("詠唱開始");
+            SetUseButtonInteractable(false);
+        }
+        else
+            SetUseButtonLabel("使用");
         SetHandInteractivity(hand, true); // すべてのカードを有効にする（グレーアウトなし）
     }
 
@@ -945,6 +978,57 @@ public class BattleUIManager : MonoBehaviour
         return popup;
     }
 
+    /// <summary>
+    /// 重要メッセージ用。Canvas の水平中心 × 指定側 <see cref="CardDisplayPanel"/> の縦位置に配置（カードパネル子ではない）。
+    /// </summary>
+    /// <returns>生成した <see cref="ImportantPopup"/>（失敗時は null）</returns>
+    public ImportantPopup ShowImportantPopup(string message, Color color, Side cardPanelSide)
+    {
+        GameObject prefab = importantPopupPrefab != null
+            ? importantPopupPrefab
+            : Resources.Load<GameObject>("Prefab/ImportantPopup");
+        if (prefab == null || uiCanvas == null) return null;
+
+        var go = Instantiate(prefab, uiCanvas.transform, false);
+        ApplyImportantPopupLayout(go.transform as RectTransform, cardPanelSide);
+
+        var popup = go.GetComponent<ImportantPopup>();
+        if (popup != null)
+            popup.Setup(message, color);
+        else
+            Debug.LogWarning("[BattleUIManager] ImportantPopup コンポーネントが見つかりません");
+        return popup;
+    }
+
+    /// <summary>
+    /// Canvas の X 中心と、<paramref name="cardPanelSide"/> の CardDisplayPanel の Y 中心を合わせた位置にルートを置く。
+    /// </summary>
+    private void ApplyImportantPopupLayout(RectTransform popupRt, Side cardPanelSide)
+    {
+        if (popupRt == null || uiCanvas == null) return;
+
+        var canvasRt = uiCanvas.transform as RectTransform;
+        if (canvasRt == null) return;
+
+        Transform panelTf = cardPanelSide == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        var panelRt = panelTf as RectTransform;
+
+        popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+        popupRt.anchorMax = new Vector2(0.5f, 0.5f);
+        popupRt.pivot = new Vector2(0.5f, 0.5f);
+        popupRt.localScale = Vector3.one;
+
+        Vector3 canvasCenterWorld = canvasRt.TransformPoint(canvasRt.rect.center);
+        Vector3 panelCenterWorld = panelRt != null
+            ? panelRt.TransformPoint(panelRt.rect.center)
+            : canvasCenterWorld;
+
+        Vector3 mixedWorld = new Vector3(canvasCenterWorld.x, panelCenterWorld.y, panelCenterWorld.z);
+        Vector3 localInCanvas = canvasRt.InverseTransformPoint(mixedWorld);
+        popupRt.anchoredPosition = new Vector2(localInCanvas.x, localInCanvas.y);
+        popupRt.SetAsLastSibling();
+    }
+
     //==== プライベートメソッド：カード選択管理 =====
     private void CancelCardSelection(CardData card)
     {
@@ -1335,6 +1419,7 @@ public class BattleUIManager : MonoBehaviour
         if (useButton == null) return;
 
         RestoreUseButtonFromBlockingSilverIfNeeded();
+        RestoreUseButtonFromArchMagicCastIfNeeded();
 
         EnsureRainbowUseButtonSprite();
 
@@ -1365,6 +1450,7 @@ public class BattleUIManager : MonoBehaviour
         if (useButton == null) return;
 
         RestoreUseButtonFromReflectionRainbowIfNeeded();
+        RestoreUseButtonFromArchMagicCastIfNeeded();
 
         var img = useButtonImage ?? (useButton.targetGraphic as Image);
         if (img != null)
@@ -1458,6 +1544,98 @@ public class BattleUIManager : MonoBehaviour
         _useButtonHasRainbowGeneratedSprite = false;
     }
 
+    /// <summary>大魔法「詠唱開始」時：ラベル #C400A8・白縁、ボタン背景は左 #9b55fc → 右 #09f9e4 のグラデーション。</summary>
+    private void ApplyArchMagicCastUseButtonStyle()
+    {
+        if (useButton == null) return;
+
+        EnsureArchMagicGradientUseButtonSprite();
+
+        var img = useButtonImage ?? (useButton.targetGraphic as Image);
+        if (img != null && _archMagicUseButtonSprite != null)
+        {
+            img.sprite = _archMagicUseButtonSprite;
+            img.color = Color.white;
+            _useButtonHasArchMagicCastStyle = true;
+        }
+
+        var pink = new Color(0xC4 / 255f, 0x00 / 255f, 0xA8 / 255f, 1f);
+        if (useButtonLabelTMP != null)
+        {
+            useButtonLabelTMP.text = "詠唱開始";
+            useButtonLabelTMP.color = pink;
+            useButtonLabelTMP.outlineColor = Color.white;
+            useButtonLabelTMP.outlineWidth = 0.22f;
+        }
+
+        if (useButtonLabelUGUI != null)
+        {
+            useButtonLabelUGUI.text = "詠唱開始";
+            useButtonLabelUGUI.color = pink;
+        }
+    }
+
+    private void EnsureArchMagicGradientUseButtonSprite()
+    {
+        if (_archMagicUseButtonSprite != null) return;
+
+        const int w = 256;
+        const int h = 64;
+        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+
+        var left = new Color(0x9b / 255f, 0x55 / 255f, 0xfc / 255f, 1f);
+        var right = new Color(0x09 / 255f, 0xf9 / 255f, 0xe4 / 255f, 1f);
+
+        for (int x = 0; x < w; x++)
+        {
+            float t = w <= 1 ? 0.5f : x / (float)(w - 1);
+            Color c = Color.Lerp(left, right, t);
+            for (int y = 0; y < h; y++)
+                tex.SetPixel(x, y, c);
+        }
+
+        tex.Apply();
+        _archMagicUseButtonTexture = tex;
+        _archMagicUseButtonSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private void RestoreUseButtonFromArchMagicCastIfNeeded()
+    {
+        if (!_useButtonHasArchMagicCastStyle) return;
+
+        var img = useButtonImage ?? (useButton?.targetGraphic as Image);
+        if (img != null)
+        {
+            if (_cachedUseButtonSprite != null)
+                img.sprite = _cachedUseButtonSprite;
+            img.color = Color.white;
+        }
+
+        if (useButtonLabelTMP != null)
+        {
+            useButtonLabelTMP.outlineWidth = _defaultUseButtonLabelOutlineWidth;
+            useButtonLabelTMP.outlineColor = _defaultUseButtonLabelOutlineColor;
+        }
+
+        if (_archMagicUseButtonTexture != null)
+        {
+            Destroy(_archMagicUseButtonTexture);
+            _archMagicUseButtonTexture = null;
+        }
+
+        if (_archMagicUseButtonSprite != null)
+        {
+            Destroy(_archMagicUseButtonSprite);
+            _archMagicUseButtonSprite = null;
+        }
+
+        _useButtonHasArchMagicCastStyle = false;
+    }
+
     /// <summary>反射の弾き返しと同じ全画面白フラッシュ（ミリ秒）。劣勢時レアドロー等からも利用。</summary>
     public void PlayFullscreenWhiteFlashMs(float durationMs)
     {
@@ -1547,8 +1725,30 @@ public class BattleUIManager : MonoBehaviour
         var selected = cardSelectionManager.GetSelectedCards();
         if (selected == null || selected.Count == 0)
         {
+            // 大魔法詠唱中：演出で選択がクリアされても「詠唱開始」表示を維持（「使用」に戻さない）
+            if (ps.IsCastingArchMagic)
+            {
+                SetUseButtonLabel("詠唱開始");
+                SetUseButtonInteractable(false);
+                return;
+            }
             SetUseButtonLabel("使用");
             SetUseButtonInteractable(false);
+            return;
+        }
+
+        // 大魔法（ArchMagic）：単独使用・ラベルは「詠唱開始」・MP は archMagic の mpCost のみを確認
+        var archMagic = ArchMagicRules.FindArchMagic(selected);
+        if (archMagic != null)
+        {
+            if (archMagic.mpCost > ps.currentMP)
+            {
+                SetUseButtonLabel("MPが足りない");
+                SetUseButtonInteractable(false);
+                return;
+            }
+            SetUseButtonLabel("詠唱開始");
+            SetUseButtonInteractable(true);
             return;
         }
 
@@ -1929,5 +2129,190 @@ public class BattleUIManager : MonoBehaviour
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && !isHandInputBlocked;
         magicPanelUI.SetAllInteractable(interactable);
+    }
+
+    // ===== 大魔法（ArchMagic）詠唱中央オーバーレイ =====
+    private GameObject _archMagicCastOverlay;
+    private CanvasGroup _archMagicCastOverlayCanvasGroup;
+    private Image _archMagicCastDimImage;
+    private Image _archMagicCastOverlayImage;
+    private TMPro.TMP_Text _archMagicCastOverlayRemainingText;
+
+    /// <summary>詠唱中：全画面ディム + 中央に大魔法アイコン + 残りターンをフェードイン表示する。</summary>
+    public async Task FadeInArchMagicCastOverlayAsync(Sprite magicSprite, int remainingTurns, int fadeMs, CancellationToken ct)
+    {
+        EnsureArchMagicCastOverlay();
+        if (_archMagicCastOverlay == null) return;
+
+        if (_archMagicCastOverlayImage != null) _archMagicCastOverlayImage.sprite = magicSprite;
+        UpdateArchMagicCastOverlayRemaining(remainingTurns);
+
+        _archMagicCastOverlay.SetActive(true);
+        if (_archMagicCastOverlayCanvasGroup != null)
+        {
+            _archMagicCastOverlayCanvasGroup.alpha = 0f;
+            _archMagicCastOverlayCanvasGroup.blocksRaycasts = false;
+        }
+
+        int steps = Mathf.Max(1, fadeMs / 16);
+        float stepDelta = 1f / steps;
+        int stepMs = Mathf.Max(1, fadeMs / steps);
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (_archMagicCastOverlayCanvasGroup != null)
+                _archMagicCastOverlayCanvasGroup.alpha = Mathf.Clamp01(stepDelta * i);
+            await Task.Delay(stepMs, ct);
+        }
+        if (_archMagicCastOverlayCanvasGroup != null)
+        {
+            _archMagicCastOverlayCanvasGroup.alpha = 1f;
+            _archMagicCastOverlayCanvasGroup.blocksRaycasts = true;
+        }
+    }
+
+    /// <summary>残りターン数のみ差し替える（ダウンカウント表現用）。</summary>
+    public void UpdateArchMagicCastOverlayRemaining(int remainingTurns)
+    {
+        if (_archMagicCastOverlayRemainingText != null)
+            _archMagicCastOverlayRemainingText.text = $"残り {remainingTurns} ターン";
+    }
+
+    /// <summary>詠唱中央オーバーレイを消す（即時 or フェード）。</summary>
+    public async Task FadeOutArchMagicCastOverlayAsync(int fadeMs, CancellationToken ct)
+    {
+        if (_archMagicCastOverlay == null || _archMagicCastOverlayCanvasGroup == null)
+        {
+            HideArchMagicCastOverlayImmediate();
+            return;
+        }
+
+        _archMagicCastOverlayCanvasGroup.blocksRaycasts = false;
+
+        int steps = Mathf.Max(1, fadeMs / 16);
+        float stepDelta = 1f / steps;
+        int stepMs = Mathf.Max(1, fadeMs / steps);
+        float a = _archMagicCastOverlayCanvasGroup.alpha;
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) break;
+            _archMagicCastOverlayCanvasGroup.alpha = Mathf.Clamp01(a - stepDelta * i);
+            await Task.Delay(stepMs, ct);
+        }
+        HideArchMagicCastOverlayImmediate();
+    }
+
+    public void HideArchMagicCastOverlayImmediate()
+    {
+        if (_archMagicCastOverlay == null) return;
+        _archMagicCastOverlay.SetActive(false);
+        if (_archMagicCastOverlayCanvasGroup != null)
+        {
+            _archMagicCastOverlayCanvasGroup.alpha = 0f;
+            _archMagicCastOverlayCanvasGroup.blocksRaycasts = false;
+        }
+    }
+
+    private void ClearArchMagicCastOverlayInternalRefs()
+    {
+        _archMagicCastOverlay = null;
+        _archMagicCastOverlayCanvasGroup = null;
+        _archMagicCastDimImage = null;
+        _archMagicCastOverlayImage = null;
+        _archMagicCastOverlayRemainingText = null;
+    }
+
+    private void EnsureArchMagicCastOverlay()
+    {
+        if (_archMagicCastOverlay != null)
+        {
+            if (_archMagicCastDimImage != null)
+                return;
+            Destroy(_archMagicCastOverlay);
+            ClearArchMagicCastOverlayInternalRefs();
+        }
+
+        var canvas = popupCanvas != null ? popupCanvas : uiCanvas;
+        if (canvas == null) return;
+
+        var root = new GameObject("ArchMagicCastOverlay", typeof(RectTransform), typeof(CanvasGroup));
+        var rt = root.GetComponent<RectTransform>();
+        rt.SetParent(canvas.transform, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.localScale = Vector3.one;
+        rt.SetAsLastSibling();
+
+        var cg = root.GetComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+
+        // 背面：半透明ブラックで画面全体を暗くする
+        var dimGo = new GameObject("ArchMagicDim", typeof(RectTransform));
+        var dimRt = dimGo.GetComponent<RectTransform>();
+        dimRt.SetParent(rt, false);
+        dimRt.SetAsFirstSibling();
+        dimRt.anchorMin = Vector2.zero;
+        dimRt.anchorMax = Vector2.one;
+        dimRt.offsetMin = Vector2.zero;
+        dimRt.offsetMax = Vector2.zero;
+        var dimImg = dimGo.AddComponent<Image>();
+        dimImg.color = new Color(0f, 0f, 0f, 0.5f);
+        dimImg.raycastTarget = true;
+
+        // 前面：アイコン + 残りターン
+        var contentGo = new GameObject("ArchMagicCastContent", typeof(RectTransform));
+        var contentRt = contentGo.GetComponent<RectTransform>();
+        contentRt.SetParent(rt, false);
+        contentRt.anchorMin = new Vector2(0.5f, 0.5f);
+        contentRt.anchorMax = new Vector2(0.5f, 0.5f);
+        contentRt.pivot = new Vector2(0.5f, 0.5f);
+        contentRt.anchoredPosition = Vector2.zero;
+        contentRt.sizeDelta = new Vector2(420f, 560f);
+
+        var imgGo = new GameObject("Icon", typeof(RectTransform));
+        var imgRt = imgGo.GetComponent<RectTransform>();
+        imgRt.SetParent(contentRt, false);
+        imgRt.anchorMin = new Vector2(0.5f, 0.5f);
+        imgRt.anchorMax = new Vector2(0.5f, 0.5f);
+        imgRt.pivot = new Vector2(0.5f, 0.5f);
+        imgRt.anchoredPosition = new Vector2(0f, 50f);
+        imgRt.sizeDelta = new Vector2(360f, 360f);
+        var iconImg = imgGo.AddComponent<Image>();
+        iconImg.preserveAspect = true;
+        iconImg.raycastTarget = false;
+
+        var textGo = new GameObject("Remaining", typeof(RectTransform));
+        var textRt = textGo.GetComponent<RectTransform>();
+        textRt.SetParent(contentRt, false);
+        textRt.anchorMin = new Vector2(0.5f, 0.5f);
+        textRt.anchorMax = new Vector2(0.5f, 0.5f);
+        textRt.pivot = new Vector2(0.5f, 0.5f);
+        textRt.anchoredPosition = new Vector2(0f, -210f);
+        textRt.sizeDelta = new Vector2(680f, 120f);
+        var tmp = textGo.AddComponent<TMPro.TextMeshProUGUI>();
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+        tmp.fontSize = 72f;
+        if (archMagicCastCountdownFont != null)
+            tmp.font = archMagicCastCountdownFont;
+        else if (TMP_Settings.defaultFontAsset != null)
+            tmp.font = TMP_Settings.defaultFontAsset;
+        tmp.fontStyle = TMPro.FontStyles.Normal;
+        tmp.color = Color.white;
+        tmp.outlineColor = new Color(0.85f, 0.12f, 0.12f, 1f);
+        tmp.outlineWidth = 0.22f;
+        tmp.text = "";
+        tmp.raycastTarget = false;
+
+        _archMagicCastOverlay = root;
+        _archMagicCastOverlayCanvasGroup = cg;
+        _archMagicCastDimImage = dimImg;
+        _archMagicCastOverlayImage = iconImg;
+        _archMagicCastOverlayRemainingText = tmp;
+        root.SetActive(false);
     }
 }

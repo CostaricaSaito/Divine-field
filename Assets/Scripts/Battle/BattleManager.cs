@@ -854,15 +854,21 @@ public class BattleManager : MonoBehaviour
         // グレーアウト制御フラグを設定（AttackPhase でグレーアウトを有効にする）
         shouldGrayOutCards = true;
 
+        // 大魔法詠唱中：自分の攻撃フェーズでは EnterAttackPhase 側で詠唱演出に差し替えるため、
+        // 敵ターン時は RunEnemyTurnAsync をスキップして AttackPhase だけ入れる。
+        bool ownerIsCasting = CurrentTurnOwner == PlayerType.Player
+            ? playerStatus != null && playerStatus.IsCastingArchMagic
+            : enemyStatus != null && enemyStatus.IsCastingArchMagic;
+
         if (CurrentTurnOwner == PlayerType.Player)
         {
             SetGameState(GameState.AttackPhase);
         }
         else
         {
-            // 敵も攻撃側メインは AttackPhase（従来 StandBy のまま RunEnemyTurnAsync しており Phase とズレていた）
             SetGameState(GameState.AttackPhase);
-            _ = RunEnemyTurnAsync();
+            if (!ownerIsCasting)
+                _ = RunEnemyTurnAsync();
         }
     }
 
@@ -871,6 +877,18 @@ public class BattleManager : MonoBehaviour
         ClearConfusionAttackTargetResolvedForDisplay();
         cardStatsDisplay?.ClearGodRagePlayerAttackDisplayLock();
         BattleUIManager.I?.SetHandClickable(true);
+
+        // 大魔法詠唱中は通常の攻撃フェーズを差し替え、詠唱演出 → TurnEnd（または発動）を走らせる。
+        var castOwner = Attacker == PlayerType.Player ? playerStatus : enemyStatus;
+        if (castOwner != null && castOwner.IsCastingArchMagic && cardSequenceManager != null)
+        {
+            BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+            BattleUIManager.I?.SetIntroModeUI(playerHand, archMagicChantUseButtonLabel: true);
+            Side ownerSide = Attacker == PlayerType.Player ? Side.Player : Side.Enemy;
+            _ = cardSequenceManager.RunArchMagicCastingTurnAsync(castOwner, ownerSide, _phaseCts.Token);
+            return;
+        }
 
         if (Attacker == PlayerType.Player)
         {
@@ -1068,6 +1086,11 @@ public class BattleManager : MonoBehaviour
         {
             if (CurrentState != GameState.CombatResolvePhase) return;
 
+            // 戦闘ダメージで大魔法詠唱がキャンセルされた場合の演出を先に消化する。
+            await ProcessArchMagicCancelIfPendingAsync(phaseToken);
+
+            if (CurrentState != GameState.CombatResolvePhase) return;
+
             try
             {
                 await InterventionTurnEndProcessor.ProcessIfNeededAsync(this, phaseToken);
@@ -1080,6 +1103,11 @@ public class BattleManager : MonoBehaviour
             {
                 Debug.LogException(ex);
             }
+
+            if (CurrentState != GameState.CombatResolvePhase) return;
+
+            // 介入による追撃ダメージでキャンセルが発生した場合も消化する。
+            await ProcessArchMagicCancelIfPendingAsync(phaseToken);
 
             if (CurrentState != GameState.CombatResolvePhase) return;
 
@@ -1116,6 +1144,9 @@ public class BattleManager : MonoBehaviour
                 Debug.LogException(ex);
             }
 
+            // 病ダメージで詠唱がキャンセルされた場合の演出
+            await ProcessArchMagicCancelIfPendingAsync(phaseToken);
+
             if (CurrentState != GameState.EndPhase) return;
 
             // ガルーダ：5n ターン終了時はメッセージ → インターバル → 裏向きドロー → 表向け（Refill より前）
@@ -1131,6 +1162,9 @@ public class BattleManager : MonoBehaviour
             {
                 Debug.LogException(ex);
             }
+
+            // 顕現スキルダメージで詠唱がキャンセルされた場合の演出
+            await ProcessArchMagicCancelIfPendingAsync(phaseToken);
 
             if (CurrentState != GameState.EndPhase) return;
 
@@ -1173,6 +1207,31 @@ public class BattleManager : MonoBehaviour
         {
             Debug.LogException(ex);
             TryRecoverLateTurnPhaseToStandByPhase();
+        }
+    }
+
+    /// <summary>
+    /// 大魔法詠唱のキャンセル（被ダメージ起因）待ちが立っていればキャンセル演出を消化する。
+    /// </summary>
+    private async Task ProcessArchMagicCancelIfPendingAsync(CancellationToken phaseToken)
+    {
+        if (cardSequenceManager == null) return;
+
+        try
+        {
+            if (playerStatus != null && playerStatus.archMagicCancelPending)
+                await cardSequenceManager.RunArchMagicCastCancelAsync(playerStatus, phaseToken);
+
+            if (enemyStatus != null && enemyStatus.archMagicCancelPending)
+                await cardSequenceManager.RunArchMagicCastCancelAsync(enemyStatus, phaseToken);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[BattleManager] ArchMagicCastCancel: キャンセル");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
         }
     }
 

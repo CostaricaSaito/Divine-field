@@ -109,6 +109,28 @@ public class CardSelectionManager : MonoBehaviour
             }
         }
 
+        // ===== 大魔法（ArchMagic）：他カードが既に選ばれていたらピック不可 =====
+        // 仕様：ArchMagic が先なら他カードを弾かず Standalone で上書きクリアするが、
+        //       他カードが既に選ばれている状態では ArchMagic を選択できない。
+        if (BattleManager.I != null
+            && BattleManager.I.CurrentState == GameState.AttackPhase
+            && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+            && ArchMagicRules.IsArchMagicCard(card)
+            && selectedCards.Count > 0)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("大魔法は他と併用できません", new Color(0.75f, 0.45f, 0.95f));
+            return false;
+        }
+
+        // 詠唱中（PlayerStatus.IsCastingArchMagic）は攻撃カード選択自体を受け付けない（保険）
+        if (BattleManager.I != null
+            && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+            && BattleManager.I.GetPlayerStatus() != null
+            && BattleManager.I.GetPlayerStatus().IsCastingArchMagic)
+        {
+            return false;
+        }
+
         // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
         CheckCardConflicts(card);
 
@@ -315,7 +337,9 @@ public class CardSelectionManager : MonoBehaviour
 
     private bool IsAttackCard(CardData card)
     {
+        if (card == null) return false;
         if (card.cardType == CardType.Magic && !card.isRecovery) return true;
+        if (card.cardType == CardType.ArchMagic) return true;
         return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
     }
 

@@ -75,10 +75,13 @@ public class EnemyAI
     /// </summary>
     public CardData SelectAttackCard(List<CardData> enemyHand, PlayerStatus enemyStatus)
     {
+        // 大魔法（ArchMagic）は敵 AI の自動選択対象から除外する（現状は全て）。
+        // 将来 AI を拡張した場合のために明示的にスキップする。
         // 第1優先: 通常攻撃カード（PrimaryAttack or Attack型）
         foreach (var c in enemyHand)
         {
             if (c.cardType == CardType.Magic) continue;
+            if (ArchMagicRules.IsArchMagicCard(c)) continue;
             if (CardRules.IsUsableInAttackPhase(c) && (c.isPrimaryAttack || c.cardType == CardType.Attack))
                 return c;
         }
@@ -87,6 +90,7 @@ public class EnemyAI
         foreach (var c in enemyHand)
         {
             if (c.cardType == CardType.Magic) continue;
+            if (ArchMagicRules.IsArchMagicCard(c)) continue;
             if (CardRules.IsUsableInAttackPhase(c))
                 return c;
         }

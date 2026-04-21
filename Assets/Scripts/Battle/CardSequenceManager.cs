@@ -54,6 +54,17 @@ public class CardSequenceManager : MonoBehaviour
     {
         Debug.Log($"[CardSequenceManager] {cardType}カード演出開始: {selectedCards.Count}枚");
 
+        // 大魔法（ArchMagic）は通常の攻撃シーケンスではなく、詠唱開始フローへ分岐する。
+        if (cardType == "攻撃" && ArchMagicRules.ContainsArchMagic(selectedCards))
+        {
+            var archCard = ArchMagicRules.FindArchMagic(selectedCards);
+            if (archCard != null)
+            {
+                await StartArchMagicCastIntroAsync(archCard, side, cancellationToken);
+                return;
+            }
+        }
+
         if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
             cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
 
@@ -306,15 +317,15 @@ public class CardSequenceManager : MonoBehaviour
         }
 
         bool meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
-            && GodRageRules.IsGodRageDoublingCombo(attackCards);
-        bool godRageOnlyCombo = GodRageRules.IsGodRageDoublingCombo(attackCards)
+            && GodrageRules.IsGodrageDoublingCombo(attackCards);
+        bool godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
             && !MagicalExplosionRules.ContainsMagicalExplosion(attackCards);
 
         if (atk == battleManager.GetPlayerStatus() && cardStatsDisplay != null)
         {
             if (meGodCombo)
             {
-                await Task.Delay(500, cancellationToken);
+                await Task.Delay(1000, cancellationToken);
                 int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
                 int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
                 await cardStatsDisplay.PlayGodRageAttackRampAsync(attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
@@ -343,13 +354,18 @@ public class CardSequenceManager : MonoBehaviour
         if (showYurusuDuringCombat)
             BattleUIManager.I.ShowYurusuDisplay();
 
-        bool enemyPhysicalReflect = selectedDefenseCard != null
+        // 大魔法（ArchMagic）は反射・無効化を受けない
+        bool archMagicActivation = ArchMagicRules.ContainsArchMagic(attackCards);
+        bool enemyPhysicalReflect = !archMagicActivation
+            && selectedDefenseCard != null
             && ReflectionRules.IsPhysicalReflectionCard(selectedDefenseCard)
             && ReflectionRules.CanReflectPhysical(attackCards);
-        bool enemyMagicReflect = selectedDefenseCard != null
+        bool enemyMagicReflect = !archMagicActivation
+            && selectedDefenseCard != null
             && ReflectionRules.IsMagicReflectionCard(selectedDefenseCard)
             && ReflectionRules.CanReflectMagic(attackCards);
-        bool enemyPhysicalBlock = selectedDefenseCard != null
+        bool enemyPhysicalBlock = !archMagicActivation
+            && selectedDefenseCard != null
             && BlockingRules.IsPhysicalBlockingCard(selectedDefenseCard)
             && BlockingRules.CanBlockPhysical(attackCards);
 
@@ -643,6 +659,218 @@ public class CardSequenceManager : MonoBehaviour
             toTotal,
             0.2f,
             cancellationToken);
+    }
+
+    // ==================== 大魔法（ArchMagic） ====================
+
+    /// <summary>
+    /// 大魔法の「詠唱開始」フロー。カード演出→500ms→ポップアップ「魔力が吹き荒れる」+SE→200ms→背景差し替え→TurnEnd。
+    /// </summary>
+    public async Task StartArchMagicCastIntroAsync(CardData archMagicCard, Side side, CancellationToken cancellationToken)
+    {
+        if (archMagicCard == null) return;
+
+        // 表示ゾーンクリア
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃");
+        await Task.Delay(300, cancellationToken);
+
+        // カード表示
+        BattleUIManager.I?.ShowCardDetail(archMagicCard, side);
+        cardStatsDisplay?.SetSequenceCards(new List<CardData> { archMagicCard }, "攻撃");
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+        // MP 消費＋手札から除去（大魔法は MagicPool に入れない）
+        var atk = side == Side.Player ? battleManager.GetPlayerStatus() : battleManager.GetEnemyStatus();
+        if (atk != null && archMagicCard.mpCost > 0)
+        {
+            atk.UseMP(archMagicCard.mpCost);
+            BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+        }
+        var ownHand = side == Side.Player ? battleManager.playerHand : battleManager.cpuHand;
+        if (side == Side.Player && archMagicCard.cardUI != null)
+        {
+            int slotIndex = archMagicCard.cardUI.transform.GetSiblingIndex();
+            handRefill?.RecordPlayerUseSlot(slotIndex);
+        }
+        else
+        {
+            handRefill?.RecordEnemyUse(archMagicCard);
+        }
+        battleProcessor.UseCard(archMagicCard, ownHand);
+
+        // 500ms インターバル
+        await Task.Delay(500, cancellationToken);
+
+        // 「魔力が吹き荒れる」ポップアップ + 詠唱開始 SE
+        SoundEffectPlayer.I?.Play("Assets/SE/大魔法詠唱開始.mp3");
+        ImportantPopup castPopup = BattleUIManager.I?.ShowImportantPopup("魔力が吹き荒れる", new Color(0.75f, 0.45f, 0.95f), side);
+        float castLife = castPopup != null ? castPopup.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(castLife, cancellationToken);
+
+        // 200ms インターバル
+        await Task.Delay(200, cancellationToken);
+
+        // 背景を 500ms かけて差し替え（アルファフェード）
+        Sprite bgSprite = ArchMagicRules.GetBackgroundSprite(archMagicCard);
+        if (bgSprite != null && BattleBgmController.Instance != null)
+            await BattleBgmController.Instance.CrossfadeToArchMagicBackgroundAsync(bgSprite, 500, cancellationToken);
+
+        // 詠唱状態を開始
+        int turns = ArchMagicRules.GetCastTurns(archMagicCard);
+        atk?.BeginArchMagicCasting(archMagicCard, turns);
+
+        // 表示を片付けて TurnEnd
+        BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.ClearSequenceCards();
+        battleManager.SetCurrentAttackCard(null);
+        cardStatsDisplay?.UpdateDisplay();
+        battleManager.SetGameState(GameState.CombatResolvePhase);
+    }
+
+    /// <summary>
+    /// 大魔法の詠唱ターン演出（自分ターン開始時）。
+    /// 「魔力を集中しろ！」ポップアップ→200ms→中央フェードイン→200ms→残り -1 +SE→残りが 0 なら発動。
+    /// </summary>
+    public async Task RunArchMagicCastingTurnAsync(PlayerStatus owner, Side ownerSide, CancellationToken cancellationToken)
+    {
+        if (owner == null || !owner.IsCastingArchMagic)
+        {
+            battleManager.SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        var card = owner.archMagicCastingCard;
+
+        // 1. ポップアップ + SE
+        SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
+        ImportantPopup focusPopup = BattleUIManager.I?.ShowImportantPopup("魔力を集中しろ！", new Color(0.55f, 0.7f, 0.95f), ownerSide);
+        float focusLife = focusPopup != null ? focusPopup.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(focusLife, cancellationToken);
+
+        // ポップアップ待ち中にキャンセルされていたらここで終了
+        if (owner.archMagicCancelPending || !owner.IsCastingArchMagic)
+        {
+            battleManager.SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        // 2. インターバル（詠唱カウントダウン全体を長めに）
+        await Task.Delay(400, cancellationToken);
+
+        // 3. ディム＋中央フェードイン（残り= current）
+        int remainingBefore = owner.archMagicRemainingTurns;
+        Sprite spr = card != null ? card.cardImage : null;
+        if (BattleUIManager.I != null)
+            await BattleUIManager.I.FadeInArchMagicCastOverlayAsync(spr, remainingBefore, 520, cancellationToken);
+
+        // 4. 視認用インターバル
+        await Task.Delay(400, cancellationToken);
+
+        // 5. 残りターンを -1 + SE
+        owner.DecrementArchMagicRemainingTurns();
+        BattleUIManager.I?.UpdateArchMagicCastOverlayRemaining(owner.archMagicRemainingTurns);
+        SoundEffectPlayer.I?.Play("Assets/SE/心臓の鼓動2.mp3");
+
+        // カウントダウン数値・SE の視認用
+        await Task.Delay(1200, cancellationToken);
+
+        // 6. オーバーレイをフェードアウト
+        if (BattleUIManager.I != null)
+            await BattleUIManager.I.FadeOutArchMagicCastOverlayAsync(480, cancellationToken);
+
+        // 7. 残りが 0 になったら発動フローへ、そうでなければ TurnEnd
+        if (owner.archMagicRemainingTurns <= 0)
+        {
+            await Task.Delay(350, cancellationToken);
+            string releaseName = ArchMagicRules.GetReleaseDisplayName(card);
+            ImportantPopup rel = BattleUIManager.I?.ShowImportantPopup($"【{releaseName}】解放", new Color(0.95f, 0.85f, 0.3f), ownerSide);
+            float rlife = rel != null ? rel.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+            await DamagePopup.WaitAfterPopupLifetimeAsync(rlife, cancellationToken);
+
+            await RunArchMagicActivationAsync(owner, ownerSide, card, cancellationToken);
+        }
+        else
+        {
+            battleManager.SetGameState(GameState.CombatResolvePhase);
+        }
+    }
+
+    /// <summary>
+    /// 大魔法の発動フロー。カード表示→相手の DefenseSelect→戦闘解決。反射・無効化は無視。
+    /// </summary>
+    public async Task RunArchMagicActivationAsync(PlayerStatus owner, Side ownerSide, CardData card, CancellationToken cancellationToken)
+    {
+        if (card == null)
+        {
+            BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+            owner?.ClearArchMagicCastingState();
+            battleManager.SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        // CardDisplayPanel に Prefab を表示（詠唱中は手札選択が無効のため ShowCardDetail は使わない）
+        BattleUIManager.I?.ShowInterventionAttackSheet(card, ownerSide);
+        cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃");
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+        battleManager.SetCurrentAttackCard(card);
+
+        await Task.Delay(500, cancellationToken);
+
+        var attackCards = new List<CardData> { card };
+        var player = battleManager.GetPlayerStatus();
+        var enemy = battleManager.GetEnemyStatus();
+        var def = ReferenceEquals(owner, player) ? enemy : player;
+        var defHand = ReferenceEquals(owner, player) ? battleManager.cpuHand : battleManager.playerHand;
+
+        try
+        {
+            if (ownerSide == Side.Player)
+            {
+                // プレイヤー発動：通常の攻撃ルートに乗せる（反射・無効化は内部でスキップ）
+                await ResolvePlayerAttackCombatAsync(attackCards, owner, def, defHand, cancellationToken);
+            }
+            else
+            {
+                // 敵発動（将来の拡張用・現状は AI が大魔法を選ばない想定の単純解決）
+                await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, owner, def, defHand, skipHitCheck: true);
+            }
+        }
+        finally
+        {
+            owner?.ClearArchMagicCastingState();
+            BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+        }
+
+        BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.ClearSequenceCards();
+        battleManager.SetCurrentAttackCard(null);
+        cardStatsDisplay?.UpdateDisplay();
+        battleManager.SetGameState(GameState.CombatResolvePhase);
+    }
+
+    /// <summary>
+    /// 詠唱キャンセル演出。「詠唱失敗」ポップアップ + ガラスが割れる2.mp3 → 500ms → 背景復帰。
+    /// ダメージ適用側で <see cref="PlayerStatus.archMagicCancelPending"/> が立っているときに呼ぶ。
+    /// </summary>
+    public async Task RunArchMagicCastCancelAsync(PlayerStatus owner, CancellationToken cancellationToken)
+    {
+        if (owner == null) return;
+        owner.archMagicCancelPending = false;
+
+        SoundEffectPlayer.I?.Play("Assets/SE/ガラスが割れる2.mp3");
+        DamagePopup popup = BattleUIManager.I?.ShowInfoPopupOnCardPanel("詠唱失敗", new Color(0.85f, 0.25f, 0.2f));
+        float life = popup != null ? popup.fadeDuration : DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(life, cancellationToken);
+
+        await Task.Delay(500, cancellationToken);
+
+        BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+
+        // 詠唱状態は TakeDamage 側で既にクリア済み
     }
 
     /// <summary>
