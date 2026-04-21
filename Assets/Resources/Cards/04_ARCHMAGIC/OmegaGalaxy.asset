@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -27,7 +27,7 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  clearsRestraintOnUse: 0
+  clearsAllStatusAilmentsOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
   isPrimaryAttack: 1
@@ -47,4 +47,4 @@ MonoBehaviour:
   attackComboPickRule: 0
   reflectionKind: 0
   blockingKind: 0
-  specialAttackRule: {fileID: 11400000, guid: 3b8f2e5a7c4d9e1b6f3a8c5d7e2b4f9a, type: 2}
+  specialAttackRule: {fileID: 11400000, guid: 4a64ba81d7e1b1b48b29f620fecb52e1, type: 2}

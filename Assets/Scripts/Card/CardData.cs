@@ -130,8 +130,8 @@ public class CardData : ScriptableObject
     public bool healsHP = false;
     public bool healsMP = false;
     public bool healsGP = false;
-    [Tooltip("回復解決時に対象から拘束を除去する（特定の治癒カード用）。")]
-    public bool clearsRestraintOnUse = false;
+    [Tooltip("即時効果解決時、対象から状態異常をすべて除去する（安らぎの祝福・プリズム等）。isRecovery は立てず SelectionRole で単独扱い。")]
+    public bool clearsAllStatusAilmentsOnUse = false;
 
     [Header("使用可能なフェーズ")]
     public bool usableInAttackPhase = false;

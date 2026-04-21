@@ -36,9 +36,6 @@ public class CardStatsDisplay : MonoBehaviour
     /// <summary>ゴッドレイジ適用後の「ATK 本体」数字（リッチテキスト）。</summary>
     private const string GodRageAtkBaseGreenHex = "#33DD55";
 
-    /// <summary>ATK を出さない状態異常付与攻撃（濃霧等）選択時。TOTAL 枠を出してターゲット切替を可能にする。</summary>
-    private const string StatusAilmentGrantAttackLabel = "状態異常付与";
-
     /// <summary>ゴッドレイジ：2倍後のリッチ表示を <see cref="GetPlayerDisplayText"/> より優先する。</summary>
     private bool _godRagePlayerAtkDisplayLocked;
     private string _godRagePlayerAtkDisplayRichText;
@@ -122,7 +119,28 @@ public class CardStatsDisplay : MonoBehaviour
             && bm.CurrentState == GameState.AttackPhase
             && bm.CurrentTurnOwner == PlayerType.Player
             && bm.IsPlayerSelfAttackTargetMode;
-        img.color = red ? new Color(0.98f, 0.72f, 0.72f) : Color.white;
+        img.color = red ? new Color(0.92f, 0.42f, 0.42f) : Color.white;
+    }
+
+    /// <summary>
+    /// 攻撃フェーズの選択について、TOTAL に出す合算攻撃力が 0 以下（数値 ATK なし）か。
+    /// </summary>
+    public bool IsPlayerAttackSelectionNumericAtkZero(IReadOnlyList<CardData> attackCards)
+    {
+        if (attackCards == null || attackCards.Count == 0 || BattleManager.I == null) return false;
+        var list = new List<CardData>(attackCards.Count);
+        foreach (var c in attackCards)
+        {
+            if (c != null) list.Add(c);
+        }
+        if (list.Count == 0) return false;
+        return GetDisplayedAttackStrength(list, BattleManager.I.GetPlayerStatus()) <= 0;
+    }
+
+    private static string FormatEffectTargetToggleLabel(BattleManager bm)
+    {
+        if (bm == null) return "対象：相手";
+        return bm.IsPlayerSelfAttackTargetMode ? "対象：自分" : "対象：相手";
     }
 
     /// <summary>
@@ -319,6 +337,16 @@ public class CardStatsDisplay : MonoBehaviour
     private void ApplyPlayerTotalAtkDefTextStyle()
     {
         if (atkdefText == null) return;
+        var bm = BattleManager.I;
+        if (bm != null && bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
+        {
+            var sel = BattleUIManager.I?.GetSelectedAttackCards();
+            if (sel != null && IsPlayerAttackSelectionNumericAtkZero(sel))
+            {
+                ApplyAttackLabelTextStyle(atkdefText, new Color(0.15f, 0.15f, 0.18f));
+                return;
+            }
+        }
         ApplyAttackLabelTextStyle(atkdefText, ElementHelper.GetElementColor(GetPlayerCombinedElement()));
     }
 
@@ -480,29 +508,7 @@ public class CardStatsDisplay : MonoBehaviour
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
             if (selectedAttackCards != null && selectedAttackCards.Count > 0)
             {
-                // 複数選択時は合計攻撃力をチェック
-                if (selectedAttackCards.Count > 1)
-                {
-                    int totalAttack = GetDisplayedAttackStrength(selectedAttackCards, battleManager.GetPlayerStatus());
-                    if (totalAttack <= 0)
-                    {
-                        if (CardRules.IsStatusOnlyMagicAttackCombo(selectedAttackCards))
-                            return false;
-                        return true;
-                    }
-                    return false;
-                }
-                
-                // 単一選択の場合
-                var card = selectedAttackCards[0];
-                if (CardRules.IsImmediateAction(card)) return true;
-                var oneAtk = new List<CardData> { card };
-                if (GetDisplayedAttackStrength(oneAtk, battleManager.GetPlayerStatus()) <= 0)
-                {
-                    if (CardRules.IsStatusOnlyMagicAttackCombo(oneAtk))
-                        return false;
-                    return true;
-                }
+                // 1 枚以上選ばれていれば表示（数値 ATK ゼロでも対象切替用 TOTAL を出す）
                 return false;
             }
 
@@ -663,15 +669,15 @@ public class CardStatsDisplay : MonoBehaviour
         {
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
             if (selectedAttackCards != null && selectedAttackCards.Count > 0
-                && CardRules.IsStatusOnlyMagicAttackCombo(selectedAttackCards))
-                return StatusAilmentGrantAttackLabel;
+                && IsPlayerAttackSelectionNumericAtkZero(selectedAttackCards))
+                return FormatEffectTargetToggleLabel(battleManager);
 
             // 複数選択を優先してチェック（複数選択時は合計値を表示）
             if (selectedAttackCards != null && selectedAttackCards.Count > 1)
             {
                 return FormatAttackPowerDisplayLabel(selectedAttackCards, battleManager.GetPlayerStatus());
             }
-            
+
             // 単一選択の場合
             if (selectedAttackCards != null && selectedAttackCards.Count == 1)
             {

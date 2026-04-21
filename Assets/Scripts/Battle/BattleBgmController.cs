@@ -276,6 +276,50 @@ public class BattleBgmController : MonoBehaviour
         img.color = baseCol;
     }
 
+    /// <summary>
+    /// 大魔法用背景を保存済みのベーススプライトへ <paramref name="durationMs"/> かけてフェード復帰し、オーバーライドを解除する。
+    /// </summary>
+    public async Task CrossfadeFromArchMagicBackgroundAsync(int durationMs, CancellationToken ct)
+    {
+        if (battleBackgroundImage == null || !_archMagicOverrideActive)
+        {
+            ClearArchMagicBackgroundOverride();
+            return;
+        }
+
+        var img = battleBackgroundImage;
+        Sprite targetSprite = _archMagicOverrideBaselineSprite;
+        Color baseCol = _backgroundBaseColor;
+        int halfMs = Mathf.Max(1, durationMs / 2);
+        const int steps = 26;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            float u = i / (float)steps;
+            var c = baseCol;
+            c.a = baseCol.a * (1f - u);
+            img.color = c;
+            await Task.Delay(halfMs / steps, ct);
+        }
+
+        img.sprite = targetSprite;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            float u = i / (float)steps;
+            var c = baseCol;
+            c.a = baseCol.a * u;
+            img.color = c;
+            await Task.Delay(halfMs / steps, ct);
+        }
+
+        img.color = baseCol;
+        _archMagicOverrideActive = false;
+        _archMagicOverrideBaselineSprite = null;
+    }
+
     public bool IsArchMagicBackgroundOverrideActive => _archMagicOverrideActive;
 
     private IEnumerator LoadSpriteToField(string address, System.Action<Sprite> assign)

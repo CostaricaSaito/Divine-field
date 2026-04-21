@@ -664,7 +664,7 @@ public class CardSequenceManager : MonoBehaviour
     // ==================== 大魔法（ArchMagic） ====================
 
     /// <summary>
-    /// 大魔法の「詠唱開始」フロー。カード演出→500ms→ポップアップ「魔力が吹き荒れる」+SE→200ms→背景差し替え→TurnEnd。
+    /// 大魔法の「詠唱開始」フロー。カード演出→500ms→ポップアップ「魔力が吹き荒れる」+SE→200ms→背景差し替え（1000ms）→TurnEnd。
     /// </summary>
     public async Task StartArchMagicCastIntroAsync(CardData archMagicCard, Side side, CancellationToken cancellationToken)
     {
@@ -713,10 +713,10 @@ public class CardSequenceManager : MonoBehaviour
         // 200ms インターバル
         await Task.Delay(200, cancellationToken);
 
-        // 背景を 500ms かけて差し替え（アルファフェード）
+        // 背景を 1000ms かけて差し替え（アルファフェード）
         Sprite bgSprite = ArchMagicRules.GetBackgroundSprite(archMagicCard);
         if (bgSprite != null && BattleBgmController.Instance != null)
-            await BattleBgmController.Instance.CrossfadeToArchMagicBackgroundAsync(bgSprite, 500, cancellationToken);
+            await BattleBgmController.Instance.CrossfadeToArchMagicBackgroundAsync(bgSprite, 1000, cancellationToken);
 
         // 詠唱状態を開始
         int turns = ArchMagicRules.GetCastTurns(archMagicCard);
@@ -805,7 +805,9 @@ public class CardSequenceManager : MonoBehaviour
     {
         if (card == null)
         {
-            BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+            var bgm = BattleBgmController.Instance;
+            if (bgm != null)
+                await bgm.CrossfadeFromArchMagicBackgroundAsync(1000, cancellationToken);
             owner?.ClearArchMagicCastingState();
             battleManager.SetGameState(GameState.CombatResolvePhase);
             return;
@@ -842,7 +844,9 @@ public class CardSequenceManager : MonoBehaviour
         finally
         {
             owner?.ClearArchMagicCastingState();
-            BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+            var bgm = BattleBgmController.Instance;
+            if (bgm != null)
+                await bgm.CrossfadeFromArchMagicBackgroundAsync(1000, cancellationToken);
         }
 
         BattleUIManager.I?.HideAllCardDetails();
@@ -853,7 +857,7 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 詠唱キャンセル演出。「詠唱失敗」ポップアップ + ガラスが割れる2.mp3 → 500ms → 背景復帰。
+    /// 詠唱キャンセル演出。「詠唱失敗」ポップアップ + ガラスが割れる2.mp3 → 背景を 1000ms で復帰。
     /// ダメージ適用側で <see cref="PlayerStatus.archMagicCancelPending"/> が立っているときに呼ぶ。
     /// </summary>
     public async Task RunArchMagicCastCancelAsync(PlayerStatus owner, CancellationToken cancellationToken)
@@ -866,9 +870,9 @@ public class CardSequenceManager : MonoBehaviour
         float life = popup != null ? popup.fadeDuration : DamagePopup.DefaultFadeDurationIfUnknown;
         await DamagePopup.WaitAfterPopupLifetimeAsync(life, cancellationToken);
 
-        await Task.Delay(500, cancellationToken);
-
-        BattleBgmController.Instance?.ClearArchMagicBackgroundOverride();
+        var bgmRestore = BattleBgmController.Instance;
+        if (bgmRestore != null)
+            await bgmRestore.CrossfadeFromArchMagicBackgroundAsync(1000, cancellationToken);
 
         // 詠唱状態は TakeDamage 側で既にクリア済み
     }

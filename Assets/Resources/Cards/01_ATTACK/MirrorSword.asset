@@ -27,7 +27,6 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  clearsRestraintOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 1
   isPrimaryAttack: 1

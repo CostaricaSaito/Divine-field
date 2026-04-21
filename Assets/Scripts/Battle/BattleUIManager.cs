@@ -72,6 +72,10 @@ public class BattleUIManager : MonoBehaviour
     [Header("大魔法（ArchMagic）詠唱カウントダウン")]
     [Tooltip("未設定時は TMP 既定フォント。推奨: Assets/TextMesh Pro/Fonts/DFSoge9 SDF")]
     [SerializeField] private TMPro.TMP_FontAsset archMagicCastCountdownFont;
+    [Tooltip("「残り N ターン」の N 部分のみ、ベースフォントに対する TMP リッチサイズ（%）。例: 185")]
+    [SerializeField] [Range(100, 260)] private int archMagicCountdownNumberSizePercent = 185;
+    [Tooltip("カウントダウン行の背後に敷く白ボックスのアルファ（0〜1）")]
+    [SerializeField] [Range(0f, 1f)] private float archMagicCountdownBackdropAlpha = 0.42f;
 
     [Header("Use ボタン設定")]
     [SerializeField] private Color useButtonNormalColor = new Color(0.2f, 0.5f, 1f, 1f);
@@ -230,7 +234,8 @@ public class BattleUIManager : MonoBehaviour
                 SetUseButtonInteractable(true);
             }
 
-            // 合算属性・TotalATKDEF の色を選択内容に同期
+            // 効果対象を既定（相手）へ戻してから TotalATKDEF を同期
+            BattleManager.I?.ResetPlayerEffectTargetToDefaultForCurrentAttackSelection();
             BattleManager.I?.UpdateTotalATKDEFDisplay();
 
             if (side == Side.Player
@@ -612,6 +617,46 @@ public class BattleUIManager : MonoBehaviour
 
         Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
         return 0f;
+    }
+
+    /// <summary>状態異常一括解除時、次のポップを出すまでの間隔（秒）。</summary>
+    public const float StatusAilmentBulkClearStaggerSeconds = 0.2f;
+
+    /// <summary>
+    /// 一括解除済みの異常タイプを、付与時と同じ配色の <see cref="DamagePopup"/> で 0.2 秒ずつ重ね表示し、
+    /// 最後のポップの寿命＋ポストインターバルまで待つ。
+    /// </summary>
+    public async Task PlayStatusAilmentBulkClearPresentationAsync(
+        IReadOnlyList<StatusEffectType> clearedTypesOrdered,
+        PlayerStatus target,
+        CancellationToken cancellationToken = default)
+    {
+        if (clearedTypesOrdered == null || clearedTypesOrdered.Count == 0) return;
+
+        float lastFade = DamagePopup.DefaultFadeDurationIfUnknown;
+        for (int i = 0; i < clearedTypesOrdered.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var effectType = clearedTypesOrdered[i];
+            if (effectType == StatusEffectType.None) continue;
+
+            var popupGo = SpawnPopupFor(target);
+            var damageText = popupGo != null ? popupGo.GetComponent<DamagePopup>() : null;
+            if (damageText != null)
+            {
+                string name = StatusEffectPresentation.GetDisplayName(effectType);
+                if (string.IsNullOrEmpty(name))
+                    name = effectType.ToString();
+                StatusEffectPresentation.GetPopupColors(effectType, out Color bg, out Color fg);
+                damageText.SetupStatusAilmentGrant(name, bg, fg);
+                lastFade = damageText.fadeDuration;
+            }
+
+            if (i < clearedTypesOrdered.Count - 1)
+                await Task.Delay(TimeSpan.FromSeconds(StatusAilmentBulkClearStaggerSeconds), cancellationToken);
+        }
+
+        await DamagePopup.WaitAfterPopupLifetimeAsync(lastFade, cancellationToken);
     }
 
     /// <summary>
@@ -1049,6 +1094,7 @@ public class BattleUIManager : MonoBehaviour
         // BattleManager の更新
         UpdateBattleManagerAfterCancel();
 
+        BattleManager.I?.ResetPlayerEffectTargetToDefaultForCurrentAttackSelection();
         // TotalATKDEF 表示を更新（選択が空の場合は非表示になる）
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
@@ -2174,8 +2220,11 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>残りターン数のみ差し替える（ダウンカウント表現用）。</summary>
     public void UpdateArchMagicCastOverlayRemaining(int remainingTurns)
     {
-        if (_archMagicCastOverlayRemainingText != null)
-            _archMagicCastOverlayRemainingText.text = $"残り {remainingTurns} ターン";
+        if (_archMagicCastOverlayRemainingText == null) return;
+        _archMagicCastOverlayRemainingText.richText = true;
+        int pct = Mathf.Clamp(archMagicCountdownNumberSizePercent, 100, 260);
+        _archMagicCastOverlayRemainingText.text =
+            $"残り <size={pct}%>{remainingTurns}</size> ターン";
     }
 
     /// <summary>詠唱中央オーバーレイを消す（即時 or フェード）。</summary>
@@ -2286,17 +2335,35 @@ public class BattleUIManager : MonoBehaviour
         iconImg.preserveAspect = true;
         iconImg.raycastTarget = false;
 
+        var panelGo = new GameObject("RemainingBackdrop", typeof(RectTransform));
+        var panelRt = panelGo.GetComponent<RectTransform>();
+        panelRt.SetParent(contentRt, false);
+        panelRt.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRt.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRt.pivot = new Vector2(0.5f, 0.5f);
+        panelRt.anchoredPosition = new Vector2(0f, -210f);
+        panelRt.sizeDelta = new Vector2(720f, 108f);
+        var backdrop = panelGo.AddComponent<Image>();
+        {
+            var w = Texture2D.whiteTexture;
+            backdrop.sprite = Sprite.Create(w, new Rect(0, 0, w.width, w.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+        backdrop.type = Image.Type.Simple;
+        backdrop.color = new Color(1f, 1f, 1f, Mathf.Clamp01(archMagicCountdownBackdropAlpha));
+        backdrop.raycastTarget = false;
+
         var textGo = new GameObject("Remaining", typeof(RectTransform));
         var textRt = textGo.GetComponent<RectTransform>();
-        textRt.SetParent(contentRt, false);
-        textRt.anchorMin = new Vector2(0.5f, 0.5f);
-        textRt.anchorMax = new Vector2(0.5f, 0.5f);
+        textRt.SetParent(panelRt, false);
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = new Vector2(14f, 10f);
+        textRt.offsetMax = new Vector2(-14f, -10f);
         textRt.pivot = new Vector2(0.5f, 0.5f);
-        textRt.anchoredPosition = new Vector2(0f, -210f);
-        textRt.sizeDelta = new Vector2(680f, 120f);
         var tmp = textGo.AddComponent<TMPro.TextMeshProUGUI>();
         tmp.alignment = TMPro.TextAlignmentOptions.Center;
-        tmp.fontSize = 72f;
+        tmp.fontSize = 58f;
+        tmp.richText = true;
         if (archMagicCastCountdownFont != null)
             tmp.font = archMagicCastCountdownFont;
         else if (TMP_Settings.defaultFontAsset != null)

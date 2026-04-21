@@ -10,6 +10,7 @@ public static class CardRules
         if (c.usableInAttackPhase) return true;
         if (c.isPrimaryAttack || c.isAdditionalAttack || c.isCounterAttack) return true;
         if (c.isRecovery) return true;        // �񕜂͍U���^�[��OK�̎d�l
+        if (c.clearsAllStatusAilmentsOnUse && c.cardType == CardType.Recovery) return true;
         if (c.isSpecialEffect) return true;
 
         switch (c.cardType)
@@ -40,6 +41,9 @@ public static class CardRules
     {
         if (c == null) return false;
         if (c.cardType == CardType.Recovery || c.isRecovery) return true;
+        if (c.clearsAllStatusAilmentsOnUse
+            && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
+            return true;
         return c.canApplyStatusEffect
             && c.statusEffectToApply != StatusEffectType.None
             && c.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve;

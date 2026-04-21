@@ -159,11 +159,16 @@ public class BattleProcessor : MonoBehaviour
 
         Debug.Log($"[BattleProcessor] 即時効果解決開始: {card.cardName}");
 
-        // 回復効果の適用（拘束解除のみのカードも ApplyRecovery 内で処理）
-        if (card.recoveryAmount > 0 || card.clearsRestraintOnUse)
+        // 回復効果の適用（効果対象＝TOTAL で選んだ自分／相手。target が null のときのみ使用者へ）
+        if (card.recoveryAmount > 0)
         {
-            await ApplyRecoveryAsync(card, user, CancellationToken.None);
+            var recoveryRecipient = target ?? user;
+            if (recoveryRecipient != null)
+                await ApplyRecoveryAsync(card, recoveryRecipient, CancellationToken.None);
         }
+
+        if (card.clearsAllStatusAilmentsOnUse && target != null)
+            await ApplyAllStatusAilmentsClearAsync(target, CancellationToken.None);
 
         if (card.canApplyStatusEffect && target != null && card.statusEffectToApply != StatusEffectType.None
             && card.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve)
@@ -567,8 +572,31 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
-        if (card.clearsRestraintOnUse && target.RemoveStatusEffectsOfType(StatusEffectType.Restraint))
-            Debug.Log($"[BattleProcessor] 拘束解除（カード）: {target.DisplayName}");
+    }
+
+    /// <summary>
+    /// 状態異常を一括除去し、異常が無ければ無傷ポップ、あれば回復魔法SE＋重ねポップ演出。
+    /// 除去は演出より前に完了する。
+    /// </summary>
+    private async Task ApplyAllStatusAilmentsClearAsync(PlayerStatus target, CancellationToken ct)
+    {
+        if (target == null) return;
+
+        var snapshot = target.GetActiveAilmentTypesOrdered();
+        foreach (var t in snapshot)
+            target.RemoveStatusEffectsOfType(t);
+
+        UpdateStatusDisplay();
+
+        if (snapshot.Count == 0)
+        {
+            await ShowUnharmedPopupForNoProgressStatusAsync(target);
+            return;
+        }
+
+        SoundEffectPlayer.I?.Play("Assets/SE/回復魔法3.mp3");
+        if (BattleUIManager.I != null)
+            await BattleUIManager.I.PlayStatusAilmentBulkClearPresentationAsync(snapshot, target, ct);
     }
 
     /// <summary>

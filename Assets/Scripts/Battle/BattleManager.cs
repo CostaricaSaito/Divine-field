@@ -116,6 +116,26 @@ public class BattleManager : MonoBehaviour
 
     public void ClearPlayerSelfAttackTargetMode() => SetPlayerSelfAttackTargetMode(false);
 
+    /// <summary>
+    /// 攻撃選択が変わったとき、効果対象を既定（相手）へ戻す。
+    /// 数値 ATK が出ない選択では TOTAL で対象切替するため、選び直しのたびにリセットする。
+    /// </summary>
+    public void ResetPlayerEffectTargetToDefaultForCurrentAttackSelection()
+    {
+        if (CurrentState != GameState.AttackPhase || CurrentTurnOwner != PlayerType.Player) return;
+        if (IsReflectionChainDefensePending()) return;
+
+        var cards = BattleUIManager.I?.GetSelectedAttackCards();
+        if (cards == null || cards.Count == 0)
+        {
+            ClearPlayerSelfAttackTargetMode();
+            return;
+        }
+
+        if (cardStatsDisplay != null && cardStatsDisplay.IsPlayerAttackSelectionNumericAtkZero(cards))
+            ClearPlayerSelfAttackTargetMode();
+    }
+
     /// <summary>混乱時、攻撃のランダム対象が確定したあとの表示用（未確定時は相手命中想定で表示）。</summary>
     private bool _confusionAttackTargetResolved;
     private bool _confusionAttackTargetsSelf;
@@ -1459,7 +1479,18 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex)
+    /// <summary>
+    /// 即時効果の対象（TOTAL の自分／相手）。<see cref="RunImmediateAttackSingleCardAsync"/> では
+    /// <c>ShowCardDetail</c> が選択解除でターゲットモードを消す前に確定して渡すこと。
+    /// </summary>
+    private PlayerStatus ComputeImmediateEffectTargetForPlayerAttack()
+    {
+        if (playerStatus != null && playerStatus.HasConfusionEffect())
+            return UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+        return _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
+    }
+
+    private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex, PlayerStatus presetEffectTarget = null)
     {
         // カード表示後、回復ポップアップより前に短い間（カード詳細の読み取り用）
         await Task.Delay(DamagePopup.PreImmediateEffectDelayMs);
@@ -1467,16 +1498,23 @@ public class BattleManager : MonoBehaviour
 
         // RecordPlayerUseSlotは既にHandleAttackUseで呼ばれている（UseCardの前）
         // ここでは呼ばない（二重呼び出しを防ぐ）
-        
-        PlayerStatus effectTarget;
-        if (playerStatus != null && playerStatus.HasConfusionEffect())
+
+        PlayerStatus effectTarget = presetEffectTarget;
+        if (effectTarget == null)
+        {
+            if (playerStatus != null && playerStatus.HasConfusionEffect())
+            {
+                ClearPlayerSelfAttackTargetMode();
+                effectTarget = UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+            }
+            else
+            {
+                effectTarget = _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
+            }
+        }
+        else if (playerStatus != null && playerStatus.HasConfusionEffect())
         {
             ClearPlayerSelfAttackTargetMode();
-            effectTarget = UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
-        }
-        else
-        {
-            effectTarget = _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
         }
 
         await battleProcessor.ResolveImmediateEffectAsync(card, playerStatus, effectTarget);
@@ -1499,6 +1537,9 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex)
     {
+        // ShowCardDetail が「既選択のトグル解除」でターゲットモードをリセットする前に効果対象を固定する
+        PlayerStatus immediateEffectTarget = ComputeImmediateEffectTargetForPlayerAttack();
+
         bool isMagic = card != null && card.cardType == CardType.Magic;
         bool useMagicPanel = isMagic && MagicPoolManager.I != null;
         bool fromMagicPanel =
@@ -1547,7 +1588,7 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.ClearAllSelections();
         UpdateTotalATKDEFDisplay();
 
-        await ResolveImmediateEffectAsync(card, slotIndex);
+        await ResolveImmediateEffectAsync(card, slotIndex, immediateEffectTarget);
     }
 
     private void HandleAttackUse()
