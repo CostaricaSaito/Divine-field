@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -7,7 +7,7 @@ using UnityEngine;
 /// 【役割】
 /// - プレイヤー/敵それぞれ最大3枚の魔法カードエントリをプール
 /// - 手札から初使用時: 残り使用回数 = maxUses - 1 でプールに登録
-/// - 同種カード使用時: 使用回数を +maxUses 回復
+/// - 同種カード使用時: 残り使用回数に +max(0, maxUses-1)（手札からの1回発動分を差し引いた分）
 /// - プールから使用時: 使用回数を1消費（0になったら自動削除）
 /// - MP消費チェック（実際の消費は呼び出し側で行う）
 /// </summary>
@@ -76,7 +76,7 @@ public class MagicPoolManager : MonoBehaviour
     /// 手札の魔法カードを使用する（プールに登録）
     ///
     /// 【フロー】
-    /// 1. 同種カードがプール済み → 使用回数を +maxUses 回復
+    /// 1. 同種カードがプール済み → 手札からの1回発動分を差し引いた残りを加算（+max(0, maxUses-1)）。新規登録と同じ考え方。
     ///    → さらにデッキから手札を1枚追加（上限に余裕がある場合）
     /// 2. プールに空きがある → 残り回数 = maxUses - 1 で新規登録
     /// 3. プールが満杯かつ同種なし → false
@@ -88,12 +88,13 @@ public class MagicPoolManager : MonoBehaviour
 
         var pool = GetPool(owner);
 
-        // 同種カードがプール済みの場合
+        // 同種カードがプール済みの場合（手札からの使用で1回消費した分は新規登録と同様に差し引く）
         var existing = FindEntry(card, pool);
         if (existing != null)
         {
-            existing.remainingUses += card.maxUses;
-            Debug.Log($"[MagicPoolManager] 同種魔法カード使用({owner}): {card.cardName} 残り使用回数 → {existing.remainingUses}");
+            int addUses = Mathf.Max(card.maxUses - 1, 0);
+            existing.remainingUses += addUses;
+            Debug.Log($"[MagicPoolManager] 同種魔法カード使用({owner}): {card.cardName} +{addUses} (maxUses={card.maxUses}) → 残り {existing.remainingUses}");
 
             if (hand != null && hand.Count < handMax)
             {

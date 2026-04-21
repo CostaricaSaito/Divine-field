@@ -237,6 +237,27 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
+    /// <summary>現在表示中の CardSheet から <paramref name="card"/> と同一アセット参照のシートを検索（最後に生成されたもの）。</summary>
+    public bool TryGetCardSheetDisplayForCardData(CardData card, out CardSheetDisplay display)
+    {
+        display = null;
+        if (card == null) return false;
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var go = activeCardSheets[i];
+            if (go == null) continue;
+            var sh = go.GetComponent<CardSheetDisplay>();
+            if (sh == null) continue;
+            if (ReferenceEquals(sh.GetCurrentCardData(), card))
+            {
+                display = sh;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void HideAllCardDetails()
     {
         foreach (var go in activeCardSheets)
@@ -723,7 +744,8 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 闇属性：通常の超過ダメージ適用後の「残りHP分」表示（紫背景）。SE は呼び出し側で鳴らす。
     /// </summary>
-    public void ShowDarkFollowupDamagePopup(int amount, PlayerStatus target)
+    /// <returns><see cref="DamagePopup.fadeDuration"/>（秒）。失敗時は 0。</returns>
+    public float ShowDarkFollowupDamagePopup(int amount, PlayerStatus target)
     {
         Debug.Log($"[BattleUIManager] 闇フォローダメージポップアップ: {amount} 対象 {target?.DisplayName ?? "null"}");
 
@@ -731,7 +753,7 @@ public class BattleUIManager : MonoBehaviour
         if (popup == null)
         {
             Debug.LogWarning("[BattleUIManager] 闇ポップアップの生成に失敗しました");
-            return;
+            return 0f;
         }
 
         var damageText = popup.GetComponent<DamagePopup>();
@@ -739,9 +761,11 @@ public class BattleUIManager : MonoBehaviour
         {
             bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
             damageText.SetupDarkFollowupDamage(amount, hitPlayer);
+            return damageText.fadeDuration;
         }
-        else
-            Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+
+        Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+        return 0f;
     }
 
     /// <summary>
@@ -782,7 +806,7 @@ public class BattleUIManager : MonoBehaviour
                 statusUI.SetDeferFogVisionVisuals(true);
                 if (_fogVisionAfterPopupCoroutine != null)
                     StopCoroutine(_fogVisionAfterPopupCoroutine);
-                float waitSec = damageText.fadeDuration + DamagePopup.PostPopupIntervalMs / 1000f;
+                float waitSec = DamagePopup.TotalSecondsAfterPopupShown(damageText.fadeDuration);
                 _fogVisionAfterPopupCoroutine = StartCoroutine(CoRevealFogVisionVisualsAfterStatusPopup(waitSec));
             }
         }
@@ -803,10 +827,9 @@ public class BattleUIManager : MonoBehaviour
             UpdateStatus(BattleManager.I.GetPlayerStatus(), BattleManager.I.GetEnemyStatus());
     }
 
-    /// <summary>
-    /// 回復ポップアップを表示
-    /// </summary>
-    public void ShowHealPopup(int amount, string statType, PlayerStatus target)
+    /// <summary>回復ポップアップを表示。<see cref="DamagePopup"/> の寿命待機には戻り値を <see cref="DamagePopup.WaitAfterPopupLifetimeAsync"/> に渡す。</summary>
+    /// <returns><see cref="DamagePopup.fadeDuration"/>（秒）。生成失敗時は 0。</returns>
+    public float ShowHealPopup(int amount, string statType, PlayerStatus target)
     {
         Debug.Log($"[BattleUIManager] 回復ポップアップ表示: {statType}{amount}回復 対象 {target?.DisplayName ?? "null"}");
 
@@ -814,22 +837,21 @@ public class BattleUIManager : MonoBehaviour
         if (popup == null)
         {
             Debug.LogWarning("[BattleUIManager] ポップアップの生成に失敗しました");
-            return;
+            return 0f;
         }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            bool hitPlayer = (target == BattleManager.I.GetPlayerStatus());
             string displayText = $"{statType}{amount}回復";
             Color displayColor = Color.green; // 回復は緑色
             damageText.Setup(displayText, displayColor);
             Debug.Log($"[BattleUIManager] 回復ポップアップ設定完了: {statType}{amount}回復");
+            return damageText.fadeDuration;
         }
-        else
-        {
-            Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
-        }
+
+        Debug.LogWarning("[BattleUIManager] DamagePopup コンポーネントが見つかりません");
+        return 0f;
     }
 
     public void ShowMissPopup(PlayerStatus target)

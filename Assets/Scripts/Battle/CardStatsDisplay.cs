@@ -43,6 +43,19 @@ public class CardStatsDisplay : MonoBehaviour
     private bool _godRagePlayerAtkDisplayLocked;
     private string _godRagePlayerAtkDisplayRichText;
 
+    /// <summary>マジカルエクスプロージョン：演出直前（カード合計のみ・ME 加算前相当）。</summary>
+    private bool _magicalExplosionPreRampLocked;
+    private int _magicalExplosionPreRampAtkDisplayValue;
+
+    /// <summary>マジカルエクスプロージョン：ランプ後のリッチ表示ロック。</summary>
+    private bool _magicalExplosionPlayerAtkDisplayLocked;
+    private string _magicalExplosionPlayerAtkDisplayRichText;
+
+    /// <summary>
+    /// 攻撃＋ME の Prefab シーケンス中は TOTAL に MP×2 の予測を含めない（カード表記の合計のみ。ME 演出前に解除）。
+    /// </summary>
+    private bool _suppressMagicalExplosionPredictionDuringSequenceReveal;
+
     /// <summary>
     /// 初期化時にボタンを非表示にする
     /// </summary>
@@ -141,6 +154,7 @@ public class CardStatsDisplay : MonoBehaviour
         currentSequenceType = "";
         sequenceOwnerSide = Side.Player;
         ClearGodRagePlayerAttackDisplayLock();
+        ClearMagicalExplosionAttackDisplayLocks();
     }
 
     /// <summary>ゴッドレイジの ATK 表示ロックを解除（次の攻撃・演出用）。</summary>
@@ -148,6 +162,36 @@ public class CardStatsDisplay : MonoBehaviour
     {
         _godRagePlayerAtkDisplayLocked = false;
         _godRagePlayerAtkDisplayRichText = null;
+    }
+
+    /// <summary>マジカルエクスプロージョンの表示ロックを解除。</summary>
+    public void ClearMagicalExplosionAttackDisplayLocks()
+    {
+        _magicalExplosionPreRampLocked = false;
+        _magicalExplosionPreRampAtkDisplayValue = 0;
+        _magicalExplosionPlayerAtkDisplayLocked = false;
+        _magicalExplosionPlayerAtkDisplayRichText = null;
+        _suppressMagicalExplosionPredictionDuringSequenceReveal = false;
+    }
+
+    /// <summary>ME ランプ完了後のリッチ表示のみ解除（続けてゴッドレイジ演出を行うとき）。</summary>
+    public void ClearMagicalExplosionPlayerAtkDisplayLockOnly()
+    {
+        _magicalExplosionPlayerAtkDisplayLocked = false;
+        _magicalExplosionPlayerAtkDisplayRichText = null;
+    }
+
+    /// <summary>ME の MP×2 予測を TOTAL に含めない期間（カード決定〜ME イントロ直前）。</summary>
+    public void SetSuppressMagicalExplosionPredictionDuringSequenceReveal(bool value)
+    {
+        _suppressMagicalExplosionPredictionDuringSequenceReveal = value;
+    }
+
+    /// <summary>ME 演出直前：TOTAL を「ME 加算前」の強さで固定表示する。</summary>
+    public void SetMagicalExplosionPreRampAttackDisplay(int displayedAtkStrength)
+    {
+        _magicalExplosionPreRampAtkDisplayValue = displayedAtkStrength;
+        _magicalExplosionPreRampLocked = true;
     }
 
     /// <summary>
@@ -195,7 +239,7 @@ public class CardStatsDisplay : MonoBehaviour
         if (atkdefText != null)
         {
             atkdefText.text = GetPlayerDisplayText();
-            ApplyPlayerTotalAtkDefTextStyle(battleManager);
+            ApplyPlayerTotalAtkDefTextStyle();
         }
         else
         {
@@ -227,7 +271,7 @@ public class CardStatsDisplay : MonoBehaviour
         if (atkdefTextEnemy != null)
         {
             atkdefTextEnemy.text = GetEnemyDisplayText();
-            ApplyEnemyTotalAtkDefTextStyle(battleManager);
+            ApplyEnemyTotalAtkDefTextStyle();
         }
         else
         {
@@ -272,39 +316,16 @@ public class CardStatsDisplay : MonoBehaviour
         return FormatAttackPowerDisplayLabel(rc, fallbackAttacker);
     }
 
-    private void ApplyPlayerTotalAtkDefTextStyle(BattleManager battleManager)
+    private void ApplyPlayerTotalAtkDefTextStyle()
     {
         if (atkdefText == null) return;
-        bool reflectionPlayerGodRageRich = battleManager.IsReflectionAttackTotalDisplayActive()
-            && battleManager.ReflectionAttackTotalOnPlayerSide
-            && GodRageRules.IsGodRageDoublingCombo(battleManager.GetReflectionAttackCardsForTotalDisplay());
-        if (_godRagePlayerAtkDisplayLocked)
-        {
-            atkdefText.richText = true;
-            atkdefText.color = Color.white;
-        }
-        else if (reflectionPlayerGodRageRich)
-        {
-            atkdefText.richText = true;
-            atkdefText.color = Color.white;
-        }
-        else
-            ApplyAttackLabelTextStyle(atkdefText, ElementHelper.GetElementColor(GetPlayerCombinedElement()));
+        ApplyAttackLabelTextStyle(atkdefText, ElementHelper.GetElementColor(GetPlayerCombinedElement()));
     }
 
-    private void ApplyEnemyTotalAtkDefTextStyle(BattleManager battleManager)
+    private void ApplyEnemyTotalAtkDefTextStyle()
     {
         if (atkdefTextEnemy == null) return;
-        bool reflectionEnemyGodRageRich = battleManager.IsReflectionAttackTotalDisplayActive()
-            && !battleManager.ReflectionAttackTotalOnPlayerSide
-            && GodRageRules.IsGodRageDoublingCombo(battleManager.GetReflectionAttackCardsForTotalDisplay());
-        if (reflectionEnemyGodRageRich)
-        {
-            atkdefTextEnemy.richText = true;
-            atkdefTextEnemy.color = Color.white;
-        }
-        else
-            ApplyAttackLabelTextStyle(atkdefTextEnemy, ElementHelper.GetElementColor(GetEnemyCombinedElement()));
+        ApplyAttackLabelTextStyle(atkdefTextEnemy, ElementHelper.GetElementColor(GetEnemyCombinedElement()));
     }
 
     /// <summary>混乱中の敵攻撃側で TotalATKDEF を黄色表示（プレイヤー側と同系色）。</summary>
@@ -410,10 +431,7 @@ public class CardStatsDisplay : MonoBehaviour
         PlayerStatus blessingDefender)
     {
         if (cards == null || cards.Count == 0) return 0;
-        int sum = CalculateTotalAttackPower(cards);
-        if (GodRageRules.IsGodRageDoublingCombo(cards))
-            sum *= 2;
-        return ComputeAttackPowerFromCardSum(sum, cards, blessingAttacker, blessingDefender);
+        return GetDisplayedAttackStrengthWithDefender(cards, blessingAttacker, blessingDefender);
     }
 
     /// <summary>
@@ -618,6 +636,10 @@ public class CardStatsDisplay : MonoBehaviour
         {
             if (currentSequenceType == "攻撃")
             {
+                if (_magicalExplosionPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_magicalExplosionPlayerAtkDisplayRichText))
+                    return _magicalExplosionPlayerAtkDisplayRichText;
+                if (_magicalExplosionPreRampLocked)
+                    return $"ATK {_magicalExplosionPreRampAtkDisplayValue}";
                 if (_godRagePlayerAtkDisplayLocked && !string.IsNullOrEmpty(_godRagePlayerAtkDisplayRichText))
                     return _godRagePlayerAtkDisplayRichText;
                 return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetPlayerStatus());
@@ -839,11 +861,109 @@ public class CardStatsDisplay : MonoBehaviour
     }
 
     /// <summary>
-    /// 合計攻撃力を計算
+    /// 合計攻撃力を計算（マジカルエクスプロージョンは <paramref name="attackerForMeRule"/> があるとき反映）。
     /// </summary>
-    private int CalculateTotalAttackPower(List<CardData> attackCards)
+    private int CalculateTotalAttackPower(List<CardData> attackCards, PlayerStatus attackerForMeRule = null)
     {
+        if (attackCards == null || attackCards.Count == 0) return 0;
+        if (attackerForMeRule != null && MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
+        {
+            if (_suppressMagicalExplosionPredictionDuringSequenceReveal)
+                return MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(attackCards);
+            return MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attackerForMeRule);
+        }
         return CalculateTotalPower(attackCards, true);
+    }
+
+    /// <summary>ME 演出：カード表記 ATK 合計のみ（加護・衰弱の後）で「演出開始前」値。</summary>
+    public int ComputeMagicalExplosionRampFrom(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sumEx = MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(cards);
+        return ComputeAttackPowerFromCardSum(sumEx, cards, attacker, defenderForBlessings);
+    }
+
+    /// <summary>ME 演出完了後の TOTAL と一致する強さ。</summary>
+    public int ComputeMagicalExplosionRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sum = MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(cards, attacker);
+        return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
+    }
+
+    /// <summary>
+    /// TOTAL とマジカルエクスプロージョンの CardSheet ATK を同時にカウントアップ。完了後リッチ表示ロック。
+    /// </summary>
+    public async Task PlayMagicalExplosionAttackRampAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        CardData meCard,
+        int meSheetAtkTarget,
+        int fromTotal,
+        int toTotal,
+        float totalDurationSec,
+        CancellationToken cancellationToken)
+    {
+        _magicalExplosionPreRampLocked = false;
+
+        if (atkdefText == null || totalDurationSec <= 0f)
+        {
+            _magicalExplosionPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _magicalExplosionPlayerAtkDisplayLocked = true;
+            UpdateDisplay();
+            return;
+        }
+
+        if (fromTotal == toTotal)
+        {
+            _magicalExplosionPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _magicalExplosionPlayerAtkDisplayLocked = true;
+            UpdateDisplay();
+            return;
+        }
+
+        int lo = Mathf.Min(fromTotal, toTotal);
+        int hi = Mathf.Max(fromTotal, toTotal);
+        int span = hi - lo;
+        float stepSec = span > 0 ? totalDurationSec / span : 0f;
+
+        CardSheetDisplay meSheet = null;
+        if (meCard != null && BattleUIManager.I != null
+            && BattleUIManager.I.TryGetCardSheetDisplayForCardData(meCard, out var sh))
+            meSheet = sh;
+
+        int defPow = meCard != null ? meCard.defensePower : 0;
+
+        atkdefText.richText = false;
+        {
+            var el = attackCards != null && attackCards.Count > 0
+                ? ElementHelper.GetCombinedElement(attackCards)
+                : ElementType.None;
+            atkdefText.color = ElementHelper.GetElementColor(el);
+        }
+
+        float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
+        for (int v = lo; v <= hi; v++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            float t = (v - lo) * invSpan;
+            int meAtkVal = Mathf.RoundToInt(Mathf.Lerp(0f, meSheetAtkTarget, t));
+            if (v == hi)
+                meAtkVal = meSheetAtkTarget;
+            if (meSheet != null)
+                meSheet.SetAtkDefenseNumbers(meAtkVal, defPow);
+
+            atkdefText.text = $"ATK {v}";
+            if (v < hi && stepSec > 0f)
+                await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
+        }
+
+        if (meSheet != null && meSheetAtkTarget >= 0)
+            meSheet.SetAtkDefenseNumbers(meSheetAtkTarget, defPow);
+
+        _magicalExplosionPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+        _magicalExplosionPlayerAtkDisplayLocked = true;
+        UpdateDisplay();
     }
 
     /// <summary>
@@ -887,18 +1007,27 @@ public class CardStatsDisplay : MonoBehaviour
     /// <param name="defenderForBlessingsOverride">
     /// 指定時は <see cref="GetDefenderForAttackDisplay"/> を使わず加護の防御側に使う（反射 TOTAL の「相手側視点」用）。
     /// </param>
+    /// <param name="forMeOnlyPostRampExcludeGodRageDouble">
+    /// true のときゴッドレイジ 2 倍を適用しない（ME ランプ直後の TOTAL は MP×2 までのみ）。
+    /// </param>
     private string FormatAttackPowerDisplayLabel(
         List<CardData> cards,
         PlayerStatus attacker,
-        PlayerStatus defenderForBlessingsOverride = null)
+        PlayerStatus defenderForBlessingsOverride = null,
+        bool forMeOnlyPostRampExcludeGodRageDouble = false)
     {
         if (cards == null || cards.Count == 0 || attacker == null) return "";
 
-        int baseSum = CalculateTotalAttackPower(cards);
-        if (baseSum <= 0) return "";
+        int rawCombo = CalculateTotalAttackPower(cards, attacker);
+        if (rawCombo <= 0) return "";
 
-        int afterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, baseSum);
-        int ifritDelta = afterIfrit - baseSum;
+        bool applyGodDouble = GodRageRules.IsGodRageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble;
+        if (_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            applyGodDouble = false;
+        int baseForBlessings = applyGodDouble ? rawCombo * 2 : rawCombo;
+
+        int afterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, baseForBlessings);
+        int ifritDelta = afterIfrit - baseForBlessings;
 
         PlayerStatus defender = defenderForBlessingsOverride ?? GetDefenderForAttackDisplay(attacker);
         int afterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(attacker, defender, cards, afterIfrit);
@@ -912,7 +1041,7 @@ public class CardStatsDisplay : MonoBehaviour
             return $"ATK {final}";
 
         var sb = new StringBuilder(48);
-        sb.Append("ATK ").Append(baseSum);
+        sb.Append("ATK ").Append(baseForBlessings);
         if (ifritDelta > 0)
         {
             sb.Append(" <color=").Append(IfritBonusColorHex).Append(">+").Append(ifritDelta).Append("</color>");
@@ -934,7 +1063,7 @@ public class CardStatsDisplay : MonoBehaviour
     {
         if (cards == null || cards.Count == 0 || attacker == null || defender == null) return "";
 
-        int baseSum = CalculateTotalAttackPower(cards);
+        int baseSum = CalculateTotalAttackPower(cards, attacker);
         if (baseSum <= 0) return "";
 
         int doubledBase = baseSum * 2;
@@ -969,12 +1098,25 @@ public class CardStatsDisplay : MonoBehaviour
 
     /// <summary>
     /// TotalATK 表示用。攻撃側加護 → 防御側の攻撃力抑制（リヴァイアサン等）→ 衰弱時は与ダメ補正（魔法単体攻撃は除外）。
+    /// ゴッドレイジは <see cref="BattleProcessor.CalculateTotalAttackPower"/> と同様、加護前にカード合計を 2 倍する。
     /// </summary>
     private int GetDisplayedAttackStrength(List<CardData> cards, PlayerStatus attacker)
     {
+        return GetDisplayedAttackStrengthWithDefender(cards, attacker, GetDefenderForAttackDisplay(attacker));
+    }
+
+    private int GetDisplayedAttackStrengthWithDefender(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defenderForBlessings)
+    {
         if (cards == null || cards.Count == 0) return 0;
-        int sum = CalculateTotalAttackPower(cards);
-        return ComputeAttackPowerFromCardSum(sum, cards, attacker, GetDefenderForAttackDisplay(attacker));
+        int sum = CalculateTotalAttackPower(cards, attacker);
+        bool godDouble = GodRageRules.IsGodRageDoublingCombo(cards)
+            && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards));
+        if (godDouble)
+            sum *= 2;
+        return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
     }
 
     /// <summary>カード攻撃力合計を起点に、イフリート→リヴァ→衰弱まで適用（ゴッドレイジ2倍は <paramref name="cardSum"/> に含める）。</summary>
@@ -998,14 +1140,14 @@ public class CardStatsDisplay : MonoBehaviour
     /// <summary>ゴッドレイジ演出用：2倍前（命中・イフリート・リヴァ等は通常どおり、2倍は未適用）。</summary>
     public int ComputeGodRageRampFrom(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
     {
-        int sum = CalculateTotalAttackPower(cards);
+        int sum = CalculateTotalAttackPower(cards, attacker);
         return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
     }
 
     /// <summary>ゴッドレイジ演出用：カード合計2倍後にイフリート・リヴァ等を適用した最終値。</summary>
     public int ComputeGodRageRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
     {
-        int sum = CalculateTotalAttackPower(cards);
+        int sum = CalculateTotalAttackPower(cards, attacker);
         if (GodRageRules.IsGodRageDoublingCombo(cards))
             sum *= 2;
         return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
@@ -1023,6 +1165,8 @@ public class CardStatsDisplay : MonoBehaviour
         float totalDurationSec,
         CancellationToken cancellationToken)
     {
+        ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+
         if (atkdefText == null || totalDurationSec <= 0f)
         {
             ClearGodRagePlayerAttackDisplayLock();

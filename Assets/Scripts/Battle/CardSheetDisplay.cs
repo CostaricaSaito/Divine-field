@@ -37,6 +37,15 @@ public class CardSheetDisplay : MonoBehaviour
         SetupGoldOrMpCostDisplay(cardData, ownerForMpDisplay);
     }
 
+    public CardData GetCurrentCardData() => currentCardData;
+
+    /// <summary>マジカルエクスプロージョン演出など：ATK 行のみ差し替え。</summary>
+    public void SetAtkDefenseNumbers(int attack, int defense)
+    {
+        if (atkDefText != null)
+            atkDefText.text = $"ATK {attack} / DEF {defense}";
+    }
+
     /// <summary>
     /// 魔法以外：右下に GoldIcon + 価値（cardValue）。魔法：Gold を隠し消費MP（眼精疲労で2倍・群発で使用不可表示）。
     /// </summary>

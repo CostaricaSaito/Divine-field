@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -53,9 +53,7 @@ public static class InterventionTurnEndProcessor
 
         BattleUIManager.I?.ShowInterventionIntroPopup(attackerStatus);
 
-        float waitSec = DamagePopup.DefaultFadeDurationIfUnknown;
-        await Task.Delay(System.TimeSpan.FromSeconds(waitSec), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, ct);
 
         // 戦闘解決用はインスタンスを分離（手札参照のままだと破棄時に手札が壊れる）
         CardData combatCard = UnityEngine.Object.Instantiate(source);
@@ -143,8 +141,7 @@ public static class InterventionTurnEndProcessor
         {
             SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
             BattleUIManager.I?.ShowMissPopup(bm.GetEnemyStatus());
-            await Task.Delay(System.TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, ct);
             return;
         }
 
@@ -154,8 +151,7 @@ public static class InterventionTurnEndProcessor
             float sec = BattleUIManager.I != null
                 ? BattleUIManager.I.ShowCombatHitConfirmedPopup(bm.GetEnemyStatus())
                 : DamagePopup.DefaultFadeDurationIfUnknown;
-            await Task.Delay(System.TimeSpan.FromSeconds(sec), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(sec, ct);
         }
 
         await bm.PickAndDisplayEnemyDefenseAfterPlayerHitAsync(atkList);
@@ -186,8 +182,7 @@ public static class InterventionTurnEndProcessor
         {
             SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
             BattleUIManager.I?.ShowMissPopup(bm.GetPlayerStatus());
-            await Task.Delay(System.TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, ct);
             return;
         }
 
@@ -197,8 +192,7 @@ public static class InterventionTurnEndProcessor
             float sec = BattleUIManager.I != null
                 ? BattleUIManager.I.ShowCombatHitConfirmedPopup(bm.GetPlayerStatus())
                 : DamagePopup.DefaultFadeDurationIfUnknown;
-            await Task.Delay(System.TimeSpan.FromSeconds(sec), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(sec, ct);
         }
 
         bm.BeginInterventionPlayerDefensePhase(atkList);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -138,16 +138,14 @@ public static class DiseaseTurnEndProcessor
         await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
         await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
-        ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
+        await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
 
         int lethal = attacker.currentHP;
         ApplyHpLossIgnoringCardModifiers(attacker, lethal);
-        ui.ShowDamagePopup(lethal, attacker);
+        float lethalFade = ui.ShowDamagePopup(lethal, attacker);
         RefreshStatuses();
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
     }
 
     private static StatusEffectType FindDiseaseStage(PlayerStatus status)
@@ -210,18 +208,16 @@ public static class DiseaseTurnEndProcessor
         else
         {
             // 2行表示（「病が」／「体を蝕む」）。ダメージ数値は通常の ShowDamagePopup を流用（病1／重病3／煉獄病5）。
-            ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
+            float diseaseMsgFade = ui.ShowMessagePopupForTarget(attacker, "病が\n体を蝕む", Color.black);
             SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
-            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(diseaseMsgFade, ct);
         }
 
         ApplyHpLossIgnoringCardModifiers(attacker, damage);
-        ui.ShowDamagePopup(damage, attacker);
+        float diseaseDmgFade = ui.ShowDamagePopup(damage, attacker);
         BattleProcessor.I?.PlayDamagePopupCompanionSound(damage);
         RefreshStatuses();
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(diseaseDmgFade, ct);
     }
 
     /// <param name="skipEcstasyRoll">煉獄→楽園に自然進行した当ターンは true。絶頂抽選をせずヘブン＋回復のみ。</param>
@@ -239,35 +235,33 @@ public static class DiseaseTurnEndProcessor
             await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
             await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
-            ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
+            await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
 
             int lethal = attacker.currentHP;
             ApplyHpLossIgnoringCardModifiers(attacker, lethal);
-            ui.ShowDamagePopup(lethal, attacker);
+            float lethalFade = ui.ShowDamagePopup(lethal, attacker);
             RefreshStatuses();
-            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-            await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
             return;
         }
 
         if (showPurgatoryToParadiseProgressionIntro)
             await RunDiseaseNaturalProgressIntroAsync(attacker, ui, "病が裏返った", ct);
 
-        ui.ShowMessagePopupForTarget(attacker, "ヘブン状態", new Color(1f, 0.6f, 0.95f));
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        float heavenMsgFade = ui.ShowMessagePopupForTarget(attacker, "ヘブン状態", new Color(1f, 0.6f, 0.95f));
+        await DamagePopup.WaitAfterPopupLifetimeAsync(heavenMsgFade, ct);
 
         int oldHp = attacker.currentHP;
         attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + s.paradiseHealAmount);
         int healed = attacker.currentHP - oldHp;
+        float healFade = 0f;
         if (healed > 0)
-            ui.ShowHealPopup(healed, "HP", attacker);
+            healFade = ui.ShowHealPopup(healed, "HP", attacker);
 
         RefreshStatuses();
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown), ct);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        if (healed > 0)
+            await DamagePopup.WaitAfterPopupLifetimeAsync(healFade, ct);
     }
 
     private static void RefreshStatuses()

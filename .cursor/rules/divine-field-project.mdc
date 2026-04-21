@@ -3,18 +3,18 @@ description: ディヴァインフィールド（Divine2）の世界観・設計
 alwaysApply: true
 ---
 
-1. ゲームの概要
+ゲームの概要
 
 - ゲームの名前：ディヴァインフィールド（リポジトリ名：Divine2）-
-- 媒体：iOS/Android向けのスマートフォンゲームを予定している
+- 媒体：iOS/Android向けのスマートフォンゲームを予定
 - 開発環境：Unity
 - ジャンル：ターン制の **2Dカードバトル**（Unity）。
 - データ駆動:カード・召喚は主に **ScriptableObject**（`CardData` = `DivineField/Card`、`SummonData` = `DivineField/SummonData`）
 - 簡単なルール：デッキ構築制ではなく、全てのカードからランダムに手札が配られる。相手のHPを0にするか、特殊勝利条件を満たすことで勝利。
 
-2. 設計の柱
+設計の特徴
 
-1. **フェーズ制バトル**: `GameState` で全体遷移。攻撃側は `AttackSelect` → `AttackConfirm`、防御側は `DefenseSelect` → `DefenseConfirm`。解決・ターン締めは `DamageResolve` / `TurnEnd` など。
+1. **フェーズ制バトル**: `GameState` で全体フェーズ遷移を管理。攻撃側は `AttackSelect` → `AttackConfirm`、防御側は `DefenseSelect` → `DefenseConfirm`。解決・ターン締めは `DamageResolve` / `TurnEnd` など。
 
 2. **属性**:
  `ElementType`で定義される9個の属性が存在する（無・火・水・風・雷・鋼・氷・闇・光）

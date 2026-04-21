@@ -23,7 +23,7 @@ public sealed class DiseaseTurnEndSettings : ScriptableObject
     [Tooltip("第1文言（病が体を蝕む）が浮上する時間。DamagePopup.fadeDuration と揃えると「アニメ完了＝停止」の体感になりやすい。")]
     [Min(0.05f)] public float diseaseWorsenPhase1FloatSeconds = 1f;
     [Tooltip("第1→第2文言のリール切り替えにかける秒数。")]
-    [Min(0.05f)] public float diseaseWorsenReelDurationSeconds = 0.35f;
+    [Min(0.05f)] public float diseaseWorsenReelDurationSeconds = 0.5f;
     [Tooltip("第1文言の移動停止から、リール開始までのインターバル（秒）。")]
-    [Min(0f)] public float diseaseWorsenPauseBeforeReelSeconds = 0.3f;
+    [Min(0f)] public float diseaseWorsenPauseBeforeReelSeconds = 0.5f;
 }

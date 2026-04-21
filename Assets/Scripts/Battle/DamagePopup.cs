@@ -1,3 +1,4 @@
+﻿using System;
 using System.Collections;
 using System.Text;
 using System.Threading;
@@ -81,13 +82,44 @@ public class DamagePopup : MonoBehaviour
     // floatSpeed … 上方向に漂う速度。大きいほど速く上に抜ける（ワールド／ローカルは親の向き依存。通常は上へ）。
     public float floatSpeed = 30f;
     // fadeDuration … 何秒かけて透明になるか。大きいほど長く残る。Destroy もこの秒後。
-    public float fadeDuration = 1f;
+    public float fadeDuration = 0.5f;
 
     /// <summary>UI 生成に失敗したときなど、闇フォロー前の待ちに使う既定秒数（<see cref="fadeDuration"/> のデフォルトと一致）。</summary>
     public const float DefaultFadeDurationIfUnknown = 1f;
 
-    /// <summary>ポップアップ消滅後?次処理までの標準インターバル（ms）。寿命は <see cref="fadeDuration"/> と別途待つ。</summary>
-    public const int PostPopupIntervalMs = 500;
+    /// <summary>
+    /// ポップアップが画面上に残る時間（<see cref="fadeDuration"/>）のあと、次の処理までの標準インターバル（ms）。
+    /// 待機は「表示開始と同時」ではなく、<see cref="WaitAfterPopupLifetimeAsync"/> で <b>寿命終了後</b>に挟む。
+    /// </summary>
+    public const int PostPopupIntervalMs = 250;
+
+    /// <summary>即時効果解決の直前など、回復ポップアップより前に置く短い間（カード詳細の読み取り用）。</summary>
+    public const int PreImmediateEffectDelayMs = 250;
+
+    /// <summary>戦闘ダメージ数値ポップアップの直前の短い間（命中演出の間）。</summary>
+    public const int PreDamagePopupBeatMs = 500;
+
+    /// <summary>ShowDamagePopup / ShowHealPopup 等が返す秒数を正規化（0 以下は <see cref="DefaultFadeDurationIfUnknown"/>）。</summary>
+    public static float NormalizedFadeSeconds(float fadeSecondsReturnedFromShow)
+    {
+        return fadeSecondsReturnedFromShow > 0f ? fadeSecondsReturnedFromShow : DefaultFadeDurationIfUnknown;
+    }
+
+    /// <summary>コルーチン用：ポップアップ寿命＋ポストインターバルの合計秒。</summary>
+    public static float TotalSecondsAfterPopupShown(float fadeSecondsReturnedFromShow)
+    {
+        return NormalizedFadeSeconds(fadeSecondsReturnedFromShow) + PostPopupIntervalMs / 1000f;
+    }
+
+    /// <summary>
+    /// ポップアップ表示<strong>後</strong>、画面上の寿命（フェード）が終わるまで待ち、続けて <see cref="PostPopupIntervalMs"/> 待つ。
+    /// </summary>
+    public static async Task WaitAfterPopupLifetimeAsync(float fadeSecondsReturnedFromShow, CancellationToken cancellationToken = default)
+    {
+        float fade = NormalizedFadeSeconds(fadeSecondsReturnedFromShow);
+        await Task.Delay(TimeSpan.FromSeconds(fade), cancellationToken);
+        await Task.Delay(PostPopupIntervalMs, cancellationToken);
+    }
 
     private float timer;
     // CanvasGroup … ない場合はフェードなし（透明度は変わらず、そのまま消えるまで表示）。

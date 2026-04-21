@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,8 +23,7 @@ public static class BlockingNullifyFlow
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (sec <= 0f) sec = DamagePopup.DefaultFadeDurationIfUnknown;
 
-        await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
 
         if (blockingDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(blockingDefenseCard);
@@ -58,8 +57,7 @@ public static class BlockingNullifyFlow
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (sec <= 0f) sec = DamagePopup.DefaultFadeDurationIfUnknown;
 
-        await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
 
         if (enemyBlockingDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(enemyBlockingDefenseCard);

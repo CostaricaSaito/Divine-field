@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using UnityEngine;
 using TMPro;
@@ -127,14 +127,12 @@ public class ExchangeFeature : MonoBehaviour
         }
 
         // 演出：操作前の数値をフワッと表示
-        ShowExchangeResultPopup(beforeHP, beforeMP, beforeGP, isBefore: true);
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
-        await Task.Delay(DamagePopup.PostPopupIntervalMs);
+        float fadeBefore = ShowExchangeResultPopup(beforeHP, beforeMP, beforeGP, isBefore: true);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeBefore);
 
         // 演出：操作後の数値をフワッと表示
-        ShowExchangeResultPopup(afterHP, afterMP, afterGP, isBefore: false);
-        await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
-        await Task.Delay(DamagePopup.PostPopupIntervalMs);
+        float fadeAfter = ShowExchangeResultPopup(afterHP, afterMP, afterGP, isBefore: false);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeAfter);
 
         // 実際のステータスに反映
         playerStatus.currentHP = Mathf.Max(afterHP, 0);
@@ -209,18 +207,20 @@ public class ExchangeFeature : MonoBehaviour
     // ===== 演出 =====
 
     /// <summary>
-    /// 操作前・操作後の HP/MP/GP をフワッとポップアップ表示する
+    /// 操作前・操作後の HP/MP/GP をフワッとポップアップ表示する。
     /// </summary>
-    private void ShowExchangeResultPopup(int hp, int mp, int gp, bool isBefore)
+    /// <returns><see cref="BattleUIManager.ShowHealPopup"/> のフェード秒（失敗時は 0）。</returns>
+    private float ShowExchangeResultPopup(int hp, int mp, int gp, bool isBefore)
     {
         string label = isBefore ? "変更前" : "変更後";
         string text = $"{label}  HP:{hp}  MP:{mp}  GP:{gp}";
-        Color color = isBefore ? Color.yellow : Color.cyan;
 
-        // BattleUIManager の DamagePopup 機構を流用してプレイヤー側に表示
-        BattleUIManager.I?.ShowHealPopup(0, text, playerStatus);
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowHealPopup(0, text, playerStatus)
+            : 0f;
 
         Debug.Log($"[ExchangeFeature] 演出ポップアップ: {text}");
+        return fade;
     }
 
     // ===== ターン終了 =====

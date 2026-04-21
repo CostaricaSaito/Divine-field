@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,12 +80,7 @@ public static class SummonGarudaLifecycle
         Color messageColor = new Color(0.5f, 0.92f, 0.72f);
         SoundEffectPlayer.I?.Play(TurnEndBonusSeAddress);
         float fadeSec = ui.ShowMessagePopupForTarget(owner, TurnEndBonusMessage, messageColor);
-        if (fadeSec <= 0f)
-            fadeSec = DamagePopup.DefaultFadeDurationIfUnknown;
-
-        await Task.Delay(TimeSpan.FromSeconds(fadeSec), ct);
-        if (ct.IsCancellationRequested) return;
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, ct);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
         if (ct.IsCancellationRequested) return;
 
         int cap = isPlayerHand ? bm.GetHandMaxCount() : bm.GetEnemyHandCapacity();

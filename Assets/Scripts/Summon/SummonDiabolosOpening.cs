@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -31,18 +31,14 @@ public static class SummonDiabolosOpening
         {
             SoundEffectPlayer.I?.Play(DarkPreparationSeAddress);
             float fadeSec = ui.ShowMessagePopupForTarget(player, DarkPreparationMessage, messageColor);
-            if (fadeSec <= 0f) fadeSec = DamagePopup.DefaultFadeDurationIfUnknown;
-            yield return new WaitForSeconds(fadeSec);
-            yield return new WaitForSeconds(DamagePopup.PostPopupIntervalMs / 1000f);
+            yield return new WaitForSeconds(DamagePopup.TotalSecondsAfterPopupShown(fadeSec));
         }
 
         if (showEnemy)
         {
             SoundEffectPlayer.I?.Play(DarkPreparationSeAddress);
             float fadeSec = ui.ShowMessagePopupForTarget(enemy, DarkPreparationMessage, messageColor);
-            if (fadeSec <= 0f) fadeSec = DamagePopup.DefaultFadeDurationIfUnknown;
-            yield return new WaitForSeconds(fadeSec);
-            yield return new WaitForSeconds(DamagePopup.PostPopupIntervalMs / 1000f);
+            yield return new WaitForSeconds(DamagePopup.TotalSecondsAfterPopupShown(fadeSec));
         }
     }
 }

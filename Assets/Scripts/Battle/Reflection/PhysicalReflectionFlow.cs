@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,8 +63,7 @@ public static class PhysicalReflectionFlow
             ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
-        await Task.Delay(TimeSpan.FromSeconds(bounceSec), cancellationToken);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(bounceSec, cancellationToken);
 
         if (playerReflectionDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(playerReflectionDefenseCard);
@@ -132,8 +131,7 @@ public static class PhysicalReflectionFlow
             ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
         if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
-        await Task.Delay(TimeSpan.FromSeconds(bounceSec), cancellationToken);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(bounceSec, cancellationToken);
 
         if (enemyReflectionDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(enemyReflectionDefenseCard);
@@ -221,8 +219,7 @@ public static class PhysicalReflectionFlow
                         ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
                         : DamagePopup.DefaultFadeDurationIfUnknown;
                     if (sec <= 0f) sec = DamagePopup.DefaultFadeDurationIfUnknown;
-                    await Task.Delay(TimeSpan.FromSeconds(sec), cancellationToken);
-                    await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+                    await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
 
                     BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
 
@@ -301,8 +298,7 @@ public static class PhysicalReflectionFlow
                     ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
                     : DamagePopup.DefaultFadeDurationIfUnknown;
                 if (sec2 <= 0f) sec2 = DamagePopup.DefaultFadeDurationIfUnknown;
-                await Task.Delay(TimeSpan.FromSeconds(sec2), cancellationToken);
-                await Task.Delay(DamagePopup.PostPopupIntervalMs, cancellationToken);
+                await DamagePopup.WaitAfterPopupLifetimeAsync(sec2, cancellationToken);
 
                 BattleUIManager.I?.DestroyMostRecentCardSheetOnPanelForCardData(card, Side.Player);
 

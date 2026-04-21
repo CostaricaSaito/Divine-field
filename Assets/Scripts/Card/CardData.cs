@@ -172,6 +172,10 @@ public class CardData : ScriptableObject
     [Header("無効化")]
     public BlockingKind blockingKind = BlockingKind.None;
 
+    [Header("特殊攻撃ルール（任意・B案）")]
+    [Tooltip("マジカルエクスプロージョン等。未設定なら従来どおりカード数値のみ。")]
+    public SpecialAttackRuleSO specialAttackRule;
+
     [Header("UI参照（非表示）")]
     [System.NonSerialized] public CardUI cardUI;
 

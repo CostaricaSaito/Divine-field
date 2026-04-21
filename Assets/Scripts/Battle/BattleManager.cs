@@ -142,7 +142,34 @@ public class BattleManager : MonoBehaviour
         targetsSelf = false;
         return false;
     }
-    
+
+    /// <summary>マジカルエクスプロージョン：演出で MP を 0 にしたあとの攻撃力計算用（他カードの魔法 MP 消費後の残り）。</summary>
+    private bool _magicalExplosionMpSnapActive;
+    private int _magicalExplosionMpPoolAfterOtherCosts;
+
+    public void SetMagicalExplosionComboMpPoolSnapshot(int mpRemainingBeforeMeDrain)
+    {
+        _magicalExplosionMpSnapActive = true;
+        _magicalExplosionMpPoolAfterOtherCosts = Mathf.Max(0, mpRemainingBeforeMeDrain);
+    }
+
+    public bool TryGetMagicalExplosionComboMpPoolSnapshot(out int mp)
+    {
+        if (_magicalExplosionMpSnapActive)
+        {
+            mp = _magicalExplosionMpPoolAfterOtherCosts;
+            return true;
+        }
+
+        mp = 0;
+        return false;
+    }
+
+    public void ClearMagicalExplosionComboMpPoolSnapshot()
+    {
+        _magicalExplosionMpSnapActive = false;
+    }
+
     /// <summary>
     /// 現在の攻撃カードを設定（BuyFeature、CardSequenceManagerから使用）
     /// </summary>
@@ -1228,8 +1255,7 @@ public class BattleManager : MonoBehaviour
         {
             SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
             BattleUIManager.I?.ShowMissPopup(playerStatus);
-            await Task.Delay(TimeSpan.FromSeconds(DamagePopup.DefaultFadeDurationIfUnknown));
-            await Task.Delay(DamagePopup.PostPopupIntervalMs);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown);
             BattleUIManager.I?.HideAllCardDetails();
             currentAttackCard = null;
             SetGameState(GameState.CombatResolvePhase);
@@ -1242,8 +1268,7 @@ public class BattleManager : MonoBehaviour
             float popupSec = BattleUIManager.I != null
                 ? BattleUIManager.I.ShowCombatHitConfirmedPopup(playerStatus)
                 : DamagePopup.DefaultFadeDurationIfUnknown;
-            await Task.Delay(TimeSpan.FromSeconds(popupSec));
-            await Task.Delay(DamagePopup.PostPopupIntervalMs);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(popupSec);
         }
 
         SetGameState(GameState.DefensePhase);
@@ -1377,9 +1402,9 @@ public class BattleManager : MonoBehaviour
 
     private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex)
     {
-        // カード表示後、ポップアップ表示前に0.5秒のインターバル
-        await Task.Delay(500);
-        Debug.Log("[BattleManager] 回復カード表示後、0.5秒インターバル完了");
+        // カード表示後、回復ポップアップより前に短い間（カード詳細の読み取り用）
+        await Task.Delay(DamagePopup.PreImmediateEffectDelayMs);
+        Debug.Log("[BattleManager] 回復カード表示後、即時効果前インターバル完了");
 
         // RecordPlayerUseSlotは既にHandleAttackUseで呼ばれている（UseCardの前）
         // ここでは呼ばない（二重呼び出しを防ぐ）
@@ -1403,9 +1428,7 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         UpdateTotalATKDEFDisplay();
 
-        // ポップアップ表示後、ターン終了前に0.5秒のインターバル
-        await Task.Delay(500);
-        Debug.Log("[BattleManager] 回復ポップアップ表示後、0.5秒インターバル完了");
+        // 回復ポップアップの寿命＋ポストインターバルは BattleProcessor.ApplyRecoveryAsync 内で待機済み
 
         // 回復カード（即時効果）の場合は防御フェーズをスキップして直接ターン終了
         SetGameState(GameState.CombatResolvePhase);

@@ -58,9 +58,8 @@ public class BattleProcessor : MonoBehaviour
 
     /// <summary>
     /// 戦闘解決（状態異常付与など）完了後、<see cref="CardSequenceManager"/> に戻る直前の待機。
-    /// 従来 500ms。TurnEnd→「病が体を蝕む」までの体感にも効くため 1000ms（2倍）を既定とする。
     /// </summary>
-    private const int CombatResolveTailDelayMs = 1000;
+    private const int CombatResolveTailDelayMs = 100;
 
     private CardDealer cardDealer; // UI管理用（カードの一時表示等）
 
@@ -163,7 +162,7 @@ public class BattleProcessor : MonoBehaviour
         // 回復効果の適用（拘束解除のみのカードも ApplyRecovery 内で処理）
         if (card.recoveryAmount > 0 || card.clearsRestraintOnUse)
         {
-            ApplyRecovery(card, user);
+            await ApplyRecoveryAsync(card, user, CancellationToken.None);
         }
 
         if (card.canApplyStatusEffect && target != null && card.statusEffectToApply != StatusEffectType.None
@@ -358,7 +357,7 @@ public class BattleProcessor : MonoBehaviour
 
     /// <summary>
     /// 重複・段階進行なしなどで <see cref="ProgressiveApplyResult.NoChange"/> となったときの「無傷」表示と、
-    /// フェード後の規定 <see cref="DamagePopup.PostPopupIntervalMs"/> 待機。
+    /// <see cref="DamagePopup.WaitAfterPopupLifetimeAsync"/> による寿命後インターバル。
     /// </summary>
     private async Task ShowUnharmedPopupForNoProgressStatusAsync(PlayerStatus target)
     {
@@ -372,8 +371,7 @@ public class BattleProcessor : MonoBehaviour
         }
 
         PlayDamagePopupCompanionSound(0);
-        await Task.Delay(System.TimeSpan.FromSeconds(fadeSec));
-        await Task.Delay(DamagePopup.PostPopupIntervalMs);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec);
     }
 
     /// <summary>
@@ -391,18 +389,27 @@ public class BattleProcessor : MonoBehaviour
         Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName}");
         Debug.Log($"[BattleProcessor] 攻撃カード数: {attackCards.Count}");
         
-        int totalAttackPower = 0;
-        for (int i = 0; i < attackCards.Count; i++)
+        int totalAttackPower;
+        if (MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
         {
-            var card = attackCards[i];
-            if (card != null)
+            totalAttackPower = MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attacker);
+            Debug.Log($"[BattleProcessor] マジカルエクスプロージョン込みのカード合計（加護前）: {totalAttackPower}");
+        }
+        else
+        {
+            totalAttackPower = 0;
+            for (int i = 0; i < attackCards.Count; i++)
             {
-                totalAttackPower += card.attackPower;
-                Debug.Log($"[BattleProcessor] [{i+1}] {card.cardName}: ATK {card.attackPower} (累計: {totalAttackPower})");
-            }
-            else
-            {
-                Debug.LogWarning($"[BattleProcessor] [{i+1}] カードがnullです");
+                var card = attackCards[i];
+                if (card != null)
+                {
+                    totalAttackPower += card.attackPower;
+                    Debug.Log($"[BattleProcessor] [{i+1}] {card.cardName}: ATK {card.attackPower} (累計: {totalAttackPower})");
+                }
+                else
+                {
+                    Debug.LogWarning($"[BattleProcessor] [{i+1}] カードがnullです");
+                }
             }
         }
 
@@ -498,9 +505,9 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 回復を適用する
+    /// 回復を適用する。各回復ポップアップの寿命＋ポストインターバル後まで待つ。
     /// </summary>
-    private void ApplyRecovery(CardData card, PlayerStatus target)
+    private async Task ApplyRecoveryAsync(CardData card, PlayerStatus target, CancellationToken ct = default)
     {
         if (card == null || target == null) return;
 
@@ -516,9 +523,11 @@ public class BattleProcessor : MonoBehaviour
             if (actualRecovery > 0)
             {
                 Debug.Log($"[BattleProcessor] HP回復適用: {actualRecovery} → {target.DisplayName} (HP: {target.currentHP})");
-                BattleUIManager.I?.ShowHealPopup(actualRecovery, "HP", target);
-                // HP回復効果音を再生
+                float fade = BattleUIManager.I != null
+                    ? BattleUIManager.I.ShowHealPopup(actualRecovery, "HP", target)
+                    : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/power09(DFHP回復).wav");
+                await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
 
@@ -532,9 +541,11 @@ public class BattleProcessor : MonoBehaviour
             if (actualRecovery > 0)
             {
                 Debug.Log($"[BattleProcessor] MP回復適用: {actualRecovery} → {target.DisplayName} (MP: {target.currentMP})");
-                BattleUIManager.I?.ShowHealPopup(actualRecovery, "MP", target);
-                // MP回復効果音を再生
+                float fade = BattleUIManager.I != null
+                    ? BattleUIManager.I.ShowHealPopup(actualRecovery, "MP", target)
+                    : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す25.mp3");
+                await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
 
@@ -548,9 +559,11 @@ public class BattleProcessor : MonoBehaviour
             if (actualRecovery > 0)
             {
                 Debug.Log($"[BattleProcessor] GP回復適用: {actualRecovery} → {target.DisplayName} (GP: {target.currentGP})");
-                BattleUIManager.I?.ShowHealPopup(actualRecovery, "GP", target);
-                // GP回復効果音を再生
+                float fade = BattleUIManager.I != null
+                    ? BattleUIManager.I.ShowHealPopup(actualRecovery, "GP", target)
+                    : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/レジスターで精算.mp3");
+                await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
 
@@ -711,7 +724,7 @@ public class BattleProcessor : MonoBehaviour
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
         Debug.Log($"[BattleProcessor] 第1段（超過・与ダメ補正後）: {firstPhaseDamage}");
 
-        await Task.Delay(500);
+        await Task.Delay(DamagePopup.PreDamagePopupBeatMs);
 
         float normalPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
         if (firstPhaseDamage > 0)
@@ -736,16 +749,19 @@ public class BattleProcessor : MonoBehaviour
         PlayDamageSE(firstPhaseDamage);
         UpdateStatusDisplay();
 
+        await DamagePopup.WaitAfterPopupLifetimeAsync(normalPopupLifetimeSec);
+
         if (attackElement == ElementType.Dark && firstPhaseDamage > 0 && defender.currentHP > 0)
         {
-            await Task.Delay(System.TimeSpan.FromSeconds(normalPopupLifetimeSec));
-            await Task.Delay(DamagePopup.PostPopupIntervalMs);
             int darkDamage = defender.currentHP;
             SoundEffectPlayer.I?.Play("Assets/SE/チーン1.mp3");
-            BattleUIManager.I?.ShowDarkFollowupDamagePopup(darkDamage, defender);
+            float darkFade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDarkFollowupDamagePopup(darkDamage, defender)
+                : 0f;
             ApplyDamage(defender, darkDamage);
             Debug.Log($"[BattleProcessor] 闇フォロー: 残HP相当 {darkDamage} → {defender.DisplayName}");
             UpdateStatusDisplay();
+            await DamagePopup.WaitAfterPopupLifetimeAsync(darkFade);
         }
 
         bool anyWithDamageThrough =
@@ -756,7 +772,6 @@ public class BattleProcessor : MonoBehaviour
             await Task.Delay(1000);
 
         await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage, defenseCardsForStatusRule);
-        await Task.Delay(DamagePopup.PostPopupIntervalMs);
 
         if (IsDead(attacker) || IsDead(defender))
             Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
