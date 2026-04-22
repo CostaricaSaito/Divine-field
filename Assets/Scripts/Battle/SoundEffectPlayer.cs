@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Threading.Tasks;
+using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections.Generic;
@@ -26,6 +27,8 @@ public class SoundEffectPlayer : MonoBehaviour
     public static SoundEffectPlayer I { get; private set; }
 
     [SerializeField] private AudioSource seSource;
+    [Tooltip("ループ用 SE（電子ルーレット等）。未設定のとき起動時に子オブジェクトに生成する。")]
+    [SerializeField] private AudioSource loopSeSource;
     private Dictionary<string, AudioClip> clipCache = new();
 
     private static bool bootstrapInitialized;
@@ -43,6 +46,15 @@ public class SoundEffectPlayer : MonoBehaviour
         if (seSource == null)
             seSource = gameObject.AddComponent<AudioSource>();
         seSource.playOnAwake = false;
+        if (loopSeSource == null)
+        {
+            var loopGo = new GameObject("SE_Looping");
+            loopGo.transform.SetParent(transform, false);
+            loopSeSource = loopGo.AddComponent<AudioSource>();
+            loopSeSource.playOnAwake = false;
+            loopSeSource.loop = true;
+            loopSeSource.spatialBlend = 0f;
+        }
 
         bootstrapInitialized = true;
     }
@@ -127,6 +139,67 @@ public class SoundEffectPlayer : MonoBehaviour
             return;
         }
         seSource.PlayOneShot(clip);
+    }
+
+    /// <summary>ループ用 SE。事前に <see cref="StartLoopingAsync"/> するか、キャッシュ済みキー用。</summary>
+    public void StartLooping(string addressKey)
+    {
+        if (string.IsNullOrEmpty(addressKey) || loopSeSource == null) return;
+        if (clipCache.TryGetValue(addressKey, out AudioClip clip) && clip != null)
+        {
+            loopSeSource.Stop();
+            loopSeSource.clip = clip;
+            loopSeSource.loop = true;
+            loopSeSource.volume = 1f;
+            loopSeSource.Play();
+            return;
+        }
+        Addressables.LoadAssetAsync<AudioClip>(addressKey).Completed += handle =>
+        {
+            if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null) return;
+            clipCache[addressKey] = handle.Result;
+            if (loopSeSource == null) return;
+            loopSeSource.Stop();
+            loopSeSource.clip = handle.Result;
+            loopSeSource.loop = true;
+            loopSeSource.volume = 1f;
+            loopSeSource.Play();
+        };
+    }
+
+    /// <summary>非同期でクリップ取得後、ループ再生を始める（カウント開始と同期させる）。</summary>
+    public async Task StartLoopingAsync(string addressKey)
+    {
+        if (string.IsNullOrEmpty(addressKey) || loopSeSource == null) return;
+        if (!clipCache.TryGetValue(addressKey, out var clip) || clip == null)
+        {
+            var h = Addressables.LoadAssetAsync<AudioClip>(addressKey);
+            var tcs = new TaskCompletionSource<AudioClip>();
+            h.Completed += op =>
+            {
+                if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
+                {
+                    clipCache[addressKey] = op.Result;
+                    tcs.TrySetResult(op.Result);
+                }
+                else
+                    tcs.TrySetResult(null);
+            };
+            clip = await tcs.Task;
+        }
+        if (clip == null) return;
+        loopSeSource.Stop();
+        loopSeSource.clip = clip;
+        loopSeSource.loop = true;
+        loopSeSource.volume = 1f;
+        loopSeSource.Play();
+    }
+
+    public void StopLooping()
+    {
+        if (loopSeSource == null) return;
+        loopSeSource.Stop();
+        loopSeSource.clip = null;
     }
 
     /// <summary>ループや上書き向け：再生を止めてから <paramref name="clip"/> を再生。</summary>

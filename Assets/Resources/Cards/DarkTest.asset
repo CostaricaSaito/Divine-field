@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
   m_Name: DarkTest
   m_EditorClassIdentifier: 
-  cardName: "\u95C7\u30C6\u30B9\u30C8"
+  cardName: "\u30AB\u30EB\u30DE\u30BD\u30FC\u30C9"
   cardType: 0
-  cardImage: {fileID: 21300000, guid: 55ddab88f1b6de64294855a03c2d8325, type: 3}
-  description: "\u95C7\u30C6\u30B9\u30C8"
-  attackPower: 10
+  cardImage: {fileID: 21300000, guid: faa8ef71ae8d2a644baa66e8d5aa40df, type: 3}
+  description: "\u95C7\u306E\u5263"
+  attackPower: 5
   defensePower: 0
   element: 7
   hitRate: 50
@@ -27,6 +27,7 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  clearsAllStatusAilmentsOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
   isPrimaryAttack: 1
@@ -39,7 +40,11 @@ MonoBehaviour:
   statusEffectChance: 0
   statusEffectToApply: 0
   statusEffectApplyTiming: 0
-  cardValue: 30
+  cardValue: 10
   isRare: 0
   attackPhaseRole: 1
   defensePhaseRole: 0
+  attackComboPickRule: 0
+  reflectionKind: 0
+  blockingKind: 0
+  specialAttackRule: {fileID: 0}

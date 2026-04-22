@@ -81,14 +81,21 @@ public static class ProgressiveStatusApplicator
         status.activeEffects.Add(new DiseaseLineEffect(stage));
     }
 
+    /// <summary>病系4段階の「強さ」順。列挙値 1〜4 がそのまま順位になる。</summary>
+    private static int DiseaseStageRank(StatusEffectType t)
+    {
+        if (!DiseaseLineEffect.IsDiseaseFamily(t)) return 0;
+        return (int)t;
+    }
+
     private static ProgressiveApplyResult ApplyDiseaseFamily(PlayerStatus target, StatusEffectType requested, StatusProgressionConfig config)
     {
         StatusEffectType cur = FindDiseaseStage(target);
 
         if (cur == StatusEffectType.ParadiseSickness
-            && requested == StatusEffectType.Sickness
             && config.paradisePlusSicknessForcesEcstasy)
         {
+            // 楽園病中のいかなる病系付与も「進行」扱いで強制絶頂（病・重病・煉獄・楽園・ランダムで病が当たった場合を含む）
             return ProgressiveApplyResult.ForcedParadiseEcstasy;
         }
 
@@ -98,24 +105,25 @@ public static class ProgressiveStatusApplicator
             return ProgressiveApplyResult.Applied;
         }
 
-        if (requested == StatusEffectType.Sickness)
-        {
-            StatusEffectType next = DiseaseLineEffect.GetNextStage(cur);
-            if (next == StatusEffectType.None)
-                return ProgressiveApplyResult.NoChange;
-
-            if (next == cur)
-                return ProgressiveApplyResult.NoChange;
-
-            SetDiseaseStage(target, next);
-            return ProgressiveApplyResult.DiseaseProgressed;
-        }
-
-        if (requested == cur)
+        int rCur = DiseaseStageRank(cur);
+        int rReq = DiseaseStageRank(requested);
+        if (rCur <= 0 || rReq <= 0)
             return ProgressiveApplyResult.NoChange;
 
-        SetDiseaseStage(target, requested);
-        return ProgressiveApplyResult.Applied;
+        // 付与が現在より進んだ段階なら、その段階へ置き換え
+        if (rReq > rCur)
+        {
+            SetDiseaseStage(target, requested);
+            return ProgressiveApplyResult.Applied;
+        }
+
+        // 同じかより低い段階の付与 → 現在段階から1段階だけ進行（病・重病・煉獄を付与するカード・攻撃はいずれも同じルール）
+        StatusEffectType next = DiseaseLineEffect.GetNextStage(cur);
+        if (next == StatusEffectType.None)
+            return ProgressiveApplyResult.NoChange;
+
+        SetDiseaseStage(target, next);
+        return ProgressiveApplyResult.DiseaseProgressed;
     }
 
     private static bool HasEffect(PlayerStatus status, StatusEffectType t)

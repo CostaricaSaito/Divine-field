@@ -1,6 +1,8 @@
-﻿/// <summary>
-/// 状態異常の種類（全15種 + None）。
-/// 数値は公式IDと一致（1=病 … 15=拘束）。シリアライズ互換のため明示指定。
+﻿using UnityEngine;
+
+/// <summary>
+/// 状態異常の種類（全15種 + None + カード用特殊値）。
+/// 1〜15 は公式IDと一致。RANDOM は公式IDではない（100）。
 /// </summary>
 public enum StatusEffectType
 {
@@ -43,4 +45,10 @@ public enum StatusEffectType
     CurseBind = 14,
     /// <summary>15 拘束</summary>
     Restraint = 15,
+
+    /// <summary>
+    /// カード効果用：15種から等確率で1つを選び付与。体験上の公式IDではない。
+    /// </summary>
+    [InspectorName("RANDOM（全状態異常から1つ・等確率）")]
+    RandomOneAilment = 100,
 }

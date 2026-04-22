@@ -254,6 +254,9 @@ public class PlayerStatus
         if (type == StatusEffectType.None)
             return ProgressiveApplyResult.NoChange;
 
+        if (type == StatusEffectType.RandomOneAilment)
+            return TryApplyRandomOneAilmentFromCatalog(config, suppressGrantPopupAndSound);
+
         config ??= StatusProgressionConfig.GetRuntimeFallback();
 
         if (type == StatusEffectType.Seal
@@ -273,6 +276,32 @@ public class PlayerStatus
         }
 
         return ProgressiveApplyResult.NoChange;
+    }
+
+    /// <summary>
+    /// <see cref="StatusEffectType.RandomOneAilment"/>：15種から等確率で抽選し <see cref="TryApplyStatusEffect"/> へ委譲。
+    /// 病系の進行は <see cref="ProgressiveStatusApplicator"/> に任せる。封印は既存時は無傷。
+    /// </summary>
+    private ProgressiveApplyResult TryApplyRandomOneAilmentFromCatalog(
+        StatusProgressionConfig config,
+        bool suppressGrantPopupAndSound)
+    {
+        config ??= StatusProgressionConfig.GetRuntimeFallback();
+        StatusEffectType pick = StatusEffectCatalog.PickRandomAilmentUniform();
+        if (pick == StatusEffectType.None)
+            return ProgressiveApplyResult.NoChange;
+
+        if (pick == StatusEffectType.Seal && HasActiveEffectType(StatusEffectType.Seal))
+            return ProgressiveApplyResult.NoChange;
+
+        return TryApplyStatusEffect(pick, config, suppressGrantPopupAndSound);
+    }
+
+    private bool HasActiveEffectType(StatusEffectType t)
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == t) return true;
+        return false;
     }
 
     private ProgressiveApplyResult NotifyApplyFeedbackAndReturn(StatusEffectType requested, ProgressiveApplyResult result)

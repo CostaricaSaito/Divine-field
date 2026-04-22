@@ -146,6 +146,9 @@ public static class DiseaseTurnEndProcessor
         float lethalFade = ui.ShowDamagePopup(lethal, attacker);
         RefreshStatuses();
         await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
+
+        if (BattleManager.I != null)
+            await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
     }
 
     private static StatusEffectType FindDiseaseStage(PlayerStatus status)
@@ -218,6 +221,9 @@ public static class DiseaseTurnEndProcessor
         BattleProcessor.I?.PlayDamagePopupCompanionSound(damage);
         RefreshStatuses();
         await DamagePopup.WaitAfterPopupLifetimeAsync(diseaseDmgFade, ct);
+
+        if (BattleManager.I != null)
+            await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
     }
 
     /// <param name="skipEcstasyRoll">煉獄→楽園に自然進行した当ターンは true。絶頂抽選をせずヘブン＋回復のみ。</param>
@@ -243,6 +249,9 @@ public static class DiseaseTurnEndProcessor
             float lethalFade = ui.ShowDamagePopup(lethal, attacker);
             RefreshStatuses();
             await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
+
+            if (BattleManager.I != null)
+                await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
             return;
         }
 

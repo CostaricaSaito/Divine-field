@@ -512,5 +512,8 @@ MonoBehaviour:
     panelBackground: {r: 0, g: 0, b: 0, a: 0}
   darkFollowupPanelBackground: {r: 0.28, g: 0.1, b: 0.42, a: 0.94}
   defaultOutlineForSimpleMessage: {r: 1, g: 1, b: 1, a: 1}
+  reflectionPanelBackground: {r: 0.82, g: 0.08, b: 0.1, a: 0.96}
+  blockingNullifyPanelBackground: {r: 0, g: 0, b: 0, a: 0.96}
+  blockingNullifyMessageFill: {r: 0.55, g: 0.55, b: 0.55, a: 1}
   floatSpeed: 30
   fadeDuration: 1

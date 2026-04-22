@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,6 +67,10 @@ public class BattleManager : MonoBehaviour
     public SummonSkillButton summonSkillButton;
     public CardPurchaseAnimation cardPurchaseAnimation;
     [SerializeField] private CardSellAnimation cardSellAnimation;
+
+    [Header("リザルト")]
+    [Tooltip("未設定時は Resources.Load(\"Prefab/GameResult\") を試す")]
+    [SerializeField] private GameObject gameResultPrefab;
     
     [SerializeField] private HandRefillService handRefill;
     public HandRefillService HandRefill => handRefill;
@@ -732,6 +736,13 @@ public class BattleManager : MonoBehaviour
     {
         if (CurrentState == newState) { Debug.Log($"[State] noop {newState}"); return; }
 
+        // ゲーム終了済みの場合、BattleEndPhase 以外への遷移は無視する（後続処理による逆戻りを防ぐ）
+        if (_gameEndTriggered && newState != GameState.BattleEndPhase)
+        {
+            Debug.Log($"[State] ゲーム終了中のため {newState} への遷移を無視");
+            return;
+        }
+
         _phaseCts?.Cancel(); _phaseCts?.Dispose();
         _phaseCts = new CancellationTokenSource();
 
@@ -796,6 +807,9 @@ public class BattleManager : MonoBehaviour
     //================ バトル開始（Layer1: Turn 前の開幕のみ） ================
     private async System.Threading.Tasks.Task BattleStartSequenceAsync()
     {
+        // リザルト画面のカウント起点に使う RP スナップショットを取得
+        GameProfile.I?.CaptureBattleStartRP();
+
         SummonGarudaLifecycle.GetOpeningHandTargets(playerStatus, enemyStatus, out int openingPlayer, out int openingCpu);
         await RunOpeningDealAsync(openingPlayer, openingCpu);
 
@@ -2045,6 +2059,145 @@ public class BattleManager : MonoBehaviour
             {
                 continue;
             }
+        }
+    }
+
+    // ================ ゲーム終了（HP0 検出 → 往生 → リザルト） ================
+
+    private bool _gameEndTriggered;
+
+    /// <summary>
+    /// ゲーム終了シーケンスが起動済みかどうか。以降の通常フロー（フェーズ遷移・演出）をスキップする判定に用いる。
+    /// </summary>
+    public bool IsGameEndTriggered => _gameEndTriggered;
+
+    /// <summary>
+    /// 各ダメージ適用点から呼ぶ共通チェック。HP0 のプレイヤーが居れば 200ms 待って「往生」ポップアップを出し、
+    /// UI を片付けて <see cref="GameState.BattleEndPhase"/> へ遷移したところまでを <b>await で完了</b>させる。
+    /// リザルト画面の演出は fire-and-forget で別途走らせるため、呼び出し側は戻り値が true なら即座に
+    /// 後続処理（ターン送り・闇フォロー等）を抜けて OK。
+    /// </summary>
+    public async Task<bool> TryHandleDeathIfAnyAsync(CancellationToken ct = default)
+    {
+        if (_gameEndTriggered) return true;
+
+        bool pDead = playerStatus != null && playerStatus.IsDead();
+        bool eDead = enemyStatus != null && enemyStatus.IsDead();
+        if (!pDead && !eDead) return false;
+
+        _gameEndTriggered = true;
+
+        try
+        {
+            await Task.Delay(200, ct);
+            await RunOjyouAndHideUIAsync(pDead, eDead, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[BattleManager] ゲーム終了シーケンスがキャンセルされました");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+
+        // リザルト画面の演出は別タスクで非同期に走らせる（呼び出し側を長時間ブロックしない）。
+        _ = RunGameResultScreenAsync(pDead, eDead);
+        return true;
+    }
+
+    /// <summary>
+    /// 往生ポップアップの表示 → 約 2 秒待ち → バトル UI 片付け → BattleEndPhase 遷移までを行う。
+    /// 戻り値 Task が完了した時点でダメージ経路の呼び出し側は安全に抜けられる。
+    /// </summary>
+    private const string OjyouBellSeAddress = "Assets/SE/お寺の鐘.mp3";
+
+    private async Task RunOjyouAndHideUIAsync(bool playerDead, bool enemyDead, CancellationToken ct)
+    {
+        OjyouPopup popupLifetimeRef = null;
+
+        // 往生と同時：鐘＋ BGM フェード（往生表示時間＝フェード秒）
+        float lifetime = 2.0f;
+        if (playerDead)
+        {
+            if (BattleUIManager.I != null)
+                popupLifetimeRef = BattleUIManager.I.ShowOjyouPopup(Side.Player) ?? popupLifetimeRef;
+        }
+        if (enemyDead)
+        {
+            if (BattleUIManager.I != null)
+                popupLifetimeRef = BattleUIManager.I.ShowOjyouPopup(Side.Enemy) ?? popupLifetimeRef;
+        }
+
+        if (popupLifetimeRef != null)
+            lifetime = popupLifetimeRef.SequenceLifetimeSeconds;
+
+        SoundEffectPlayer.I?.Play(OjyouBellSeAddress);
+        BattleBgmController.Instance?.FadeOutBattleBgmAndStop(lifetime);
+
+        await Task.Delay(TimeSpan.FromSeconds(lifetime), ct);
+
+        if (BattleUIManager.I != null)
+        {
+            try
+            {
+                await BattleUIManager.I.ShowPostOjyouFlashAndGameSetAsync(ct);
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        // GAMESET 演出が終わってから 500ms してから GameResult 側のフェード等を行う
+        try
+        {
+            await Task.Delay(500, ct);
+        }
+        catch (OperationCanceledException) { }
+
+        BattleUIManager.I?.HideBattleUIForGameEnd();
+        cardStatsDisplay?.HideAllForGameEnd();
+
+        SetGameState(GameState.BattleEndPhase);
+    }
+
+    /// <summary>
+    /// リザルト画面 Prefab を生成して演出を走らせる（fire-and-forget）。
+    /// </summary>
+    private async Task RunGameResultScreenAsync(bool playerDead, bool enemyDead)
+    {
+        GameObject prefab = gameResultPrefab != null
+            ? gameResultPrefab
+            : Resources.Load<GameObject>("Prefab/GameResult");
+        if (prefab == null)
+        {
+            Debug.LogWarning("[BattleManager] GameResult プレハブが見つかりません");
+            return;
+        }
+
+        var battleUi = BattleUIManager.I;
+        Transform parentForResult = battleUi != null ? battleUi.transform.root : null;
+        GameObject resultGo = parentForResult != null
+            ? Instantiate(prefab, parentForResult, false)
+            : Instantiate(prefab);
+
+        var controller = resultGo.GetComponent<GameResultController>();
+        if (controller == null)
+        {
+            Debug.LogWarning("[BattleManager] GameResultController が GameResult プレハブにアタッチされていません");
+            return;
+        }
+
+        GameResultController.ResultKind kind;
+        if (playerDead && enemyDead) kind = GameResultController.ResultKind.Stalemate;
+        else if (playerDead)         kind = GameResultController.ResultKind.Defeat;
+        else                         kind = GameResultController.ResultKind.Victory;
+
+        try
+        {
+            await controller.ShowAsync(kind, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
         }
     }
 

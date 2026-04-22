@@ -32,6 +32,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1e5cdf426ef9f42439ff750da7e368ad
+    m_Address: "Assets/Music/\u30B2\u30FC\u30E0\u30AF\u30EA\u30A2\u30FC\uFF01.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 20ced266a55940c4bbf1f7babf51fac3
     m_Address: "Assets/Images/02_\u80CC\u666F/\u9727\u72B6\u614B.jpg"
     m_ReadOnly: 0
@@ -52,8 +57,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2db3f714d3140534c82386d3006c8d0c
+    m_Address: "Assets/SE/\u304A\u5BFA\u306E\u9418.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 30612229dd083bc4e91ccd10a623add5
     m_Address: Assets/SE/power14.wav
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3076ac6f4df04274aaebe19e26ee0c3a
+    m_Address: "Assets/SE/\u96FB\u5B50\u30EB\u30FC\u30EC\u30C3\u30C8\u56DE\u8EE2\u4E2D.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -92,6 +107,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 58c18c4b198dcab43a59ed98e3586b16
+    m_Address: "Assets/Images/06_UI\u30D1\u30FC\u30C4/GAMESET.png"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 590b25ec6393bb640a8e364af9e852d0
     m_Address: "Assets/SE/\u30AB\u30FC\u30BD\u30EB\u79FB\u52D51.mp3"
     m_ReadOnly: 0
@@ -124,6 +144,16 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 807e7f75e5c198d4bb829e40ee205fc9
     m_Address: "Assets/SE/\u56DE\u5FA9\u9B54\u6CD53.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85f62be387e297644a873d48dd2a028d
+    m_Address: "Assets/SE/\u96FB\u5B50\u30EB\u30FC\u30EC\u30C3\u30C8\u505C\u6B62\u30DC\u30BF\u30F3\u3092\u62BC\u3059.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c0d96a8f76acae44962acfa7b73b530
+    m_Address: "Assets/SE/\u8A66\u5408\u7D42\u4E86\u306E\u30B4\u30F3\u30B0.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -167,8 +197,23 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c32de875173d67c4b8e8222cc4e66286
+    m_Address: "Assets/Music/\u30A2\u30F3\u30C9\u30ED\u30A4\u30C9\u306E\u6D99.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3b0102b4b4c2584eb8d06968dbbc824
+    m_Address: "Assets/Music/\u30A2\u30AF\u30BB\u30EB_Axcel.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c647f07220d0e5f4191f2edfb847edac
     m_Address: Assets/Music/Extinguish.mp3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cccf830888ce77246abdb1e5d1692bfa
+    m_Address: Assets/Music/COLORS.mp3
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -217,6 +262,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef76f47914e384d4b91b0f09e631e52d
+    m_Address: "Assets/SE/\u6559\u4F1A\u306E\u94181.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: efc39af3a87c2f041b8978d5daab6a9b
     m_Address: "Assets/SE/\u75C5\u30C0\u30E1\u30FC\u30B8.mp3"
     m_ReadOnly: 0
@@ -224,6 +274,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f62b1af42bdf1d44c81c29f603c09396
     m_Address: "Assets/SE/\u30B8\u30E3\u30F3\u30D7.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8f64697be2260e4b901f6fb5ceb9d1c
+    m_Address: "Assets/SE/\u30B2\u30FC\u30B8\u56DE\u5FA92.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

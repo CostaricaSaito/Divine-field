@@ -110,9 +110,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 176.793, y: -14}
-  m_SizeDelta: {x: 24, y: 24}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 163, y: -30}
+  m_SizeDelta: {x: 30, y: 30}
+  m_Pivot: {x: 0, y: 0}
 --- !u!222 &2934839162491555987
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -141,7 +141,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 21300000, guid: 431689c7fcdacf54da8c93900bd3841f, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -185,9 +185,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 294.305, y: -41.600006}
-  m_SizeDelta: {x: 259.02, y: 24.880997}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 165, y: -57}
+  m_SizeDelta: {x: 241.41, y: 25}
+  m_Pivot: {x: 0, y: 0}
 --- !u!222 &5387871961804343222
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -243,10 +243,10 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 25.1
-  m_fontSizeBase: 24
+  m_fontSize: 25
+  m_fontSizeBase: 25
   m_fontWeight: 400
-  m_enableAutoSizing: 1
+  m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
@@ -258,7 +258,7 @@ MonoBehaviour:
   m_lineSpacing: 0
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
-  m_charWidthMaxAdj: 0
+  m_charWidthMaxAdj: 50
   m_enableWordWrapping: 1
   m_wordWrappingRatios: 0.4
   m_overflowMode: 0
@@ -453,9 +453,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 308.93402, y: -12.4410095}
-  m_SizeDelta: {x: 229.76, y: 24.880997}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 195, y: -30}
+  m_SizeDelta: {x: 211.41, y: 30}
+  m_Pivot: {x: 0, y: 0}
 --- !u!222 &7599446996144200729
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -484,7 +484,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: ATK 15
+  m_text: ATK15 / DEF15
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
   m_sharedMaterial: {fileID: 2570324923874611504, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
@@ -511,8 +511,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 30
+  m_fontSizeBase: 30
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -618,7 +618,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MP 10
+  m_text: "\u6D88\u8CBBMP 10"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
   m_sharedMaterial: {fileID: 2570324923874611504, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
@@ -651,7 +651,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -988,9 +988,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 78.100006, y: 0}
-  m_SizeDelta: {x: 131, y: 131}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 12, y: -66.3}
+  m_SizeDelta: {x: 132, y: 132}
+  m_Pivot: {x: 0, y: 0}
 --- !u!222 &1394831081222822217
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1063,9 +1063,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 324.7374, y: 40.324097}
-  m_SizeDelta: {x: 319.8907, y: 39.113}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 165, y: 18}
+  m_SizeDelta: {x: 320, y: 42}
+  m_Pivot: {x: 0, y: 0}
 --- !u!222 &63766811000739031
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1121,10 +1121,10 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36.8
+  m_fontSize: 36
   m_fontSizeBase: 36
   m_fontWeight: 400
-  m_enableAutoSizing: 1
+  m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
@@ -1136,7 +1136,7 @@ MonoBehaviour:
   m_lineSpacing: 0
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
-  m_charWidthMaxAdj: 0
+  m_charWidthMaxAdj: 50
   m_enableWordWrapping: 1
   m_wordWrappingRatios: 0.4
   m_overflowMode: 0

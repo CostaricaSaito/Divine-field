@@ -1,3 +1,5 @@
+﻿using UnityEngine;
+
 /// <summary>
 /// 状態異常（公式ID 1〜15）の一覧。デバッグUIやループ処理用。
 /// </summary>
@@ -39,7 +41,7 @@ public static class StatusEffectCatalog
         return _all[officialId - 1];
     }
 
-    /// <summary>列挙値の公式ID（1〜15）。None は 0。</summary>
+    /// <summary>列挙値の公式ID（1〜15）。None・<see cref="StatusEffectType.RandomOneAilment"/> などは 0。</summary>
     public static int ToOfficialId(StatusEffectType type)
     {
         if (type == StatusEffectType.None) return 0;
@@ -48,5 +50,13 @@ public static class StatusEffectCatalog
             if (_all[i] == type) return i + 1;
         }
         return 0;
+    }
+
+    /// <summary><see cref="AllAilments"/> から等確率で1つを選ぶ（<see cref="StatusEffectType.RandomOneAilment"/> の本体）。</summary>
+    public static StatusEffectType PickRandomAilmentUniform()
+    {
+        var a = AllAilments;
+        if (a == null || a.Length == 0) return StatusEffectType.None;
+        return a[Random.Range(0, a.Length)];
     }
 }

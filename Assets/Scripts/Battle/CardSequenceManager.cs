@@ -786,6 +786,7 @@ public class CardSequenceManager : MonoBehaviour
         {
             await Task.Delay(350, cancellationToken);
             string releaseName = ArchMagicRules.GetReleaseDisplayName(card);
+            SoundEffectPlayer.I?.Play("Assets/SE/教会の鐘1.mp3");
             ImportantPopup rel = BattleUIManager.I?.ShowImportantPopup($"【{releaseName}】解放", new Color(0.95f, 0.85f, 0.3f), ownerSide);
             float rlife = rel != null ? rel.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
             await DamagePopup.WaitAfterPopupLifetimeAsync(rlife, cancellationToken);
@@ -815,6 +816,7 @@ public class CardSequenceManager : MonoBehaviour
 
         // CardDisplayPanel に Prefab を表示（詠唱中は手札選択が無効のため ShowCardDetail は使わない）
         BattleUIManager.I?.ShowInterventionAttackSheet(card, ownerSide);
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
         cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃");
         cardStatsDisplay?.UpdateDisplay();
         SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");

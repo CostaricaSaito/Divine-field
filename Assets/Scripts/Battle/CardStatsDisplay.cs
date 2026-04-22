@@ -79,6 +79,17 @@ public class CardStatsDisplay : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// ゲーム終了時：両サイドの TotalATKDEF ボタンを SetActive(false) で完全に隠す。
+    /// </summary>
+    public void HideAllForGameEnd()
+    {
+        if (totalATKDEFButton != null)
+            totalATKDEFButton.SetActive(false);
+        if (totalATKDEFButtonEnemy != null)
+            totalATKDEFButtonEnemy.SetActive(false);
+    }
+
     private void OnPlayerTotalAtkDefButtonClicked()
     {
         var bm = BattleManager.I;

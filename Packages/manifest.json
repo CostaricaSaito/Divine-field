@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.coffee.ui-effect": "https://github.com/mob-sakai/UIEffect.git?path=Packages/src",
     "com.unity.addressables": "1.22.3",
     "com.unity.collab-proxy": "2.8.2",
     "com.unity.device-simulator.devices": "1.0.1",

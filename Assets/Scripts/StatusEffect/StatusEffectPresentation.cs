@@ -9,6 +9,8 @@ public static class StatusEffectPresentation
     /// <summary>公式名（病・衰弱 …）。None は空文字。</summary>
     public static string GetDisplayName(StatusEffectType type)
     {
+        if (type == StatusEffectType.RandomOneAilment)
+            return "RANDOM（全状態異常から1つ）";
         int id = StatusEffectCatalog.ToOfficialId(type);
         if (id < 1 || id > 15) return string.Empty;
         return StatusEffectCatalog.OfficialDisplayNames[id - 1];
@@ -47,5 +49,6 @@ public static class StatusEffectPresentation
             { StatusEffectType.Intervention, (new Color(0.18f, 0.28f, 0.22f, 0.93f), new Color(0.55f, 1f, 0.75f)) },
             { StatusEffectType.CurseBind, (new Color(0.15f, 0.1f, 0.22f, 0.93f), new Color(0.75f, 0.45f, 1f)) },
             { StatusEffectType.Restraint, (new Color(0.22f, 0.22f, 0.28f, 0.93f), new Color(0.95f, 0.95f, 1f)) },
+            { StatusEffectType.RandomOneAilment, (new Color(0.22f, 0.12f, 0.32f, 0.93f), new Color(0.95f, 0.65f, 1f)) },
         };
 }

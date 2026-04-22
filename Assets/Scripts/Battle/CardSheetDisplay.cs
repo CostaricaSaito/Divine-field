@@ -31,7 +31,7 @@ public class CardSheetDisplay : MonoBehaviour
         currentCardData = cardData;
         SetupArtwork(cardData);
         if (cardNameText) cardNameText.text = cardData.cardName;
-        if (atkDefText) atkDefText.text = $"ATK {cardData.attackPower} / DEF {cardData.defensePower}";
+        if (atkDefText) atkDefText.text = FormatAtkDefLine(cardData.attackPower, cardData.defensePower);
         if (descText) descText.text = cardData.description;
         SetupElementDisplay(cardData);
         SetupGoldOrMpCostDisplay(cardData, ownerForMpDisplay);
@@ -43,7 +43,21 @@ public class CardSheetDisplay : MonoBehaviour
     public void SetAtkDefenseNumbers(int attack, int defense)
     {
         if (atkDefText != null)
-            atkDefText.text = $"ATK {attack} / DEF {defense}";
+            atkDefText.text = FormatAtkDefLine(attack, defense);
+    }
+
+    /// <summary>
+    /// ATK0→DEFのみ、DEF0→ATKのみ、両方0→空欄。それ以外は従来どおり ATK / DEF。
+    /// </summary>
+    private static string FormatAtkDefLine(int attack, int defense)
+    {
+        if (attack == 0 && defense == 0)
+            return "";
+        if (attack == 0)
+            return $"DEF {defense}";
+        if (defense == 0)
+            return $"ATK {attack}";
+        return $"ATK {attack} / DEF {defense}";
     }
 
     /// <summary>

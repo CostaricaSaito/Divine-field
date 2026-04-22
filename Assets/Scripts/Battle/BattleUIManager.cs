@@ -7,6 +7,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Linq;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public enum Side { Player, Enemy }
 
@@ -58,6 +60,8 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private GameObject damagePopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
     [SerializeField] private GameObject importantPopupPrefab;
+    [Tooltip("未設定時は Resources.Load(\"Prefab/OjyouPopup\") を試す")]
+    [SerializeField] private GameObject ojyouPopupPrefab;
     [SerializeField] private Canvas uiCanvas;
 
     [Header("カード詳細表示")]
@@ -123,6 +127,21 @@ public class BattleUIManager : MonoBehaviour
     private float _defaultUseButtonLabelOutlineWidth;
     private Color _defaultUseButtonLabelOutlineColor = Color.black;
     private GameObject _fullscreenWhiteFlashGo;
+    private GameObject _gameSetOverlayGo;
+
+    [Header("ゲーム終了：GAMESET 表示")]
+    [Tooltip("中間点・フェード前の基準スケール（1.0 = Rect の描画大きさに対する乗数）。")]
+    [SerializeField] private float gameSetDisplayScale = 1.1f;
+    [Tooltip("出現直後の大きさは「基準のこの倍率」。例:5 で基準の 5 倍。")]
+    [SerializeField] private float gameSetStartScaleFactor = 5f;
+    [SerializeField] private float gameSetShrinkToBaseDuration = 0.2f;
+    [SerializeField] private float gameSetExpandDuration = 1f;
+    [Tooltip("中間点からの最終拡大。例:1.5 で基準の 1.5 倍まで。")]
+    [SerializeField] private float gameSetEndScaleOfBase = 1.5f;
+    [SerializeField] private float gameSetFadeOutDuration = 0.4f;
+    [Tooltip("GameSet スケール・フェードのイージング（前半で変化量が大きく、後半はゆるやか＝Out 系推奨）。")]
+    [SerializeField] private LeanTweenType gameSetScaleEase = LeanTweenType.easeOutCubic;
+    [SerializeField] private LeanTweenType gameSetFadeEase = LeanTweenType.easeOutCubic;
 
     // ポップアップ状態管理
     private bool isHandInputBlocked = false;
@@ -1046,6 +1065,64 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 「往生」ポップアップを表示する（ゲーム終了時）。指定側の CardDisplayPanel の子として生成し、
+    /// 中央配置から <see cref="OjyouPopup"/> がパネル上端まで上昇しながらフェードする。
+    /// </summary>
+    public OjyouPopup ShowOjyouPopup(Side side)
+    {
+        GameObject prefab = ojyouPopupPrefab != null
+            ? ojyouPopupPrefab
+            : Resources.Load<GameObject>("Prefab/OjyouPopup");
+        if (prefab == null)
+        {
+            Debug.LogWarning("[BattleUIManager] OjyouPopup プレハブが見つかりません");
+            return null;
+        }
+
+        Transform parent = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (parent == null)
+        {
+            Debug.LogWarning("[BattleUIManager] CardDisplayPanel が未設定のため OjyouPopup を表示できません");
+            return null;
+        }
+
+        var go = Instantiate(prefab, parent, false);
+        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
+
+        var popup = go.GetComponent<OjyouPopup>();
+        if (popup != null)
+            popup.Setup("往生", Color.black);
+        else
+            Debug.LogWarning("[BattleUIManager] OjyouPopup コンポーネントが見つかりません");
+        return popup;
+    }
+
+    /// <summary>
+    /// ゲーム終了時にバトル用 UI（カード表示パネル・TotalATKDEF・UseButton・許す・経済アクション）を一括で隠す／非アクティブ化する。
+    /// 手札のタップも <see cref="SetHandClickable"/> で封鎖する。
+    /// </summary>
+    public void HideBattleUIForGameEnd()
+    {
+        if (playerCardDisplayPanel != null)
+            playerCardDisplayPanel.gameObject.SetActive(false);
+        if (enemyCardDisplayPanel != null)
+            enemyCardDisplayPanel.gameObject.SetActive(false);
+
+        if (useButton != null)
+            useButton.gameObject.SetActive(false);
+        if (yurusuDisplay != null)
+            yurusuDisplay.SetActive(false);
+
+        if (buyButton != null) buyButton.interactable = false;
+        if (sellButton != null) sellButton.interactable = false;
+        if (exchangeButton != null) exchangeButton.interactable = false;
+
+        SetHandClickable(false);
+
+        Debug.Log("[BattleUIManager] ゲーム終了：バトル UI を非表示化しました");
+    }
+
+    /// <summary>
     /// Canvas の X 中心と、<paramref name="cardPanelSide"/> の CardDisplayPanel の Y 中心を合わせた位置にルートを置く。
     /// </summary>
     private void ApplyImportantPopupLayout(RectTransform popupRt, Side cardPanelSide)
@@ -1714,6 +1791,188 @@ public class BattleUIManager : MonoBehaviour
             _fullscreenWhiteFlashGo.SetActive(false);
     }
 
+    private const string GameSetSpriteAddress = "Assets/Images/06_UIパーツ/GAMESET.png";
+    private const string PostOjyouGameGongSeAddress = "Assets/SE/試合終了のゴング.mp3";
+
+    /// <summary>
+    /// 往生アニメ終了直後：反射「弾き返し」と同じ全画面白フラッシュ → 中央に GAMESET 大表示＋ゴング SE。一定時間後に画像を消す。
+    /// </summary>
+    public async Task ShowPostOjyouFlashAndGameSetAsync(CancellationToken ct = default)
+    {
+        if (uiCanvas == null) return;
+
+        PlayFullscreenWhiteFlashMs(50f);
+        try
+        {
+            await Task.Delay(50, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_gameSetOverlayGo != null)
+        {
+            Destroy(_gameSetOverlayGo);
+            _gameSetOverlayGo = null;
+        }
+
+        var h = Addressables.LoadAssetAsync<Sprite>(GameSetSpriteAddress);
+        var tcs = new TaskCompletionSource<Sprite>();
+        h.Completed += op =>
+        {
+            if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
+                tcs.TrySetResult(op.Result);
+            else
+            {
+                Debug.LogWarning("[BattleUIManager] GAMESET スプライトの読み込みに失敗: " + GameSetSpriteAddress);
+                tcs.TrySetResult(null);
+            }
+        };
+
+        Sprite sprite;
+        try
+        {
+            sprite = await tcs.Task;
+        }
+        catch (Exception)
+        {
+            sprite = null;
+        }
+
+        if (sprite == null) return;
+
+        var go = new GameObject("GameSetOverlay");
+        go.transform.SetParent(uiCanvas.transform, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.1f, 0.1f);
+        rt.anchorMax = new Vector2(0.9f, 0.9f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        var img = go.AddComponent<Image>();
+        img.sprite = sprite;
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        img.type = Image.Type.Simple;
+        var cg = go.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+        _gameSetOverlayGo = go;
+        go.transform.SetAsLastSibling();
+
+        SoundEffectPlayer.I?.Play(PostOjyouGameGongSeAddress);
+
+        // 出現: 大きさ ~5x・真っ白 → 0.1s で基準 → 1s で基準の 1.5 倍 → フェードアウト
+        try
+        {
+            await AnimateGameSetOverlayAsync(rt, img, cg, ct);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (_gameSetOverlayGo != null)
+            {
+                Destroy(_gameSetOverlayGo);
+                _gameSetOverlayGo = null;
+            }
+        }
+    }
+
+    private async Task AnimateGameSetOverlayAsync(RectTransform rt, Image img, CanvasGroup canvasGroup, CancellationToken ct)
+    {
+        if (rt == null || img == null) return;
+
+        GameObject go = rt.gameObject;
+        float baseScale = Mathf.Max(0.01f, gameSetDisplayScale);
+        float fromScale = baseScale * Mathf.Max(0.1f, gameSetStartScaleFactor);
+        float midScale = baseScale;
+        float toScale = baseScale * Mathf.Max(0.1f, gameSetEndScaleOfBase);
+
+        img.color = Color.white;
+        img.material = null;
+        rt.localScale = new Vector3(fromScale, fromScale, 1f);
+
+        float dur0 = Mathf.Max(0.01f, gameSetShrinkToBaseDuration);
+        float dur1 = Mathf.Max(0.01f, gameSetExpandDuration);
+        var easeS = gameSetScaleEase;
+
+        void ApplyScale(float s)
+        {
+            if (rt != null) rt.localScale = new Vector3(s, s, 1f);
+        }
+
+        try
+        {
+            await LeanTweenValueFloatWithEaseAsync(
+                go, ApplyScale, fromScale, midScale, dur0, easeS, ct);
+            if (rt != null)
+                rt.localScale = new Vector3(midScale, midScale, 1f);
+            await LeanTweenValueFloatWithEaseAsync(
+                go, ApplyScale, midScale, toScale, dur1, easeS, ct);
+            if (rt != null)
+                rt.localScale = new Vector3(toScale, toScale, 1f);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+
+        if (canvasGroup == null) return;
+        try
+        {
+            float durFade = Mathf.Max(0.01f, gameSetFadeOutDuration);
+            await LeanTweenValueFloatWithEaseAsync(
+                go, a => { if (canvasGroup != null) canvasGroup.alpha = a; },
+                1f, 0f, durFade, gameSetFadeEase, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        if (canvasGroup != null) canvasGroup.alpha = 0f;
+    }
+
+    /// <summary>LeanTween で float をトゥイーン。easeOut 系は前半の変化が大きく、後半は緩やかに見える。</summary>
+    private static async Task LeanTweenValueFloatWithEaseAsync(
+        GameObject go,
+        Action<float> onUpdate,
+        float from,
+        float to,
+        float time,
+        LeanTweenType ease,
+        CancellationToken ct)
+    {
+        if (go == null || onUpdate == null) return;
+        if (time < 0.0001f)
+        {
+            onUpdate(to);
+            return;
+        }
+        onUpdate(from);
+        var tcs = new TaskCompletionSource<bool>();
+        var reg = ct.Register(() =>
+        {
+            if (go != null) LeanTween.cancel(go);
+            tcs.TrySetCanceled();
+        });
+        try
+        {
+            LeanTween.value(go, onUpdate, from, to, time)
+                .setEase(ease)
+                .setIgnoreTimeScale(true)
+                .setOnComplete(() =>
+                {
+                    if (!tcs.Task.IsCompleted)
+                        tcs.TrySetResult(true);
+                });
+            await tcs.Task.ConfigureAwait(true);
+        }
+        finally
+        {
+            reg.Dispose();
+        }
+    }
+
     /// <summary>介入発動時のメッセージ（病系処理より前）。</summary>
     public void ShowInterventionIntroPopup(PlayerStatus attackerStatus)
     {
@@ -1850,6 +2109,15 @@ public class BattleUIManager : MonoBehaviour
     public void UpdateEconomicActionButtons()
     {
         if (EconomicAction.I == null) return;
+
+        // ゲーム終了処理中は経済アクションを再アクティブ化しない
+        if (BattleManager.I != null && BattleManager.I.IsGameEndTriggered)
+        {
+            if (buyButton != null) buyButton.interactable = false;
+            if (sellButton != null) sellButton.interactable = false;
+            if (exchangeButton != null) exchangeButton.interactable = false;
+            return;
+        }
 
         // 買うボタン
         if (buyButton != null)

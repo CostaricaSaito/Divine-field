@@ -322,6 +322,35 @@ public class BattleBgmController : MonoBehaviour
 
     public bool IsArchMagicBackgroundOverrideActive => _archMagicOverrideActive;
 
+    /// <summary>ゲーム終了時：現在のバトル BGM の音量を下げゼロにして停止する（リザルト用に呼ぶ）。</summary>
+    public void FadeOutBattleBgmAndStop(float durationSeconds)
+    {
+        if (_source == null) return;
+        if (_fadeCoroutine != null)
+            StopCoroutine(_fadeCoroutine);
+        _fadeCoroutine = StartCoroutine(CoFadeOutOnlyAndStop(durationSeconds));
+    }
+
+    private IEnumerator CoFadeOutOnlyAndStop(float durationSeconds)
+    {
+        float v0 = _source != null ? _source.volume : 0f;
+        float d = Mathf.Max(0.05f, durationSeconds);
+        float t = 0f;
+        while (t < d)
+        {
+            t += Time.unscaledDeltaTime;
+            if (_source != null)
+                _source.volume = Mathf.Lerp(v0, 0f, t / d);
+            yield return null;
+        }
+        if (_source != null)
+        {
+            _source.Stop();
+            _source.volume = v0; // 次入場用にインスペクタ想定の音量に戻す
+        }
+        _fadeCoroutine = null;
+    }
+
     private IEnumerator LoadSpriteToField(string address, System.Action<Sprite> assign)
     {
         if (string.IsNullOrEmpty(address))

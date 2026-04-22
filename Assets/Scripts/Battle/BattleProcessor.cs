@@ -53,9 +53,6 @@ public class BattleProcessor : MonoBehaviour
     [Header("状態異常（未設定時はランタイム既定）")]
     [SerializeField] private StatusProgressionConfig statusProgressionConfig;
 
-    [Header("音響")]
-    public AudioClip damageSE;
-
     /// <summary>
     /// 戦闘解決（状態異常付与など）完了後、<see cref="CardSequenceManager"/> に戻る直前の待機。
     /// </summary>
@@ -627,14 +624,7 @@ public class BattleProcessor : MonoBehaviour
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
-    /// <summary>ミス時など、命中後のダメージ結果に依らないSE。</summary>
-    private void PlayDamageSE()
-    {
-        if (damageSE != null)
-            SoundEffectPlayer.I?.Play(damageSE);
-    }
-
-    /// <summary>命中後：ダメージ0（ダメージなし！）はピコッ、1以上は従来の damageSE。</summary>
+    /// <summary>命中後：0 は「ピコッ」、1〜29 は <see cref="DamagePopupSfx.Slash"/>、30 以上は <see cref="DamagePopupSfx.Explosion"/>（Addressables）。</summary>
     private void PlayDamageSE(int finalDamage)
     {
         if (finalDamage <= 0)
@@ -642,8 +632,10 @@ public class BattleProcessor : MonoBehaviour
             SoundEffectPlayer.I?.Play("Assets/SE/ピコッ.mp3");
             return;
         }
-        if (damageSE != null)
-            SoundEffectPlayer.I?.Play(damageSE);
+        if (finalDamage >= DamagePopupSfx.HighDamageMin)
+            SoundEffectPlayer.I?.Play(DamagePopupSfx.Explosion);
+        else
+            SoundEffectPlayer.I?.Play(DamagePopupSfx.Slash);
     }
 
     /// <summary>
@@ -802,7 +794,14 @@ public class BattleProcessor : MonoBehaviour
         await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage, defenseCardsForStatusRule);
 
         if (IsDead(attacker) || IsDead(defender))
+        {
             Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
+            if (BattleManager.I != null)
+            {
+                bool handled = await BattleManager.I.TryHandleDeathIfAnyAsync();
+                if (handled) return;
+            }
+        }
 
         await Task.Delay(CombatResolveTailDelayMs);
         Debug.Log($"[BattleProcessor] 戦闘解決完了");

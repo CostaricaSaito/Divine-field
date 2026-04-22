@@ -11,7 +11,7 @@ public sealed class StatusProgressionConfig : ScriptableObject
     [Min(1)] public int defaultSealDurationTurns = 2;
 
     [Header("病系（段階付与）")]
-    [Tooltip("楽園病の状態で「病」相当の付与が来たとき、ターン終了10%絶頂とは別ルートの強制絶頂を発生させる")]
+    [Tooltip("楽園病中に病系（病・重病・煉獄・楽園のいずれか）が付与されたとき、強制絶頂（残りHP相当・状態異常の被ダメ軽減なし）を発生させる")]
     public bool paradisePlusSicknessForcesEcstasy = true;
 
     [Header("眼精疲労 / 群発頭痛")]
