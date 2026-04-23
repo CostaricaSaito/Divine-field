@@ -15,7 +15,7 @@ MonoBehaviour:
   cardName: "<<\u30D5\u30A1\u30A4\u30A2\u30DC\u30FC\u30EB>>"
   cardType: 2
   cardImage: {fileID: 21300000, guid: 0994282337beb9a49b103554c66cb2df, type: 3}
-  description: +2
+  description: "\u706B\u306E\u7389\u3092\u98DB\u3070\u3059"
   attackPower: 2
   defensePower: 0
   element: 1
@@ -47,4 +47,6 @@ MonoBehaviour:
   attackComboPickRule: 0
   reflectionKind: 0
   blockingKind: 0
+  parryKind: 0
   specialAttackRule: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}

@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: OmegaGalaxyRule
   m_EditorClassIdentifier: 
   castTurns: 2
-  backgroundSprite: {fileID: 21300000, guid: 6f54692fb72b300499cc832ed5af9a76, type: 3}
+  backgroundSprite: {fileID: 21300000, guid: 81c38db8f92d31946adf12b6d5ffe548, type: 3}
   displayNameForRelease: "\u5927\u9280\u6CB3"

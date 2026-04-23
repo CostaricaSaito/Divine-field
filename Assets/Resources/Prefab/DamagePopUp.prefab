@@ -65,7 +65,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u75C5\u304C"
+  m_text: "\u3042\u3042\u3042\u3042"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
   m_sharedMaterial: {fileID: 2570324923874611504, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
@@ -92,7 +92,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 150
+  m_fontSize: 90
   m_fontSizeBase: 160
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -515,5 +515,7 @@ MonoBehaviour:
   reflectionPanelBackground: {r: 0.82, g: 0.08, b: 0.1, a: 0.96}
   blockingNullifyPanelBackground: {r: 0, g: 0, b: 0, a: 0.96}
   blockingNullifyMessageFill: {r: 0.55, g: 0.55, b: 0.55, a: 1}
+  parryPanelBackground: {r: 0.96862745, g: 0.827451, b: 0.34509805, a: 0.96}
+  parryMessageOutlineWidth: 0.4
   floatSpeed: 30
   fadeDuration: 1

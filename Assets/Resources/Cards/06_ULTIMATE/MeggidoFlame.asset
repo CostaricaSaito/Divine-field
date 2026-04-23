@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
+  m_Name: MeggidoFlame
+  m_EditorClassIdentifier: 
+  cardName: "\u30E1\u30AE\u30C9\u30D5\u30EC\u30A4\u30E0"
+  cardType: 6
+  cardImage: {fileID: 21300000, guid: 9b7d894ea6f298e42b95963898b7107c, type: 3}
+  description: "\u708E\u5C5E\u6027\u306E20\u30C0\u30E1\u30FC\u30B8\u3002"
+  attackPower: 20
+  defensePower: 0
+  element: 1
+  hitRate: 100
+  mpCost: 0
+  maxUses: 1
+  isCombinationMagic: 0
+  recoveryAmount: 0
+  healsHP: 0
+  healsMP: 0
+  healsGP: 0
+  clearsAllStatusAilmentsOnUse: 0
+  usableInAttackPhase: 1
+  usableInDefensePhase: 0
+  isPrimaryAttack: 1
+  isAdditionalAttack: 0
+  isPrimaryDefense: 0
+  isCounterAttack: 0
+  isRecovery: 0
+  isSpecialEffect: 0
+  canApplyStatusEffect: 0
+  statusEffectChance: 0
+  statusEffectToApply: 0
+  statusEffectApplyTiming: 0
+  cardValue: 0
+  isRare: 0
+  attackPhaseRole: 2
+  defensePhaseRole: 0
+  attackComboPickRule: 0
+  reflectionKind: 0
+  blockingKind: 0
+  parryKind: 0
+  specialAttackRule: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 21300000, guid: 936dd3ffb783ac64f8f7633ed876a216, type: 3}

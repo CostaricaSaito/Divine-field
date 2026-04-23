@@ -142,8 +142,9 @@ public class EnemyAI
         if (choices == null || choices.Count == 0)
             return null;
 
-        // 物理無効カードは通常防御候補に含めない（無効化ルート専用）
+        // 物理無効・打ち払いは専用ルート（ExecuteDefenseSelectAsync 先頭の優先分岐）のみ
         choices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        choices.RemoveAll(c => c != null && ParryRules.IsParryCard(c));
         if (choices.Count == 0)
             return null;
 
@@ -220,6 +221,13 @@ public class EnemyAI
         }
         else
         {
+            // マジカルエクスプロージョンは白フラッシュ→MP 全喪失→ATK ランプのあと手札から除去（CardSequence 側）
+            if (MagicalExplosionRules.IsMagicalExplosionCard(attack))
+            {
+                Debug.Log("[EnemyAI] マジカルエクスプロージョンは演出完了後に手札から除去します");
+                return attack;
+            }
+
             // 通常カード
             battleProcessor.UseCard(attack, cpuHand);
             handRefill?.RecordEnemyUse(attack);
@@ -264,6 +272,19 @@ public class EnemyAI
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 魔法反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
+                }
+            }
+
+            if (defenseCard == null)
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (c != null && ParryRules.RequiresParryExclusiveLock(c, incomingForReflection))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 打ち払いを優先: {defenseCard.cardName}");
                         break;
                     }
                 }

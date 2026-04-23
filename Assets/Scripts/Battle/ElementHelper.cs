@@ -54,11 +54,23 @@ public static class ElementHelper
     /// - 全て同一属性 or 光との組み合わせ → その非光属性
     /// - 光のみ → 光
     /// - 非光属性が2種以上混在 → 無属性
+    /// - Spellbook of xx（<see cref="SpellbookRuleSO"/>）を複数枚コンボに含めると最終属性はその SO の属性（<paramref name="applySpellbookElementForce"/> が true のとき）
     /// </summary>
-    public static ElementType GetCombinedElement(List<CardData> cards)
+    public static ElementType GetCombinedElement(IReadOnlyList<CardData> cards, bool applySpellbookElementForce = true)
     {
         if (cards == null || cards.Count == 0) return ElementType.None;
 
+        ElementType core = GetCombinedElementCore(cards);
+        if (applySpellbookElementForce
+            && SpellbookRules.ShouldForceComboElement(cards)
+            && SpellbookRules.TryGetForcedComboElement(cards, out ElementType forced))
+            return forced;
+        return core;
+    }
+
+    /// <summary>魔導書の属性固定を適用しない合算（演出中の表示用）。</summary>
+    private static ElementType GetCombinedElementCore(IReadOnlyList<CardData> cards)
+    {
         // ゴッドレイジと他カードの組み合わせ：ダメージは 2 倍だが合算属性は無属性
         if (GodrageRules.IsGodrageDoublingCombo(cards))
             return ElementType.None;

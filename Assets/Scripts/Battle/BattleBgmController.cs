@@ -92,7 +92,7 @@ public class BattleBgmController : MonoBehaviour
     {
         if (_source == null || player == null) return;
 
-        bool want = DisadvantageRules.IsDisadvantaged(player);
+        bool want = DisadvantageRules.IsDisadvantaged(player) && !player.hasUsedManifestationSkill;
 
         if (!_lastDisadvantageWant.HasValue)
         {

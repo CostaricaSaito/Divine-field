@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
@@ -65,6 +66,8 @@ public class BattleManager : MonoBehaviour
 
     [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
+    [Tooltip("PvP：相手側召喚アイコン用。未設定なら片側のみ。")]
+    [SerializeField] private SummonSkillButton enemySummonSkillButton;
     public CardPurchaseAnimation cardPurchaseAnimation;
     [SerializeField] private CardSellAnimation cardSellAnimation;
 
@@ -97,6 +100,12 @@ public class BattleManager : MonoBehaviour
     public PlayerType CurrentTurnOwner { get; private set; } = PlayerType.Player;
 
     private CardData currentAttackCard;
+
+    /// <summary>Resources の SummonSkillPopup が開いている間、手札・経済・重複表示を防ぐ。</summary>
+    public bool IsSummonSkillPopupOpen => _summonSkillPopupRoot != null;
+
+    private GameObject _summonSkillPopupRoot;
+    private bool _manifestationFlowRunning;
 
     /// <summary>攻撃フェーズでプレイヤーが「自分自身」を攻撃対象にするモード（TotalATK/DEF タップで切替）。</summary>
     private bool _playerSelfAttackTargetMode;
@@ -243,6 +252,7 @@ public class BattleManager : MonoBehaviour
     private CardData selectedDefenseCard;
     private TaskCompletionSource<List<CardData>> _reflectionChainDefenseTcs;
     private List<CardData> _reflectionChainAttackSnapshot;
+    private TaskCompletionSource<List<CardData>> _parryRerunDefenseTcs;
 
     /// <summary>反射スライド後：TOTAL ATK を攻撃側から反射側へ移した表示用（<see cref="SetReflectionAttackTotalDisplayAfterSlide"/>）。</summary>
     private bool _reflectionAtkTotalActive;
@@ -391,7 +401,7 @@ public class BattleManager : MonoBehaviour
         {
             foreach (var c in playerHand)
             {
-                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c) && !defenseChoices.Contains(c))
+                if (c != null && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, attackSource) && !defenseChoices.Contains(c))
                     defenseChoices.Add(c);
             }
         }
@@ -404,9 +414,13 @@ public class BattleManager : MonoBehaviour
         {
             foreach (var c in playerHand)
             {
-                if (c != null && ReflectionRules.IsMagicReflectionCard(c) && !defenseChoices.Contains(c))
+                if (c != null && ReflectionRules.CanUseMagicReflectionAgainstAttack(c, attackSource) && !defenseChoices.Contains(c))
                     defenseChoices.Add(c);
             }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsMagicReflectionCard(c));
         }
 
         if (BlockingRules.CanBlockPhysical(attackSource))
@@ -420,6 +434,13 @@ public class BattleManager : MonoBehaviour
         else
         {
             defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        }
+
+        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, attackSource));
+        foreach (var c in playerHand)
+        {
+            if (c != null && ParryRules.CanParryIncoming(c, attackSource) && !defenseChoices.Contains(c))
+                defenseChoices.Add(c);
         }
 
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
@@ -437,6 +458,45 @@ public class BattleManager : MonoBehaviour
     public bool IsReflectionChainDefensePending()
     {
         return _reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted;
+    }
+
+    /// <summary>打ち払い後、攻撃が自分側に戻ったあとの再防御入力待ちか。</summary>
+    public bool IsParryRerunDefensePending()
+    {
+        return _parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted;
+    }
+
+    /// <summary>打ち払い「こちらに飛んできた！」後、再び防御を選ぶまで待つ（許す＝空リスト）。</summary>
+    public async Task<List<CardData>> WaitForParryRerunDefenseSubmitAsync(CancellationToken cancellationToken)
+    {
+        _parryRerunDefenseTcs = new TaskCompletionSource<List<CardData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        isProcessingUseButton = false;
+        selectedDefenseCard = null;
+        BattleUIManager.I?.ClearAllSelections();
+        ClearSelectedCards();
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.SetUseButtonInteractable(true);
+        BattleUIManager.I?.SetUseButtonLabel("許す");
+        RefreshPlayerDefensePhaseInteractivity();
+        BattleUIManager.I?.UpdateDefenseButtonLabel();
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+        try
+        {
+            using (cancellationToken.Register(() =>
+                   {
+                       if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
+                           _parryRerunDefenseTcs.TrySetCanceled();
+                   }))
+            {
+                return await _parryRerunDefenseTcs.Task;
+            }
+        }
+        finally
+        {
+            _parryRerunDefenseTcs = null;
+            BattleUIManager.I?.SetHandClickable(false);
+        }
     }
 
     /// <summary>連鎖反射時の攻撃カードスナップショット（可否判定用）。</summary>
@@ -550,7 +610,7 @@ public class BattleManager : MonoBehaviour
         {
             foreach (var c in playerHand)
             {
-                if (c != null && ReflectionRules.IsPhysicalReflectionCard(c) && !defenseChoices.Contains(c))
+                if (c != null && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, attackSnapshot) && !defenseChoices.Contains(c))
                     defenseChoices.Add(c);
             }
         }
@@ -563,9 +623,13 @@ public class BattleManager : MonoBehaviour
         {
             foreach (var c in playerHand)
             {
-                if (c != null && ReflectionRules.IsMagicReflectionCard(c) && !defenseChoices.Contains(c))
+                if (c != null && ReflectionRules.CanUseMagicReflectionAgainstAttack(c, attackSnapshot) && !defenseChoices.Contains(c))
                     defenseChoices.Add(c);
             }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsMagicReflectionCard(c));
         }
 
         if (BlockingRules.CanBlockPhysical(attackSnapshot))
@@ -579,6 +643,13 @@ public class BattleManager : MonoBehaviour
         else
         {
             defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        }
+
+        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, attackSnapshot));
+        foreach (var c in playerHand)
+        {
+            if (c != null && ParryRules.CanParryIncoming(c, attackSnapshot) && !defenseChoices.Contains(c))
+                defenseChoices.Add(c);
         }
 
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
@@ -662,7 +733,8 @@ public class BattleManager : MonoBehaviour
         battleDebug?.ApplyInitialSummonOverrides(playerStatus, enemyStatus);
 #endif
 
-        summonSkillButton.SetStatus(playerStatus, enemyStatus);
+        summonSkillButton?.Configure(playerStatus, enemyStatus);
+        enemySummonSkillButton?.Configure(enemyStatus, playerStatus);
 
         // システム初期化
         cardDealer.Initialize(playerStatus, enemyStatus, handPanel, cardUIPrefab, cardBackSprite);
@@ -954,6 +1026,8 @@ public class BattleManager : MonoBehaviour
 
             // MagicPanel のインタラクティブ状態を更新
             BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+
+            RefreshSummonSkillButtonInteractables();
         }
         else
         {
@@ -962,6 +1036,8 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.SetUseButtonInteractable(false);
             BattleUIManager.I?.SetIntroModeUI(playerHand);
         }
+
+        RefreshSummonSkillButtonInteractables();
     }
 
     private async Task RunDefenseSelectAsync()
@@ -1091,6 +1167,7 @@ public class BattleManager : MonoBehaviour
 
             if (_phaseCts.Token.IsCancellationRequested) return;
 
+            ClearMagicalExplosionComboMpPoolSnapshot();
             // ダメージ処理完了後、全カード表示をクリア
             BattleUIManager.I?.HideAllCardDetails();
 
@@ -1295,20 +1372,25 @@ public class BattleManager : MonoBehaviour
 
         currentAttackCard = attack;
 
-        // 敵の攻撃カードを表示
-        BattleUIManager.I?.ShowCardDetail(attack, Side.Enemy);
-        
-        // 相手のカード決定時の効果音
-        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-        Debug.Log($"[BattleManager] 相手のカード決定: {attack.cardName}");
+        var token = _phaseCts != null ? _phaseCts.Token : default;
 
-        // ステータスUI更新（MP消費の反映）
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-
-        // 敵のTotalATKDEF表示を更新
-        cardStatsDisplay.UpdateDisplay();
-
-        await Task.Delay(1000);
+        if (MagicalExplosionRules.IsMagicalExplosionCard(attack) && cardSequenceManager != null)
+        {
+            Debug.Log("[BattleManager] 敵マジカルエクスプロージョン演出（MP 全喪失・ATK ランプ）");
+            await cardSequenceManager.PresentEnemyMagicalExplosionAttackAsync(attack, token);
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            cardStatsDisplay?.UpdateDisplay();
+        }
+        else
+        {
+            // 敵の攻撃カードを表示
+            BattleUIManager.I?.ShowCardDetail(attack, Side.Enemy);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            Debug.Log($"[BattleManager] 相手のカード決定: {attack.cardName}");
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            cardStatsDisplay.UpdateDisplay();
+            await Task.Delay(1000);
+        }
 
         var atkList = new List<CardData> { attack };
         bool confusedEnemy = enemyStatus != null && enemyStatus.HasConfusionEffect();
@@ -1322,7 +1404,6 @@ public class BattleManager : MonoBehaviour
             await Task.Delay(500);
             if (cardSequenceManager != null)
             {
-                var token = _phaseCts != null ? _phaseCts.Token : default;
                 bool finished = await cardSequenceManager.ResolvePlayerAttackCombatAsync(atkList, enemyStatus, enemyStatus, cpuHand, token);
                 BattleUIManager.I?.HideAllCardDetails();
                 currentAttackCard = null;
@@ -1350,6 +1431,9 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.ShowMissPopup(playerStatus);
             await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown);
             BattleUIManager.I?.HideAllCardDetails();
+            cardStatsDisplay?.ClearSequenceCards();
+            cardStatsDisplay?.ClearMagicalExplosionAttackDisplayLocks();
+            ClearMagicalExplosionComboMpPoolSnapshot();
             currentAttackCard = null;
             SetGameState(GameState.CombatResolvePhase);
             return;
@@ -1578,7 +1662,13 @@ public class BattleManager : MonoBehaviour
             }
             else
             {
-                RectTransform handRt = card.cardUI != null ? card.cardUI.transform as RectTransform : null;
+                RectTransform handRt = null;
+                if (card.cardUI != null)
+                {
+                    handRt = card.cardUI.cardImage != null
+                        ? card.cardUI.cardImage.rectTransform
+                        : card.cardUI.transform as RectTransform;
+                }
                 if (handRt != null && BattleUIManager.I != null && card.cardImage != null)
                 {
                     int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
@@ -1680,6 +1770,14 @@ public class BattleManager : MonoBehaviour
                 return;
             }
 
+            if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
+            {
+                _parryRerunDefenseTcs.TrySetResult(new List<CardData>());
+                BattleUIManager.I?.ClearAllSelections();
+                UpdateTotalATKDEFDisplay();
+                return;
+            }
+
             // 防御カードを1枚も使わない場合（「許す」）
             Debug.Log("[BattleManager] 防御カードを使用せずにダメージを受ける（許す）");
             HandleNoDefenseCard();
@@ -1697,6 +1795,22 @@ public class BattleManager : MonoBehaviour
             }
 
             _reflectionChainDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
+            BattleUIManager.I?.ClearAllSelections();
+            UpdateTotalATKDEFDisplay();
+            return;
+        }
+
+        if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
+        {
+            if (playerStatus != null
+                && playerStatus.HasRestraintEffect()
+                && selectedDefenseCards.Count > 1)
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+                return;
+            }
+
+            _parryRerunDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
             BattleUIManager.I?.ClearAllSelections();
             UpdateTotalATKDEFDisplay();
             return;
@@ -1747,6 +1861,7 @@ public class BattleManager : MonoBehaviour
 
         if (token.IsCancellationRequested) return;
 
+        ClearMagicalExplosionComboMpPoolSnapshot();
         // ダメージ処理完了後、全カード表示をクリア
         BattleUIManager.I?.HideAllCardDetails();
 
@@ -1776,6 +1891,227 @@ public class BattleManager : MonoBehaviour
             Debug.Log($"[BattleManager] 敵の攻撃カード: {currentAttackCard?.cardName ?? "なし"}");
             return new List<CardData> { currentAttackCard };
         }
+    }
+
+    public void RefreshSummonSkillButtonInteractables()
+    {
+        summonSkillButton?.RefreshInteractable();
+        enemySummonSkillButton?.RefreshInteractable();
+    }
+
+    public bool TryOpenSummonSkillPopup(PlayerStatus summoner, PlayerStatus opponent)
+    {
+        if (_summonSkillPopupRoot != null || summoner == null || opponent == null) return false;
+        if (summoner.hasUsedManifestationSkill) return false;
+        if (CurrentState != GameState.AttackPhase) return false;
+
+        bool summonerIsPlayer = ReferenceEquals(summoner, playerStatus);
+        if (CurrentTurnOwner != (summonerIsPlayer ? PlayerType.Player : PlayerType.Enemy))
+            return false;
+
+        if (summoner.summonData == null || summoner.summonData.manifestationCard == null) return false;
+        if (IsEconomicActionInProgress()) return false;
+        if (CardSelectionManager.I != null && CardSelectionManager.I.SelectedCardCount > 0) return false;
+
+        var prefab = Resources.Load<GameObject>("Prefab/SummonSkillPopup");
+        if (prefab == null)
+        {
+            Debug.LogError("[BattleManager] Resources/Prefab/SummonSkillPopup が見つかりません");
+            return false;
+        }
+
+        var canvas = BattleUIManager.I != null ? BattleUIManager.I.GetPopupCanvas() : null;
+        if (canvas == null) return false;
+
+        _summonSkillPopupRoot = Instantiate(prefab, canvas.transform, false);
+        var rt = _summonSkillPopupRoot.GetComponent<RectTransform>();
+        if (rt != null)
+        {
+            rt.localScale = Vector3.one;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+        }
+
+        BindSummonSkillPopupUi(_summonSkillPopupRoot, summoner, opponent);
+
+        BattleUIManager.I?.SetHandClickable(false);
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+        BattleUIManager.I?.DisableEconomicActionButtonsTemporarily();
+
+        RefreshSummonSkillButtonInteractables();
+        return true;
+    }
+
+    /// <summary>
+    /// SummonSkillPopup プレハブは「外枠 → 内側パネル」の2段になっていることがあり、
+    /// Instantiate のルート直下にはボタンが無い。その場合は子をパネルとして扱う。
+    /// </summary>
+    private static Transform ResolveSummonSkillPopupPanel(Transform root)
+    {
+        if (root == null) return null;
+        if (root.Find("SummonButton") != null) return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var child = root.GetChild(i);
+            if (child != null && child.Find("SummonButton") != null)
+                return child;
+        }
+        return root;
+    }
+
+    private void BindSummonSkillPopupUi(GameObject root, PlayerStatus summoner, PlayerStatus opponent)
+    {
+        var summon = summoner.summonData;
+        if (summon == null || root == null) return;
+
+        var panel = ResolveSummonSkillPopupPanel(root.transform);
+        if (panel == null) return;
+
+        var nameT = panel.Find("SummonSkillName")?.GetComponent<TMPro.TMP_Text>();
+        var descT = panel.Find("SummonSkillDesc")?.GetComponent<TMPro.TMP_Text>();
+        var manifestBtn = panel.Find("SummonButton")?.GetComponent<Button>();
+        var cancelBtn = panel.Find("CancelButton")?.GetComponent<Button>();
+
+        if (nameT != null)
+        {
+            nameT.text = summon.specialSkillName;
+            summon.ApplyStyleTo(nameT, summon.popupSkillNameStyle);
+        }
+        if (descT != null)
+        {
+            descT.text = summon.specialSkillDescription;
+            summon.ApplyStyleTo(descT, summon.popupSkillDescStyle);
+        }
+
+        if (manifestBtn != null)
+        {
+            manifestBtn.onClick.RemoveAllListeners();
+            manifestBtn.onClick.AddListener(() => OnSummonSkillManifestClicked(summoner, opponent));
+        }
+        if (cancelBtn != null)
+        {
+            cancelBtn.onClick.RemoveAllListeners();
+            cancelBtn.onClick.AddListener(OnSummonSkillPopupCancelClicked);
+        }
+
+        if (manifestBtn == null || cancelBtn == null)
+            Debug.LogWarning("[BattleManager] SummonSkillPopup: SummonButton/CancelButton が見つかりません。プレハブ階層を確認してください。");
+    }
+
+    private void OnSummonSkillPopupCancelClicked()
+    {
+        if (_summonSkillPopupRoot != null)
+        {
+            Destroy(_summonSkillPopupRoot);
+            _summonSkillPopupRoot = null;
+        }
+        RefreshSummonSkillButtonInteractables();
+        if (CurrentState == GameState.AttackPhase && CurrentTurnOwner == PlayerType.Player)
+            EnterAttackPhase();
+        else if (CurrentState == GameState.AttackPhase && CurrentTurnOwner == PlayerType.Enemy)
+        {
+            BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.SetIntroModeUI(playerHand);
+        }
+    }
+
+    private void OnSummonSkillManifestClicked(PlayerStatus summoner, PlayerStatus opponent)
+    {
+        if (_manifestationFlowRunning) return;
+        if (_summonSkillPopupRoot != null)
+        {
+            Destroy(_summonSkillPopupRoot);
+            _summonSkillPopupRoot = null;
+        }
+        RefreshSummonSkillButtonInteractables();
+        _manifestationFlowRunning = true;
+        summoner.MarkManifestationSkillUsed();
+        statusUI?.UpdateStatus(playerStatus, enemyStatus);
+        _ = RunSummonManifestationFlowAsync(summoner, opponent);
+    }
+
+    private async Task RunSummonManifestationFlowAsync(PlayerStatus summoner, PlayerStatus opponent)
+    {
+        try
+        {
+            BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+
+            if (cardSequenceManager != null)
+                await cardSequenceManager.RunManifestationSkillSequenceAsync(summoner, opponent);
+        }
+        finally
+        {
+            _manifestationFlowRunning = false;
+            RefreshSummonSkillButtonInteractables();
+            if (CurrentState == GameState.AttackPhase && CurrentTurnOwner == PlayerType.Player)
+                EnterAttackPhase();
+            else if (CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
+            {
+                BattleUIManager.I?.SetHandClickable(true);
+                RefreshPlayerDefensePhaseInteractivity();
+                BattleUIManager.I?.UpdateDefenseButtonLabel();
+                BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            }
+        }
+    }
+
+    /// <summary>敵側からの顕現：命中判定の後、プレイヤー防御フェーズへ。</summary>
+    public async Task PresentEnemyManifestationAttackToPlayerDefenseAsync(
+        List<CardData> atkList,
+        CancellationToken cancellationToken)
+    {
+        if (atkList == null || atkList.Count == 0 || enemyStatus == null || playerStatus == null) return;
+
+        if (enemyStatus.HasConfusionEffect())
+        {
+            bool confusionTargetSelf = UnityEngine.Random.Range(0, 2) == 0;
+            SetConfusionAttackTargetResolvedForDisplay(confusionTargetSelf);
+            if (confusionTargetSelf)
+            {
+                cardStatsDisplay?.UpdateDisplay();
+                await Task.Delay(500, cancellationToken);
+                if (cardSequenceManager != null)
+                {
+                    bool finished = await cardSequenceManager.ResolvePlayerAttackCombatAsync(
+                        atkList, enemyStatus, enemyStatus, cpuHand, cancellationToken);
+                    BattleUIManager.I?.HideAllCardDetails();
+                    currentAttackCard = null;
+                    cardStatsDisplay?.UpdateDisplay();
+                    if (!finished) return;
+                    await cardSequenceManager.RunAfterCombatSharedCleanupAsync(cancellationToken);
+                }
+                return;
+            }
+        }
+
+        var primary = HitRateRules.GetPrimaryForHitRate(atkList);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus, playerStatus);
+        bool rolledHit = HitRateRules.RollHit(finalPct);
+        if (!rolledHit)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
+            BattleUIManager.I?.ShowMissPopup(playerStatus);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, cancellationToken);
+            BattleUIManager.I?.HideAllCardDetails();
+            currentAttackCard = null;
+            cardStatsDisplay?.ClearSequenceCards();
+            cardStatsDisplay?.UpdateDisplay();
+            SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        if (finalPct < 100)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/小パンチ.mp3");
+            float popupSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowCombatHitConfirmedPopup(playerStatus)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
+            await DamagePopup.WaitAfterPopupLifetimeAsync(popupSec, cancellationToken);
+        }
+
+        SetGameState(GameState.DefensePhase);
     }
 
     public void ToggleTurnOwner()

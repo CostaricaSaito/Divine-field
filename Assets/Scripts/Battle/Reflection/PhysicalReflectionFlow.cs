@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -164,7 +164,7 @@ public static class PhysicalReflectionFlow
         }
     }
 
-    private static async Task RunReflectionChainLoopAsync(
+    public static async Task RunReflectionChainLoopAsync(
         BattleManager battleManager,
         BattleProcessor battleProcessor,
         HandRefillService handRefill,

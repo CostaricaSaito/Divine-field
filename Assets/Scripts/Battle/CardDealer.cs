@@ -92,7 +92,7 @@ public class CardDealer : MonoBehaviour
             _darkCardTemplates = System.Array.Empty<CardData>();
             return;
         }
-        _darkCardTemplates = allCards.Where(c => c != null && c.element == ElementType.Dark).ToArray();
+        _darkCardTemplates = allCards.Where(c => c != null && c.element == ElementType.Dark && c.cardType != CardType.Ultimate).ToArray();
         if (_darkCardTemplates.Length == 0)
             Debug.LogWarning("[CardDealer] 闇属性の CardData がありません。ダークプリパレーションは通常抽選にフォールバックします。");
         else
@@ -226,7 +226,17 @@ public class CardDealer : MonoBehaviour
     {
         if (allCards == null || allCards.Length == 0) return null;
 
-        var template = allCards[Random.Range(0, allCards.Length)];
+        const int maxAttempts = 256;
+        CardData template = null;
+        for (int a = 0; a < maxAttempts; a++)
+        {
+            var pick = allCards[Random.Range(0, allCards.Length)];
+            if (pick != null && pick.cardType != CardType.Ultimate)
+            {
+                template = pick;
+                break;
+            }
+        }
         if (template == null) return null;
 
         var instance = ScriptableObject.Instantiate(template);
@@ -262,10 +272,20 @@ public class CardDealer : MonoBehaviour
             return null;
         }
         
-        var src = allCards[Random.Range(0, allCards.Length)];
+        const int maxAttempts = 256;
+        CardData src = null;
+        for (int a = 0; a < maxAttempts; a++)
+        {
+            var pick = allCards[Random.Range(0, allCards.Length)];
+            if (pick != null && pick.cardType != CardType.Ultimate)
+            {
+                src = pick;
+                break;
+            }
+        }
         if (src == null)
         {
-            Debug.LogWarning("[CardDealer] 選択されたカードテンプレートがnullです");
+            Debug.LogWarning("[CardDealer] 顕現以外の抽選可能カードがありません");
             return null;
         }
 

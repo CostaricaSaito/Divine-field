@@ -1,0 +1,483 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+using TMPro;
+
+public enum Side { Player, Enemy }
+
+/// <summary>
+/// バトル画面 UI の「窓口（Facade）」。基本ステータス表示（ターン数・HP/MP など）と、
+/// 各サブマネージャ（UseButton / Economic / Effect / ArchMagic / RestraintHeavy / Magic / Popup / Card）への
+/// 薄い委譲のみを担当する。新規 UI ロジックは原則いずれかのサブマネージャへ追加し、
+/// ここには外部 API 互換のために必要な公開メソッドだけを薄く残す。
+///
+/// 【責務範囲】
+/// - シングルトン <see cref="I"/> の管理
+/// - ステータス表示（<see cref="BattleStatusUI"/>）とターン表示（<see cref="turnCountText"/>）の更新
+/// - サブマネージャへの API 委譲（<see cref="BattleManager"/> 等、外部からのエントリポイントを維持）
+/// - 濃霧ポップアップ直後の遅延ベール（<see cref="ScheduleFogVisionRevealAfterPopup"/>）
+///   のみ例外的に保持（<see cref="BattleStatusUI.SetDeferFogVisionVisuals"/> を叩くため）
+///
+/// 【サブマネージャ一覧】
+/// - <see cref="UseButtonPresenter"/>：使用ボタン／許す表示／反射・無効化・詠唱開始スタイル
+/// - <see cref="EconomicUIHandler"/>：購入／売却／交換ボタンと確認ポップ
+/// - <see cref="BattleEffectPresenter"/>：全画面フラッシュ／GAMESET／往生後演出
+/// - <see cref="ArchMagicOverlayPresenter"/>：大魔法詠唱中央オーバーレイ
+/// - <see cref="RestraintHeavyOverlayPresenter"/>：拘束「体が重い」オーバーレイ
+/// - <see cref="MagicPanelPresenter"/>：魔法パネル更新／手札→パネル飛行アニメ
+/// - <see cref="BattlePopupPresenter"/>：ダメージ／回復／ミス／反射／無効／状態異常／Important／Ojyou ポップ
+/// - <see cref="BattleCardUIController"/>：カード詳細表示・選択・手札インタラクティビティ・反射スライド・介入表示
+///
+/// 【注意事項】
+/// - サブ相互に直接参照を張らず、本クラスをハブにして <see cref="I"/> 経由で呼ぶこと（循環依存の予防）。
+/// - 新規ロジックは極力サブ側へ。ここに増えた場合は責務の見直しサイン。
+/// </summary>
+public class BattleUIManager : MonoBehaviour
+{
+    public static BattleUIManager I;
+
+    //==== フィールド =====
+    [Header("UI 要素")]
+    [SerializeField] private BattleStatusUI statusUI;
+
+    [Header("サブマネージャ")]
+    [SerializeField] private UseButtonPresenter useButtonPresenter;
+    [SerializeField] private EconomicUIHandler economicHandler;
+    [SerializeField] private BattleEffectPresenter effectPresenter;
+    [SerializeField] private ArchMagicOverlayPresenter archMagicPresenter;
+    [SerializeField] private RestraintHeavyOverlayPresenter restraintHeavyPresenter;
+    [SerializeField] private MagicPanelPresenter magicPanelPresenter;
+    [SerializeField] private BattlePopupPresenter popupPresenter;
+    [SerializeField] private BattleCardUIController cardController;
+
+    [Header("ターン表示（Canvas の TurnCount / TurnCountText）")]
+    [SerializeField] private TMP_Text turnCountText;
+    private bool _turnCountTextStyled;
+
+    [Header("メイン Canvas")]
+    [SerializeField] private Canvas uiCanvas;
+
+    private Coroutine _fogVisionAfterPopupCoroutine;
+
+    //==== 初期化 =====
+    void Awake()
+    {
+        if (I != null && I != this) { Destroy(gameObject); return; }
+        I = this;
+    }
+
+    /// <summary>
+    /// <see cref="SummonTurnCounterState"/> に基づき「ターンN」を表示。黒字・白アウトラインは初回のみ適用。
+    /// </summary>
+    public void RefreshTurnCountDisplay(SummonTurnCounterState counters)
+    {
+        if (turnCountText == null || counters == null) return;
+        EnsureTurnCountTextStyle();
+        turnCountText.text = $"ターン{counters.CurrentBattleTurnDisplay}";
+    }
+
+    private void EnsureTurnCountTextStyle()
+    {
+        if (_turnCountTextStyled || turnCountText == null) return;
+        turnCountText.color = Color.black;
+        if (turnCountText.outlineWidth < 0.08f)
+            turnCountText.outlineWidth = 0.22f;
+        turnCountText.outlineColor = Color.white;
+        _turnCountTextStyled = true;
+    }
+
+    /// <summary>
+    /// 相手が防具を使わなかった／使えなかったときに「許す」を表示する。非表示は <see cref="HideYurusuButton"/>（戦闘解決の await 完了後）。
+    /// </summary>
+    public void ShowYurusuDisplay() => useButtonPresenter?.ShowYurusuDisplay();
+
+    public void HideYurusuButton() => useButtonPresenter?.HideYurusuDisplay();
+
+    //==== パブリックAPI：ステータス表示 =====
+    public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
+    {
+        // 手札の枚数を取得（通常は現在の手札枚数を参照）
+        int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
+        int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
+
+        statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount);
+        BattleManager.I?.RefreshSummonSkillButtonInteractables();
+    }
+
+    //==== パブリックAPI：カード詳細表示（BattleCardUIController へ委譲） =====
+    public void ShowCardDetail(CardData card, Side side) => cardController?.ShowCardDetail(card, side);
+
+    /// <summary>現在表示中の CardSheet から <paramref name="card"/> と同一アセット参照のシートを検索（最後に生成されたもの）。</summary>
+    public bool TryGetCardSheetDisplayForCardData(CardData card, out CardSheetDisplay display)
+    {
+        if (cardController != null)
+            return cardController.TryGetCardSheetDisplayForCardData(card, out display);
+        display = null;
+        return false;
+    }
+
+    public void HideAllCardDetails() => cardController?.HideAllCardDetails();
+
+    /// <summary>プレイヤー側のカード表示のみクリア（敵側は残す）</summary>
+    public void HidePlayerCardDetails() => cardController?.HidePlayerCardDetails();
+
+    //==== パブリックAPI：カード選択管理 =====
+    public List<CardData> GetSelectedCards()
+        => cardController != null ? cardController.GetSelectedCards() : new List<CardData>();
+
+    public List<CardData> GetSelectedAttackCards()
+        => cardController != null ? cardController.GetSelectedAttackCards() : new List<CardData>();
+
+    public List<CardData> GetSelectedDefenseCards()
+        => cardController != null ? cardController.GetSelectedDefenseCards() : new List<CardData>();
+
+    //==== パブリックAPI：ボタン管理 =====
+    public void SetUseButtonLabel(string text) => useButtonPresenter?.SetUseButtonLabel(text);
+
+    public void SetUseButtonInteractable(bool interactable) => useButtonPresenter?.SetUseButtonInteractable(interactable);
+
+    /// <summary>手札カードのクリック受付のみを切り替える（見た目は変更しない）。</summary>
+    public void SetHandClickable(bool clickable) => cardController?.SetHandClickable(clickable);
+
+    //==== パブリックAPI：手札管理（BattleCardUIController へ委譲） =====
+    public void SetHandInteractivity(List<CardData> hand, bool interactable)
+        => cardController?.SetHandInteractivity(hand, interactable);
+
+    public void SetCardInteractable(CardData card, bool interactable)
+        => cardController?.SetCardInteractable(card, interactable);
+
+    public void UpdateHandInteractivity(List<CardData> hand, List<CardData> allowedCards = null)
+        => cardController?.UpdateHandInteractivity(hand, allowedCards);
+
+    public void SetPrayModeUI(List<CardData> hand) => cardController?.SetPrayModeUI(hand);
+
+    public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
+        => cardController?.RefreshAttackInteractivity(hand, attackableCards);
+
+    public void RefreshDefenseInteractivity(List<CardData> hand, List<CardData> defenseCards)
+        => cardController?.RefreshDefenseInteractivity(hand, defenseCards);
+
+    /// <summary>
+    /// 防御側が拘束中のとき、カード表示パネル上の「体が重い」枠を表示（2枚目スロット相当またはオーバーライドRect）。
+    /// </summary>
+    public void SyncRestraintHeavyOverlay() => restraintHeavyPresenter?.Sync();
+
+    /// <summary>拘束「体が重い」枠を全て非表示化する（介入・カード全クリア等）。</summary>
+    public void HideRestraintHeavyOverlays() => restraintHeavyPresenter?.HideAll();
+
+    /// <summary>
+    /// Intro 時点でのカード表示（グレーアウトなし）
+    /// </summary>
+    /// <param name="archMagicChantUseButtonLabel">
+    /// true のとき「詠唱開始」のまま（大魔法詠唱中の攻撃フェーズ差し替え時など。「使用」に戻さない）。
+    /// </param>
+    public void SetIntroModeUI(List<CardData> hand, bool archMagicChantUseButtonLabel = false)
+        => cardController?.SetIntroModeUI(hand, archMagicChantUseButtonLabel);
+
+    //==== パブリックAPI：ポップアップ（BattlePopupPresenter へ委譲） =====
+    /// <returns>表示したポップアップが Destroy されるまでの秒数（<see cref="DamagePopup.fadeDuration"/>）。生成失敗時は 0。</returns>
+    public float ShowDamagePopup(int amount, PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowDamagePopup(amount, target) : 0f;
+
+    /// <summary>状態異常一括解除時、次のポップを出すまでの間隔（秒）。</summary>
+    public const float StatusAilmentBulkClearStaggerSeconds = BattlePopupPresenter.StatusAilmentBulkClearStaggerSeconds;
+
+    /// <summary>
+    /// 一括解除済みの異常タイプを、付与時と同じ配色の <see cref="DamagePopup"/> で 0.2 秒ずつ重ね表示し、
+    /// 最後のポップの寿命＋ポストインターバルまで待つ。
+    /// </summary>
+    public Task PlayStatusAilmentBulkClearPresentationAsync(
+        IReadOnlyList<StatusEffectType> clearedTypesOrdered,
+        PlayerStatus target,
+        CancellationToken cancellationToken = default)
+        => popupPresenter != null
+            ? popupPresenter.PlayStatusAilmentBulkClearPresentationAsync(clearedTypesOrdered, target, cancellationToken)
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// 物理／魔法反射「弾き返す」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。
+    /// </summary>
+    public float ShowReflectionBouncePopup(PlayerStatus target, bool magicReflection = false)
+        => popupPresenter != null ? popupPresenter.ShowReflectionBouncePopup(target, magicReflection) : 0f;
+
+    /// <summary>無効化「護身」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。</summary>
+    public float ShowBlockingNullifyPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowBlockingNullifyPopup(target) : 0f;
+
+    /// <summary>打ち払い「打ち払う」ポップアップ（黄・白字・黒縁・白フラッシュ・SE）。</summary>
+    public float ShowParryIntroPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowParryIntroPopup(target) : 0f;
+
+    /// <summary>打ち払い後、攻撃が防御側に戻ったときのポップアップ。</summary>
+    public float ShowParryReturnToSelfPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowParryReturnToSelfPopup(target) : 0f;
+
+    /// <summary>
+    /// 反射で表示中の攻撃カードシートを、パネル間で横スライド（線形・既定500ms）する。
+    /// </summary>
+    public Task SlideReflectionAttackSheetsAsync(
+        List<CardData> attackCards,
+        bool slideTowardPlayer,
+        float durationSec,
+        CancellationToken cancellationToken = default)
+        => cardController != null
+            ? cardController.SlideReflectionAttackSheetsAsync(attackCards, slideTowardPlayer, durationSec, cancellationToken)
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// 闇属性：通常の超過ダメージ適用後の「残りHP分」表示（紫背景）。SE は呼び出し側で鳴らす。
+    /// </summary>
+    public float ShowDarkFollowupDamagePopup(int amount, PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowDarkFollowupDamagePopup(amount, target) : 0f;
+
+    /// <summary>
+    /// 状態異常が付与されたとき（ダメージポップと同じプレハブ）。表示成功時に SE を再生。
+    /// </summary>
+    public void ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
+        => popupPresenter?.ShowStatusAilmentGrantPopup(type, target);
+
+    /// <summary>
+    /// 濃霧ポップアップ寿命（fade）と <see cref="DamagePopup.PostPopupIntervalMs"/> 経過後に濃霧画面演出を有効化する。
+    /// Popup Presenter からファサード経由で呼ばれる。
+    /// </summary>
+    public void ScheduleFogVisionRevealAfterPopup(float waitSeconds)
+    {
+        if (statusUI == null) return;
+        statusUI.SetDeferFogVisionVisuals(true);
+        if (_fogVisionAfterPopupCoroutine != null)
+            StopCoroutine(_fogVisionAfterPopupCoroutine);
+        _fogVisionAfterPopupCoroutine = StartCoroutine(CoRevealFogVisionVisualsAfterStatusPopup(waitSeconds));
+    }
+
+    private IEnumerator CoRevealFogVisionVisualsAfterStatusPopup(float waitSeconds)
+    {
+        yield return new WaitForSeconds(waitSeconds);
+        _fogVisionAfterPopupCoroutine = null;
+        if (statusUI != null)
+            statusUI.SetDeferFogVisionVisuals(false);
+        if (BattleManager.I != null)
+            UpdateStatus(BattleManager.I.GetPlayerStatus(), BattleManager.I.GetEnemyStatus());
+    }
+
+    /// <summary>回復ポップアップを表示。</summary>
+    public float ShowHealPopup(int amount, string statType, PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowHealPopup(amount, statType, target) : 0f;
+
+    public void ShowMissPopup(PlayerStatus target)
+        => popupPresenter?.ShowMissPopup(target);
+
+    /// <summary>命中時（100% 未満のみ呼び出す想定）。SE は呼び出し側。</summary>
+    public float ShowCombatHitConfirmedPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowCombatHitConfirmedPopup(target) : DamagePopup.DefaultFadeDurationIfUnknown;
+
+    /// <summary>ステータス付近に任意メッセージのポップアップ。</summary>
+    public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
+        => popupPresenter != null ? popupPresenter.ShowMessagePopupForTarget(target, message, color) : 0f;
+
+    /// <summary>対象のカードパネル中央にポップアップを生成し <see cref="DamagePopup"/> を返す（病系シーケンス用）。</summary>
+    public DamagePopup SpawnDamagePopupForTarget(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.SpawnDamagePopupForTarget(target) : null;
+
+    /// <summary>プレイヤーの CardDisplayPanel 中央に情報ポップアップを表示。</summary>
+    public DamagePopup ShowInfoPopupOnCardPanel(string message, Color color)
+        => popupPresenter != null ? popupPresenter.ShowInfoPopupOnCardPanel(message, color) : null;
+
+    /// <summary>重要メッセージ用。</summary>
+    public ImportantPopup ShowImportantPopup(string message, Color color, Side cardPanelSide)
+        => popupPresenter != null ? popupPresenter.ShowImportantPopup(message, color, cardPanelSide) : null;
+
+    /// <summary>「往生」ポップアップを表示する（ゲーム終了時）。</summary>
+    public OjyouPopup ShowOjyouPopup(Side side)
+        => popupPresenter != null ? popupPresenter.ShowOjyouPopup(side) : null;
+
+    /// <summary>
+    /// ゲーム終了時にバトル用 UI（カード表示パネル・TotalATKDEF・UseButton・許す・経済アクション）を一括で隠す／非アクティブ化する。
+    /// 手札のタップも <see cref="SetHandClickable"/> で封鎖する。
+    /// </summary>
+    public void HideBattleUIForGameEnd()
+    {
+        cardController?.DisableCardDisplayPanels();
+
+        useButtonPresenter?.HideForGameEnd();
+
+        economicHandler?.DisableAllButtons();
+
+        SetHandClickable(false);
+
+        Debug.Log("[BattleUIManager] ゲーム終了：バトル UI を非表示化しました");
+    }
+
+    public void ClearAllSelections() => cardController?.ClearAllSelections();
+
+    /// <summary>
+    /// 表示中のカードシート（CardDisplay / EnemyDisplay のいずれか）を CardData で特定して破棄。反射「弾き返す」ポップアップ消滅後など。
+    /// </summary>
+    public void DestroyCardSheetForCardData(CardData card)
+        => cardController?.DestroyCardSheetForCardData(card);
+
+    /// <summary>
+    /// 指定パネル上の該当 CardData のシートだけを破棄。
+    /// </summary>
+    public void DestroyCardSheetsForCardDataOnPanel(CardData card, Side side)
+        => cardController?.DestroyCardSheetsForCardDataOnPanel(card, side);
+
+    /// <summary>
+    /// 同一パネルに同じ CardData のシートが複数あるとき、最後に追加された1枚だけ破棄（反射バウンスの重複除去）。
+    /// </summary>
+    public void DestroyMostRecentCardSheetOnPanelForCardData(CardData card, Side side)
+        => cardController?.DestroyMostRecentCardSheetOnPanelForCardData(card, side);
+
+    /// <summary>
+    /// 防御フェーズのボタンラベルを更新
+    /// </summary>
+    public void UpdateDefenseButtonLabel() => useButtonPresenter?.UpdateDefenseButtonLabel();
+
+    /// <summary>反射の弾き返しと同じ全画面白フラッシュ（ミリ秒）。劣勢時レアドロー等からも利用。</summary>
+    public void PlayFullscreenWhiteFlashMs(float durationMs) => effectPresenter?.PlayFullscreenWhiteFlashMs(durationMs);
+
+    /// <summary>全画面を指定色で一瞬表示（ミリ秒）。</summary>
+    public void PlayFullscreenColorFlashMs(Color flashColor, float durationMs)
+        => effectPresenter?.PlayFullscreenColorFlashMs(flashColor, durationMs);
+
+    /// <summary>
+    /// 往生アニメ終了直後：反射「弾き返し」と同じ全画面白フラッシュ → 中央に GAMESET 大表示＋ゴング SE。一定時間後に画像を消す。
+    /// </summary>
+    public Task ShowPostOjyouFlashAndGameSetAsync(CancellationToken ct = default)
+        => effectPresenter != null ? effectPresenter.ShowPostOjyouFlashAndGameSetAsync(ct) : Task.CompletedTask;
+
+    /// <summary>介入発動時のメッセージ（病系処理より前）。</summary>
+    public void ShowInterventionIntroPopup(PlayerStatus attackerStatus)
+        => popupPresenter?.ShowInterventionIntroPopup(attackerStatus);
+
+    /// <summary>介入攻撃カードを表示パネル先頭に出す（選択マネージャには載せない）。</summary>
+    public void ShowInterventionAttackSheet(CardData card, Side side)
+        => cardController?.ShowInterventionAttackSheet(card, side);
+
+    /// <summary>
+    /// 攻撃選択中：魔法の合算MP（眼精疲労の倍率・群発の使用不可）に応じて使用ボタンを更新。
+    /// </summary>
+    public void RefreshUseButtonForMpAndSelection() => useButtonPresenter?.RefreshUseButtonForMpAndSelection();
+
+    //==== 経済アクション（EconomicUIHandler へ委譲） =====
+
+    public void UpdateEconomicActionButtons() => economicHandler?.UpdateButtons();
+
+    /// <summary>顕現ポップアップ等：経済ボタンを一時的に無効化（解除後は <see cref="UpdateEconomicActionButtons"/>）。</summary>
+    public void DisableEconomicActionButtonsTemporarily() => economicHandler?.DisableAllButtons();
+
+    public void OnBuyButtonPressed() => economicHandler?.OnBuyButtonPressed();
+
+    public void OnSellButtonPressed() => economicHandler?.OnSellButtonPressed();
+
+    public void OnExchangeButtonPressed() => economicHandler?.OnExchangeButtonPressed();
+
+    public void CancelBuyPopup() => economicHandler?.CancelBuyPopup();
+
+    /// <summary>プレイヤーのカード表示エリアの中心位置を取得</summary>
+    public Vector3 GetPlayerCardDisplayCenter()
+        => cardController != null ? cardController.GetPlayerCardDisplayCenter() : Vector3.zero;
+
+    /// <summary>敵のカード表示エリアの中心位置を取得</summary>
+    public Vector3 GetEnemyCardDisplayCenter()
+        => cardController != null ? cardController.GetEnemyCardDisplayCenter() : Vector3.zero;
+
+    /// <summary>プレイヤーのカード表示エリアの Transform を取得</summary>
+    public Transform GetPlayerCardDisplayPanel()
+        => cardController != null ? cardController.PlayerCardDisplayPanel : null;
+
+    /// <summary>敵のカード表示エリアの Transform を取得</summary>
+    public Transform GetEnemyCardDisplayPanel()
+        => cardController != null ? cardController.EnemyCardDisplayPanel : null;
+
+    /// <summary>
+    /// SellConfirmPopup の Prefab を取得（BattleManager から使用）
+    /// </summary>
+    public GameObject GetSellConfirmPopupPrefab() => economicHandler != null ? economicHandler.GetSellConfirmPopupPrefab() : null;
+
+    /// <summary>
+    /// ExchangePopup の Prefab を取得（BattleManager から使用）
+    /// </summary>
+    public GameObject GetExchangePopupPrefab() => economicHandler != null ? economicHandler.GetExchangePopupPrefab() : null;
+
+    /// <summary>
+    /// カードシートの Prefab を取得
+    /// </summary>
+    public GameObject GetCardSheetPrefab() => cardController != null ? cardController.CardSheetPrefab : null;
+
+    /// <summary>
+    /// ポップアップ用の Canvas を取得（BattleManager から使用）
+    /// </summary>
+    public Canvas GetPopupCanvas()
+    {
+        if (economicHandler != null)
+        {
+            var c = economicHandler.GetResolvedPopupCanvas();
+            if (c != null) return c;
+        }
+        return uiCanvas;
+    }
+
+    /// <summary>
+    /// メイン UI Canvas を取得（サブマネージャからフォールバック用に参照）。
+    /// </summary>
+    public Canvas GetMainUICanvas() => uiCanvas;
+
+    /// <summary>
+    /// UseButton のラベルフォントを取得（RestraintHeavy 等のサブマネージャから流用する用）。
+    /// </summary>
+    public TMP_FontAsset GetUseButtonLabelFont()
+        => useButtonPresenter != null ? useButtonPresenter.GetLabelFont() : null;
+
+    /// <summary>
+    /// CardLayoutManager を取得（RestraintHeavy 等のサブマネージャからスロット高さ計算に使用）。
+    /// </summary>
+    public CardLayoutManager GetCardLayoutManager() => cardController != null ? cardController.LayoutManager : null;
+
+    /// <summary>手札入力ブロック中か（ポップアップや反射解決中）。サブマネージャ参照用。</summary>
+    public bool IsHandInputBlocked => cardController != null && cardController.IsHandInputBlocked;
+
+    // ===== MagicPanel：MagicPanelPresenter へ委譲 =====
+
+    public void UpdateMagicPanel() => magicPanelPresenter?.UpdatePanel();
+
+    /// <summary>
+    /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。
+    /// </summary>
+    public bool IsPlayerMagicCardUiOnMagicPanel(CardData card)
+        => magicPanelPresenter != null && magicPanelPresenter.IsPlayerMagicCardUiOnMagicPanel(card);
+
+    /// <summary>
+    /// 手札の魔法カードが MagicPanel のスロットへ直線移動する演出（プール登録は呼び出し側）
+    /// </summary>
+    public Task PlayMagicFlyHandToPanelAsync(CardData card, RectTransform handCardRt, int slotIndex)
+        => magicPanelPresenter != null
+            ? magicPanelPresenter.PlayFlyHandToPanelAsync(card, handCardRt, slotIndex)
+            : Task.CompletedTask;
+
+    public void RefreshMagicCardInteractivity(List<CardData> hand)
+        => magicPanelPresenter?.RefreshMagicCardInteractivity(hand);
+
+    // ===== 大魔法（ArchMagic）詠唱中央オーバーレイ：ArchMagicOverlayPresenter へ委譲 =====
+
+    /// <summary>詠唱中：全画面ディム + 中央に大魔法アイコン + 残りターンをフェードイン表示する。</summary>
+    public Task FadeInArchMagicCastOverlayAsync(Sprite magicSprite, int remainingTurns, int fadeMs, CancellationToken ct)
+        => archMagicPresenter != null
+            ? archMagicPresenter.FadeInAsync(magicSprite, remainingTurns, fadeMs, ct)
+            : Task.CompletedTask;
+
+    /// <summary>残りターン数のみ差し替える（ダウンカウント表現用）。</summary>
+    public void UpdateArchMagicCastOverlayRemaining(int remainingTurns)
+        => archMagicPresenter?.UpdateRemaining(remainingTurns);
+
+    /// <summary>詠唱中央オーバーレイを消す（フェード）。</summary>
+    public Task FadeOutArchMagicCastOverlayAsync(int fadeMs, CancellationToken ct)
+        => archMagicPresenter != null
+            ? archMagicPresenter.FadeOutAsync(fadeMs, ct)
+            : Task.CompletedTask;
+
+    public void HideArchMagicCastOverlayImmediate()
+        => archMagicPresenter?.HideImmediate();
+
+}

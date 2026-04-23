@@ -49,6 +49,6 @@ public enum StatusEffectType
     /// <summary>
     /// カード効果用：15種から等確率で1つを選び付与。体験上の公式IDではない。
     /// </summary>
-    [InspectorName("RANDOM（全状態異常から1つ・等確率）")]
+    [InspectorName("RANDOM")]
     RandomOneAilment = 100,
 }

@@ -65,6 +65,12 @@ public class PlayerStatus
         archMagicCancelPending = false;
     }
 
+    // ===== 顕現スキル（1バトル1回） =====
+    /// <summary>顕現スキルを使用済みか。使用後は窮地でも虹演出・再発動不可。</summary>
+    public bool hasUsedManifestationSkill { get; private set; }
+
+    public void MarkManifestationSkillUsed() => hasUsedManifestationSkill = true;
+
     /// <summary>
     /// UI 用：現在かかっている状態異常の種類（重複なし・公式ID順）。
     /// </summary>

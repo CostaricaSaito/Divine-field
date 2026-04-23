@@ -7,6 +7,7 @@ public static class CardRules
     public static bool IsUsableInAttackPhase(CardData c)
     {
         if (c == null) return false;
+        if (c.cardType == CardType.Ultimate) return false;
         if (c.usableInAttackPhase) return true;
         if (c.isPrimaryAttack || c.isAdditionalAttack || c.isCounterAttack) return true;
         if (c.isRecovery) return true;        // �񕜂͍U���^�[��OK�̎d�l
@@ -20,6 +21,7 @@ public static class CardRules
             case CardType.Magic:
             case CardType.Recovery:
             case CardType.Special: return true;
+            case CardType.Ultimate: return false;
             default: return false;
         }
     }
@@ -170,6 +172,16 @@ public static class CardRules
     }
 
     /// <summary>
+    /// 魔法単体攻撃に相当する分類（魔法コンボ、または単独の顕現カード）。反射・衰弱除外などに使用。
+    /// </summary>
+    public static bool IsMagicClassifiedAttackCombo(IReadOnlyList<CardData> cards)
+    {
+        if (cards == null || cards.Count == 0) return false;
+        if (IsMagicOnlyAttackCombo(cards)) return true;
+        return cards.Count == 1 && cards[0] != null && cards[0].cardType == CardType.Ultimate;
+    }
+
+    /// <summary>
     /// A: ダメージを与えず <see cref="StatusEffectApplyTiming.OnCardEffectResolve"/> のみの魔法（濃霧付与など。ATK0）。
     /// B（将来）: ダメージあり＋<see cref="StatusEffectApplyTiming.WithDamageThrough"/> はここでは false。
     /// </summary>
@@ -199,6 +211,7 @@ public static class CardRules
         if (c == null || c.cardType != CardType.Defense) return false;
         if (c.reflectionKind != ReflectionKind.None) return false;
         if (c.blockingKind != BlockingKind.None) return false;
+        if (c.parryKind != ParryKind.None) return false;
         return true;
     }
 

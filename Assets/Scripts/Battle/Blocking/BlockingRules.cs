@@ -23,19 +23,21 @@ public static class BlockingRules
     public static bool RequiresBlockingExclusiveLock(CardData card, IReadOnlyList<CardData> incomingAttack)
     {
         if (card == null || incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack)) return false;
         if (IsPhysicalBlockingCard(card) && CanBlockPhysical(incomingAttack)) return true;
         return false;
     }
 
-    /// <summary>反射用・無効化用のいずれかで「防御1枚のみ」ロックが必要か。</summary>
+    /// <summary>反射用・無効化用・打ち払い用のいずれかで「防御1枚のみ」ロックが必要か。</summary>
     public static bool RequiresDefenseNullifyExclusiveLock(CardData card, IReadOnlyList<CardData> incomingAttack)
     {
         return ReflectionRules.RequiresReflectionExclusiveLock(card, incomingAttack)
-            || RequiresBlockingExclusiveLock(card, incomingAttack);
+            || RequiresBlockingExclusiveLock(card, incomingAttack)
+            || ParryRules.RequiresParryExclusiveLock(card, incomingAttack);
     }
 
     /// <summary>
-    /// いずれかの防御カードが、与えられた攻撃に対して反射（物理／魔法）または無効化として解決されるか。
+    /// いずれかの防御カードが、与えられた攻撃に対して反射（物理／魔法）・無効化・打ち払いとして解決されるか。
     /// TotalATK/DEF に DEF を出さない判定などに使う。
     /// </summary>
     public static bool AnyDefenseCardResolvesAsReflectionOrNullify(

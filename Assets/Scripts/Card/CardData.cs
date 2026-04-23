@@ -14,6 +14,10 @@ public enum CardType
     /// 反射・無効化を受けない。<see cref="ArchMagicRuleSO"/> と連携。
     /// </summary>
     ArchMagic = 5,
+    /// <summary>
+    /// 顕現スキル専用。手札に配られず、顕現フローでのみ使用。
+    /// </summary>
+    Ultimate = 6,
 }
 
 public enum ElementType
@@ -45,6 +49,17 @@ public enum ReflectionKind
 /// 無効化（ブロッキング）防御カードの種別（<see cref="CardData.blockingKind"/>）。
 /// </summary>
 public enum BlockingKind
+{
+    None = 0,
+    Physical = 1,
+    Magic = 2,
+    Full = 3,
+}
+
+/// <summary>
+/// 打ち払い防御カードの種別（<see cref="CardData.parryKind"/>）。反射・無効化と排他。
+/// </summary>
+public enum ParryKind
 {
     None = 0,
     Physical = 1,
@@ -149,7 +164,9 @@ public class CardData : ScriptableObject
 
     [Header("特殊効果")]
     public bool canApplyStatusEffect = false;
-    [Range(0, 100)] public int statusEffectChance = 0;
+    [Range(0, 100)]
+    [Tooltip("①WithDamageThrough: 0 だと Random.Range(0,100)>=0 で常に不発。100 で必ず。②OnCardEffectResolve: 即時解決は roll<chance。0 は常に不発。")]
+    public int statusEffectChance = 0;
     public StatusEffectType statusEffectToApply = StatusEffectType.None;
     [Tooltip("①ダメージが通ったときのみ（将来：ダメージ系攻撃魔法＋付与） / ②解決時のみ（濃霧付与など ATK0・ダメージなし）。攻撃力では分けない（Inspectorで明示）。")]
     public StatusEffectApplyTiming statusEffectApplyTiming = StatusEffectApplyTiming.WithDamageThrough;
@@ -177,12 +194,44 @@ public class CardData : ScriptableObject
     [Header("無効化")]
     public BlockingKind blockingKind = BlockingKind.None;
 
+    [Header("打ち払い")]
+    public ParryKind parryKind = ParryKind.None;
+
     [Header("特殊攻撃ルール（任意・B案）")]
     [Tooltip("マジカルエクスプロージョン・ゴッドレイジ・大魔法等。未設定なら従来どおりカード数値のみ。")]
     public SpecialAttackRuleSO specialAttackRule;
 
+    [Header("顕現・特殊表示")]
+    [Tooltip("CardDisplayPanel 用カードシートの背景枠。未設定時はプレハブ既定。")]
+    public Sprite cardDisplayFrameSprite;
+
     [Header("UI参照（非表示）")]
     [System.NonSerialized] public CardUI cardUI;
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        int n = (reflectionKind != ReflectionKind.None ? 1 : 0)
+            + (blockingKind != BlockingKind.None ? 1 : 0)
+            + (parryKind != ParryKind.None ? 1 : 0);
+        if (n <= 1) return;
+
+        if (reflectionKind != ReflectionKind.None)
+        {
+            blockingKind = BlockingKind.None;
+            parryKind = ParryKind.None;
+        }
+        else if (blockingKind != BlockingKind.None)
+        {
+            parryKind = ParryKind.None;
+        }
+        else
+        {
+            reflectionKind = ReflectionKind.None;
+            blockingKind = BlockingKind.None;
+        }
+    }
+#endif
 
 }
 

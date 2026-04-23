@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
   m_Name: MirrorSword
   m_EditorClassIdentifier: 
-  cardName: "\u53CD\u5C04\u5263"
+  cardName: "\u30EA\u30D5\u30EC\u30AF\u30C8\u30BD\u30FC\u30C9"
   cardType: 0
   cardImage: {fileID: 21300000, guid: 76836da5233d7d94a99c261dbe19afba, type: 3}
-  description: "\u8DF3\u306D\u8FD4\u3059\uFF01"
+  description: "\u7269\u7406\u653B\u6483\u3092\u8DF3\u306D\u8FD4\u3059"
   attackPower: 10
   defensePower: 0
   element: 0
@@ -27,6 +27,7 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  clearsAllStatusAilmentsOnUse: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 1
   isPrimaryAttack: 1
@@ -43,4 +44,9 @@ MonoBehaviour:
   isRare: 0
   attackPhaseRole: 2
   defensePhaseRole: 1
+  attackComboPickRule: 0
   reflectionKind: 1
+  blockingKind: 0
+  parryKind: 0
+  specialAttackRule: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}

@@ -15,6 +15,11 @@ public static class ReflectionRules
         return c != null && c.reflectionKind == ReflectionKind.Magic;
     }
 
+    public static bool IsFullReflectionCard(CardData c)
+    {
+        return c != null && c.reflectionKind == ReflectionKind.Full;
+    }
+
     /// <summary>
     /// 物理反射が「跳ね返せる」攻撃か（無属性かつ魔法単体攻撃でない）。
     /// </summary>
@@ -26,7 +31,7 @@ public static class ReflectionRules
             list.Add(incomingAttack[i]);
         if (ElementHelper.GetCombinedElement(list) != ElementType.None)
             return false;
-        if (CardRules.IsMagicOnlyAttackCombo(incomingAttack)) return false;
+        if (CardRules.IsMagicClassifiedAttackCombo(incomingAttack)) return false;
         return true;
     }
 
@@ -36,7 +41,27 @@ public static class ReflectionRules
     public static bool CanReflectMagic(IReadOnlyList<CardData> incomingAttack)
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
-        return CardRules.IsMagicOnlyAttackCombo(incomingAttack);
+        return CardRules.IsMagicClassifiedAttackCombo(incomingAttack);
+    }
+
+    /// <summary>プレイヤー／敵防御解決用：物理反射経路が成立するか。</summary>
+    public static bool CanUsePhysicalReflectionAgainstAttack(CardData defense, IReadOnlyList<CardData> incomingAttack)
+    {
+        if (!CanReflectPhysical(incomingAttack)) return false;
+        if (defense == null) return false;
+        if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack))
+            return IsFullReflectionCard(defense);
+        return IsPhysicalReflectionCard(defense);
+    }
+
+    /// <summary>プレイヤー／敵防御解決用：魔法反射経路が成立するか。</summary>
+    public static bool CanUseMagicReflectionAgainstAttack(CardData defense, IReadOnlyList<CardData> incomingAttack)
+    {
+        if (!CanReflectMagic(incomingAttack)) return false;
+        if (defense == null) return false;
+        if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack))
+            return IsFullReflectionCard(defense);
+        return IsMagicReflectionCard(defense);
     }
 
     /// <summary>
@@ -45,8 +70,8 @@ public static class ReflectionRules
     public static bool RequiresReflectionExclusiveLock(CardData card, IReadOnlyList<CardData> incomingAttack)
     {
         if (card == null || incomingAttack == null || incomingAttack.Count == 0) return false;
-        if (IsPhysicalReflectionCard(card) && CanReflectPhysical(incomingAttack)) return true;
-        if (IsMagicReflectionCard(card) && CanReflectMagic(incomingAttack)) return true;
+        if (CanUsePhysicalReflectionAgainstAttack(card, incomingAttack)) return true;
+        if (CanUseMagicReflectionAgainstAttack(card, incomingAttack)) return true;
         return false;
     }
 }

@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -73,4 +73,5 @@ MonoBehaviour:
     faceDilate: 0
   specialSkillCutInSprite: {fileID: 21300000, guid: 707e639f3c193a545aeaf9273b8e1eeb, type: 3}
   specialSkillSE: {fileID: 8300000, guid: aad6e996fbd838f459f2812ce4f1a20c, type: 3}
+  manifestationCard: {fileID: 11400000, guid: b8180ea847aa43b4cb29a613a96f8534, type: 2}
   passiveBlessingMode: 0

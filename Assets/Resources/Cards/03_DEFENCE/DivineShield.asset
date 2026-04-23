@@ -15,7 +15,7 @@ MonoBehaviour:
   cardName: "\u30C7\u30A3\u30D0\u30A4\u30F3\u30B7\u30FC\u30EB\u30C9\t"
   cardType: 1
   cardImage: {fileID: 21300000, guid: 743bdad4337ba4146b8f82b7078e4263, type: 3}
-  description: "\u8056\u306A\u308B\u52A0\u8B77 "
+  description: "\u8056\u306A\u308B\u52A0\u8B77\u306E\u76FE"
   attackPower: 0
   defensePower: 30
   element: 0
@@ -27,6 +27,7 @@ MonoBehaviour:
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  clearsAllStatusAilmentsOnUse: 0
   usableInAttackPhase: 0
   usableInDefensePhase: 1
   isPrimaryAttack: 0
@@ -43,3 +44,9 @@ MonoBehaviour:
   isRare: 1
   attackPhaseRole: 0
   defensePhaseRole: 4
+  attackComboPickRule: 0
+  reflectionKind: 0
+  blockingKind: 0
+  parryKind: 0
+  specialAttackRule: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}

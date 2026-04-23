@@ -63,6 +63,10 @@ public class SummonData : ScriptableObject
     public Sprite specialSkillCutInSprite;  // 全画面演出用イラスト
     public AudioClip specialSkillSE;        // 発動時のSE（任意）
 
+    [Header("顕現スキル")]
+    [Tooltip("窮地から発動時に表示・自動解決する顕現カード。未設定なら顕現ボタンは無効扱い。")]
+    public CardData manifestationCard;
+
     [Header("加護（パッシブ・ランタイム）")]
     [SerializeField]
     [Tooltip("Auto: アセット名（Ifrit 等）で加護を決定。None で無効、Ifrit で明示。")]
@@ -93,20 +97,6 @@ public class SummonData : ScriptableObject
     {
         if (passiveBlessingMode == SummonPassiveBlessingMode.Diabolos) return true;
         return name == "Diabolos";
-    }
-
-    /// <summary>
-    /// 顕現スキルの効果をここに書く（例：イフリート → 敵に30ダメージ）
-    /// </summary>
-    public void ActivateSpecialSkill(PlayerStatus self, PlayerStatus opponent)
-    {
-        if (name == "Ifrit")
-        {
-            opponent.TakeDamage(30);
-            Debug.Log("イフリートの顕現スキルが正常に発動！敵に30ダメージ！");
-        }
-
-        // 他の召喚獣はここに追加していく
     }
 
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)

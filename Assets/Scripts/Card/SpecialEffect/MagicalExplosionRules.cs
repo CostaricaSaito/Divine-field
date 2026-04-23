@@ -4,7 +4,8 @@ using UnityEngine;
 /// <summary>
 /// マジカルエクスプロージョンの判定と、MP 消費順に沿った攻撃力合算。
 /// 先に他カードの魔法消費 MP を差し引き、残りを全て ME が吸い取り 2 倍の攻撃力となる。
-/// MP 全喪失後の計算は <see cref="BattleManager"/> のスナップショットを参照する。
+/// MP 全喪失後の計算は <see cref="BattleManager.TryGetMagicalExplosionComboMpPoolSnapshot"/> のスナップショットを参照する
+///（プレイヤーは <c>StartCardSequenceAsync</c> 内の演出、敵は <c>CardSequenceManager.PresentEnemyMagicalExplosionAttackAsync</c> で設定する）。
 /// </summary>
 public static class MagicalExplosionRules
 {

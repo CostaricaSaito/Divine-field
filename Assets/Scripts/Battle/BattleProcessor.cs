@@ -167,18 +167,25 @@ public class BattleProcessor : MonoBehaviour
         if (card.clearsAllStatusAilmentsOnUse && target != null)
             await ApplyAllStatusAilmentsClearAsync(target, CancellationToken.None);
 
-        if (card.canApplyStatusEffect && target != null && card.statusEffectToApply != StatusEffectType.None
+        if (card.canApplyStatusEffect && card.statusEffectToApply != StatusEffectType.None
             && card.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve)
         {
             int roll = Random.Range(0, 100);
             if (roll < card.statusEffectChance)
             {
                 var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
-                var result = target.TryApplyStatusEffect(card.statusEffectToApply, cfg);
-                if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
-                    await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(target, CancellationToken.None);
-                else if (result == ProgressiveApplyResult.NoChange)
-                    await ShowUnharmedPopupForNoProgressStatusAsync(target);
+                // RandomOneAilment はカード対象へ（対象未指定のときのみ使用者）。それ以外は従来どおり target のみ。
+                PlayerStatus recipient = card.statusEffectToApply == StatusEffectType.RandomOneAilment
+                    ? (target ?? user)
+                    : target;
+                if (recipient != null)
+                {
+                    var result = recipient.TryApplyStatusEffect(card.statusEffectToApply, cfg);
+                    if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
+                        await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(recipient, CancellationToken.None);
+                    else if (result == ProgressiveApplyResult.NoChange)
+                        await ShowUnharmedPopupForNoProgressStatusAsync(recipient);
+                }
             }
         }
 
@@ -328,6 +335,7 @@ public class BattleProcessor : MonoBehaviour
     /// <param name="defenseCards">濃霧付与など A 系魔法のとき、通常防具が誤選択されていれば付与を抑止するために渡す。</param>
     private async Task TryApplyAttackCardStatusEffectsAsync(
         List<CardData> attackCards,
+        PlayerStatus attacker,
         PlayerStatus defender,
         int finalDamage,
         IReadOnlyList<CardData> defenseCards = null)
@@ -347,11 +355,15 @@ public class BattleProcessor : MonoBehaviour
                 continue;
             if (Random.Range(0, 100) >= card.statusEffectChance) continue;
 
-            var result = defender.TryApplyStatusEffect(card.statusEffectToApply, cfg);
+            // ダメージ通過時の付与は常にダメージを受けた側へ（混沌の球等の RandomOneAilment 含む）
+            PlayerStatus recipient = defender;
+            if (recipient == null) continue;
+
+            var result = recipient.TryApplyStatusEffect(card.statusEffectToApply, cfg);
             if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
-                await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(defender, CancellationToken.None);
+                await DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(recipient, CancellationToken.None);
             else if (result == ProgressiveApplyResult.NoChange)
-                await ShowUnharmedPopupForNoProgressStatusAsync(defender);
+                await ShowUnharmedPopupForNoProgressStatusAsync(recipient);
 
             UpdateStatusDisplay();
         }
@@ -737,7 +749,7 @@ public class BattleProcessor : MonoBehaviour
 
         int baseDamage = attackPower - defensePower;
         int firstPhaseDamage = Mathf.Max(0, baseDamage);
-        if (!CardRules.IsMagicOnlyAttackCombo(attackCards))
+        if (!CardRules.IsMagicClassifiedAttackCombo(attackCards))
             firstPhaseDamage = attacker.ApplyOutgoingDamageModifiers(firstPhaseDamage);
 
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
@@ -791,7 +803,7 @@ public class BattleProcessor : MonoBehaviour
         if (firstPhaseDamage > 0 && anyWithDamageThrough)
             await Task.Delay(1000);
 
-        await TryApplyAttackCardStatusEffectsAsync(attackCards, defender, firstPhaseDamage, defenseCardsForStatusRule);
+        await TryApplyAttackCardStatusEffectsAsync(attackCards, attacker, defender, firstPhaseDamage, defenseCardsForStatusRule);
 
         if (IsDead(attacker) || IsDead(defender))
         {
