@@ -10,12 +10,14 @@ using UnityEngine.UI;
 /// - <see cref="MagicPoolManager"/> のプール内容を <see cref="MagicPanelUI"/> に同期
 /// - プレイヤー魔法 CardUI がプールスロット側にあるか判定
 /// - 魔法カード選択時の「手札 → プールスロット」への飛行演出
-/// - 攻撃フェーズ中のみパネル側カードをインタラクティブ化
+/// - プレイヤーが魔法パネルから選べる局面（攻撃ターン・防御側の防御／介入防御など）でパネルをインタラクティブ化
 /// </summary>
 public class MagicPanelPresenter : MonoBehaviour
 {
     [Header("魔法パネル")]
     [SerializeField] private MagicPanelUI magicPanelUI;
+    [Tooltip("未設定なら相手プールはデータのみ（BattleManager のスナップショット）。設定時は相手のチャージ魔法を表示更新する。")]
+    [SerializeField] private MagicPanelUI enemyMagicPanelUI;
 
     [Header("魔法：手札→MagicPanel 飛行アニメ")]
     [SerializeField] private float magicHandToPanelDuration = 0.2f;
@@ -26,6 +28,13 @@ public class MagicPanelPresenter : MonoBehaviour
         magicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries());
     }
 
+    /// <summary>相手側 MagicPool を UI に反映（<see cref="enemyMagicPanelUI"/> がある場合のみ）。</summary>
+    public void UpdateEnemyPanel()
+    {
+        if (enemyMagicPanelUI == null || MagicPoolManager.I == null) return;
+        enemyMagicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy));
+    }
+
     /// <summary>
     /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。
     /// 手札に同種カードが残っていても、スロットに載っている参照と一致する場合のみ true（プールからの発動）。
@@ -34,6 +43,16 @@ public class MagicPanelPresenter : MonoBehaviour
     {
         if (card == null || card.cardType != CardType.Magic || magicPanelUI == null) return false;
         CardUI poolSlotUi = magicPanelUI.GetCardUI(card);
+        return poolSlotUi != null && card.cardUI != null && ReferenceEquals(card.cardUI, poolSlotUi);
+    }
+
+    /// <summary>
+    /// 敵魔法の <see cref="CardData.cardUI"/> が相手用 MagicPanel スロットの CardUI か。
+    /// </summary>
+    public bool IsEnemyMagicCardUiOnMagicPanel(CardData card)
+    {
+        if (card == null || card.cardType != CardType.Magic || enemyMagicPanelUI == null) return false;
+        CardUI poolSlotUi = enemyMagicPanelUI.GetCardUI(card);
         return poolSlotUi != null && card.cardUI != null && ReferenceEquals(card.cardUI, poolSlotUi);
     }
 
@@ -119,9 +138,20 @@ public class MagicPanelPresenter : MonoBehaviour
     {
         if (magicPanelUI == null) return;
         bool handBlocked = BattleUIManager.I != null && BattleUIManager.I.IsHandInputBlocked;
-        bool interactable = BattleManager.I != null
-            && BattleManager.I.CurrentState == GameState.AttackPhase
-            && !handBlocked;
-        magicPanelUI.SetAllInteractable(interactable);
+        var bm = BattleManager.I;
+        // 攻撃フェーズに限らず、プレイヤーが防御側で魔法（<<アイアンクラッド>> 等）をパネルから選べるフェーズでも
+        // インタラクティブにする。Button.interactable=false だと無効カラーで絵が透明に見えるため。
+        bool allowMagicPanel = bm != null && !handBlocked && !bm.IsHandReloadPopupOpen
+            && (
+            (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
+            || (bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player)
+            || (bm.CurrentState == GameState.DefenseConfirmPhase && bm.DefenderPublic == PlayerType.Player)
+            || (bm.CurrentState == GameState.CombatResolvePhase
+                && bm.IsInterventionDefenseWaitActive()
+                && bm.DefenderPublic == PlayerType.Player)
+            // 反射連鎖／パリィ再防御は GameState が攻撃フェーズのまま等の場合があり、通常の Defense 条件だけでは無効のままになる
+            || bm.IsReflectionChainDefensePending()
+            || bm.IsParryRerunDefensePending());
+        magicPanelUI.SetAllInteractable(allowMagicPanel);
     }
 }

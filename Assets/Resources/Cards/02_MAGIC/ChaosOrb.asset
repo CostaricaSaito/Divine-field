@@ -18,7 +18,7 @@ MonoBehaviour:
   description: "\u30E9\u30F3\u30C0\u30E0\u72B6\u614B\u7570\u5E38\u3092\u4ED8\u4E0E"
   attackPower: 8
   defensePower: 0
-  element: 0
+  element: 8
   hitRate: 100
   mpCost: 5
   maxUses: 5

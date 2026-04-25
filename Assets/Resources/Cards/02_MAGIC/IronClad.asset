@@ -12,27 +12,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: adbad1f68826ca9438ce5c7cfd5854ba, type: 3}
   m_Name: IronClad
   m_EditorClassIdentifier: 
-  cardName: "<<\u30A2\u30A4\u30B9\u30B8\u30E3\u30D9\u30EA\u30F3>>"
+  cardName: "<<\u30A2\u30A4\u30A2\u30F3\u30AF\u30E9\u30C3\u30C9>>"
   cardType: 2
-  cardImage: {fileID: 21300000, guid: 97da1bdbaa25de2448add8456b85ef83, type: 3}
-  description: "\u6C37\u306E\u5263\u3092\u98DB\u3070\u3059"
-  attackPower: 4
+  cardImage: {fileID: 21300000, guid: 8df7872911fab4b4eae6fe0b1ce4e7e6, type: 3}
+  description: "\u7269\u7406\u653B\u6483\u3092\u7121\u52B9\u5316\u3059\u308B"
+  attackPower: 0
   defensePower: 0
-  element: 6
+  element: 0
   hitRate: 100
-  mpCost: 5
-  maxUses: 5
+  mpCost: 8
+  maxUses: 2
   isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
   clearsAllStatusAilmentsOnUse: 0
-  usableInAttackPhase: 1
-  usableInDefensePhase: 0
+  usableInAttackPhase: 0
+  usableInDefensePhase: 1
   isPrimaryAttack: 0
   isAdditionalAttack: 0
-  isPrimaryDefense: 0
+  isPrimaryDefense: 1
   isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
@@ -42,9 +42,11 @@ MonoBehaviour:
   statusEffectApplyTiming: 0
   cardValue: 0
   isRare: 0
-  attackPhaseRole: 1
-  defensePhaseRole: 0
+  attackPhaseRole: 0
+  defensePhaseRole: 1
   attackComboPickRule: 0
   reflectionKind: 0
-  blockingKind: 0
+  blockingKind: 1
+  parryKind: 0
   specialAttackRule: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}

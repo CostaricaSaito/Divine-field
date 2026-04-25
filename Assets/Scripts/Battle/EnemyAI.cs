@@ -249,6 +249,14 @@ public class EnemyAI
     {
         Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
 
+        if (incomingForReflection != null
+            && CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingForReflection))
+        {
+            Debug.Log("[EnemyAI] 即時回復／即時効果系：許す");
+            await Task.Delay(500);
+            return null;
+        }
+
         CardData defenseCard = null;
         if (incomingForReflection != null && incomingForReflection.Count > 0 && cpuHand != null)
         {

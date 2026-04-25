@@ -96,6 +96,17 @@ public class DamagePopup : MonoBehaviour
     /// </summary>
     public const int PostPopupIntervalMs = 250;
 
+    /// <summary>
+    /// ダメージポップ表示完了後、<see cref="StatusEffectApplyTiming.WithDamageThrough"/> の付与処理に入るまでの待ち（旧 1000ms の半分）。
+    /// </summary>
+    public const int PreStatusEffectAfterDamagePopupDelayMs = 500;
+
+    /// <summary>
+    /// ダメージ／回復／状態異常付与など、最後に出したフローティングポップの
+    /// 「寿命＋<see cref="PostPopupIntervalMs"/>」まで待った<strong>あと</strong>、CombatResolve（TurnEnd 系）へ進む直前の共通インターバル。
+    /// </summary>
+    public const int PostLastPresentationBeforeCombatResolveMs = 400;
+
     /// <summary>即時効果解決の直前など、回復ポップアップより前に置く短い間（カード詳細の読み取り用）。</summary>
     public const int PreImmediateEffectDelayMs = 250;
 
@@ -311,6 +322,31 @@ public class DamagePopup : MonoBehaviour
             valueText.fontSizeMin = messageFontSizeMin;
             valueText.fontSizeMax = messageFontSizeMax;
             ApplyFillAndOutline(valueText, textFillColor, defaultOutlineForSimpleMessage);
+        }
+    }
+
+    /// <summary>手札リロード演出。状態異常付与ポップと同様に Message オートサイズ。縁色を指定する。</summary>
+    public void SetupHandReload(string displayName, Color panelBackgroundColor, Color textFillColor, Color textOutlineColor)
+    {
+        if (_rootPanelImage != null)
+            _rootPanelImage.color = panelBackgroundColor;
+
+        if (messageText != null)
+        {
+            ShowMessageLayout(displayName ?? string.Empty, textFillColor, textOutlineColor, statusAilmentAutoSize: true);
+        }
+        else if (valueText != null)
+        {
+            if (labelText != null)
+                labelText.gameObject.SetActive(false);
+            valueText.gameObject.SetActive(true);
+            valueText.text = displayName ?? string.Empty;
+            valueText.enableWordWrapping = false;
+            valueText.overflowMode = TextOverflowModes.Overflow;
+            valueText.enableAutoSizing = true;
+            valueText.fontSizeMin = messageFontSizeMin;
+            valueText.fontSizeMax = messageFontSizeMax;
+            ApplyFillAndOutline(valueText, textFillColor, textOutlineColor);
         }
     }
 

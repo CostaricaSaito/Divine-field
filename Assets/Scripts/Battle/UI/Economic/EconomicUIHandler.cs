@@ -53,6 +53,14 @@ public class EconomicUIHandler : MonoBehaviour
             return;
         }
 
+        if (BattleManager.I != null && BattleManager.I.IsHandReloadPopupOpen)
+        {
+            if (buyButton != null) { buyButton.interactable = false; buyButton.image.color = Color.gray; }
+            if (sellButton != null) { sellButton.interactable = false; sellButton.image.color = Color.gray; }
+            if (exchangeButton != null) { exchangeButton.interactable = false; exchangeButton.image.color = Color.gray; }
+            return;
+        }
+
         if (buyButton != null)
         {
             bool canBuy = EconomicAction.I.CanBuy();

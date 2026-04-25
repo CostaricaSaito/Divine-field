@@ -101,11 +101,6 @@ public enum SelectionRole
     Free = 4,
 }
 
-public interface ISpecialCardEffect
-{
-    void Activate(PlayerStatus player, PlayerStatus enemy);
-}
-
 /// <summary>
 /// 状態異常の付与タイミング。
 /// ① <see cref="WithDamageThrough"/> … 戦闘で命中し、かつ最終ダメージが1以上のときのみ（攻撃・攻撃魔法のコンボ）。
@@ -123,6 +118,7 @@ public class CardData : ScriptableObject
 
     [Header("基本情報")]
     public string cardName;
+    [Tooltip("Magic は攻撃フェーズ・防御フェーズのどちらでも使えるカードがあり得る（フェーズ可否は usableInAttackPhase / usableInDefensePhase 等。シーケンスは CardSequenceManager が \"攻撃\"／\"防御\" で分岐）。")]
     public CardType cardType;
     public Sprite cardImage;
     [TextArea(2, 4)] public string description;
@@ -200,6 +196,10 @@ public class CardData : ScriptableObject
     [Header("特殊攻撃ルール（任意・B案）")]
     [Tooltip("マジカルエクスプロージョン・ゴッドレイジ・大魔法等。未設定なら従来どおりカード数値のみ。")]
     public SpecialAttackRuleSO specialAttackRule;
+
+    [Header("Special カード")]
+    [Tooltip("cardType が Special のとき、使用時に実行するカード固有の効果（ScriptableObject）。")]
+    public SpecialCardEffectSO specialCardEffect;
 
     [Header("顕現・特殊表示")]
     [Tooltip("CardDisplayPanel 用カードシートの背景枠。未設定時はプレハブ既定。")]

@@ -46,6 +46,7 @@ public class SummonSkillButton : MonoBehaviour
             && !_self.IsCastingArchMagic
             && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
             && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
+            && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
             && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0);
 
         _button.interactable = can;

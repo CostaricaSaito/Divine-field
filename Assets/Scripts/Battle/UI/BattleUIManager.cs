@@ -123,6 +123,16 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>プレイヤー側のカード表示のみクリア（敵側は残す）</summary>
     public void HidePlayerCardDetails() => cardController?.HidePlayerCardDetails();
 
+    /// <summary>敵側のカード表示のみクリア（プレイヤー側は残す）</summary>
+    public void HideEnemyCardDetails() => cardController?.HideEnemyCardDetails();
+
+    /// <summary>選択フローなしで CardDisplayPanel 相当にシートを出す（双剣2本目用・1枚）。</summary>
+    public void ShowCardSheetVisualOnly(CardData card, Side side) => cardController?.ShowCardSheetVisualOnly(card, side);
+
+    /// <summary>攻撃使用カード列を一括表示（双剣2本目の再掲示）。レイアウト用に選択は載せない。</summary>
+    public void ShowCardSheetsVisualOnlyBatch(IReadOnlyList<CardData> cards, Side side) =>
+        cardController?.ShowCardSheetsVisualOnlyBatch(cards, side);
+
     //==== パブリックAPI：カード選択管理 =====
     public List<CardData> GetSelectedCards()
         => cardController != null ? cardController.GetSelectedCards() : new List<CardData>();
@@ -235,8 +245,13 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 状態異常が付与されたとき（ダメージポップと同じプレハブ）。表示成功時に SE を再生。
     /// </summary>
-    public void ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
-        => popupPresenter?.ShowStatusAilmentGrantPopup(type, target);
+    /// <returns><see cref="DamagePopup.fadeDuration"/>。Presenter 未設定時は 0。</returns>
+    public float ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowStatusAilmentGrantPopup(type, target) : 0f;
+
+    /// <summary>手札リロードのメッセージポップ（ピンク背景・<c>Assets/SE/リロード.mp3</c>）。</summary>
+    public float ShowHandReloadPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowHandReloadPopup(target) : 0f;
 
     /// <summary>
     /// 濃霧ポップアップ寿命（fade）と <see cref="DamagePopup.PostPopupIntervalMs"/> 経過後に濃霧画面演出を有効化する。
@@ -442,11 +457,20 @@ public class BattleUIManager : MonoBehaviour
 
     public void UpdateMagicPanel() => magicPanelPresenter?.UpdatePanel();
 
+    /// <summary>相手 MagicPool 変更時（BattleManager から登録）。相手用パネルがあれば再描画。</summary>
+    public void OnEnemyMagicPoolChanged() => magicPanelPresenter?.UpdateEnemyPanel();
+
     /// <summary>
     /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。
     /// </summary>
     public bool IsPlayerMagicCardUiOnMagicPanel(CardData card)
         => magicPanelPresenter != null && magicPanelPresenter.IsPlayerMagicCardUiOnMagicPanel(card);
+
+    /// <summary>
+    /// 敵魔法の <see cref="CardData.cardUI"/> が相手側 MagicPanel スロットの CardUI か。
+    /// </summary>
+    public bool IsEnemyMagicCardUiOnMagicPanel(CardData card)
+        => magicPanelPresenter != null && magicPanelPresenter.IsEnemyMagicCardUiOnMagicPanel(card);
 
     /// <summary>
     /// 手札の魔法カードが MagicPanel のスロットへ直線移動する演出（プール登録は呼び出し側）

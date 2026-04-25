@@ -37,6 +37,8 @@ public class PlayerStatus
     // ===== 大魔法（ArchMagic）詠唱状態 =====
     /// <summary>詠唱中の大魔法カード。null のとき詠唱していない。</summary>
     public CardData archMagicCastingCard { get; private set; }
+    /// <summary>発動時の効果対象（詠唱開始時に確定。自分攻撃のときは使用者本人）。</summary>
+    public PlayerStatus archMagicEffectTarget { get; private set; }
     /// <summary>残り詠唱ターン数。0 になった自分の攻撃フェーズで発動する。</summary>
     public int archMagicRemainingTurns { get; private set; }
     /// <summary>直近 <see cref="TakeDamage"/> 中にダメージを受けたことで詠唱がキャンセルされたか（BattleManager が消費）。</summary>
@@ -44,9 +46,11 @@ public class PlayerStatus
 
     public bool IsCastingArchMagic => archMagicCastingCard != null;
 
-    public void BeginArchMagicCasting(CardData card, int turns)
+    /// <param name="effectTarget">解放時にダメージ等を受ける側（プレイヤーが自分に向けた大魔法なら使用者本人）。</param>
+    public void BeginArchMagicCasting(CardData card, int turns, PlayerStatus effectTarget)
     {
         archMagicCastingCard = card;
+        archMagicEffectTarget = effectTarget;
         archMagicRemainingTurns = Mathf.Max(1, turns);
         archMagicCancelPending = false;
     }
@@ -61,6 +65,7 @@ public class PlayerStatus
     public void ClearArchMagicCastingState()
     {
         archMagicCastingCard = null;
+        archMagicEffectTarget = null;
         archMagicRemainingTurns = 0;
         archMagicCancelPending = false;
     }
@@ -112,6 +117,7 @@ public class PlayerStatus
         {
             archMagicCancelPending = true;
             archMagicCastingCard = null;
+            archMagicEffectTarget = null;
             archMagicRemainingTurns = 0;
         }
     }
@@ -251,14 +257,17 @@ public class PlayerStatus
     /// 段階型・排他型（病・眼精／群発・封印）と単純付与（衰弱など）を統合した付与API。
     /// </summary>
     /// <param name="suppressGrantPopupAndSound">true のとき付与ポップアップと SE を出さない（デバッグ付与など）。</param>
-    /// <returns>強制絶頂が必要な場合は <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>。呼び出し側で非同期処理すること。</returns>
-    public ProgressiveApplyResult TryApplyStatusEffect(
+    /// <returns>
+    /// result: 強制絶頂が必要な場合は <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>（呼び出し側で非同期処理）。
+    /// grantPopupFadeSeconds: 付与ポップを出したときの <see cref="DamagePopup.fadeDuration"/>。0 なら寿命待ち不要。
+    /// </returns>
+    public (ProgressiveApplyResult result, float grantPopupFadeSeconds) TryApplyStatusEffect(
         StatusEffectType type,
         StatusProgressionConfig config,
         bool suppressGrantPopupAndSound = false)
     {
         if (type == StatusEffectType.None)
-            return ProgressiveApplyResult.NoChange;
+            return (ProgressiveApplyResult.NoChange, 0f);
 
         if (type == StatusEffectType.RandomOneAilment)
             return TryApplyRandomOneAilmentFromCatalog(config, suppressGrantPopupAndSound);
@@ -271,34 +280,34 @@ public class PlayerStatus
             || type == StatusEffectType.ClusterHeadache)
         {
             var complex = ProgressiveStatusApplicator.Apply(this, type, config);
-            if (suppressGrantPopupAndSound) return complex;
+            if (suppressGrantPopupAndSound) return (complex, 0f);
             return NotifyApplyFeedbackAndReturn(type, complex);
         }
 
         if (ProgressiveStatusApplicator.TryAddSimpleEffect(this, type, config))
         {
-            if (suppressGrantPopupAndSound) return ProgressiveApplyResult.Applied;
+            if (suppressGrantPopupAndSound) return (ProgressiveApplyResult.Applied, 0f);
             return NotifyApplyFeedbackAndReturn(type, ProgressiveApplyResult.Applied);
         }
 
-        return ProgressiveApplyResult.NoChange;
+        return (ProgressiveApplyResult.NoChange, 0f);
     }
 
     /// <summary>
     /// <see cref="StatusEffectType.RandomOneAilment"/>：15種から等確率で抽選し <see cref="TryApplyStatusEffect"/> へ委譲。
     /// 病系の進行は <see cref="ProgressiveStatusApplicator"/> に任せる。封印は既存時は無傷。
     /// </summary>
-    private ProgressiveApplyResult TryApplyRandomOneAilmentFromCatalog(
+    private (ProgressiveApplyResult result, float grantPopupFadeSeconds) TryApplyRandomOneAilmentFromCatalog(
         StatusProgressionConfig config,
         bool suppressGrantPopupAndSound)
     {
         config ??= StatusProgressionConfig.GetRuntimeFallback();
         StatusEffectType pick = StatusEffectCatalog.PickRandomAilmentUniform();
         if (pick == StatusEffectType.None)
-            return ProgressiveApplyResult.NoChange;
+            return (ProgressiveApplyResult.NoChange, 0f);
 
         if (pick == StatusEffectType.Seal && HasActiveEffectType(StatusEffectType.Seal))
-            return ProgressiveApplyResult.NoChange;
+            return (ProgressiveApplyResult.NoChange, 0f);
 
         return TryApplyStatusEffect(pick, config, suppressGrantPopupAndSound);
     }
@@ -310,21 +319,24 @@ public class PlayerStatus
         return false;
     }
 
-    private ProgressiveApplyResult NotifyApplyFeedbackAndReturn(StatusEffectType requested, ProgressiveApplyResult result)
+    private (ProgressiveApplyResult result, float grantPopupFadeSeconds) NotifyApplyFeedbackAndReturn(
+        StatusEffectType requested,
+        ProgressiveApplyResult result)
     {
-        if (StatusEffectApplyFeedback.ShouldShowGrantPopup(result))
-        {
-            var popupType = StatusEffectApplyFeedback.GetGrantPopupEffectType(this, requested, result);
-            BattleUIManager.I?.ShowStatusAilmentGrantPopup(popupType, this);
-        }
+        if (!StatusEffectApplyFeedback.ShouldShowGrantPopup(result))
+            return (result, 0f);
 
-        return result;
+        var popupType = StatusEffectApplyFeedback.GetGrantPopupEffectType(this, requested, result);
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowStatusAilmentGrantPopup(popupType, this)
+            : 0f;
+        return (result, fade);
     }
 
     /// <summary>従来の単純付与。内部で <see cref="TryApplyStatusEffect"/> を使用。</summary>
     public void AddStatusEffect(StatusEffectType type)
     {
-        var result = TryApplyStatusEffect(type, null);
+        var (result, _) = TryApplyStatusEffect(type, null);
         if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
         {
             Debug.LogWarning($"{DisplayName}: 楽園病＋「病」は AddStatusEffect では処理されません。TryApplyStatusEffect の戻り値に応じて強制絶頂を実行してください。");

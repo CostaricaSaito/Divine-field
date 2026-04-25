@@ -137,6 +137,82 @@ public class BattleCardUIController : MonoBehaviour
         UpdateHandCardHighlights();
     }
 
+    /// <summary>敵側のカード表示のみクリア（プレイヤー側は残す）。</summary>
+    public void HideEnemyCardDetails()
+    {
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var go = activeCardSheets[i];
+            if (go == null) { activeCardSheets.RemoveAt(i); continue; }
+            if (go.transform.parent == enemyCardDisplayPanel)
+            {
+                Destroy(go);
+                activeCardSheets.RemoveAt(i);
+            }
+        }
+        cardSelectionManager.ClearAllSelections();
+        UpdateHandCardHighlights();
+    }
+
+    /// <summary>
+    /// 手札選択を介さず1枚。内部は <see cref="ShowCardSheetsVisualOnlyBatch"/>。
+    /// </summary>
+    public void ShowCardSheetVisualOnly(CardData card, Side side)
+    {
+        if (card == null) return;
+        ShowCardSheetsVisualOnlyBatch(new List<CardData> { card }, side);
+    }
+
+    /// <summary>
+    /// 手札選択を使わず、使用カード列を一括表示し <see cref="CardLayoutManager.RebuildLayoutForCardDataOrder"/> で配置する。
+    /// （<see cref="DisplayCard"/> は選択リストが空だと <see cref="CardLayoutManager"/> が再配置をスキップするため併用しない。）
+    /// </summary>
+    public void ShowCardSheetsVisualOnlyBatch(IReadOnlyList<CardData> cards, Side side)
+    {
+        if (cards == null || cards.Count == 0) return;
+        Transform parent = (side == Side.Player) ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (parent == null) return;
+        if (!parent.gameObject.activeSelf) parent.gameObject.SetActive(true);
+
+        if (cardSheetPrefab == null)
+        {
+            foreach (var c in cards)
+            {
+                if (c == null) continue;
+                HandleCardDisplayFallback(c, side);
+            }
+            return;
+        }
+
+        var ordered = new List<CardData>(cards.Count);
+        foreach (var c in cards)
+        {
+            if (c == null) continue;
+            ordered.Add(c);
+            var go = Instantiate(cardSheetPrefab, parent);
+            if (!go.activeSelf) go.SetActive(true);
+            var display = go.GetComponent<CardSheetDisplay>();
+            if (display != null)
+            {
+                PlayerStatus mpOwner = side == Side.Player
+                    ? BattleManager.I?.GetPlayerStatus()
+                    : BattleManager.I?.GetEnemyStatus();
+                display.Setup(c, mpOwner);
+            }
+            activeCardSheets.Add(go);
+        }
+
+        if (ordered.Count == 0) return;
+
+        if (cardLayoutManager != null)
+        {
+            if (parent is RectTransform prt) cardLayoutManager.SetLayoutPanelRect(prt);
+            cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+            cardLayoutManager.RebuildLayoutForCardDataOrder(ordered);
+        }
+        UpdateHandCardHighlights();
+    }
+
     //==== パブリックAPI：カード選択管理 =====
     public List<CardData> GetSelectedCards() => cardSelectionManager.GetSelectedCards();
 
@@ -534,7 +610,8 @@ public class BattleCardUIController : MonoBehaviour
             var cardData = cardUI.GetCardData();
             if (cardData == null) continue;
 
-            bool isSelected = cardSelectionManager.IsCardSelected(cardData);
+            bool reloadSel = HandReloadController.I != null && HandReloadController.I.IsReloadSelected(cardData);
+            bool isSelected = cardSelectionManager.IsCardSelected(cardData) || reloadSel;
             cardUI.SetHighlight(isSelected);
         }
     }

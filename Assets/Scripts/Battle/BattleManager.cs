@@ -44,6 +44,11 @@ public class BattleManager : MonoBehaviour
     private bool shouldGrayOutCards = false;
 
     private readonly SummonTurnCounterState _summonTurnCounters = new();
+
+    /// <summary>
+    /// 相手側 MagicPool のスナップショット（プレイヤー側UI・ロジック用。<see cref="RefreshEnemyMagicPoolSnapshot"/> で更新）。
+    /// </summary>
+    private readonly List<MagicCardEntry> _enemyMagicPoolSnapshot = new();
     /// <summary>召喚ライフサイクル用：各側が自分のターンを終えた回数（UI表示などに使用可）。</summary>
     public SummonTurnCounterState SummonTurnCounters => _summonTurnCounters;
 
@@ -86,6 +91,23 @@ public class BattleManager : MonoBehaviour
 
     /// <summary>反射連鎖で敵の防御選択に使用する。</summary>
     public EnemyAI GetEnemyAI() => enemyAI;
+
+    /// <summary>
+    /// 相手側 MagicPool のコピー（カード参照＋残り回数）。プレイヤー側から「相手がチャージしている魔法」を参照する用途。
+    /// <see cref="MagicPoolManager"/> 更新時に同期される。
+    /// </summary>
+    public IReadOnlyList<MagicCardEntry> GetEnemyMagicPoolSnapshot() => _enemyMagicPoolSnapshot;
+
+    private void RefreshEnemyMagicPoolSnapshot()
+    {
+        _enemyMagicPoolSnapshot.Clear();
+        if (MagicPoolManager.I == null) return;
+        foreach (var e in MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy))
+        {
+            if (e?.cardData == null) continue;
+            _enemyMagicPoolSnapshot.Add(new MagicCardEntry(e.cardData, e.remainingUses));
+        }
+    }
     private BuyFeature buyFeature = new BuyFeature();
     private SellFeature sellFeature = new SellFeature();
     [SerializeField] private ExchangeFeature exchangeFeature;
@@ -130,8 +152,9 @@ public class BattleManager : MonoBehaviour
     public void ClearPlayerSelfAttackTargetMode() => SetPlayerSelfAttackTargetMode(false);
 
     /// <summary>
-    /// 攻撃選択が変わったとき、効果対象を既定（相手）へ戻す。
+    /// 攻撃選択が変わったとき、効果対象トグルを既定へ戻す（TOTAL 赤オフ）。
     /// 数値 ATK が出ない選択では TOTAL で対象切替するため、選び直しのたびにリセットする。
+    /// 回復系では既定＝自分へ効く（赤＝相手へ回復）。
     /// </summary>
     public void ResetPlayerEffectTargetToDefaultForCurrentAttackSelection()
     {
@@ -203,6 +226,95 @@ public class BattleManager : MonoBehaviour
         _magicalExplosionMpSnapActive = false;
     }
 
+    /// <summary>マジカルソード：MP 支払いで上乗せする攻撃力（プレイヤー今回分）。0 のとき上乗せなし。</summary>
+    private int _magicalSwordAttackPowerBonus;
+
+    /// <summary>マジカルエクスプロージョン演出前：マジカルソードの ATK/ TOTAL ランプを出し済み（Resolve 内で重複防止）。</summary>
+    private bool _magicalSwordPlayerPreMeRampVisualDone;
+
+    public int MagicalSwordAttackPowerBonus => _magicalSwordAttackPowerBonus;
+
+    public void SetMagicalSwordAttackPowerBonus(int value) => _magicalSwordAttackPowerBonus = Mathf.Max(0, value);
+
+    public void ClearMagicalSwordAttackPowerBonus() => _magicalSwordAttackPowerBonus = 0;
+
+    public bool MagicalSwordPlayerPreMeRampVisualDone => _magicalSwordPlayerPreMeRampVisualDone;
+
+    public void SetMagicalSwordPlayerPreMeRampVisualDone(bool value) => _magicalSwordPlayerPreMeRampVisualDone = value;
+
+    public void ClearMagicalSwordPlayerAttackState()
+    {
+        _magicalSwordAttackPowerBonus = 0;
+        _magicalSwordPlayerPreMeRampVisualDone = false;
+    }
+
+    /// <summary>敵の双剣デュアリズム：プレイヤー防御1回目解決直後=0、2回目の防御入力待ち中=1。</summary>
+    private int _playerDefenseVsEnemyDualBladeStreakIndex;
+
+    /// <summary>
+    /// 敵攻撃＋双剣デュアリズム：1回目の解決の共有後処理の前に呼ぶ。2回目の防御選択へ回すとき true（後処理をスキップ）。
+    /// </summary>
+    public async Task<bool> TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(CancellationToken cancellationToken = default)
+    {
+        if (Attacker != PlayerType.Enemy || Defender != PlayerType.Player) return false;
+        if (currentAttackCard == null) return false;
+        if (!DualBladeDualismRules.ContainsDualBladeDualism(
+                new List<CardData> { currentAttackCard }))
+            return false;
+        if (playerStatus == null || enemyStatus == null) return false;
+        if (playerStatus.IsDead() || enemyStatus.IsDead())
+        {
+            _playerDefenseVsEnemyDualBladeStreakIndex = 0;
+            return false;
+        }
+
+        if (_playerDefenseVsEnemyDualBladeStreakIndex == 1)
+        {
+            _playerDefenseVsEnemyDualBladeStreakIndex = 0;
+            return false;
+        }
+
+        _playerDefenseVsEnemyDualBladeStreakIndex = 1;
+        await BeginPlayerDualBladeSecondDefenseEntryAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task BeginPlayerDualBladeSecondDefenseEntryAsync(CancellationToken cancellationToken = default)
+    {
+        if (cancellationToken.IsCancellationRequested) return;
+
+        BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.ClearSequenceCards();
+        cardStatsDisplay?.UpdateDisplay();
+
+        await Task.Delay(300, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        if (currentAttackCard != null)
+        {
+            BattleUIManager.I?.ShowCardSheetVisualOnly(currentAttackCard, Side.Enemy);
+            cardStatsDisplay?.SetSequenceCards(
+                new List<CardData> { currentAttackCard },
+                "攻撃",
+                Side.Enemy);
+            cardStatsDisplay?.UpdateDisplay();
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+        }
+
+        await Task.Delay(500, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+        Debug.Log("[BattleManager] 双剣デュアリズム: 2回目の防御選択");
+        BattleUIManager.I?.SyncRestraintHeavyOverlay();
+
+        selectedDefenseCard = null;
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.SetUseButtonLabel("許す");
+        RefreshPlayerDefensePhaseInteractivity();
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+    }
+
     /// <summary>
     /// 現在の攻撃カードを設定（BuyFeature、CardSequenceManagerから使用）
     /// </summary>
@@ -235,7 +347,20 @@ public class BattleManager : MonoBehaviour
     {
         if (card == null) return;
 
-        if (CurrentState != GameState.AttackPhase || Attacker != PlayerType.Player)
+        bool fromAttack = CurrentState == GameState.AttackPhase && Attacker == PlayerType.Player;
+        bool fromDefense = (CurrentState == GameState.DefensePhase || CurrentState == GameState.DefenseConfirmPhase)
+            && Defender == PlayerType.Player
+            && CardRules.IsUsableInDefensePhase(card);
+        bool fromIntervention = CurrentState == GameState.CombatResolvePhase
+            && IsInterventionDefenseWaitActive()
+            && Defender == PlayerType.Player
+            && CardRules.IsUsableInDefensePhase(card);
+        bool fromReflectionChain = IsReflectionChainDefensePending()
+            && CardRules.IsUsableInDefensePhase(card);
+        bool fromParryRerun = IsParryRerunDefensePending()
+            && CardRules.IsUsableInDefensePhase(card);
+
+        if (!fromAttack && !fromDefense && !fromIntervention && !fromReflectionChain && !fromParryRerun)
         {
             Debug.Log($"[BattleManager] MagicPanel カード選択不可: 現在のState={CurrentState}");
             return;
@@ -394,6 +519,19 @@ public class BattleManager : MonoBehaviour
             attackSource = GetAttackCardsForCombat();
         else
             return;
+
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackSource))
+        {
+            var defenseChoicesRestricted = CardRules.GetFullOnlyReactiveDefenseChoices(playerHand, attackSource);
+            var selectedDefenseR = BattleUIManager.I.GetSelectedDefenseCards();
+            defenseChoicesRestricted = CardRules.ApplyRestraintDefenseFilter(
+                defenseChoicesRestricted,
+                selectedDefenseR,
+                playerStatus != null && playerStatus.HasRestraintEffect());
+            BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoicesRestricted);
+            BattleUIManager.I.UpdateDefenseButtonLabel();
+            return;
+        }
 
         ElementType attackElement = ElementHelper.GetCombinedElement(attackSource);
         var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSource);
@@ -604,6 +742,19 @@ public class BattleManager : MonoBehaviour
     {
         if (BattleUIManager.I == null || attackSnapshot == null) return;
 
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackSnapshot))
+        {
+            var defenseChoicesR = CardRules.GetFullOnlyReactiveDefenseChoices(playerHand, attackSnapshot);
+            var selectedDefenseR = BattleUIManager.I.GetSelectedDefenseCards();
+            defenseChoicesR = CardRules.ApplyRestraintDefenseFilter(
+                defenseChoicesR,
+                selectedDefenseR,
+                playerStatus != null && playerStatus.HasRestraintEffect());
+            BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoicesR);
+            BattleUIManager.I.UpdateDefenseButtonLabel();
+            return;
+        }
+
         ElementType attackElement = ElementHelper.GetCombinedElement(attackSnapshot);
         var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSnapshot);
         if (ReflectionRules.CanReflectPhysical(attackSnapshot))
@@ -790,6 +941,13 @@ public class BattleManager : MonoBehaviour
                 BattleUIManager.I?.UpdateMagicPanel();
                 BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
             });
+            magicPoolManager.RegisterOnEnemyPoolChanged(() =>
+            {
+                RefreshEnemyMagicPoolSnapshot();
+                BattleUIManager.I?.OnEnemyMagicPoolChanged();
+            });
+            RefreshEnemyMagicPoolSnapshot();
+            BattleUIManager.I?.OnEnemyMagicPoolChanged();
             Debug.Log("[BattleManager] MagicPoolManager初期化完了");
         }
 
@@ -802,6 +960,12 @@ public class BattleManager : MonoBehaviour
 
         _ = BattleStartSequenceAsync();
     }
+
+    /// <summary>
+    /// 配布・カットイン等の開幕 <see cref="BattleStartSequenceAsync"/> が完了し、<see cref="GameState.StandByPhase"/> 直前の時点で true になる。
+    /// 手札リロード UI はこれが true かつ攻撃プレイヤーの <see cref="GameState.AttackPhase"/> などで有効化する。
+    /// </summary>
+    public bool IsBattleOpeningSequenceComplete { get; private set; }
 
     //================ 状態遷移 ================
     public void SetGameState(GameState newState)
@@ -822,6 +986,8 @@ public class BattleManager : MonoBehaviour
         CurrentState = newState;
         isProcessingUseButton = false;
         HandleStateChange();
+        // 攻撃フェーズ外では入口を消す。EnterAttackPhase 内でも呼ぶが、他フェーズへ移った直後の表示残りを防ぐ。
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     private void HandleStateChange()
@@ -879,6 +1045,8 @@ public class BattleManager : MonoBehaviour
     //================ バトル開始（Layer1: Turn 前の開幕のみ） ================
     private async System.Threading.Tasks.Task BattleStartSequenceAsync()
     {
+        IsBattleOpeningSequenceComplete = false;
+
         // リザルト画面のカウント起点に使う RP スナップショットを取得
         GameProfile.I?.CaptureBattleStartRP();
 
@@ -902,6 +1070,7 @@ public class BattleManager : MonoBehaviour
 
         DetermineOpeningFirstTurn();
 
+        IsBattleOpeningSequenceComplete = true;
         SetGameState(GameState.StandByPhase);
     }
 
@@ -1028,6 +1197,7 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
 
             RefreshSummonSkillButtonInteractables();
+            HandReloadController.I?.RefreshReloadEntryButton();
         }
         else
         {
@@ -1038,6 +1208,34 @@ public class BattleManager : MonoBehaviour
         }
 
         RefreshSummonSkillButtonInteractables();
+    }
+
+    /// <summary>手札リロードのポップアップ表示中、またはリロード演出シーケンス中。経済・魔法パネル等のブロックに使用。</summary>
+    public bool IsHandReloadPopupOpen => HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking;
+
+    /// <summary>手札リロードのキャンセル／リロード確定演出の完了後、攻撃フェーズの手札・ボタンを再構築する。</summary>
+    public void RefreshUIFromHandReloadClose()
+    {
+        if (CurrentState != GameState.AttackPhase || CurrentTurnOwner != PlayerType.Player) return;
+        ClearPlayerSelfAttackTargetMode();
+        var attackables = CardRules.GetAttackChoices(playerHand);
+        if (attackables.Count == 0)
+        {
+            BattleUIManager.I?.SetPrayModeUI(playerHand);
+        }
+        else
+        {
+            BattleUIManager.I?.SetUseButtonLabel("使用");
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+            if (shouldGrayOutCards)
+                BattleUIManager.I?.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
+            else
+                BattleUIManager.I?.SetIntroModeUI(playerHand);
+        }
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        RefreshSummonSkillButtonInteractables();
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     private async Task RunDefenseSelectAsync()
@@ -1157,7 +1355,16 @@ public class BattleManager : MonoBehaviour
 
             try
             {
-                await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+                if (attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+                    && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards))
+                {
+                    await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, _phaseCts.Token);
+                    await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                }
+                else
+                {
+                    await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+                }
             }
             finally
             {
@@ -1172,13 +1379,18 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.HideAllCardDetails();
 
             // 敵の防御カード使用処理（裏向きにする）
-            if (defenseCardToDisplay != null)
+            if (defenseCardToDisplay != null
+                && !(attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+                    && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)))
             {
                 // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
                 handRefill?.RecordEnemyUse(defenseCardToDisplay);
                 battleProcessor.UseCard(defenseCardToDisplay, defHand);
             }
 
+            cardStatsDisplay?.ClearSequenceCards();
+            currentAttackCard = null;
+            cardStatsDisplay?.UpdateDisplay();
             SetGameState(GameState.CombatResolvePhase);
         }
         finally
@@ -1371,6 +1583,7 @@ public class BattleManager : MonoBehaviour
         }
 
         currentAttackCard = attack;
+        _playerDefenseVsEnemyDualBladeStreakIndex = 0;
 
         var token = _phaseCts != null ? _phaseCts.Token : default;
 
@@ -1380,6 +1593,44 @@ public class BattleManager : MonoBehaviour
             await cardSequenceManager.PresentEnemyMagicalExplosionAttackAsync(attack, token);
             BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
             cardStatsDisplay?.UpdateDisplay();
+        }
+        else if (CardRules.IsImmediateAction(attack))
+        {
+            Debug.Log($"[BattleManager] 相手の即時カード: {attack.cardName}");
+            try
+            {
+                await PlayAttackConfirmPresentationAsync(attack, Side.Enemy, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            cardStatsDisplay?.UpdateDisplay();
+
+            PlayerStatus immediateTarget = ResolveCpuImmediateEffectTarget(attack);
+            if (immediateTarget == enemyStatus)
+            {
+                await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, token);
+                await battleProcessor.ResolveImmediateEffectAsync(attack, enemyStatus, enemyStatus);
+                if (cardSequenceManager != null)
+                    await cardSequenceManager.RunAfterCombatSharedCleanupAsync(token);
+                else
+                {
+                    BattleUIManager.I?.HideAllCardDetails();
+                    cardStatsDisplay?.ClearSequenceCards();
+                    currentAttackCard = null;
+                    ClearMagicalExplosionComboMpPoolSnapshot();
+                    BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+                    cardStatsDisplay?.UpdateDisplay();
+                    SetGameState(GameState.CombatResolvePhase);
+                }
+                return;
+            }
+
+            SetGameState(GameState.DefensePhase);
+            return;
         }
         else
         {
@@ -1393,6 +1644,7 @@ public class BattleManager : MonoBehaviour
         }
 
         var atkList = new List<CardData> { attack };
+
         bool confusedEnemy = enemyStatus != null && enemyStatus.HasConfusionEffect();
         bool confusionTargetSelf = confusedEnemy && UnityEngine.Random.Range(0, 2) == 0;
         if (confusedEnemy)
@@ -1456,6 +1708,12 @@ public class BattleManager : MonoBehaviour
         if (ui == null) return;
         var card = ui.GetCardData();
         if (card == null) return;
+
+        if (HandReloadController.I != null && HandReloadController.I.IsReloadPopupContentOpen)
+        {
+            HandReloadController.I.OnHandCardClickedForReload(card);
+            return;
+        }
 
         // 連鎖反射：GameState は AttackPhase のままだが、防御カード選択として扱う
         if (IsReflectionChainDefensePending())
@@ -1578,14 +1836,28 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 即時効果の対象（TOTAL の自分／相手）。<see cref="RunImmediateAttackSingleCardAsync"/> では
-    /// <c>ShowCardDetail</c> が選択解除でターゲットモードを消す前に確定して渡すこと。
+    /// 即時効果の対象（TOTAL のタップで切替）。攻撃・状態異常は赤＝自分側が効く相手。
+    /// 回復・回復魔法は既定が自分、赤＝相手へ回復（直感に合わせて通常と逆）。
     /// </summary>
-    private PlayerStatus ComputeImmediateEffectTargetForPlayerAttack()
+    private PlayerStatus ComputeImmediateEffectTargetForPlayerAttack(CardData card)
     {
         if (playerStatus != null && playerStatus.HasConfusionEffect())
             return UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+        bool recover = card != null && CardRules.IsRecoveryCard(card);
+        if (recover)
+            return _playerSelfAttackTargetMode ? enemyStatus : playerStatus;
         return _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
+    }
+
+    /// <summary>敵ターンの即時効果の対象（回復＝自分、それ以外＝プレイヤー。混乱時はランダム）。</summary>
+    private PlayerStatus ResolveCpuImmediateEffectTarget(CardData attack)
+    {
+        if (attack == null) return playerStatus;
+        if (enemyStatus != null && enemyStatus.HasConfusionEffect())
+            return UnityEngine.Random.Range(0, 2) == 0 ? enemyStatus : playerStatus;
+        if (CardRules.IsRecoveryCard(attack))
+            return enemyStatus;
+        return playerStatus;
     }
 
     private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex, PlayerStatus presetEffectTarget = null)
@@ -1607,7 +1879,7 @@ public class BattleManager : MonoBehaviour
             }
             else
             {
-                effectTarget = _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
+                effectTarget = ComputeImmediateEffectTargetForPlayerAttack(card);
             }
         }
         else if (playerStatus != null && playerStatus.HasConfusionEffect())
@@ -1619,14 +1891,40 @@ public class BattleManager : MonoBehaviour
 
         ClearPlayerSelfAttackTargetMode();
         selectedCard = null;
-        BattleUIManager.I?.HideAllCardDetails();
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         UpdateTotalATKDEFDisplay();
 
-        // 回復ポップアップの寿命＋ポストインターバルは BattleProcessor.ApplyRecoveryAsync 内で待機済み
+        if (cardSequenceManager != null)
+            await cardSequenceManager.RunAfterCombatSharedCleanupAsync(_phaseCts != null ? _phaseCts.Token : default);
+        else
+        {
+            BattleUIManager.I?.HideAllCardDetails();
+            cardStatsDisplay?.ClearSequenceCards();
+            SetCurrentAttackCard(null);
+            cardStatsDisplay?.UpdateDisplay();
+            SetGameState(GameState.CombatResolvePhase);
+        }
+    }
 
-        // 回復カード（即時効果）の場合は防御フェーズをスキップして直接ターン終了
-        SetGameState(GameState.CombatResolvePhase);
+    /// <summary>
+    /// 攻撃確定後のカード掲示（<see cref="CardSequenceManager.StartCardSequenceAsync"/> の①クリア～②1枚表示と同じテンポ）。
+    /// </summary>
+    private async Task PlayAttackConfirmPresentationAsync(CardData card, Side side, CancellationToken ct)
+    {
+        if (card == null) return;
+
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃", side);
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+
+        await Task.Delay(300, ct);
+
+        BattleUIManager.I?.ShowCardDetail(card, side);
+        SetStatsDisplaySequenceCards(new List<CardData> { card }, "攻撃", side);
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+        await Task.Delay(500, ct);
     }
 
     /// <summary>
@@ -1636,12 +1934,23 @@ public class BattleManager : MonoBehaviour
     private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex)
     {
         // ShowCardDetail が「既選択のトグル解除」でターゲットモードをリセットする前に効果対象を固定する
-        PlayerStatus immediateEffectTarget = ComputeImmediateEffectTargetForPlayerAttack();
+        PlayerStatus immediateEffectTarget = ComputeImmediateEffectTargetForPlayerAttack(card);
 
         bool isMagic = card != null && card.cardType == CardType.Magic;
         bool useMagicPanel = isMagic && MagicPoolManager.I != null;
         bool fromMagicPanel =
             useMagicPanel && BattleUIManager.I != null && BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
+
+        var tok = _phaseCts != null ? _phaseCts.Token : default;
+
+        try
+        {
+            await PlayAttackConfirmPresentationAsync(card, Side.Player, tok);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
 
         if (useMagicPanel)
         {
@@ -1658,7 +1967,7 @@ public class BattleManager : MonoBehaviour
                 MagicPoolManager.I.ConsumeUse(card);
                 var drawn = await DrawOneCardAsync(trailingDelayMs: 0, playSoundOnDraw: false);
                 if (drawn != null && handRefill != null)
-                    await handRefill.RevealDrawnCardAfterCombatAsync(drawn);
+                    await handRefill.RevealDrawnCardAfterCombatAsync(drawn, tok);
             }
             else
             {
@@ -1686,13 +1995,20 @@ public class BattleManager : MonoBehaviour
             battleProcessor.UseCard(card, playerHand);
         }
 
-        BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-
+        currentAttackCard = card;
         selectedCard = null;
-        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         UpdateTotalATKDEFDisplay();
 
-        await ResolveImmediateEffectAsync(card, slotIndex, immediateEffectTarget);
+        ClearPlayerSelfAttackTargetMode();
+
+        if (immediateEffectTarget == playerStatus)
+        {
+            await ResolveImmediateEffectAsync(card, slotIndex, playerStatus);
+            return;
+        }
+
+        SetGameState(GameState.DefensePhase);
     }
 
     private void HandleAttackUse()
@@ -1855,11 +2171,28 @@ public class BattleManager : MonoBehaviour
 
         List<CardData> attackCards = GetAttackCardsForCombat();
 
+        if (attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+            && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards))
+        {
+            await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+            if (token.IsCancellationRequested) return;
+            ClearMagicalExplosionComboMpPoolSnapshot();
+            BattleUIManager.I?.HideAllCardDetails();
+            cardStatsDisplay?.ClearSequenceCards();
+            currentAttackCard = null;
+            cardStatsDisplay?.UpdateDisplay();
+            SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
         // 防御カードなしで戦闘解決（敵の攻撃は RunEnemyTurnAsync で命中済み）
         bool skipHit = Attacker == PlayerType.Enemy;
         await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHit);
 
         if (token.IsCancellationRequested) return;
+
+        if (await TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(token))
+            return;
 
         ClearMagicalExplosionComboMpPoolSnapshot();
         // ダメージ処理完了後、全カード表示をクリア

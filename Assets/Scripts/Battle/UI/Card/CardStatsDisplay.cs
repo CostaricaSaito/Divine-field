@@ -62,6 +62,11 @@ public class CardStatsDisplay : MonoBehaviour
     /// </summary>
     private bool _suppressSpellbookElementDuringSequenceReveal;
 
+    private bool _playerAttackDisplaySuppressGodRageDouble;
+    private bool _playerAttackDisplaySuppressMagicalSwordBonus;
+    private bool _magicalSwordSubGodRagePlayerAtkDisplayLocked;
+    private string _magicalSwordSubGodRagePlayerAtkDisplayRichText;
+
     /// <summary>
     /// 初期化時にボタンを非表示にする
     /// </summary>
@@ -165,10 +170,16 @@ public class CardStatsDisplay : MonoBehaviour
         return GetDisplayedAttackStrength(list, BattleManager.I.GetPlayerStatus()) <= 0;
     }
 
-    private static string FormatEffectTargetToggleLabel(BattleManager bm)
+    /// <param name="recoveryEffectCard">
+    /// true のとき回復系：既定は自分、TOTAL 赤＝相手（攻撃・状態異常系とは文言の対応が逆）。
+    /// </param>
+    private static string FormatEffectTargetToggleLabel(BattleManager bm, bool recoveryEffectCard)
     {
         if (bm == null) return "対象：相手";
-        return bm.IsPlayerSelfAttackTargetMode ? "対象：自分" : "対象：相手";
+        bool red = bm.IsPlayerSelfAttackTargetMode;
+        if (recoveryEffectCard)
+            return red ? "対象：相手" : "対象：自分";
+        return red ? "対象：自分" : "対象：相手";
     }
 
     /// <summary>
@@ -200,6 +211,8 @@ public class CardStatsDisplay : MonoBehaviour
         currentSequenceType = "";
         sequenceOwnerSide = Side.Player;
         ClearGodRagePlayerAttackDisplayLock();
+        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
+        ClearPlayerPreGodRageStackedDisplaySuppressions();
         ClearMagicalExplosionAttackDisplayLocks();
     }
 
@@ -238,6 +251,49 @@ public class CardStatsDisplay : MonoBehaviour
     public void SetSuppressSpellbookElementDuringSequenceReveal(bool value)
     {
         _suppressSpellbookElementDuringSequenceReveal = value;
+    }
+
+    /// <summary>マジカルソード＋ゴッドレイジ：決定直後（ポップアップ後〜カード掲出前）に TOTAL を 2 倍・未払い上乗せ前相当で出す用。</summary>
+    public void SetPlayerMsGodComboInterstitialPreCardReveal(int magicalSwordOptionalMpPaidBonus)
+    {
+        _playerAttackDisplaySuppressMagicalSwordBonus = magicalSwordOptionalMpPaidBonus > 0;
+        _playerAttackDisplaySuppressGodRageDouble = false;
+    }
+
+    /// <summary>カードを CardDisplay へ掲出中：2 倍なし。払い済み上乗せは表示から除外して基礎合計（例:6）。</summary>
+    public void SetPlayerMsGodComboCardRevealPhase()
+    {
+        _playerAttackDisplaySuppressGodRageDouble = true;
+        _playerAttackDisplaySuppressMagicalSwordBonus = BattleManager.I != null
+            && BattleManager.I.MagicalSwordAttackPowerBonus > 0;
+    }
+
+    /// <summary>マジカルソード上乗せランプ中：2 倍はまだ。上乗せは本計算に加える。</summary>
+    public void SetPlayerMsGodComboForMagicalSwordRamp()
+    {
+        _playerAttackDisplaySuppressGodRageDouble = true;
+        _playerAttackDisplaySuppressMagicalSwordBonus = false;
+    }
+
+    /// <summary>ゴッドレイジランプ前：TOTAL 計算を最終弾に合わせる。</summary>
+    public void ClearPlayerPreGodRageStackedDisplaySuppressions()
+    {
+        _playerAttackDisplaySuppressGodRageDouble = false;
+        _playerAttackDisplaySuppressMagicalSwordBonus = false;
+    }
+
+    public void ClearMagicalSwordSubGodRagePlayerAtkDisplayLock()
+    {
+        _magicalSwordSubGodRagePlayerAtkDisplayLocked = false;
+        _magicalSwordSubGodRagePlayerAtkDisplayRichText = null;
+    }
+
+    public void SetMagicalSwordSubGodRagePlayerAtkDisplayAfterRamp(int finalDisplayedAtk)
+    {
+        if (finalDisplayedAtk <= 0) return;
+        _magicalSwordSubGodRagePlayerAtkDisplayRichText =
+            $"<color={GodRageAtkBaseGreenHex}>ATK {finalDisplayedAtk}</color>";
+        _magicalSwordSubGodRagePlayerAtkDisplayLocked = true;
     }
 
     /// <summary>ME 演出直前：TOTAL を「ME 加算前」の強さで固定表示する。</summary>
@@ -543,6 +599,8 @@ public class CardStatsDisplay : MonoBehaviour
 
         if (battleManager.IsEconomicActionInProgress()) return true;
 
+        if (battleManager.IsHandReloadPopupOpen) return true;
+
         // 連鎖反射で防御選択時は最優先で表示（古い攻撃シーケンス・反射非表示より先）
         if (PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
             return false;
@@ -716,6 +774,9 @@ public class CardStatsDisplay : MonoBehaviour
                     return $"ATK {_magicalExplosionPreRampAtkDisplayValue}";
                 if (_godRagePlayerAtkDisplayLocked && !string.IsNullOrEmpty(_godRagePlayerAtkDisplayRichText))
                     return _godRagePlayerAtkDisplayRichText;
+                if (_magicalSwordSubGodRagePlayerAtkDisplayLocked
+                    && !string.IsNullOrEmpty(_magicalSwordSubGodRagePlayerAtkDisplayRichText))
+                    return _magicalSwordSubGodRagePlayerAtkDisplayRichText;
                 return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetPlayerStatus());
             }
             else if (currentSequenceType == "防御")
@@ -738,7 +799,11 @@ public class CardStatsDisplay : MonoBehaviour
             var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
             if (selectedAttackCards != null && selectedAttackCards.Count > 0
                 && IsPlayerAttackSelectionNumericAtkZero(selectedAttackCards))
-                return FormatEffectTargetToggleLabel(battleManager);
+            {
+                bool recovery = selectedAttackCards.Count == 1
+                    && CardRules.IsRecoveryCard(selectedAttackCards[0]);
+                return FormatEffectTargetToggleLabel(battleManager, recovery);
+            }
 
             // 複数選択を優先してチェック（複数選択時は合計値を表示）
             if (selectedAttackCards != null && selectedAttackCards.Count > 1)
@@ -952,7 +1017,10 @@ public class CardStatsDisplay : MonoBehaviour
                 return MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(attackCards);
             return MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attackerForMeRule);
         }
-        return CalculateTotalPower(attackCards, true);
+        int plain = CalculateTotalPower(attackCards, true);
+        if (attackerForMeRule != null && !_playerAttackDisplaySuppressMagicalSwordBonus)
+            plain += MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule);
+        return plain;
     }
 
     /// <summary>ME 演出：カード表記 ATK 合計のみ（加護・衰弱の後）で「演出開始前」値。</summary>
@@ -960,6 +1028,7 @@ public class CardStatsDisplay : MonoBehaviour
     {
         if (cards == null || attacker == null) return 0;
         int sumEx = MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(cards);
+        sumEx += MagicalSwordRules.GetActivePowerBonus(cards, attacker);
         return ComputeAttackPowerFromCardSum(sumEx, cards, attacker, defenderForBlessings);
     }
 
@@ -1102,7 +1171,8 @@ public class CardStatsDisplay : MonoBehaviour
         int rawCombo = CalculateTotalAttackPower(cards, attacker);
         if (rawCombo <= 0) return "";
 
-        bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble;
+        bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble
+            && !_playerAttackDisplaySuppressGodRageDouble;
         if (_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
             applyGodDouble = false;
         int baseForBlessings = applyGodDouble ? rawCombo * 2 : rawCombo;
@@ -1194,7 +1264,8 @@ public class CardStatsDisplay : MonoBehaviour
         if (cards == null || cards.Count == 0) return 0;
         int sum = CalculateTotalAttackPower(cards, attacker);
         bool godDouble = GodrageRules.IsGodrageDoublingCombo(cards)
-            && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards));
+            && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            && !_playerAttackDisplaySuppressGodRageDouble;
         if (godDouble)
             sum *= 2;
         return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
@@ -1247,6 +1318,8 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
+        ClearPlayerPreGodRageStackedDisplaySuppressions();
 
         if (atkdefText == null || totalDurationSec <= 0f)
         {
@@ -1282,6 +1355,100 @@ public class CardStatsDisplay : MonoBehaviour
 
         _godRagePlayerAtkDisplayRichText = FormatGodRageDoubledAttackPowerDisplayLabel(attackCards, atk, def);
         _godRagePlayerAtkDisplayLocked = true;
+        UpdateDisplay();
+    }
+
+    /// <summary>マジカルソード上乗せ 0 相当の <see cref="GetDisplayedAttackStrengthWithDefender"/>（演出用）。</summary>
+    public int ComputeMagicalSwordDisplayRampFrom(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        PlayerStatus def)
+    {
+        if (attackCards == null || atk == null || def == null) return 0;
+        var bm = BattleManager.I;
+        int save = 0;
+        if (bm != null) save = bm.MagicalSwordAttackPowerBonus;
+        if (bm != null) bm.SetMagicalSwordAttackPowerBonus(0);
+        try
+        {
+            return GetDisplayedAttackStrengthWithDefender(attackCards, atk, def);
+        }
+        finally
+        {
+            if (bm != null) bm.SetMagicalSwordAttackPowerBonus(save);
+        }
+    }
+
+    /// <summary>マジカルソード上乗せを含めた <see cref="GetDisplayedAttackStrengthWithDefender"/>（演出用）。</summary>
+    public int ComputeMagicalSwordDisplayRampTo(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        PlayerStatus def) =>
+        GetDisplayedAttackStrengthWithDefender(attackCards, atk, def);
+
+    /// <summary>マジカルソード：MP 払い分の緑色 TOTAL / カード ATK カウントアップ（ゴッドレイジ・ME と同系）。</summary>
+    public async Task PlayMagicalSwordAttackRampAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        PlayerStatus def,
+        CardData msCard,
+        int boost,
+        float totalDurationSec,
+        CancellationToken cancellationToken)
+    {
+        ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearGodRagePlayerAttackDisplayLock();
+        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
+        if (GodrageRules.IsGodrageDoublingCombo(attackCards)
+            && MagicalSwordRules.ContainsMagicalSword(attackCards))
+            SetPlayerMsGodComboForMagicalSwordRamp();
+        if (msCard == null || boost <= 0 || totalDurationSec <= 0f || atkdefText == null)
+        {
+            UpdateDisplay();
+            return;
+        }
+        int fromTotal = ComputeMagicalSwordDisplayRampFrom(attackCards, atk, def);
+        int toTotal = ComputeMagicalSwordDisplayRampTo(attackCards, atk, def);
+        if (fromTotal == toTotal)
+        {
+            UpdateDisplay();
+            return;
+        }
+        int lo = Mathf.Min(fromTotal, toTotal);
+        int hi = Mathf.Max(fromTotal, toTotal);
+        int span = hi - lo;
+        float stepSec = span > 0 ? totalDurationSec / span : 0f;
+        int fromSheet = msCard.attackPower;
+        int toSheet = fromSheet + boost;
+        CardSheetDisplay msSh = null;
+        if (BattleUIManager.I != null
+            && BattleUIManager.I.TryGetCardSheetDisplayForCardData(msCard, out var sh))
+            msSh = sh;
+        int defPow = msCard.defensePower;
+        atkdefText.richText = false;
+        atkdefText.color = new Color(0.2f, 0.86f, 0.32f, 1f);
+        SoundEffectPlayer.I?.Play("Assets/SE/ロボット合体2.mp3");
+        float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
+        for (int v = lo; v <= hi; v++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            float t = (v - lo) * invSpan;
+            int sAtk = Mathf.RoundToInt(Mathf.Lerp(fromSheet, toSheet, t));
+            if (v == hi) sAtk = toSheet;
+            if (msSh != null)
+                msSh.SetAtkDefenseNumbers(sAtk, defPow);
+            atkdefText.text = $"ATK {v}";
+            if (v < hi && stepSec > 0f)
+                await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
+        }
+        if (msSh != null)
+            msSh.SetAtkDefenseNumbers(toSheet, defPow);
+        if (GodrageRules.IsGodrageDoublingCombo(attackCards)
+            && MagicalSwordRules.ContainsMagicalSword(attackCards))
+        {
+            int t = ComputeMagicalSwordDisplayRampTo(attackCards, atk, def);
+            SetMagicalSwordSubGodRagePlayerAtkDisplayAfterRamp(t);
+        }
         UpdateDisplay();
     }
 

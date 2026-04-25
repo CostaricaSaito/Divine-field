@@ -26,6 +26,7 @@ public static class ReflectionRules
     public static bool CanReflectPhysical(IReadOnlyList<CardData> incomingAttack)
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack)) return false;
         var list = new List<CardData>(incomingAttack.Count);
         for (int i = 0; i < incomingAttack.Count; i++)
             list.Add(incomingAttack[i]);
@@ -41,14 +42,17 @@ public static class ReflectionRules
     public static bool CanReflectMagic(IReadOnlyList<CardData> incomingAttack)
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack)) return false;
         return CardRules.IsMagicClassifiedAttackCombo(incomingAttack);
     }
 
     /// <summary>プレイヤー／敵防御解決用：物理反射経路が成立するか。</summary>
     public static bool CanUsePhysicalReflectionAgainstAttack(CardData defense, IReadOnlyList<CardData> incomingAttack)
     {
+        if (defense == null || incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack))
+            return IsFullReflectionCard(defense);
         if (!CanReflectPhysical(incomingAttack)) return false;
-        if (defense == null) return false;
         if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack))
             return IsFullReflectionCard(defense);
         return IsPhysicalReflectionCard(defense);
@@ -57,8 +61,10 @@ public static class ReflectionRules
     /// <summary>プレイヤー／敵防御解決用：魔法反射経路が成立するか。</summary>
     public static bool CanUseMagicReflectionAgainstAttack(CardData defense, IReadOnlyList<CardData> incomingAttack)
     {
+        if (defense == null || incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack))
+            return IsFullReflectionCard(defense);
         if (!CanReflectMagic(incomingAttack)) return false;
-        if (defense == null) return false;
         if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack))
             return IsFullReflectionCard(defense);
         return IsMagicReflectionCard(defense);

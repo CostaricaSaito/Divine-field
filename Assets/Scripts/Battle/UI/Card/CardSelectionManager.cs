@@ -24,6 +24,9 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
 
+        if (HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking)
+            return false;
+
         if (BattleManager.I != null && BattleManager.I.IsSummonSkillPopupOpen)
             return false;
 
@@ -93,8 +96,13 @@ public class CardSelectionManager : MonoBehaviour
         // ===== 魔法カードの事前ガード =====
         if (card.cardType == CardType.Magic)
         {
-            var playerStatus = BattleManager.I?.GetPlayerStatus();
-            if (playerStatus != null && playerStatus.IsMagicUseForbidden())
+            PlayerType magicPoolOwner = BattleManager.I != null
+                ? BattleManager.I.CurrentTurnOwner
+                : PlayerType.Player;
+            PlayerStatus magicUserStatus = magicPoolOwner == PlayerType.Player
+                ? BattleManager.I?.GetPlayerStatus()
+                : BattleManager.I?.GetEnemyStatus();
+            if (magicUserStatus != null && magicUserStatus.IsMagicUseForbidden())
             {
                 BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法が使用できません", new Color(0.95f, 0.22f, 0.2f));
                 return false;
@@ -103,12 +111,17 @@ public class CardSelectionManager : MonoBehaviour
             // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。ここでは単体MP不足で弾かない。
 
             // MagicPool 容量チェックは「手札からプールへ載せる」場合のみ。MagicPanel 表示中のカードは既にプール内。
-            bool capacityApplies = card.cardUI == null
-                || BattleUIManager.I == null
-                || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
-            if (capacityApplies && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card))
+            // プールは手番ごとに分離（プレイヤー満杯でも敵の空きは別）。
+            bool onOwnMagicPanel = false;
+            if (BattleUIManager.I != null && magicPoolOwner == PlayerType.Player)
+                onOwnMagicPanel = BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
+            else if (BattleUIManager.I != null && magicPoolOwner == PlayerType.Enemy)
+                onOwnMagicPanel = BattleUIManager.I.IsEnemyMagicCardUiOnMagicPanel(card);
+
+            bool capacityApplies = card.cardUI == null || !onOwnMagicPanel;
+            if (capacityApplies && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card, magicPoolOwner))
             {
-                Debug.Log($"[CardSelectionManager] MagicPool 満杯のため {card.cardName} は選択不可");
+                Debug.Log($"[CardSelectionManager] MagicPool 満杯のため {card.cardName} は選択不可 (owner={magicPoolOwner})");
                 BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法容量不足！", new Color(1f, 0.5f, 0f));
                 return false;
             }
@@ -356,6 +369,7 @@ public class CardSelectionManager : MonoBehaviour
         if (card == null) return false;
         if (card.cardType == CardType.Magic && !card.isRecovery) return true;
         if (card.cardType == CardType.ArchMagic) return true;
+        if (card.cardType == CardType.Special) return true;
         return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
     }
 

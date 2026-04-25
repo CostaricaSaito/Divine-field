@@ -353,4 +353,75 @@ public class HandRefillService : MonoBehaviour
 
         await Task.Delay(100, ct);
     }
+
+    /// <summary>手札リロード：DamagePopup 寿命後の追加インターバル（ms）。</summary>
+    public const int HandReloadAfterPopupWaitMs = 500;
+
+    public struct HandReloadSlotWork
+    {
+        public int HandIndex;
+        public CardData NewCard;
+        public CardUI Ui;
+    }
+
+    /// <summary>
+    /// リロード対象の手札を <see cref="DrawRandomCard"/> ルールで置換し、すべて裏向きにする。
+    /// 戻りの順序は手札インデックス昇順（左→右）。
+    /// </summary>
+    public IReadOnlyList<HandReloadSlotWork> BeginHandReloadReplaceAllFaceDown(
+        IReadOnlyList<CardData> oldCards,
+        List<CardData> playerHand)
+    {
+        var result = new List<HandReloadSlotWork>();
+        if (oldCards == null || playerHand == null) return result;
+
+        var seenIndex = new HashSet<int>();
+        foreach (var old in oldCards)
+        {
+            if (old == null) continue;
+            int idx = playerHand.IndexOf(old);
+            if (idx < 0 || !seenIndex.Add(idx)) continue;
+            var ui = old.cardUI;
+            if (ui == null) continue;
+
+            var newC = DrawRandomCard();
+            if (newC == null)
+            {
+                Debug.LogWarning("[HandRefillService] リロード: 新カードの抽選失敗");
+                continue;
+            }
+
+            playerHand[idx] = newC;
+            newC.cardUI = ui;
+            DestroyCardDataInstance(old);
+
+            ui.Setup(newC, cardBackSprite, playerHandRareBackPresentation: true);
+            if (ui.button != null) ui.button.interactable = false;
+
+            result.Add(new HandReloadSlotWork { HandIndex = idx, NewCard = newC, Ui = ui });
+        }
+
+        result.Sort((a, b) => a.HandIndex.CompareTo(b.HandIndex));
+        return result;
+    }
+
+    /// <summary>リロード：左から順に <see cref="ReplacePlayerBackSlotAsync"/> と同様の間隔で表向け。</summary>
+    public async Task RevealHandReloadSlotsSequentially(
+        IReadOnlyList<HandReloadSlotWork> work,
+        CancellationToken ct = default)
+    {
+        if (work == null) return;
+        for (int i = 0; i < work.Count; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            var w = work[i];
+            if (w.Ui == null || w.NewCard == null) continue;
+            if (w.Ui.button != null) w.Ui.button.interactable = true;
+            await Task.Delay(150, ct);
+            if (ct.IsCancellationRequested) return;
+            CardDealAudio.Play(w.NewCard, true);
+            w.Ui.Reveal();
+            await Task.Delay(100, ct);
+        }
+    }
 }

@@ -17,8 +17,12 @@ public static class CardRules
         switch (c.cardType)
         {
             case CardType.Defense: return false;
-            case CardType.Attack:
             case CardType.Magic:
+                // Magic は通常どちらのフェーズもあり得るが、ブロッキング等で「攻撃フェーズ不可」にしたカードだけここで除外
+                if (c.blockingKind != BlockingKind.None && !c.usableInAttackPhase)
+                    return false;
+                return true;
+            case CardType.Attack:
             case CardType.Recovery:
             case CardType.Special: return true;
             case CardType.Ultimate: return false;
@@ -46,9 +50,50 @@ public static class CardRules
         if (c.clearsAllStatusAilmentsOnUse
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
             return true;
+        if (c.cardType == CardType.Special && c.specialCardEffect != null) return true;
         return c.canApplyStatusEffect
             && c.statusEffectToApply != StatusEffectType.None
             && c.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve;
+    }
+
+    /// <summary>攻撃コンボに Special が1枚でも含まれるか（反射・打ち払い・無効の分類に使用）。</summary>
+    public static bool IncomingContainsSpecialCard(IReadOnlyList<CardData> incomingAttack)
+    {
+        if (incomingAttack == null) return false;
+        for (int i = 0; i < incomingAttack.Count; i++)
+        {
+            var c = incomingAttack[i];
+            if (c != null && c.cardType == CardType.Special) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 単体の即時行動カード（回復・回復魔法・Special 効果・プリズム等）のみの incoming か。
+    /// 相手対象時、反射／無効／打ち払いは FULL のみ有効にする分類に使う。
+    /// </summary>
+    public static bool IncomingIsSingleImmediateActionAttack(IReadOnlyList<CardData> incomingAttack)
+    {
+        if (incomingAttack == null || incomingAttack.Count != 1) return false;
+        return IsImmediateAction(incomingAttack[0]);
+    }
+
+    /// <summary>Special または単体即時行動。FULL 以外の反射・無効・打ち払いを無効にする。</summary>
+    public static bool IncomingRequiresFullOnlyReactiveDefense(IReadOnlyList<CardData> incomingAttack)
+    {
+        if (incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (IncomingContainsSpecialCard(incomingAttack)) return true;
+        return IncomingIsSingleImmediateActionAttack(incomingAttack);
+    }
+
+    /// <summary>
+    /// 即時系 incoming に対し選択可能な防御：FULL 反射・FULL 打ち払いのみ（無効化の FULL は未使用）。
+    /// FULL 跳ね返し未実装の間は空リスト（「許す」のみ）とする。
+    /// </summary>
+    public static List<CardData> GetFullOnlyReactiveDefenseChoices(List<CardData> hand, IReadOnlyList<CardData> incoming)
+    {
+        // TODO: FULL 反射の跳ね返し実装後、hand から IsFullReflection / IsFullParry で CanUse*(incoming) を満たすカードだけ返す。
+        return new List<CardData>();
     }
 
     // 攻撃カードかどうか

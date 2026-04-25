@@ -32,6 +32,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1910ccbace1442444bc1ad8bda5152e1
+    m_Address: "Assets/SE/\u30EA\u30ED\u30FC\u30C9\u53EF\u80FD.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cf314dfa011eda4f8aae1c6e4af0dcf
+    m_Address: Assets/Music/Crystal brilliance.mp3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1e5cdf426ef9f42439ff750da7e368ad
     m_Address: "Assets/Music/\u30B2\u30FC\u30E0\u30AF\u30EA\u30A2\u30FC\uFF01.mp3"
     m_ReadOnly: 0
@@ -179,6 +189,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6b74a883f2d94c49aa0e0d0a1aea784
     m_Address: "Assets/SE/\u666E\u901A\u30AB\u30FC\u30C9.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ba673d278d24d9842bf1673999f8ba9a
+    m_Address: "Assets/SE/\u30EA\u30ED\u30FC\u30C9.mp3"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

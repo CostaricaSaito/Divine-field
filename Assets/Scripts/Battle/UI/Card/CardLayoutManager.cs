@@ -56,6 +56,16 @@ public class CardLayoutManager : MonoBehaviour
     {
         selectedCards = cards;
     }
+
+    /// <summary>
+    /// 手札選択に載せずにシートだけ重ねたとき、表示順に <see cref="SetSelectedCards"/> を合わせて再配置する（双剣2本目の再掲示など）。
+    /// </summary>
+    public void RebuildLayoutForCardDataOrder(List<CardData> orderedNonNullCards)
+    {
+        if (orderedNonNullCards == null || orderedNonNullCards.Count == 0) return;
+        SetSelectedCards(orderedNonNullCards);
+        RepositionAllCards();
+    }
     
     /// <summary>反射スライド後など、レイアウト基準パネルを明示するときに使用。</summary>
     public void SetLayoutPanelRect(RectTransform panel)

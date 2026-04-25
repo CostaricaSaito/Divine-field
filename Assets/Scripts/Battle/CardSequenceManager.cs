@@ -53,6 +53,8 @@ public class CardSequenceManager : MonoBehaviour
                                             CancellationToken cancellationToken)
     {
         Debug.Log($"[CardSequenceManager] {cardType}カード演出開始: {selectedCards.Count}枚");
+        if (cardType == "攻撃" && side == Side.Player)
+            PlayerAttackTotalDisplayFlow.OnNewPlayerAttackSequenceBegin(cardStatsDisplay);
 
         // 大魔法（ArchMagic）は通常の攻撃シーケンスではなく、詠唱開始フローへ分岐する。
         if (cardType == "攻撃" && ArchMagicRules.ContainsArchMagic(selectedCards))
@@ -63,6 +65,41 @@ public class CardSequenceManager : MonoBehaviour
                 await StartArchMagicCastIntroAsync(archCard, side, cancellationToken);
                 return;
             }
+        }
+
+        if (cardType == "攻撃" && side == Side.Player)
+        {
+            battleManager.ClearMagicalSwordPlayerAttackState();
+            if (MagicalSwordRules.ContainsMagicalSword(selectedCards)
+                && MagicalSwordRules.TryGetFirstMagicalSwordRule(selectedCards, out var msRule))
+            {
+                var p = battleManager.GetPlayerStatus();
+                if (p != null
+                    && MagicalSwordRules.CanAffordOptionalMagicalSwordAfterOtherComboMagic(
+                        selectedCards, p, msRule.optionalMpCost))
+                {
+                    var ch = await MPCostPopupUI.ShowAndWaitAsync(cancellationToken);
+                    if (ch == MPCostPopupUI.Choice.PayMpForBoost)
+                    {
+                        p.UseMP(msRule.optionalMpCost);
+                        battleManager.SetMagicalSwordAttackPowerBonus(msRule.attackPowerBonus);
+                        BattleUIManager.I?.UpdateStatus(
+                            battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+                    }
+                    else
+                        battleManager.SetMagicalSwordAttackPowerBonus(0);
+                }
+                else
+                    battleManager.SetMagicalSwordAttackPowerBonus(0);
+            }
+        }
+
+        if (cardType == "攻撃" && side == Side.Player
+            && GodrageRules.IsGodrageDoublingCombo(selectedCards)
+            && MagicalSwordRules.ContainsMagicalSword(selectedCards))
+        {
+            PlayerAttackTotalDisplayFlow.AfterModifierCommitBeforeCardReveal_InterstitialMsPlusGod(
+                cardStatsDisplay, battleManager.MagicalSwordAttackPowerBonus);
         }
 
         if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
@@ -95,6 +132,11 @@ public class CardSequenceManager : MonoBehaviour
         // クリア後のインターバル（まっさらな状態を維持）
         await Task.Delay(300, cancellationToken);
 
+        if (cardType == "攻撃" && side == Side.Player
+            && GodrageRules.IsGodrageDoublingCombo(selectedCards)
+            && MagicalSwordRules.ContainsMagicalSword(selectedCards))
+            PlayerAttackTotalDisplayFlow.EnterSequentialCardReveal_PrimaryAttackBaseOnly_MsWithGodRage(cardStatsDisplay);
+
         // ②カードを順次表示（0.5秒インターバル）
         for (int i = 0; i < selectedCards.Count; i++)
         {
@@ -104,6 +146,8 @@ public class CardSequenceManager : MonoBehaviour
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
                 if (cardType == "攻撃")
                     cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+                if (cardType == "攻撃" && side == Side.Player)
+                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
                 return;
             }
 
@@ -129,6 +173,8 @@ public class CardSequenceManager : MonoBehaviour
                 cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
             if (cardType == "攻撃")
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+            if (cardType == "攻撃" && side == Side.Player)
+                PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
             return;
         }
 
@@ -144,6 +190,8 @@ public class CardSequenceManager : MonoBehaviour
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+                if (side == Side.Player)
+                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
                 return;
             }
 
@@ -160,11 +208,46 @@ public class CardSequenceManager : MonoBehaviour
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+                if (side == Side.Player)
+                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
                 return;
             }
 
             cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
             cardStatsDisplay?.UpdateDisplay();
+        }
+
+        if (cardType == "攻撃" && side == Side.Player
+            && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards)
+            && MagicalSwordRules.ContainsMagicalSword(selectedCards)
+            && battleManager.MagicalSwordAttackPowerBonus > 0
+            && cardStatsDisplay != null
+            && MagicalSwordRules.TryGetFirstMagicalSwordRule(selectedCards, out var msRForPreMeRamp))
+        {
+            var psPre = battleManager.GetPlayerStatus();
+            var esPre = battleManager.GetEnemyStatus();
+            PlayerStatus atkPre = battleManager.AttackerPublic == PlayerType.Player ? psPre : esPre;
+            if (psPre != null && esPre != null && ReferenceEquals(atkPre, psPre))
+            {
+                PlayerStatus defPre;
+                if (battleManager.IsPlayerSelfAttackTargetMode && ReferenceEquals(atkPre, psPre))
+                    defPre = psPre;
+                else
+                    defPre = ReferenceEquals(atkPre, psPre) ? esPre : psPre;
+                var msCardPre = MagicalSwordRules.FindFirstMagicalSwordCard(selectedCards);
+                if (msCardPre != null)
+                {
+                    await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
+                        selectedCards,
+                        psPre,
+                        defPre,
+                        msCardPre,
+                        msRForPreMeRamp.attackPowerBonus,
+                        0.2f,
+                        cancellationToken);
+                    battleManager.SetMagicalSwordPlayerPreMeRampVisualDone(true);
+                }
+            }
         }
 
         if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
@@ -253,7 +336,9 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
-        List<CardData> attackCards = GetAttackCardsForCombat(selectedCards);
+        List<CardData> attackCards = cardType == "防御"
+            ? GetAttackCardsForCombat(null)
+            : GetAttackCardsForCombat(selectedCards);
 
         if (cardType == "攻撃")
         {
@@ -264,6 +349,14 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
+            if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)
+                && attackCards != null && attackCards.Count == 1 && attackCards[0] != null)
+            {
+                await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                await RunAfterCombatSharedCleanupAsync(cancellationToken);
+                return;
+            }
+
             bool playerPhysicalReflect = selectedCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
                 && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(selectedCards[0], attackCards);
@@ -329,6 +422,9 @@ public class CardSequenceManager : MonoBehaviour
     {
         if (cancellationToken.IsCancellationRequested) return;
 
+        if (await battleManager.TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(cancellationToken))
+            return;
+
         await RevealMagicPanelBonusDrawsAsync(cancellationToken);
 
         if (cancellationToken.IsCancellationRequested) return;
@@ -340,6 +436,45 @@ public class CardSequenceManager : MonoBehaviour
 
         battleManager.SetGameState(GameState.CombatResolvePhase);
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearMagicalSwordPlayerAttackState();
+    }
+
+    /// <summary>
+    /// 双剣1本目解決後の手順4〜5：CardDisplay 系をクリアし、使用した攻撃カード（デュアリズム含むコンボ）を一度に載せ直す。
+    /// </summary>
+    private async Task PresentDualBladeSecondStrikeAttackRevealAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        CancellationToken cancellationToken)
+    {
+        if (attackCards == null || attackCards.Count == 0) return;
+        if (cancellationToken.IsCancellationRequested) return;
+
+        // 4. 一度クリア
+        BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.ClearSequenceCards();
+        cardStatsDisplay?.UpdateDisplay();
+
+        await Task.Delay(300, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
+        Side displaySide = attackerIsPlayer ? Side.Player : Side.Enemy;
+
+        // 5. 再度：攻撃の使用カードを一括表示（CardLayout は選択中カード数が0だと再配置されないためバッチ専用API）
+        var full = new List<CardData>(attackCards.Count);
+        for (int i = 0; i < attackCards.Count; i++)
+        {
+            if (attackCards[i] != null) full.Add(attackCards[i]);
+        }
+        if (full.Count == 0) return;
+        BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(full, displaySide);
+        cardStatsDisplay?.SetSequenceCards(full, "攻撃", displaySide);
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+        if (!cancellationToken.IsCancellationRequested)
+            await Task.Delay(500, cancellationToken);
     }
 
     /// <summary>
@@ -352,7 +487,8 @@ public class CardSequenceManager : MonoBehaviour
         PlayerStatus atk,
         PlayerStatus def,
         List<CardData> defHand,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int dualBladeStrikeIndex = 0)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
         int finalPct = HitRateRules.ComputeFinalHitPercent(primary, atk, def);
@@ -369,6 +505,7 @@ public class CardSequenceManager : MonoBehaviour
             battleManager.SetCurrentAttackCard(null);
             cardStatsDisplay?.UpdateDisplay();
             battleManager.SetGameState(GameState.CombatResolvePhase);
+            battleManager.ClearMagicalSwordPlayerAttackState();
             return false;
         }
 
@@ -381,26 +518,48 @@ public class CardSequenceManager : MonoBehaviour
             await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
         }
 
-        bool meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
+        var meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
             && GodrageRules.IsGodrageDoublingCombo(attackCards);
-        bool godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
+        var godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
             && !MagicalExplosionRules.ContainsMagicalExplosion(attackCards);
+        bool playGodRamps = meGodCombo || godRageOnlyCombo;
+        int msBonusRuntime = battleManager.MagicalSwordAttackPowerBonus;
+        bool hasMsSword = MagicalSwordRules.ContainsMagicalSword(attackCards);
+        bool msBoost = hasMsSword && msBonusRuntime > 0;
+        bool preMeMsDone = battleManager.MagicalSwordPlayerPreMeRampVisualDone;
+        bool needMsRampInResolve = msBoost && !preMeMsDone;
+        MagicalSwordRules.TryGetFirstMagicalSwordRule(attackCards, out var msRuleForRamp);
+        int attackBoost = msRuleForRamp != null ? msRuleForRamp.attackPowerBonus : 0;
+        var msDataCard = MagicalSwordRules.FindFirstMagicalSwordCard(attackCards);
 
-        if (atk == battleManager.GetPlayerStatus() && cardStatsDisplay != null)
+        // 1本目で既に出したランプ。2本目は直前の「まっさら→再表示」を潰さないようスキップ。
+        if (atk == battleManager.GetPlayerStatus() && cardStatsDisplay != null
+            && dualBladeStrikeIndex == 0)
         {
-            if (meGodCombo)
+            if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
             {
-                await Task.Delay(1000, cancellationToken);
-                int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
-                int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
-                await cardStatsDisplay.PlayGodRageAttackRampAsync(attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
+                if (playGodRamps)
+                {
+                    // マジカルソード+ゴッドレイジ：MS 前に長い遅延は入れない
+                }
+                else
+                    await Task.Delay(500, cancellationToken);
+                await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
+                    attackCards, atk, def, msDataCard, attackBoost, 0.2f, cancellationToken);
             }
-            else if (godRageOnlyCombo)
+
+            if (playGodRamps)
             {
-                await Task.Delay(500, cancellationToken);
+                if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
+                    await Task.Delay(500, cancellationToken);
+                else if (meGodCombo)
+                    await Task.Delay(1000, cancellationToken);
+                else
+                    await Task.Delay(500, cancellationToken);
                 int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
                 int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
-                await cardStatsDisplay.PlayGodRageAttackRampAsync(attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
+                await cardStatsDisplay.PlayGodRageAttackRampAsync(
+                    attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
             }
         }
 
@@ -408,6 +567,12 @@ public class CardSequenceManager : MonoBehaviour
         if (selfAttack)
         {
             await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHitCheck: true);
+            if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
+                && dualBladeStrikeIndex == 0
+                && !atk.IsDead() && !def.IsDead())
+            {
+                await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHitCheck: true);
+            }
             return true;
         }
 
@@ -480,6 +645,15 @@ public class CardSequenceManager : MonoBehaviour
             battleProcessor.UseCard(selectedDefenseCard, defHand);
         }
 
+        if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
+            && dualBladeStrikeIndex == 0
+            && !atk.IsDead() && !def.IsDead())
+        {
+            await PresentDualBladeSecondStrikeAttackRevealAsync(attackCards, atk, cancellationToken);
+            return await ResolvePlayerAttackCombatAsync(
+                attackCards, atk, def, defHand, cancellationToken, 1);
+        }
+
         return true;
     }
 
@@ -532,6 +706,16 @@ public class CardSequenceManager : MonoBehaviour
             battleManager.SetCurrentAttackCard(normalCards[0]);
         }
 
+        if (cardType == "防御")
+        {
+            CardData defPick = null;
+            if (normalCards.Count > 0)
+                defPick = normalCards[0];
+            else if (magicCards.Count > 0)
+                defPick = magicCards[0];
+            battleManager.SetSelectedDefenseCard(defPick);
+        }
+
         // 通常カードのみ UseCard で手札から除去
         foreach (var card in normalCards)
         {
@@ -547,18 +731,23 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 単一カードの処理（攻撃・防御共通）
+    /// 単一カードの処理（攻撃・防御共通）。
+    /// <see cref="CardType.Magic"/> は攻撃・防御のどちらのフェーズでもあり得る。<paramref name="cardType"/>（"攻撃"／"防御"）で
+    /// <see cref="BattleManager.SetCurrentAttackCard"/> と <see cref="BattleManager.SetSelectedDefenseCard"/> を切り替える。
     /// </summary>
     private async System.Threading.Tasks.Task ProcessSingleCardAsync(CardData card, string cardType)
     {
-        // 魔法カード（単独型・組み合わせ型とも）の場合は特殊処理
+        // 魔法：MP・MagicPanel は共通。解決時の役割だけフェーズ（cardType）で分岐する。
         if (card.cardType == CardType.Magic)
         {
             Debug.Log($"[CardSequenceManager] 魔法カード処理: {card.cardName} (組み合わせ={card.isCombinationMagic})");
             bool isFromHand = BattleUIManager.I == null
                 || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
             await ApplyMagicCardToPoolAsync(card, isFromHand);
-            battleManager.SetCurrentAttackCard(card);
+            if (cardType == "防御")
+                battleManager.SetSelectedDefenseCard(card);
+            else
+                battleManager.SetCurrentAttackCard(card);
             return;
         }
 
@@ -582,6 +771,18 @@ public class CardSequenceManager : MonoBehaviour
     /// 魔法カードを MagicPool に適用する内部ヘルパー
     /// MP消費 → (手札からなら飛行アニメ) → プール操作 → (プール使用時)カードドロー
     /// </summary>
+    /// <summary>
+    /// 反射連鎖・パリィ再防御など、<see cref="StartCardSequenceAsync"/> を通さない経路で魔法をプールへ載せる。
+    /// </summary>
+    public async Task ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(CardData card, CancellationToken cancellationToken = default)
+    {
+        if (card == null || card.cardType != CardType.Magic) return;
+        if (cancellationToken.IsCancellationRequested) return;
+        bool isFromHand = BattleUIManager.I == null
+            || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
+        await ApplyMagicCardToPoolAsync(card, isFromHand);
+    }
+
     private async System.Threading.Tasks.Task ApplyMagicCardToPoolAsync(CardData card, bool isFromHand)
     {
         if (MagicPoolManager.I == null) return;
@@ -830,9 +1031,19 @@ public class CardSequenceManager : MonoBehaviour
         if (bgSprite != null && BattleBgmController.Instance != null)
             await BattleBgmController.Instance.CrossfadeToArchMagicBackgroundAsync(bgSprite, 1000, cancellationToken);
 
-        // 詠唱状態を開始
+        // 詠唱状態を開始（効果対象はこの時点の TOTAL ターゲットで固定）
         int turns = ArchMagicRules.GetCastTurns(archMagicCard);
-        atk?.BeginArchMagicCasting(archMagicCard, turns);
+        var ps = battleManager.GetPlayerStatus();
+        var es = battleManager.GetEnemyStatus();
+        PlayerStatus spellTarget;
+        if (side == Side.Player)
+        {
+            spellTarget = battleManager.IsPlayerSelfAttackTargetMode ? ps : es;
+            battleManager.ClearPlayerSelfAttackTargetMode();
+        }
+        else
+            spellTarget = ps;
+        atk?.BeginArchMagicCasting(archMagicCard, turns, spellTarget);
 
         // 表示を片付けて TurnEnd
         BattleUIManager.I?.HideAllCardDetails();
@@ -939,8 +1150,10 @@ public class CardSequenceManager : MonoBehaviour
         var attackCards = new List<CardData> { card };
         var player = battleManager.GetPlayerStatus();
         var enemy = battleManager.GetEnemyStatus();
-        var def = ReferenceEquals(owner, player) ? enemy : player;
-        var defHand = ReferenceEquals(owner, player) ? battleManager.cpuHand : battleManager.playerHand;
+        PlayerStatus def = owner.archMagicEffectTarget;
+        if (def == null || (!ReferenceEquals(def, player) && !ReferenceEquals(def, enemy)))
+            def = ReferenceEquals(owner, player) ? enemy : player;
+        var defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
 
         try
         {
@@ -1054,6 +1267,8 @@ public class CardSequenceManager : MonoBehaviour
                 {
                     if (card.cardType == CardType.Attack || card.cardType == CardType.Magic
                         || card.cardType == CardType.Ultimate
+                        || card.cardType == CardType.Recovery
+                        || card.cardType == CardType.Special
                         || card.isPrimaryAttack || card.isAdditionalAttack)
                     {
                         attackCards.Add(card);

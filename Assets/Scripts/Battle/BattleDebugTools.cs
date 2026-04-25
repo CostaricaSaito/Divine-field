@@ -618,7 +618,7 @@ public class BattleDebugTools : MonoBehaviour
         }
 
         var cfg = StatusProgressionConfig.GetRuntimeFallback();
-        var result = target.TryApplyStatusEffect(type, cfg, suppressGrantPopupAndSound: true);
+        var (result, _) = target.TryApplyStatusEffect(type, cfg, suppressGrantPopupAndSound: true);
         if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
             _ = DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync(target, CancellationToken.None);
     }

@@ -215,22 +215,23 @@ public class BattlePopupPresenter : MonoBehaviour
     /// <summary>
     /// 状態異常が付与されたとき（ダメージポップと同じプレハブ）。表示成功時に SE を再生。
     /// </summary>
-    public void ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
+    /// <returns><see cref="DamagePopup.fadeDuration"/>（<see cref="DamagePopup.WaitAfterPopupLifetimeAsync"/> 用）。失敗時は 0。</returns>
+    public float ShowStatusAilmentGrantPopup(StatusEffectType type, PlayerStatus target)
     {
-        if (target == null || type == StatusEffectType.None) return;
+        if (target == null || type == StatusEffectType.None) return 0f;
 
         string name = StatusEffectPresentation.GetDisplayName(type);
         if (string.IsNullOrEmpty(name))
         {
             Debug.LogWarning($"[BattlePopupPresenter] 状態異常の表示名がありません: {type}");
-            return;
+            return 0f;
         }
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
         {
             Debug.LogWarning("[BattlePopupPresenter] 状態異常ポップアップの生成に失敗しました");
-            return;
+            return 0f;
         }
 
         StatusEffectPresentation.GetPopupColors(type, out Color bg, out Color fg);
@@ -250,9 +251,38 @@ public class BattlePopupPresenter : MonoBehaviour
                 float waitSec = DamagePopup.TotalSecondsAfterPopupShown(damageText.fadeDuration);
                 BattleUIManager.I.ScheduleFogVisionRevealAfterPopup(waitSec);
             }
+
+            return damageText.fadeDuration;
         }
-        else
-            Debug.LogWarning("[BattlePopupPresenter] DamagePopup コンポーネントが見つかりません");
+
+        Debug.LogWarning("[BattlePopupPresenter] DamagePopup コンポーネントが見つかりません");
+        return 0f;
+    }
+
+    /// <summary>手札リロード（ピンクパネル・白字・濃いピンク縁）。SE は <c>Assets/SE/リロード.mp3</c>。</summary>
+    /// <returns><see cref="DamagePopup.fadeDuration"/>。失敗時 0。</returns>
+    public float ShowHandReloadPopup(PlayerStatus target)
+    {
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] 手札リロードポップアップ生成に失敗");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] DamagePopup がありません（手札リロード）");
+            return 0f;
+        }
+
+        SoundEffectPlayer.I?.Play("Assets/SE/リロード.mp3");
+        Color bg = new Color(140f / 255f, 96f / 255f, 138f / 255f, 1f);
+        Color fg = Color.white;
+        Color ol = new Color(212f / 255f, 62f / 255f, 212f / 255f, 1f);
+        damageText.SetupHandReload("リロード", bg, fg, ol);
+        return damageText.fadeDuration;
     }
 
     public float ShowHealPopup(int amount, string statType, PlayerStatus target)

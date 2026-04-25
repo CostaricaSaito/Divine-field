@@ -54,11 +54,11 @@ public static class MagicalExplosionRules
                 var c = cards[i];
                 if (c != null) plain += c.attackPower;
             }
-            return plain;
+            return plain + MagicalSwordRules.GetActivePowerBonus(cards, attacker);
         }
 
         if (BattleManager.I != null && BattleManager.I.TryGetMagicalExplosionComboMpPoolSnapshot(out int snapMp))
-            return SumWithMeBonusFromPool(cards, snapMp);
+            return SumWithMeBonusFromPool(cards, snapMp, attacker);
 
         int mpPool = attacker.currentMP;
         for (int i = 0; i < cards.Count; i++)
@@ -69,10 +69,13 @@ public static class MagicalExplosionRules
                 mpPool -= attacker.GetEffectiveMagicMpCost(c.mpCost);
         }
         mpPool = Mathf.Max(0, mpPool);
-        return SumWithMeBonusFromPool(cards, mpPool);
+        return SumWithMeBonusFromPool(cards, mpPool, attacker);
     }
 
-    private static int SumWithMeBonusFromPool(IReadOnlyList<CardData> cards, int mpPoolAfterOtherCosts)
+    private static int SumWithMeBonusFromPool(
+        IReadOnlyList<CardData> cards,
+        int mpPoolAfterOtherCosts,
+        PlayerStatus attacker)
     {
         int sumAtk = 0;
         for (int i = 0; i < cards.Count; i++)
@@ -81,6 +84,8 @@ public static class MagicalExplosionRules
             if (c == null || IsMagicalExplosionCard(c)) continue;
             sumAtk += c.attackPower;
         }
+        if (attacker != null)
+            sumAtk += MagicalSwordRules.GetActivePowerBonus(cards, attacker);
         if (ContainsMagicalExplosion(cards))
             sumAtk += mpPoolAfterOtherCosts * 2;
         return sumAtk;

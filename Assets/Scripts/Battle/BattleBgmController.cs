@@ -20,7 +20,7 @@ public class BattleBgmController : MonoBehaviour
     [SerializeField] private string disadvantageBgmAddress = "Assets/Music/Extinguish.mp3";
 
     [Tooltip("シーン開始時のクリップが無い場合のフォールバック")]
-    [SerializeField] private string normalBgmAddress = "Assets/Music/強い者との戦い.mp3";
+    [SerializeField] private string normalBgmAddress = "Assets/Music/Crystal brilliance.mp3";
 
     [SerializeField] private float fadeOutSeconds = 0.45f;
     [SerializeField] private float fadeInSeconds = 0.45f;
@@ -44,7 +44,7 @@ public class BattleBgmController : MonoBehaviour
     private Color _backgroundBaseColor = Color.white;
 
     public const string DefaultDisadvantageBgmAddress = "Assets/Music/Extinguish.mp3";
-    public const string DefaultNormalBgmAddress = "Assets/Music/強い者との戦い.mp3";
+    public const string DefaultNormalBgmAddress = "Assets/Music/Crystal brilliance.mp3";
 
     private void Awake()
     {

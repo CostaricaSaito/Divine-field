@@ -316,9 +316,17 @@ public static class PhysicalReflectionFlow
             // 反射された物理攻撃に対する物理無効（ResolveReflectedCombat の通常防具扱いにしない）
             if (BlockingRules.IsPhysicalBlockingCard(card) && BlockingRules.CanBlockPhysical(incomingAttackCards))
             {
-                int slotB = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
-                if (slotB >= 0) handRefill?.RecordPlayerUseSlot(slotB);
-                battleProcessor.UseCard(card, battleManager.playerHand);
+                if (card.cardType == CardType.Magic && battleManager.Sequences != null)
+                {
+                    await battleManager.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(
+                        card, cancellationToken);
+                }
+                else
+                {
+                    int slotB = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
+                    if (slotB >= 0) handRefill?.RecordPlayerUseSlot(slotB);
+                    battleProcessor.UseCard(card, battleManager.playerHand);
+                }
 
                 BattleUIManager.I?.ShowCardDetail(card, Side.Player);
                 battleManager.SetStatsDisplaySequenceCards(
@@ -334,9 +342,17 @@ public static class PhysicalReflectionFlow
                 return;
             }
 
-            int slot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
-            if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
-            battleProcessor.UseCard(card, battleManager.playerHand);
+            if (card.cardType == CardType.Magic && battleManager.Sequences != null)
+            {
+                await battleManager.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(
+                    card, cancellationToken);
+            }
+            else
+            {
+                int slot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
+                if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
+                battleProcessor.UseCard(card, battleManager.playerHand);
+            }
 
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
             battleManager.SetStatsDisplaySequenceCards(

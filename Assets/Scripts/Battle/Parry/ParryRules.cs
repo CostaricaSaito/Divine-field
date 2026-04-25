@@ -30,6 +30,8 @@ public static class ParryRules
     {
         if (card == null || !IsParryCard(card) || incomingAttack == null || incomingAttack.Count == 0)
             return false;
+        if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack))
+            return IsFullParryCard(card);
         if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack))
         {
             return IsFullParryCard(card)
