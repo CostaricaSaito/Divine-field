@@ -82,7 +82,8 @@ public class EnemyAI
         {
             if (c.cardType == CardType.Magic) continue;
             if (ArchMagicRules.IsArchMagicCard(c)) continue;
-            if (CardRules.IsUsableInAttackPhase(c) && (c.isPrimaryAttack || c.cardType == CardType.Attack))
+            if (CardRules.IsUsableInAttackPhase(c)
+                && (c.cardType == CardType.Attack || c.attackPhaseUseRule == AttackPhaseUseRule.Primary))
                 return c;
         }
 
@@ -95,13 +96,14 @@ public class EnemyAI
                 return c;
         }
 
-        // 第3優先: 手札の魔法カード（MPが足りる＋プールに空きがある場合）
+        // 第3優先: 手札の魔法カード（MPが足りる＋プールに空き or 同種。パネル登録済みは手札攻撃に使わない）
         foreach (var c in enemyHand)
         {
             if (c.cardType != CardType.Magic) continue;
             if (!CardRules.IsUsableInAttackPhase(c)) continue;
             if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
             if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(c.mpCost)) continue;
+            if (MagicPoolManager.I != null && MagicPoolManager.I.IsInPool(c, PlayerType.Enemy)) continue;
             if (MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(c, PlayerType.Enemy)) continue;
             return c;
         }

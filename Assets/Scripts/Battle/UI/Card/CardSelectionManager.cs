@@ -34,6 +34,7 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I != null
             && (BattleManager.I.CurrentState == GameState.DefensePhase
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending()
                 || BattleManager.I.IsParryRerunDefensePending())
             && IsDefenseCard(card))
@@ -66,6 +67,7 @@ public class CardSelectionManager : MonoBehaviour
             && (BattleManager.I.CurrentState == GameState.DefensePhase
                 || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending()
                 || BattleManager.I.IsParryRerunDefensePending())
             && IsDefenseCard(card))
@@ -96,6 +98,19 @@ public class CardSelectionManager : MonoBehaviour
         // ===== 魔法カードの事前ガード =====
         if (card.cardType == CardType.Magic)
         {
+            // 防具マジック等：プレイヤー攻撃手番の Attack では手札候補と同じく IsUsableInAttackPhase。MagicPanel クリック専用の抜け穴を塞ぐ
+            // 反射連鎖／打ち払い再防御は State が攻撃系のままのため必ず除外
+            if (BattleManager.I != null
+                && BattleManager.I.CurrentState == GameState.AttackPhase
+                && !BattleManager.I.IsReflectionChainDefensePending()
+                && !BattleManager.I.IsParryRerunDefensePending()
+                && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+                && !card.isRecovery
+                && !CardRules.IsUsableInAttackPhase(card))
+            {
+                return false;
+            }
+
             PlayerType magicPoolOwner = BattleManager.I != null
                 ? BattleManager.I.CurrentTurnOwner
                 : PlayerType.Player;
@@ -121,23 +136,19 @@ public class CardSelectionManager : MonoBehaviour
             bool capacityApplies = card.cardUI == null || !onOwnMagicPanel;
             if (capacityApplies && MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(card, magicPoolOwner))
             {
-                Debug.Log($"[CardSelectionManager] MagicPool 満杯のため {card.cardName} は選択不可 (owner={magicPoolOwner})");
                 BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法容量不足！", new Color(1f, 0.5f, 0f));
                 return false;
             }
         }
 
-        // ===== 大魔法（ArchMagic）：他カードが既に選ばれていたらピック不可 =====
-        // 仕様：ArchMagic が先なら他カードを弾かず Standalone で上書きクリアするが、
-        //       他カードが既に選ばれている状態では ArchMagic を選択できない。
+        // ===== Standalone（大魔法・顕現等）／グランド枠：他と併用不可。ポップアップは出さず既存をクリアして新カードへ差し替え =====
         if (BattleManager.I != null
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player
-            && (ArchMagicRules.IsArchMagicCard(card) || card.cardType == CardType.Ultimate)
+            && card.attackPhaseUseRule == AttackPhaseUseRule.Standalone
             && selectedCards.Count > 0)
         {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel("大魔法・顕現は他と併用できません", new Color(0.75f, 0.45f, 0.95f));
-            return false;
+            ClearAllWithUI();
         }
 
         if (BattleManager.I != null
@@ -147,8 +158,7 @@ public class CardSelectionManager : MonoBehaviour
             && GrandMagicRules.ContainsGrandMagicStyleAttack(selectedCards)
             && !GrandMagicRules.IsGrandMagicStyleAttackCard(card))
         {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel("大魔法・顕現は他と併用できません", new Color(0.75f, 0.45f, 0.95f));
-            return false;
+            ClearAllWithUI();
         }
 
         // 詠唱中（PlayerStatus.IsCastingArchMagic）は攻撃カード選択自体を受け付けない（保険）
@@ -160,7 +170,17 @@ public class CardSelectionManager : MonoBehaviour
             return false;
         }
 
-        // 競合チェック（CheckCardConflictsは常にtrueを返すが、競合がある場合は既存選択をクリアする）
+        // ===== 攻撃：魔法（Primary）＋ 物理（Attack + Flexible）は同時不可。Primary同士同様、既存を消して新カードへ差し替え =====
+        if (BattleManager.I != null
+            && BattleManager.I.CurrentState == GameState.AttackPhase
+            && BattleManager.I.CurrentTurnOwner == PlayerType.Player
+            && !BattleManager.I.IsReflectionChainDefensePending()
+            && ConflictsMagicPrimaryWithPhysicalAttackFlexible(selectedCards, card))
+        {
+            ClearAllWithUI();
+        }
+
+        // SelectionRole 等に基づき、併用不可なら既存選択をクリア
         CheckCardConflicts(card);
 
         // ===== 攻撃フェーズ：組み合わせ専用（先に攻撃カード1枚以上） =====
@@ -168,7 +188,7 @@ public class CardSelectionManager : MonoBehaviour
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player
             && !BattleManager.I.IsReflectionChainDefensePending()
-            && card.attackComboPickRule == AttackComboPickRule.ComboAttachmentOnly)
+            && card.attackPhaseUseRule == AttackPhaseUseRule.AddOn)
         {
             var attackSoFar = GetSelectedAttackCards();
             if (!AttackComboSelectionRules.CanPickAttackCardNow(card, attackSoFar))
@@ -201,9 +221,7 @@ public class CardSelectionManager : MonoBehaviour
         // ScriptableObject でも参照が一致しないケースがあるため InstanceID で除去（表示と選択の不整合防止）
         int id = card.GetInstanceID();
         int n = selectedCards.RemoveAll(c => c != null && c.GetInstanceID() == id);
-        bool removed = n > 0;
-        Debug.Log($"[CardSelectionManager] カード選択キャンセル: {card.cardName} (削除成功: {removed}, 件数={n}, selectedCards数: {selectedCards.Count})");
-        return removed;
+        return n > 0;
     }
 
     /// <summary>
@@ -211,7 +229,6 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public void ClearAllSelections()
     {
-        Debug.Log("[CardSelectionManager] 全選択をクリア");
         selectedCards.Clear();
     }
 
@@ -220,7 +237,7 @@ public class CardSelectionManager : MonoBehaviour
     /// </summary>
     public List<CardData> GetSelectedCards()
     {
-        return selectedCards; // 直接返す（読み取り専用として使用）
+        return selectedCards;
     }
 
     /// <summary>
@@ -292,6 +309,7 @@ public class CardSelectionManager : MonoBehaviour
         var state = BattleManager.I.CurrentState;
         if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase
             || (state == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
             || (state == GameState.CombatResolvePhase && BattleManager.I.IsReflectionChainDefensePending())
             || (state == GameState.AttackPhase && BattleManager.I.IsReflectionChainDefensePending()))
             return card.defensePhaseRole;
@@ -339,10 +357,6 @@ public class CardSelectionManager : MonoBehaviour
                 break;
 
             case SelectionRole.Standalone:
-                if (selectedCards.Count > 0)
-                    ClearAllWithUI();
-                break;
-
             case SelectionRole.Primary:
                 if (selectedCards.Count > 0)
                     ClearAllWithUI();
@@ -367,14 +381,52 @@ public class CardSelectionManager : MonoBehaviour
     private bool IsAttackCard(CardData card)
     {
         if (card == null) return false;
-        if (card.cardType == CardType.Magic && !card.isRecovery) return true;
+        if (card.cardType == CardType.Magic && !card.isRecovery)
+            return CardRules.IsUsableInAttackPhase(card);
         if (card.cardType == CardType.ArchMagic) return true;
         if (card.cardType == CardType.Special) return true;
-        return card.cardType == CardType.Attack || card.isPrimaryAttack || card.isAdditionalAttack || card.isRecovery;
+        if (card.cardType == CardType.Ultimate) return true;
+        return card.cardType == CardType.Attack || card.isRecovery;
     }
 
     private bool IsDefenseCard(CardData card)
     {
         return card.cardType == CardType.Defense || card.isPrimaryDefense || card.isCounterAttack;
+    }
+
+    /// <summary>回復以外の <see cref="CardType.Magic"/> かつ <see cref="AttackPhaseUseRule.Primary"/>。</summary>
+    private static bool IsMagicPrimaryAttackInCombo(CardData c)
+    {
+        return c != null
+            && c.cardType == CardType.Magic
+            && !c.isRecovery
+            && c.attackPhaseUseRule == AttackPhaseUseRule.Primary;
+    }
+
+    /// <summary><see cref="CardType.Attack"/> かつ <see cref="AttackPhaseUseRule.Flexible"/>（武器の追撃枠）。</summary>
+    private static bool IsPhysicalAttackFlexibleInCombo(CardData c)
+    {
+        return c != null
+            && c.cardType == CardType.Attack
+            && c.attackPhaseUseRule == AttackPhaseUseRule.Flexible;
+    }
+
+    /// <summary>上記2種を同一コンボに揃おうとしたら真（呼び出し側で既存をクリアして新カードのみに差し替える）。</summary>
+    private static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
+        IReadOnlyList<CardData> currentSelection, CardData adding)
+    {
+        if (adding == null) return false;
+        bool hasMagicPrimary = false;
+        bool hasPhysicalFlexible = false;
+        for (int i = 0; i < currentSelection.Count; i++)
+        {
+            var c = currentSelection[i];
+            if (c == null) continue;
+            if (IsMagicPrimaryAttackInCombo(c)) hasMagicPrimary = true;
+            if (IsPhysicalAttackFlexibleInCombo(c)) hasPhysicalFlexible = true;
+        }
+        if (IsMagicPrimaryAttackInCombo(adding)) hasMagicPrimary = true;
+        if (IsPhysicalAttackFlexibleInCombo(adding)) hasPhysicalFlexible = true;
+        return hasMagicPrimary && hasPhysicalFlexible;
     }
 }

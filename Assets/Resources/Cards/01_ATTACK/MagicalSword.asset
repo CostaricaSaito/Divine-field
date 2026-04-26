@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -18,20 +18,18 @@ MonoBehaviour:
   description: "\u9B54\u529B\u3067\u653B\u6483\u529B\u30A2\u30C3\u30D7"
   attackPower: 6
   defensePower: 0
+  cardValue: 30
   element: 0
   hitRate: 100
   mpCost: 0
   maxUses: 1
-  isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  clearsAllStatusAilmentsOnUse: 0
+  cureAllStatusEffects: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
-  isPrimaryAttack: 1
-  isAdditionalAttack: 0
   isPrimaryDefense: 0
   isCounterAttack: 0
   isRecovery: 0
@@ -40,14 +38,22 @@ MonoBehaviour:
   statusEffectChance: 0
   statusEffectToApply: 0
   statusEffectApplyTiming: 0
-  cardValue: 30
   isRare: 1
-  attackPhaseRole: 2
-  defensePhaseRole: 0
-  attackComboPickRule: 0
-  reflectionKind: 0
-  blockingKind: 0
-  parryKind: 0
+  attackPhaseUseRule: 0
+  defensePhaseUseRule: 0
+  reactiveInteraction: 0
   specialAttackRule: {fileID: 11400000, guid: 2e3d4c5b6a79808192a3b4c5d6e7f8a0, type: 2}
   specialCardEffect: {fileID: 0}
   cardDisplayFrameSprite: {fileID: 0}
+  _legacyReflection: 0
+  _legacyBlocking: 0
+  _legacyParry: 0
+  _legacyReactiveImported: 1
+  _legacyAttackPhaseRole: 2
+  _legacyComboPick: 0
+  _legacyIsCombinationMagic: 0
+  _legacyAttackComboImported: 1
+  _migIsPrimaryAttack: 0
+  _migIsAdditionalAttack: 0
+  _migPrimaryAdditionalImported: 1
+  _migV1Hcm: -1

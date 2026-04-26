@@ -428,6 +428,11 @@ public class CardStatsDisplay : MonoBehaviour
     {
         var rc = bm.GetReflectionAttackCardsForTotalDisplay();
         if (rc == null || rc.Count == 0) return "";
+        if (bm.GetReflectionAttackDisplayStrengthOverride() is int ovr)
+        {
+            if (ovr <= 0) return "";
+            return $"ATK {ovr}";
+        }
         var rAtk = bm.GetReflectionAttackBlessingAttacker();
         var rDef = bm.GetReflectionAttackBlessingDefender();
         if (rAtk != null && rDef != null)
@@ -583,7 +588,24 @@ public class CardStatsDisplay : MonoBehaviour
         PlayerStatus blessingDefender)
     {
         if (cards == null || cards.Count == 0) return 0;
+        var bm = BattleManager.I;
+        if (bm != null && bm.GetReflectionAttackDisplayStrengthOverride() is int ovr)
+            return ovr;
         return GetDisplayedAttackStrengthWithDefender(cards, blessingAttacker, blessingDefender);
+    }
+
+    /// <summary>獄炎宝玉表示は「防御」シーケンスだが、TOTAL は反撃 ATK（反射オーバーレイ）を使う。</summary>
+    private bool IsHellfireOrbSequenceWithActiveReflectionForPanel(BattleManager bm, bool forPlayerPanel)
+    {
+        if (bm == null || !bm.IsReflectionAttackTotalDisplayActive()) return false;
+        if (forPlayerPanel != bm.ReflectionAttackTotalOnPlayerSide) return false;
+        if (currentSequenceCards == null || currentSequenceCards.Count != 1) return false;
+        if (currentSequenceType != "防御") return false;
+        var wantSide = forPlayerPanel ? Side.Player : Side.Enemy;
+        if (sequenceOwnerSide != wantSide) return false;
+        var c = currentSequenceCards[0];
+        if (c == null || c.orbReactionRule is not OrbOfHellfireRuleSO) return false;
+        return true;
     }
 
     /// <summary>
@@ -616,6 +638,8 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, true))
+                    return false;
                 if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return true;
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 if (totalDefense <= 0) return true;
@@ -699,6 +723,8 @@ public class CardStatsDisplay : MonoBehaviour
             }
             else if (currentSequenceType == "防御")
             {
+                if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, false))
+                    return false;
                 if (IsReflectionOrNullifyDefenseRoute(battleManager, currentSequenceCards)) return true;
                 int totalDefense = CalculateTotalDefensePower(currentSequenceCards);
                 if (totalDefense <= 0) return true;
@@ -710,7 +736,8 @@ public class CardStatsDisplay : MonoBehaviour
             return refHideEnemy;
 
         // 敵のターン（攻撃側）: currentAttackCard が設定されていれば表示
-        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy
+            && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
@@ -763,7 +790,14 @@ public class CardStatsDisplay : MonoBehaviour
                 return FormatDefensePowerLabel(selectedDefenseCards);
         }
 
-        // CardSequenceManager／反射連鎖確定後の Prefab シーケンス（反射用 TOTAL ATK より優先）
+        if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, true))
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return FormatReflectionAttackTotalLabel(battleManager, battleManager.GetPlayerStatus());
+        }
+
+        // CardSequenceManager／反射連鎖確定後の Prefab シーケンス（反射用 TOTAL ATK より優先。獄炎宝玉は上で反撃 ATK）
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
         {
             if (currentSequenceType == "攻撃")
@@ -847,6 +881,13 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return "";
 
+        if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, false))
+        {
+            var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
+            if (rc != null && rc.Count > 0)
+                return FormatReflectionAttackTotalLabel(battleManager, battleManager.GetEnemyStatus());
+        }
+
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
         {
             if (currentSequenceType == "攻撃")
@@ -867,8 +908,9 @@ public class CardStatsDisplay : MonoBehaviour
                 return FormatReflectionAttackTotalLabel(battleManager, battleManager.GetEnemyStatus());
         }
 
-        // 敵のターン（攻撃側）: ATK を表示
-        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        // 敵のターン（攻撃側）: ATK を表示（宝玉反撃中は元攻撃カード行を抑止）
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy
+            && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
@@ -973,7 +1015,8 @@ public class CardStatsDisplay : MonoBehaviour
                 return ElementHelper.GetCombinedElement(rc);
         }
 
-        if (battleManager.CurrentTurnOwner == PlayerType.Enemy)
+        if (battleManager.CurrentTurnOwner == PlayerType.Enemy
+            && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
             var card = battleManager.GetCurrentAttackCard();
             if (card != null) return card.element;

@@ -89,7 +89,9 @@ public class BattleUIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 相手が防具を使わなかった／使えなかったときに「許す」を表示する。非表示は <see cref="HideYurusuButton"/>（戦闘解決の await 完了後）。
+    /// 相手（CPU）が DefenseSelect を防御0枚で完了し、戦闘解決（CombatSequence 相当）に入った区間でのみ
+    /// 専用の「許す」装飾を出す。自プレイヤー防御中の表現は <see cref="SetUseButtonLabel"/>。
+    /// 非表示は <see cref="HideYurusuButton"/>（解決の await 完了後など）。
     /// </summary>
     public void ShowYurusuDisplay() => useButtonPresenter?.ShowYurusuDisplay();
 
@@ -119,6 +121,10 @@ public class BattleUIManager : MonoBehaviour
     }
 
     public void HideAllCardDetails() => cardController?.HideAllCardDetails();
+
+    /// <summary>プレイヤー／敵の CardDisplay 直子を即破棄（宝玉の再掲前など。通常は <see cref="HideAllCardDetails"/>）。</summary>
+    public void ClearAllCardDisplaysAndSelectionImmediate() =>
+        cardController?.ClearAllCardDisplaysAndSelectionImmediate();
 
     /// <summary>プレイヤー側のカード表示のみクリア（敵側は残す）</summary>
     public void HidePlayerCardDetails() => cardController?.HidePlayerCardDetails();

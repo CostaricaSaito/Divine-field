@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 
@@ -27,6 +29,7 @@ public class CardSheetDisplay : MonoBehaviour
     [SerializeField] private Color mpCostClusterTextColor = Color.white;
 
     private CardData currentCardData;
+    private Image _orbTintOverlay;
 
     private void Awake()
     {
@@ -195,5 +198,58 @@ public class CardSheetDisplay : MonoBehaviour
         // 画像をArtWorkSlotにぴったりフィットさせる設定
         artworkSlot.type = Image.Type.Simple;
         artworkSlot.preserveAspect = false; // アスペクト比を無視して枠にぴったり合わせる
+    }
+
+    /// <summary>宝玉：CardSheet プレハブ全体の属性色トーン（フェードイン→フェードアウト。秒は呼び出し側で 0.5+0.5 想定）。</summary>
+    public async Task PlayOrbElementTintFlashAsync(Color tintRgb, float fadeInSec, float fadeOutSec, CancellationToken ct)
+    {
+        // アート枠内ではなくルート（プレハブ全体）に被せる。旧オーバーレイは親が違えば作り直す
+        var root = (RectTransform)transform;
+        if (_orbTintOverlay != null && _orbTintOverlay.transform.parent != root)
+        {
+            Destroy(_orbTintOverlay.gameObject);
+            _orbTintOverlay = null;
+        }
+
+        if (_orbTintOverlay == null)
+        {
+            var go = new GameObject("OrbTintOverlay", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(root, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.SetAsLastSibling();
+            _orbTintOverlay = go.GetComponent<Image>();
+            _orbTintOverlay.raycastTarget = false;
+        }
+
+        _orbTintOverlay.gameObject.SetActive(true);
+        Color c0 = tintRgb;
+        c0.a = 0f;
+        Color c1 = new Color(tintRgb.r, tintRgb.g, tintRgb.b, 0.5f);
+        _orbTintOverlay.color = c0;
+
+        float u;
+        u = 0f;
+        while (u < 1.0001f)
+        {
+            ct.ThrowIfCancellationRequested();
+            u += fadeInSec > 0.0001f ? Time.unscaledDeltaTime / fadeInSec : 1f;
+            _orbTintOverlay.color = Color.Lerp(c0, c1, Mathf.Clamp01(u));
+            await Task.Yield();
+        }
+        _orbTintOverlay.color = c1;
+        u = 0f;
+        while (u < 1.0001f)
+        {
+            ct.ThrowIfCancellationRequested();
+            u += fadeOutSec > 0.0001f ? Time.unscaledDeltaTime / fadeOutSec : 1f;
+            _orbTintOverlay.color = Color.Lerp(c1, c0, Mathf.Clamp01(u));
+            await Task.Yield();
+        }
+        _orbTintOverlay.color = c0;
+        _orbTintOverlay.gameObject.SetActive(false);
     }
 }

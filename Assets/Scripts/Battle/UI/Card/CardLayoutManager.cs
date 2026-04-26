@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
@@ -205,9 +205,10 @@ public class CardLayoutManager : MonoBehaviour
             return CountExistingDefenseCards();
         }
         
-        if (cardData.isPrimaryAttack) return 0;
+        if (cardData.attackPhaseUseRule == AttackPhaseUseRule.Primary) return 0;
         
-        if (cardData.attackPhaseRole == SelectionRole.Addable)
+        if (cardData.attackPhaseUseRule == AttackPhaseUseRule.Flexible
+            || cardData.attackPhaseUseRule == AttackPhaseUseRule.AddOn)
         {
             return CountExistingAttackCards();
         }

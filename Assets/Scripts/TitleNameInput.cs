@@ -1,24 +1,23 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using TMPro;
 
 public class TitleNameInput : MonoBehaviour
 {
     [SerializeField] private TMP_InputField nameInput;
-    [SerializeField] private string defaultName = "ƒvƒŒƒCƒ„[";
+    [SerializeField] private string defaultName = "Æ’vÆ’Å’Æ’CÆ’â€Â[";
 
     public const string PlayerNameKey = "DF_PlayerName";
 
     private void Start()
     {
-        // “ü—Í—“‚É•Û‘¶’l‚ğ•\¦
-        var saved = PlayerPrefs.GetString(PlayerNameKey, "");
-        var initial = string.IsNullOrWhiteSpace(saved) ? defaultName : saved;
+        PlayerProfileService.EnsureLoaded();
+        var initial = PlayerProfileService.Data.displayName;
+        if (string.IsNullOrWhiteSpace(initial))
+            initial = defaultName;
         nameInput.text = initial;
 
-        // Ä•Û‘¶iƒtƒH[ƒJƒX‚³‚ê‚¸I—¹‚µ‚½ê‡‚É‚à”õ‚¦‚Äj
         SaveName(initial);
 
-        // ‚±‚±‚ÅƒCƒxƒ“ƒg‚ğ“o˜^
         nameInput.onEndEdit.AddListener(SaveName);
     }
 
@@ -26,11 +25,11 @@ public class TitleNameInput : MonoBehaviour
     {
         var finalName = string.IsNullOrWhiteSpace(input) ? defaultName : input.Trim();
 
-        PlayerPrefs.SetString(PlayerNameKey, finalName);
-        PlayerPrefs.Save();
-
-        // ƒVƒ“ƒOƒ‹ƒgƒ“‚É‚à‘¦”½‰f
         if (GameProfile.I != null)
             GameProfile.I.SetPlayerName(finalName);
+        else
+        {
+            PlayerProfileService.SetDisplayNameAndSave(finalName);
+        }
     }
 }

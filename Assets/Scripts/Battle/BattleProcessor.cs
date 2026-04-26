@@ -170,7 +170,7 @@ public class BattleProcessor : MonoBehaviour
                 await ApplyRecoveryAsync(card, recoveryRecipient, CancellationToken.None);
         }
 
-        if (card.clearsAllStatusAilmentsOnUse && target != null)
+        if (card.cureAllStatusEffects && target != null)
             await ApplyAllStatusAilmentsClearAsync(target, CancellationToken.None);
 
         if (card.canApplyStatusEffect && card.statusEffectToApply != StatusEffectType.None
@@ -350,6 +350,99 @@ public class BattleProcessor : MonoBehaviour
             : null;
         await ApplyCombatDamageSequenceAfterHitAsync(
             attackCards, attackElement, attacker, defender, incomingAttackPower, defensePower, defenseList);
+    }
+
+    /// <summary>
+    /// 宝玉「獄炎」等：受けた第1段ダメージ相当を基礎攻撃力にした単独反撃。命中は通常。宝玉連鎖内は再発火しない。
+    /// </summary>
+    public async Task ResolveOrbCounterCombatAsync(
+        List<CardData> attackCards,
+        int receivedFirstPhaseDamageAsBase,
+        CardData defenseCard,
+        PlayerStatus counterAttacker,
+        PlayerStatus counterTarget,
+        List<CardData> defenderHand,
+        bool skipHitCheck)
+    {
+        if (attackCards == null || attackCards.Count == 0 || counterAttacker == null || counterTarget == null)
+        {
+            Debug.LogWarning("[BattleProcessor] ResolveOrbCounterCombatAsync: 無効なパラメータ");
+            return;
+        }
+
+        int attackPower = GetOrbCounterDisplayedAttackPower(attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
+        int defensePower = CalculateTotalDefensePower(defenseCard, counterTarget);
+        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
+        if (attackElement != ElementType.None && defenseCard != null
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
+        {
+            defensePower = 0;
+        }
+
+        if (!skipHitCheck)
+        {
+            bool hit = CheckHit(attackCards, counterAttacker, counterTarget);
+            if (!hit)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+                BattleUIManager.I?.ShowMissPopup(counterTarget);
+                return;
+            }
+        }
+
+        IReadOnlyList<CardData> defenseList = defenseCard != null
+            ? new List<CardData> { defenseCard }
+            : null;
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards,
+            attackElement,
+            counterAttacker,
+            counterTarget,
+            attackPower,
+            defensePower,
+            defenseList,
+            skipDefenseOrbReactions: true);
+    }
+
+    /// <summary>宝玉反撃力（TOTAL 表示用と戦闘解決のどちらでも同式）。</summary>
+    public int GetOrbCounterDisplayedAttackPower(
+        List<CardData> attackCards,
+        int receivedFirstPhaseDamageAsBase,
+        PlayerStatus counterAttacker,
+        PlayerStatus counterTarget)
+    {
+        return CalculateOrbCounterAttackPower(
+            attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
+    }
+
+    /// <summary>宝玉反撃：カードの ATK 合計の代わりに <paramref name="forcedBaseSum"/> を基礎に加護・抑制を適用。</summary>
+    private int CalculateOrbCounterAttackPower(
+        List<CardData> attackCards,
+        int forcedBaseSum,
+        PlayerStatus attacker,
+        PlayerStatus defender)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null) return 0;
+        if (MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
+            return CalculateTotalAttackPower(attackCards, attacker, defender);
+
+        int totalAttackPower = Mathf.Max(0, forcedBaseSum);
+        totalAttackPower += MagicalSwordRules.GetActivePowerBonus(attackCards, attacker);
+        if (GodrageRules.IsGodrageDoublingCombo(attackCards))
+            totalAttackPower *= 2;
+
+        totalAttackPower = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, attackCards, totalAttackPower);
+        totalAttackPower = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
+            attacker, defender, attackCards, totalAttackPower);
+        return totalAttackPower;
+    }
+
+    /// <summary>冷水の宝玉：通常の HP 回復ポップ・SE だが量だけ <paramref name="hpAmount"/>（最大 HP は既存どおり）。</summary>
+    public async Task ApplyOrbHpRecoveryAsync(CardData card, PlayerStatus target, int hpAmount, CancellationToken ct = default)
+    {
+        if (card == null || target == null || !card.healsHP || hpAmount <= 0) return;
+        await ApplyRecoveryAsync(card, target, ct, hpAmount);
     }
 
     //========================
@@ -545,19 +638,23 @@ public class BattleProcessor : MonoBehaviour
     private void ApplyDamage(PlayerStatus target, int damage)
     {
         if (target == null) return;
+        if (damage <= 0) return;
 
-        target.currentHP = Mathf.Max(0, target.currentHP - damage);
+        // TakeDamage 経由にして大魔法（詠唱中の被ダメで中断）や被ダメ補正（ModifyDamage）と整合させる
+        target.TakeDamage(damage);
         Debug.Log($"[BattleProcessor] ダメージ適用: {damage} → {target.DisplayName} (HP: {target.currentHP})");
     }
 
     /// <summary>
     /// 回復を適用する。各回復ポップアップの寿命＋ポストインターバル後まで待つ。
     /// </summary>
-    private async Task ApplyRecoveryAsync(CardData card, PlayerStatus target, CancellationToken ct = default)
+    private async Task ApplyRecoveryAsync(CardData card, PlayerStatus target, CancellationToken ct = default, int? hpRecoveryAmountOverride = null)
     {
         if (card == null || target == null) return;
 
         int amount = card.recoveryAmount;
+        if (card.healsHP && hpRecoveryAmountOverride.HasValue)
+            amount = hpRecoveryAmountOverride.Value;
 
         // HP回復
         if (card.healsHP)
@@ -766,7 +863,8 @@ public class BattleProcessor : MonoBehaviour
         PlayerStatus defender,
         int attackPower,
         int defensePower,
-        IReadOnlyList<CardData> defenseCardsForStatusRule = null)
+        IReadOnlyList<CardData> defenseCardsForStatusRule = null,
+        bool skipDefenseOrbReactions = false)
     {
         if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
         {
@@ -836,6 +934,24 @@ public class BattleProcessor : MonoBehaviour
             await Task.Delay(DamagePopup.PreStatusEffectAfterDamagePopupDelayMs);
 
         await TryApplyAttackCardStatusEffectsAsync(attackCards, attacker, defender, firstPhaseDamage, defenseCardsForStatusRule);
+
+        if (!skipDefenseOrbReactions
+            && firstPhaseDamage > 0
+            && defenseCardsForStatusRule != null
+            && BattleManager.I != null)
+        {
+            var orbs = OrbCardRules.CollectOrbsInDefenseOrder(defenseCardsForStatusRule);
+            if (orbs.Count > 0)
+            {
+                await BattleManager.I.PresentOrbDefenseReactionsAsync(
+                    this,
+                    orbs,
+                    firstPhaseDamage,
+                    attacker,
+                    defender,
+                    CancellationToken.None);
+            }
+        }
 
         if (IsDead(attacker) || IsDead(defender))
         {

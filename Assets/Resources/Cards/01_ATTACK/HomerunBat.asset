@@ -18,20 +18,18 @@ MonoBehaviour:
   description: "\u653B\u6483\u3092\u6253\u3061\u6255\u3046"
   attackPower: 10
   defensePower: 0
+  cardValue: 3
   element: 0
   hitRate: 100
   mpCost: 0
   maxUses: 1
-  isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
-  clearsAllStatusAilmentsOnUse: 0
+  cureAllStatusEffects: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 1
-  isPrimaryAttack: 1
-  isAdditionalAttack: 0
   isPrimaryDefense: 0
   isCounterAttack: 1
   isRecovery: 0
@@ -40,12 +38,22 @@ MonoBehaviour:
   statusEffectChance: 0
   statusEffectToApply: 0
   statusEffectApplyTiming: 0
-  cardValue: 3
   isRare: 0
-  attackPhaseRole: 2
-  defensePhaseRole: 1
-  attackComboPickRule: 0
-  reflectionKind: 0
-  blockingKind: 0
-  parryKind: 1
+  attackPhaseUseRule: 0
+  defensePhaseUseRule: 1
+  reactiveInteraction: 7
   specialAttackRule: {fileID: 0}
+  specialCardEffect: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}
+  _legacyReflection: 0
+  _legacyBlocking: 0
+  _legacyParry: 1
+  _legacyReactiveImported: 1
+  _legacyAttackPhaseRole: 2
+  _legacyComboPick: 0
+  _legacyIsCombinationMagic: 0
+  _legacyAttackComboImported: 1
+  _migIsPrimaryAttack: 0
+  _migIsAdditionalAttack: 0
+  _migPrimaryAdditionalImported: 1
+  _migV1Hcm: -1

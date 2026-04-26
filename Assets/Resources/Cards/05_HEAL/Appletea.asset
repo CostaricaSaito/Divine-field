@@ -18,20 +18,18 @@ MonoBehaviour:
   description: "HP5\u56DE\u5FA9"
   attackPower: 0
   defensePower: 0
+  cardValue: 1
   element: 0
   hitRate: 100
   mpCost: 0
   maxUses: 0
-  isCombinationMagic: 0
   recoveryAmount: 5
   healsHP: 1
   healsMP: 0
   healsGP: 0
-  clearsAllStatusAilmentsOnUse: 0
+  cureAllStatusEffects: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
-  isPrimaryAttack: 0
-  isAdditionalAttack: 0
   isPrimaryDefense: 0
   isCounterAttack: 0
   isRecovery: 1
@@ -40,11 +38,22 @@ MonoBehaviour:
   statusEffectChance: 0
   statusEffectToApply: 0
   statusEffectApplyTiming: 0
-  cardValue: 1
   isRare: 0
-  attackPhaseRole: 1
-  defensePhaseRole: 0
-  attackComboPickRule: 0
-  reflectionKind: 0
-  blockingKind: 0
+  attackPhaseUseRule: 1
+  defensePhaseUseRule: 0
+  reactiveInteraction: 0
   specialAttackRule: {fileID: 0}
+  specialCardEffect: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}
+  _legacyReflection: 0
+  _legacyBlocking: 0
+  _legacyParry: 0
+  _legacyReactiveImported: 1
+  _legacyAttackPhaseRole: 1
+  _legacyComboPick: 0
+  _legacyIsCombinationMagic: 0
+  _legacyAttackComboImported: 1
+  _migIsPrimaryAttack: 0
+  _migIsAdditionalAttack: 0
+  _migPrimaryAdditionalImported: 1
+  _migV1Hcm: -1

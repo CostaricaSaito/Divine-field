@@ -288,6 +288,6 @@ public static class DiseaseTurnEndProcessor
     private static void ApplyHpLossIgnoringCardModifiers(PlayerStatus target, int amount)
     {
         if (target == null || amount <= 0) return;
-        target.currentHP = Mathf.Max(0, target.currentHP - amount);
+        target.ApplyRawHpDamage(amount);
     }
 }

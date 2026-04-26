@@ -79,10 +79,9 @@ public class BattleCardUIController : MonoBehaviour
             else if (side == Side.Player
                 && BattleManager.I != null
                 && (BattleManager.I.CurrentState == GameState.DefensePhase
-                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())))
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
-            else if (side == Side.Player && BattleManager.I != null && BattleManager.I.IsReflectionChainDefensePending())
-                BattleUIManager.I.UpdateDefenseButtonLabel();
         }
     }
 
@@ -112,6 +111,35 @@ public class BattleCardUIController : MonoBehaviour
         foreach (var go in activeCardSheets)
         {
             if (go != null) Destroy(go);
+        }
+        activeCardSheets.Clear();
+        cardSelectionManager.ClearAllSelections();
+        UpdateHandCardHighlights();
+        BattleManager.I?.ClearSelectedCards();
+        BattleUIManager.I.HideRestraintHeavyOverlays();
+    }
+
+    /// <summary>
+    /// 同一フレーム内で表示パネルに再生成する前に使う。通常の <see cref="HideAllCardDetails"/> は Destroy を遅延するため、
+    /// 破棄前に <see cref="ShowCardSheetsVisualOnlyBatch"/> すると一瞬二重表示になることがある。
+    /// </summary>
+    public void ClearAllCardDisplaysAndSelectionImmediate()
+    {
+        if (playerCardDisplayPanel != null)
+        {
+            for (int c = playerCardDisplayPanel.childCount - 1; c >= 0; c--)
+            {
+                var t = playerCardDisplayPanel.GetChild(c);
+                if (t != null) DestroyImmediate(t.gameObject);
+            }
+        }
+        if (enemyCardDisplayPanel != null)
+        {
+            for (int c = enemyCardDisplayPanel.childCount - 1; c >= 0; c--)
+            {
+                var t = enemyCardDisplayPanel.GetChild(c);
+                if (t != null) DestroyImmediate(t.gameObject);
+            }
         }
         activeCardSheets.Clear();
         cardSelectionManager.ClearAllSelections();
@@ -241,6 +269,8 @@ public class BattleCardUIController : MonoBehaviour
             if (cg == null) cg = card.cardUI.gameObject.AddComponent<CanvasGroup>();
             cg.blocksRaycasts = clickable;
         }
+        // 操作ブロック中は Card Status を DEF/ATK 等のデフォルトへ。解除時のみ REFLECT/PARRY/BLOCKING の判定に通す
+        BattleManager.I?.RefreshPlayerHandStatusTextForDefenseSnapshot();
     }
 
     public void SetHandInteractivity(List<CardData> hand, bool interactable)
@@ -677,7 +707,8 @@ public class BattleCardUIController : MonoBehaviour
                 if (BattleManager.I.IsReflectionChainDefensePending())
                     BattleManager.I.RefreshReflectionChainInteractivityIfPending();
                 else if (BattleManager.I.CurrentState == GameState.DefensePhase
-                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive()))
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
                     BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
                 else if (BattleManager.I.CurrentState == GameState.AttackPhase
                          && BattleManager.I.CurrentTurnOwner == PlayerType.Player)
@@ -709,11 +740,11 @@ public class BattleCardUIController : MonoBehaviour
             }
             else if (BattleManager.I.CurrentState == GameState.DefensePhase
                      || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                      || BattleManager.I.IsReflectionChainDefensePending()
                      || BattleManager.I.IsParryRerunDefensePending())
             {
                 BattleManager.I.UpdateTotalATKDEFDisplay();
-                BattleUIManager.I.UpdateDefenseButtonLabel();
                 if (BattleManager.I.IsReflectionChainDefensePending())
                     BattleManager.I.RefreshReflectionChainInteractivityIfPending();
                 else

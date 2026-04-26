@@ -1003,15 +1003,16 @@ public class CardSequenceManager : MonoBehaviour
             BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
         }
         var ownHand = side == Side.Player ? battleManager.playerHand : battleManager.cpuHand;
-        if (side == Side.Player && archMagicCard.cardUI != null)
+        if (ownHand == battleManager.playerHand)
         {
-            int slotIndex = archMagicCard.cardUI.transform.GetSiblingIndex();
-            handRefill?.RecordPlayerUseSlot(slotIndex);
+            if (archMagicCard.cardUI != null)
+            {
+                int slotIndex = archMagicCard.cardUI.transform.GetSiblingIndex();
+                handRefill?.RecordPlayerUseSlot(slotIndex);
+            }
         }
         else
-        {
             handRefill?.RecordEnemyUse(archMagicCard);
-        }
         battleProcessor.UseCard(archMagicCard, ownHand);
 
         // 500ms インターバル
@@ -1267,9 +1268,9 @@ public class CardSequenceManager : MonoBehaviour
                 {
                     if (card.cardType == CardType.Attack || card.cardType == CardType.Magic
                         || card.cardType == CardType.Ultimate
+                        || card.cardType == CardType.ArchMagic
                         || card.cardType == CardType.Recovery
-                        || card.cardType == CardType.Special
-                        || card.isPrimaryAttack || card.isAdditionalAttack)
+                        || card.cardType == CardType.Special)
                     {
                         attackCards.Add(card);
                     }

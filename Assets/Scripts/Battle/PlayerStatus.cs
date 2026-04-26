@@ -113,13 +113,34 @@ public class PlayerStatus
 
         // 大魔法詠唱中に 1 でもダメージを受けたらキャンセル確定（MP は返らない）。
         // 実際のキャンセル演出（ポップアップ・背景復帰）は BattleManager が次の安全地帯で消費する。
-        if (modifiedAmount > 0 && IsCastingArchMagic)
-        {
-            archMagicCancelPending = true;
-            archMagicCastingCard = null;
-            archMagicEffectTarget = null;
-            archMagicRemainingTurns = 0;
-        }
+        CancelArchMagicCastingOnDamageEvent(modifiedAmount);
+    }
+
+    /// <summary>
+    /// 被ダメ補正を適用せず HP だけ減らす。病系ターン終了ダメージなど
+    /// <see cref="TakeDamage"/> を通さない経路用。大魔法の中断条件は HP が実際に減ったときに適用する。
+    /// </summary>
+    public void ApplyRawHpDamage(int amount)
+    {
+        if (amount <= 0) return;
+        int before = currentHP;
+        currentHP = Mathf.Max(0, currentHP - amount);
+        int lost = before - currentHP;
+        if (lost > 0)
+            Debug.Log($"{DisplayName} に {lost} ダメージ（raw、元指示: {amount}）");
+        CancelArchMagicCastingOnDamageEvent(lost);
+    }
+
+    /// <param name="damageForArchMagicRule">
+    /// 大魔法「いかなるダメージも中断」の判定用。被ダメ補正後の量（<see cref="TakeDamage"/>）または raw 経路では実損 <see cref="ApplyRawHpDamage"/>。
+    /// </param>
+    private void CancelArchMagicCastingOnDamageEvent(int damageForArchMagicRule)
+    {
+        if (damageForArchMagicRule <= 0 || !IsCastingArchMagic) return;
+        archMagicCancelPending = true;
+        archMagicCastingCard = null;
+        archMagicEffectTarget = null;
+        archMagicRemainingTurns = 0;
     }
 
     /// <summary>

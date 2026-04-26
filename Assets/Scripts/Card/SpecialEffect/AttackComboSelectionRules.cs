@@ -12,7 +12,7 @@ public static class AttackComboSelectionRules
     public static bool CanPickAttackCardNow(CardData card, IReadOnlyList<CardData> currentAttackSelection)
     {
         if (card == null) return false;
-        if (card.attackComboPickRule != AttackComboPickRule.ComboAttachmentOnly)
+        if (card.attackPhaseUseRule != AttackPhaseUseRule.AddOn)
             return true;
 
         int n = currentAttackSelection?.Count ?? 0;

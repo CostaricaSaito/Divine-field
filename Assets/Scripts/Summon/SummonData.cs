@@ -19,6 +19,14 @@ public class SummonData : ScriptableObject
     [TextArea(2, 4)]
     public string summonName;
 
+    [Tooltip("統計・オンライン連携用の不変ID（例: garuda）。空のときはこのアセットの Unity 名（ファイル名）を使います。")]
+    [SerializeField]
+    private string summonId;
+
+    /// <summary>統計・ネットワークで用いる不変の召喚獣ID。</summary>
+    public string StableSummonId =>
+        string.IsNullOrWhiteSpace(summonId) ? name : summonId.Trim();
+
     [TextArea(2, 4)]
     public string description;
 

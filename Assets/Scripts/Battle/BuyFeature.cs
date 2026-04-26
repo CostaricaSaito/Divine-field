@@ -201,31 +201,46 @@ public class BuyFeature
     {
         if (targetBuyCard == null) return;
 
-        // 相手の手札から削除
-        if (cpuHand != null && cpuHand.Contains(targetBuyCard))
+        // 相手手札上の当該インスタンスを除き、同内容の新規 CardData をプレイヤー手札に追加（譲渡参照を残さない）
+        var released = targetBuyCard;
+        if (cpuHand != null && cpuHand.Contains(released))
         {
-            cpuHand.Remove(targetBuyCard);
-            Debug.Log($"[BuyFeature] 相手の手札から削除: {targetBuyCard.cardName}");
+            if (released.cardUI != null)
+            {
+                Object.Destroy(released.cardUI.gameObject);
+                released.cardUI = null;
+            }
+            cpuHand.Remove(released);
+            Debug.Log($"[BuyFeature] 相手の手札から削除: {released.cardName}");
         }
 
-        // 自分の手札に追加
+        if (cardDealer == null)
+        {
+            Debug.LogError("[BuyFeature] CardDealer が null のため購入を完了できません");
+            return;
+        }
+
+        var acquired = cardDealer.InstantiateCardFromTemplate(released);
+        if (acquired == null)
+        {
+            Debug.LogError("[BuyFeature] 購入カードの複製に失敗しました");
+            return;
+        }
+
         if (playerHand != null)
         {
-            playerHand.Add(targetBuyCard);
-            Debug.Log($"[BuyFeature] 自分の手札に追加: {targetBuyCard.cardName}");
+            playerHand.Add(acquired);
+            Debug.Log($"[BuyFeature] 自分の手札に追加（新規インスタンス）: {acquired.cardName}");
         }
 
-        // カードUIを生成（裏向きのまま）
-        if (cardDealer != null)
+        if (released is ScriptableObject soReleased)
+            Object.Destroy(soReleased);
+
+        var ui = cardDealer.CreateCardUIForHand(acquired);
+        if (ui != null)
         {
-            var ui = cardDealer.CreateCardUIForHand(targetBuyCard);
-            if (ui != null)
-            {
-                // 即座に表向きにする
-                ui.Reveal();
-                
-                CardDealAudio.Play(targetBuyCard, true);
-            }
+            ui.Reveal();
+            CardDealAudio.Play(acquired, true);
         }
     }
 

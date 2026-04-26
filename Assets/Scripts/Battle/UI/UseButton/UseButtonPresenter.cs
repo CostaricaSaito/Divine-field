@@ -9,7 +9,7 @@ using TMPro;
 /// 【主な責務】
 /// - 使用／許す／祈り／MP不足／魔法使用不可 のラベル切替と配色
 /// - 反射バウンス（虹色）・無効化（銀色）・大魔法詠唱（ピンク字＋紫→水色グラデ背景）スタイル
-/// - 防御フェーズ／反射連鎖／介入防御のラベル自動更新
+/// - 防御・反射連鎖等の自プレイヤー <see cref="SetUseButtonLabel"/>（相手用 <see cref="yurusuDisplay"/> は戦闘解決側のみ）
 /// - 攻撃選択中の MP／大魔法コストチェックに基づくラベル＆操作可否
 ///
 /// Inspector 参照はこのコンポーネントにバインドする（BattleUIManager 側からは廃止済）。
@@ -20,7 +20,7 @@ public class UseButtonPresenter : MonoBehaviour
 
     [Header("UseButton / 許す表示")]
     [SerializeField] private Button useButton;
-    [Tooltip("許す表示（四角オブジェクト・非インタラクティブ）")]
+    [Tooltip("相手が防御0枚で解決中のみ。自プレイヤー防御は使用ボタンラベルのみで表現（このオブジェクトは使わない）")]
     [SerializeField] private GameObject yurusuDisplay;
     [SerializeField] private TMP_Text useButtonLabelTMP;
     [SerializeField] private Text useButtonLabelUGUI;
@@ -149,8 +149,16 @@ public class UseButtonPresenter : MonoBehaviour
         bool defenseUi = bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player;
         bool interventionDefense = bm.CurrentState == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive();
         bool reflectionChainWait = bm.IsReflectionChainDefensePending();
-        if (!defenseUi && !interventionDefense && !reflectionChainWait)
+        bool parryRerunWait = bm.IsParryRerunDefensePending();
+        bool dualBladeSecondDefense = bm.CurrentState == GameState.CombatResolvePhase
+            && bm.IsPlayerDualBladeSecondDefenseWaitActive()
+            && bm.DefenderPublic == PlayerType.Player;
+        if (!defenseUi && !interventionDefense && !reflectionChainWait && !dualBladeSecondDefense
+            && !parryRerunWait)
             return;
+
+        if (BattleUIManager.I != null)
+            BattleUIManager.I.HideYurusuButton();
 
         var selectedDefenseCards = BattleUIManager.I != null
             ? BattleUIManager.I.GetSelectedDefenseCards()
@@ -163,6 +171,10 @@ public class UseButtonPresenter : MonoBehaviour
             incomingAttack = bm.GetInterventionDefenseAttackSnapshot() ?? bm.GetAttackCardsForCombatPublic();
         else if (reflectionChainWait)
             incomingAttack = bm.GetReflectionChainAttackSnapshot();
+        else if (parryRerunWait)
+            incomingAttack = bm.GetAttackCardsForCombatPublic();
+        else if (dualBladeSecondDefense)
+            incomingAttack = bm.GetAttackCardsForCombatPublic();
 
         bool showBounce = incomingAttack != null && incomingAttack.Count > 0
             && selectedDefenseCards.Count == 1

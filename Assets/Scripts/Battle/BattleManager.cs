@@ -251,6 +251,9 @@ public class BattleManager : MonoBehaviour
     /// <summary>敵の双剣デュアリズム：プレイヤー防御1回目解決直後=0、2回目の防御入力待ち中=1。</summary>
     private int _playerDefenseVsEnemyDualBladeStreakIndex;
 
+    /// <summary>敵攻撃＋双剣：2回目の「許す／使用」入力待ち中（<see cref="GameState.CombatResolvePhase"/> かつ専用インデックス）。</summary>
+    public bool IsPlayerDualBladeSecondDefenseWaitActive() => _playerDefenseVsEnemyDualBladeStreakIndex == 1;
+
     /// <summary>
     /// 敵攻撃＋双剣デュアリズム：1回目の解決の共有後処理の前に呼ぶ。2回目の防御選択へ回すとき true（後処理をスキップ）。
     /// </summary>
@@ -281,38 +284,47 @@ public class BattleManager : MonoBehaviour
 
     private async Task BeginPlayerDualBladeSecondDefenseEntryAsync(CancellationToken cancellationToken = default)
     {
-        if (cancellationToken.IsCancellationRequested) return;
-
-        BattleUIManager.I?.HideAllCardDetails();
-        cardStatsDisplay?.ClearSequenceCards();
-        cardStatsDisplay?.UpdateDisplay();
-
-        await Task.Delay(300, cancellationToken);
-        if (cancellationToken.IsCancellationRequested) return;
-
-        if (currentAttackCard != null)
+        // 1本目の「使用」で isProcessingUseButton だけが真のまま残る（本メソッドが走る前に
+        // SetGameState せず戻るための TryPrepare 早期 return）。2回目の「許す／使用」を受け付けられるよう必ず解除する。
+        try
         {
-            BattleUIManager.I?.ShowCardSheetVisualOnly(currentAttackCard, Side.Enemy);
-            cardStatsDisplay?.SetSequenceCards(
-                new List<CardData> { currentAttackCard },
-                "攻撃",
-                Side.Enemy);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            BattleUIManager.I?.HideAllCardDetails();
+            cardStatsDisplay?.ClearSequenceCards();
             cardStatsDisplay?.UpdateDisplay();
-            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+            await Task.Delay(300, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            if (currentAttackCard != null)
+            {
+                BattleUIManager.I?.ShowCardSheetVisualOnly(currentAttackCard, Side.Enemy);
+                cardStatsDisplay?.SetSequenceCards(
+                    new List<CardData> { currentAttackCard },
+                    "攻撃",
+                    Side.Enemy);
+                cardStatsDisplay?.UpdateDisplay();
+                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            }
+
+            await Task.Delay(500, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+            Debug.Log("[BattleManager] 双剣デュアリズム: 2回目の防御選択");
+            BattleUIManager.I?.SyncRestraintHeavyOverlay();
+
+            selectedDefenseCard = null;
+            BattleUIManager.I?.SetHandClickable(true);
+            BattleUIManager.I?.SetUseButtonLabel("許す");
+            RefreshPlayerDefensePhaseInteractivity();
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         }
-
-        await Task.Delay(500, cancellationToken);
-        if (cancellationToken.IsCancellationRequested) return;
-
-        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
-        Debug.Log("[BattleManager] 双剣デュアリズム: 2回目の防御選択");
-        BattleUIManager.I?.SyncRestraintHeavyOverlay();
-
-        selectedDefenseCard = null;
-        BattleUIManager.I?.SetHandClickable(true);
-        BattleUIManager.I?.SetUseButtonLabel("許す");
-        RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        finally
+        {
+            isProcessingUseButton = false;
+        }
     }
 
     /// <summary>
@@ -355,12 +367,16 @@ public class BattleManager : MonoBehaviour
             && IsInterventionDefenseWaitActive()
             && Defender == PlayerType.Player
             && CardRules.IsUsableInDefensePhase(card);
+        bool fromDualBladeSecond = CurrentState == GameState.CombatResolvePhase
+            && IsPlayerDualBladeSecondDefenseWaitActive()
+            && Defender == PlayerType.Player
+            && CardRules.IsUsableInDefensePhase(card);
         bool fromReflectionChain = IsReflectionChainDefensePending()
             && CardRules.IsUsableInDefensePhase(card);
         bool fromParryRerun = IsParryRerunDefensePending()
             && CardRules.IsUsableInDefensePhase(card);
 
-        if (!fromAttack && !fromDefense && !fromIntervention && !fromReflectionChain && !fromParryRerun)
+        if (!fromAttack && !fromDefense && !fromIntervention && !fromDualBladeSecond && !fromReflectionChain && !fromParryRerun)
         {
             Debug.Log($"[BattleManager] MagicPanel カード選択不可: 現在のState={CurrentState}");
             return;
@@ -388,6 +404,13 @@ public class BattleManager : MonoBehaviour
     /// <summary>反射 TOTAL の加護表示用。跳ね返されたダメージの受け手側視点の抑制（リヴァイアサン等）。</summary>
     private PlayerStatus _reflectionAtkBlessDefender;
     private readonly List<CardData> _reflectionAtkCardsForTotalDisplay = new();
+    /// <summary>宝玉反撃のように <see cref="_reflectionAtkCardsForTotalDisplay"/> のカード合計が 0 だが、実ダメ B 等から算出した数値を TOTAL に出す場合。</summary>
+    private int? _reflectionAtkDisplayStrengthOverride;
+    /// <summary>
+    /// 宝玉反撃中：敵が元攻撃者のまま <see cref="GetCurrentAttackCard"/> も生きるため、敵パネル TOTAL の古いATK行を出さない。
+    /// 戦闘行の <see cref="currentAttackCard"/> クリア時に戻す。
+    /// </summary>
+    private bool _suppressEnemyStaleAttackerInTotalByOrb;
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
     private bool isProcessingUseButton;
@@ -445,9 +468,6 @@ public class BattleManager : MonoBehaviour
     public PlayerStatus GetPlayerStatus() => playerStatus;
     public PlayerStatus GetEnemyStatus() => enemyStatus;
 
-    /// <summary>
-    /// 防御フェーズ・プレイヤー防御側の手札グレーアウト（拘束時は選択済み1枚のみ）と「体が重い」オーバーレイを更新。
-    /// </summary>
     /// <summary>CombatResolvePhase 中、敵介入のプレイヤー防御入力待ちか。</summary>
     public bool IsInterventionDefenseWaitActive()
     {
@@ -464,7 +484,6 @@ public class BattleManager : MonoBehaviour
 
         RefreshPlayerDefensePhaseInteractivity();
         BattleUIManager.I?.SetHandClickable(true);
-        BattleUIManager.I?.UpdateDefenseButtonLabel();
     }
 
     public async Task WaitForInterventionPlayerDefenseSubmitAsync(CancellationToken ct)
@@ -504,21 +523,46 @@ public class BattleManager : MonoBehaviour
         isProcessingUseButton = false;
     }
 
+    /// <summary>
+    /// 防御フェーズ等でプレイヤーが防御側のとき、手札グレーアウト（拘束時は選択済み1枚のみ）と「体が重い」オーバーレイを更新。
+    /// </summary>
     public void RefreshPlayerDefensePhaseInteractivity()
     {
         bool interventionDefense = CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive();
+        bool dualBladeSecondDefense = CurrentState == GameState.CombatResolvePhase
+            && IsPlayerDualBladeSecondDefenseWaitActive();
+        bool reflectionChainWait = IsReflectionChainDefensePending();
+        bool parryRerunWait = IsParryRerunDefensePending();
 
-        if (!(CurrentState == GameState.DefensePhase && Defender == PlayerType.Player) && !interventionDefense)
+        if (!(CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
+            && !interventionDefense
+            && !dualBladeSecondDefense
+            && !reflectionChainWait
+            && !parryRerunWait)
             return;
         if (BattleUIManager.I == null) return;
 
         List<CardData> attackSource;
         if (interventionDefense && _interventionAttackForDefenseUi != null)
             attackSource = _interventionAttackForDefenseUi;
-        else if (CurrentState == GameState.DefensePhase)
+        else if (reflectionChainWait)
+        {
+            if (_reflectionChainAttackSnapshot == null || _reflectionChainAttackSnapshot.Count == 0)
+            {
+                BattleUIManager.I?.UpdateDefenseButtonLabel();
+                return;
+            }
+            attackSource = _reflectionChainAttackSnapshot;
+        }
+        else if (parryRerunWait)
+            attackSource = GetAttackCardsForCombat();
+        else if (CurrentState == GameState.DefensePhase || dualBladeSecondDefense)
             attackSource = GetAttackCardsForCombat();
         else
+        {
+            BattleUIManager.I?.UpdateDefenseButtonLabel();
             return;
+        }
 
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackSource))
         {
@@ -530,6 +574,7 @@ public class BattleManager : MonoBehaviour
                 playerStatus != null && playerStatus.HasRestraintEffect());
             BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoicesRestricted);
             BattleUIManager.I.UpdateDefenseButtonLabel();
+            RefreshPlayerHandStatusTextForDefenseSnapshot();
             return;
         }
 
@@ -589,6 +634,18 @@ public class BattleManager : MonoBehaviour
 
         BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
         BattleUIManager.I.UpdateDefenseButtonLabel();
+        RefreshPlayerHandStatusTextForDefenseSnapshot();
+    }
+
+    /// <summary>全プレイヤー手札の Card Status Text を再適用。手札操作可否は <see cref="BattleUIManager.IsHandInputBlocked"/> を参照（REFLECT 等の切替）。</summary>
+    public void RefreshPlayerHandStatusTextForDefenseSnapshot()
+    {
+        if (playerHand == null) return;
+        foreach (var c in playerHand)
+        {
+            if (c?.cardUI == null) continue;
+            c.cardUI.RefreshHandStatusText();
+        }
     }
 
     /// <summary>連鎖反射でプレイヤーが再防御を選ぶまで待つ（許す＝空リスト）。</summary>
@@ -616,7 +673,6 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.SetUseButtonInteractable(true);
         BattleUIManager.I?.SetUseButtonLabel("許す");
         RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.UpdateDefenseButtonLabel();
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
         try
@@ -710,6 +766,7 @@ public class BattleManager : MonoBehaviour
         ClearSelectedCards();
         ClearStatsDisplaySequenceCards();
         RefreshReflectionChainInteractivity(attackSnapshot);
+        RefreshPlayerDefensePhaseInteractivity();
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
 
         try
@@ -728,6 +785,7 @@ public class BattleManager : MonoBehaviour
             _reflectionChainAttackSnapshot = null;
             _reflectionChainDefenseTcs = null;
             BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.HideYurusuButton();
         }
     }
 
@@ -752,6 +810,7 @@ public class BattleManager : MonoBehaviour
                 playerStatus != null && playerStatus.HasRestraintEffect());
             BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoicesR);
             BattleUIManager.I.UpdateDefenseButtonLabel();
+            RefreshPlayerHandStatusTextForDefenseSnapshot();
             return;
         }
 
@@ -811,6 +870,7 @@ public class BattleManager : MonoBehaviour
 
         BattleUIManager.I.RefreshDefenseInteractivity(playerHand, defenseChoices);
         BattleUIManager.I.UpdateDefenseButtonLabel();
+        RefreshPlayerHandStatusTextForDefenseSnapshot();
     }
 
     /// <summary>
@@ -830,6 +890,10 @@ public class BattleManager : MonoBehaviour
                 return null;
             return new List<CardData>(_interventionAttackForDefenseUi);
         }
+
+        if (CurrentState == GameState.CombatResolvePhase && IsPlayerDualBladeSecondDefenseWaitActive()
+            && DefenderPublic == PlayerType.Player)
+            return GetAttackCardsForCombat();
 
         if ((CurrentState == GameState.DefensePhase || CurrentState == GameState.DefenseConfirmPhase)
             && DefenderPublic == PlayerType.Player)
@@ -970,7 +1034,12 @@ public class BattleManager : MonoBehaviour
     //================ 状態遷移 ================
     public void SetGameState(GameState newState)
     {
-        if (CurrentState == newState) { Debug.Log($"[State] noop {newState}"); return; }
+        if (CurrentState == newState)
+        {
+            isProcessingUseButton = false;
+            Debug.Log($"[State] noop {newState}");
+            return;
+        }
 
         // ゲーム終了済みの場合、BattleEndPhase 以外への遷移は無視する（後続処理による逆戻りを防ぐ）
         if (_gameEndTriggered && newState != GameState.BattleEndPhase)
@@ -1121,6 +1190,7 @@ public class BattleManager : MonoBehaviour
 
         BattleUIManager.I?.HideAllCardDetails();
         currentAttackCard = null;
+        SetSuppressEnemyStaleAttackerInTotalByOrb(false);
         cardStatsDisplay?.UpdateDisplay();
 
         // StandBy 時点ではグレーアウトしない
@@ -1390,6 +1460,7 @@ public class BattleManager : MonoBehaviour
 
             cardStatsDisplay?.ClearSequenceCards();
             currentAttackCard = null;
+            SetSuppressEnemyStaleAttackerInTotalByOrb(false);
             cardStatsDisplay?.UpdateDisplay();
             SetGameState(GameState.CombatResolvePhase);
         }
@@ -1727,7 +1798,6 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             UpdateTotalATKDEFDisplay();
-            BattleUIManager.I?.UpdateDefenseButtonLabel();
             return;
         }
 
@@ -1765,8 +1835,6 @@ public class BattleManager : MonoBehaviour
             // カード選択音を再生
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             UpdateTotalATKDEFDisplay();
-            // 防御フェーズのボタンラベルを更新
-            BattleUIManager.I?.UpdateDefenseButtonLabel();
             return;
         }
 
@@ -1781,7 +1849,22 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.ShowCardDetail(card, Side.Player);
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             UpdateTotalATKDEFDisplay();
-            BattleUIManager.I?.UpdateDefenseButtonLabel();
+            return;
+        }
+
+        if (CurrentState == GameState.CombatResolvePhase
+            && IsPlayerDualBladeSecondDefenseWaitActive()
+            && Defender == PlayerType.Player)
+        {
+            if (!CardRules.IsUsableInDefensePhase(card))
+            {
+                Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
+                return;
+            }
+            selectedDefenseCard = card;
+            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            UpdateTotalATKDEFDisplay();
             return;
         }
 
@@ -1822,6 +1905,8 @@ public class BattleManager : MonoBehaviour
             case GameState.CombatResolvePhase:
                 if (IsInterventionDefenseWaitActive())
                     TrySubmitInterventionPlayerDefense();
+                else if (IsPlayerDualBladeSecondDefenseWaitActive() && Defender == PlayerType.Player)
+                    HandleDefenseUse();
                 else
                 {
                     isProcessingUseButton = false;
@@ -1954,6 +2039,17 @@ public class BattleManager : MonoBehaviour
 
         if (useMagicPanel)
         {
+            if (!fromMagicPanel && MagicPoolManager.I != null
+                && !MagicPoolManager.I.CanAddToPool(card, PlayerType.Player))
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                    "マジックパネルに空きがありません", new Color(0.95f, 0.25f, 0.2f));
+                isProcessingUseButton = false;
+                BattleUIManager.I?.SetHandClickable(true);
+                BattleUIManager.I?.SetUseButtonInteractable(true);
+                return;
+            }
+
             if (playerStatus != null && card.mpCost > 0)
             {
                 int pay = playerStatus.GetEffectiveMagicMpCost(card.mpCost);
@@ -2210,8 +2306,6 @@ public class BattleManager : MonoBehaviour
     {
         if (Attacker == PlayerType.Player)
         {
-            Debug.Log("[BattleManager] プレイヤーの攻撃カードを取得中...");
-            
             var uiAttackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
             if (uiAttackCards.Count == 0 && currentAttackCard != null)
             {
@@ -2221,7 +2315,6 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            Debug.Log($"[BattleManager] 敵の攻撃カード: {currentAttackCard?.cardName ?? "なし"}");
             return new List<CardData> { currentAttackCard };
         }
     }
@@ -2384,7 +2477,6 @@ public class BattleManager : MonoBehaviour
             {
                 BattleUIManager.I?.SetHandClickable(true);
                 RefreshPlayerDefensePhaseInteractivity();
-                BattleUIManager.I?.UpdateDefenseButtonLabel();
                 BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
             }
         }
@@ -2464,6 +2556,20 @@ public class BattleManager : MonoBehaviour
     {
         cardStatsDisplay?.UpdateDisplay();
         BattleUIManager.I?.RefreshUseButtonForMpAndSelection();
+        if (ShouldUpdatePlayerDefenseUseButtonWithTotal())
+            BattleUIManager.I?.UpdateDefenseButtonLabel();
+    }
+
+    /// <summary>TotalATKDEF 更新時、自プレイヤー防御中なら UseButton ラベルも同じタイミングで合わせる。</summary>
+    private bool ShouldUpdatePlayerDefenseUseButtonWithTotal()
+    {
+        bool defenseUi = CurrentState == GameState.DefensePhase && Defender == PlayerType.Player;
+        bool interventionDefense = CurrentState == GameState.CombatResolvePhase
+            && IsInterventionDefenseWaitActive() && Defender == PlayerType.Player;
+        bool dualBladeSecondDefense = CurrentState == GameState.CombatResolvePhase
+            && IsPlayerDualBladeSecondDefenseWaitActive() && Defender == PlayerType.Player;
+        return defenseUi || interventionDefense || dualBladeSecondDefense
+            || IsReflectionChainDefensePending() || IsParryRerunDefensePending();
     }
 
     /// <summary>反射連鎖など <see cref="CardSequenceManager"/> 外のカード表示に、TotalATKDEF を同期させる。</summary>
@@ -2488,8 +2594,10 @@ public class BattleManager : MonoBehaviour
         List<CardData> attackCards,
         bool totalAtkOnPlayerSide,
         PlayerStatus reflectionBlessingsAttacker,
-        PlayerStatus reflectionBlessingsDefender)
+        PlayerStatus reflectionBlessingsDefender,
+        int? displayStrengthOverride = null)
     {
+        _reflectionAtkDisplayStrengthOverride = displayStrengthOverride;
         _reflectionAtkCardsForTotalDisplay.Clear();
         if (attackCards != null)
             _reflectionAtkCardsForTotalDisplay.AddRange(attackCards);
@@ -2507,8 +2615,16 @@ public class BattleManager : MonoBehaviour
         _reflectionAtkCardsForTotalDisplay.Clear();
         _reflectionAtkBlessAttacker = null;
         _reflectionAtkBlessDefender = null;
+        _reflectionAtkDisplayStrengthOverride = null;
         UpdateTotalATKDEFDisplay();
     }
+
+    /// <summary>反射／宝玉反撃用 TOTAL の数値。宝玉はカード表記上 ATK0 のため、実際の反撃力を返す。</summary>
+    public int? GetReflectionAttackDisplayStrengthOverride() => _reflectionAtkDisplayStrengthOverride;
+
+    public bool IsSuppressingEnemyStaleAttackerInTotalByOrb() => _suppressEnemyStaleAttackerInTotalByOrb;
+
+    public void SetSuppressEnemyStaleAttackerInTotalByOrb(bool v) => _suppressEnemyStaleAttackerInTotalByOrb = v;
 
     public PlayerStatus GetReflectionAttackBlessingAttacker() => _reflectionAtkBlessAttacker;
 
@@ -2739,6 +2855,20 @@ public class BattleManager : MonoBehaviour
     /// ゲーム終了シーケンスが起動済みかどうか。以降の通常フロー（フェーズ遷移・演出）をスキップする判定に用いる。
     /// </summary>
     public bool IsGameEndTriggered => _gameEndTriggered;
+
+    /// <summary>宝玉臨時効果。第1段通過分を基準に、DefenseSelect 順で解決。</summary>
+    public async Task PresentOrbDefenseReactionsAsync(
+        BattleProcessor battleProcessor,
+        IReadOnlyList<CardData> orbs,
+        int firstPhaseDamageB,
+        PlayerStatus originalAttacker,
+        PlayerStatus originalDefender,
+        CancellationToken cancellationToken = default)
+    {
+        if (orbs == null || orbs.Count == 0 || battleProcessor == null) return;
+        await OrbDefenseReactionFlow.PresentReactionsAsync(
+            this, battleProcessor, orbs, firstPhaseDamageB, originalAttacker, originalDefender, cancellationToken);
+    }
 
     /// <summary>
     /// 各ダメージ適用点から呼ぶ共通チェック。HP0 のプレイヤーが居れば 200ms 待って「往生」ポップアップを出し、

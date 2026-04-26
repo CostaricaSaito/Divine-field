@@ -3,34 +3,27 @@
 /// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
 {
-    // �U���t�F�[�Y�Ŏg���邩
+    /// <summary>攻撃フェーズで使用できるか。</summary>
     public static bool IsUsableInAttackPhase(CardData c)
     {
         if (c == null) return false;
         if (c.cardType == CardType.Ultimate) return false;
         if (c.usableInAttackPhase) return true;
-        if (c.isPrimaryAttack || c.isAdditionalAttack || c.isCounterAttack) return true;
-        if (c.isRecovery) return true;        // �񕜂͍U���^�[��OK�̎d�l
-        if (c.clearsAllStatusAilmentsOnUse && c.cardType == CardType.Recovery) return true;
+        if (c.isCounterAttack) return true;
+        if (c.cardType == CardType.ArchMagic) return true;
+        if (c.isRecovery) return true;
+        if (c.cureAllStatusEffects && c.cardType == CardType.Recovery) return true;
+        if (c.cardType == CardType.Magic && !c.isRecovery)
+            return false;
+
         if (c.isSpecialEffect) return true;
 
-        switch (c.cardType)
-        {
-            case CardType.Defense: return false;
-            case CardType.Magic:
-                // Magic は通常どちらのフェーズもあり得るが、ブロッキング等で「攻撃フェーズ不可」にしたカードだけここで除外
-                if (c.blockingKind != BlockingKind.None && !c.usableInAttackPhase)
-                    return false;
-                return true;
-            case CardType.Attack:
-            case CardType.Recovery:
-            case CardType.Special: return true;
-            case CardType.Ultimate: return false;
-            default: return false;
-        }
+        return c.cardType == CardType.Attack
+            || c.cardType == CardType.Recovery
+            || c.cardType == CardType.Special;
     }
 
-    // �h��t�F�[�Y�Ŏg���邩
+    /// <summary>防御フェーズで使用できるか。</summary>
     public static bool IsUsableInDefensePhase(CardData c)
     {
         if (c == null) return false;
@@ -39,7 +32,6 @@ public static class CardRules
         return c.cardType == CardType.Defense;
     }
 
-    // �����s���i�h��t�F�[�Y�����܂Ȃ��j
     /// <summary>
     /// 防御フェーズを挟まず、使用後すぐ効果解決するカード（回復・②の状態異常単体カードなど）。
     /// </summary>
@@ -47,7 +39,7 @@ public static class CardRules
     {
         if (c == null) return false;
         if (c.cardType == CardType.Recovery || c.isRecovery) return true;
-        if (c.clearsAllStatusAilmentsOnUse
+        if (c.cureAllStatusEffects
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
             return true;
         if (c.cardType == CardType.Special && c.specialCardEffect != null) return true;
@@ -144,7 +136,26 @@ public static class CardRules
         return c.isRecovery;
     }
 
-    public static List<CardData> GetAttackChoices(List<CardData> hand) => hand.FindAll(IsUsableInAttackPhase);
+    /// <summary>
+    /// 攻撃フェーズの手札候補。マジックパネル登録済み（同一参照がプール内）は攻撃手札から除外し、
+    /// プールが3種で満杯かつ同種未登録の魔法も追加不可（<see cref="MagicPoolManager.CanAddToPool"/> に合わせる）。
+    /// </summary>
+    public static List<CardData> GetAttackChoices(List<CardData> hand, PlayerType handOwner = PlayerType.Player)
+    {
+        if (hand == null) return new List<CardData>();
+        return hand.FindAll(c => IsUsableInAttackPhaseForHandRespectingMagicPool(c, handOwner));
+    }
+
+    public static bool IsUsableInAttackPhaseForHandRespectingMagicPool(CardData c, PlayerType handOwner)
+    {
+        if (c == null) return false;
+        if (c.cardType == CardType.Magic && MagicPoolManager.I != null)
+        {
+            if (MagicPoolManager.I.IsInPool(c, handOwner)) return false;
+            if (!MagicPoolManager.I.CanAddToPool(c, handOwner)) return false;
+        }
+        return IsUsableInAttackPhase(c);
+    }
     public static List<CardData> GetDefenseChoices(List<CardData> hand) => hand.FindAll(IsUsableInDefensePhase);
 
     /// <summary>

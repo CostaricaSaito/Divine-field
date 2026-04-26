@@ -149,6 +149,9 @@ public class MagicPanelPresenter : MonoBehaviour
             || (bm.CurrentState == GameState.CombatResolvePhase
                 && bm.IsInterventionDefenseWaitActive()
                 && bm.DefenderPublic == PlayerType.Player)
+            || (bm.CurrentState == GameState.CombatResolvePhase
+                && bm.IsPlayerDualBladeSecondDefenseWaitActive()
+                && bm.DefenderPublic == PlayerType.Player)
             // 反射連鎖／パリィ再防御は GameState が攻撃フェーズのまま等の場合があり、通常の Defense 条件だけでは無効のままになる
             || bm.IsReflectionChainDefensePending()
             || bm.IsParryRerunDefensePending());

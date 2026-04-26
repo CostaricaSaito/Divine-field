@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using TMPro;
@@ -66,12 +66,6 @@ public class GameResultController : MonoBehaviour
     [SerializeField] private float resultValueCountDuration = 0.5f;
     [SerializeField] private float intervalBeforeNextRankValue = 0.2f;
     [SerializeField] private float nextRankCountDuration = 0.5f;
-
-    [Header("プレースホルダー RP（Inspector から調整可）")]
-    [Tooltip("Victory 時の basic/underdog/stylish/rpCost。未設定時はスクリプト既定値。")]
-    [SerializeField] private RpBundle victoryRp = new RpBundle { basic = 100, underdog = 0, stylish = 0, rpCost = -30 };
-    [SerializeField] private RpBundle defeatRp = new RpBundle { basic = 0, underdog = 0, stylish = 0, rpCost = -30 };
-    [SerializeField] private RpBundle stalemateRp = new RpBundle { basic = 0, underdog = 0, stylish = 0, rpCost = -30 };
 
     [Serializable]
     public struct RpBundle
@@ -179,28 +173,29 @@ public class GameResultController : MonoBehaviour
         SetTextIfPresent(nextRankValueText, string.Empty);
         if (nextRankSlider != null)
         {
-            // プレイヤーの「現在進捗」を Slider に反映（0..threshold）。
-            int threshold = GameProfile.I != null ? Mathf.Max(1, GameProfile.I.NextRankThresholdRP) : 1500;
-            int preRp = GameProfile.I != null ? GameProfile.I.PreBattleRP : 0;
             nextRankSlider.minValue = 0f;
             nextRankSlider.maxValue = 1f;
-            nextRankSlider.value = Mathf.Clamp01((float)preRp / threshold);
+            nextRankSlider.value = PlayerRank.GetProgressInCurrentTier01(ResolvePreBattleRpForResult());
         }
     }
 
     /// <summary>
-    /// 結果演出の本体。kind は勝敗、RP は Inspector のプレースホルダーを使用する。
+    /// 試合開始時点の RP。GameProfile が無い場合は永続プロファイルを参照（RecordMatchEnd に 0 を渡さないため）。
+    /// </summary>
+    private static int ResolvePreBattleRpForResult()
+    {
+        if (GameProfile.I != null)
+            return GameProfile.I.PreBattleRP;
+        PlayerProfileService.EnsureLoaded();
+        return Mathf.Max(0, PlayerProfileService.Data.currentRp);
+    }
+
+    /// <summary>
+    /// 結果演出の本体。RP 増減は <see cref="BattleResultRpRules"/>（プロファイル連動の既定値）。
     /// </summary>
     public async Task ShowAsync(ResultKind kind, CancellationToken ct = default)
     {
-        RpBundle rp = kind switch
-        {
-            ResultKind.Victory => victoryRp,
-            ResultKind.Defeat => defeatRp,
-            _ => stalemateRp,
-        };
-
-        await ShowAsync(kind, rp, ct);
+        await ShowAsync(kind, BattleResultRpRules.GetBundle(kind), ct);
     }
 
     /// <summary>
@@ -208,8 +203,12 @@ public class GameResultController : MonoBehaviour
     /// </summary>
     public async Task ShowAsync(ResultKind kind, RpBundle rp, CancellationToken ct)
     {
+        int preRpForResult = ResolvePreBattleRpForResult();
+        int totalPreview = rp.Total;
+        int newRpPreview = Mathf.Max(0, preRpForResult + totalPreview);
+
         ApplyHeaderTexts(kind);
-        ApplyProfileTexts();
+        ApplyProfileTexts(newRpPreview);
         ApplyRankIcons();
         EnsureResultBgmSource();
 
@@ -247,9 +246,9 @@ public class GameResultController : MonoBehaviour
         // 7. インターバル
         await DelaySeconds(intervalBeforeResultValue, ct);
 
-        // 8. ResultRPvalue：SE 秒数＝演出秒数
-        int preRp = GameProfile.I != null ? GameProfile.I.PreBattleRP : 0;
-        int newRp = preRp + total;
+        // 8. ResultRPvalue：試合前 CurrentRP から今回の増減を反映した値
+        int preRp = ResolvePreBattleRpForResult();
+        int newRp = Mathf.Max(0, preRp + total);
         AudioClip gaugeClip = await LoadAudioClipAddressAsync(seResultRpGaugeAddress, ct);
         float resultRpAnimSeconds = gaugeClip != null
             ? gaugeClip.length
@@ -269,12 +268,11 @@ public class GameResultController : MonoBehaviour
         // 9. インターバル
         await DelaySeconds(intervalBeforeNextRankValue, ct);
 
-        // 10. NextRankValue（残り値）＋ NextRankSlider を同期
-        int threshold = GameProfile.I != null ? Mathf.Max(1, GameProfile.I.NextRankThresholdRP) : Mathf.Max(1, newRp);
-        int fromRemain = Mathf.Max(0, threshold - preRp);
-        int toRemain = Mathf.Max(0, threshold - newRp);
-        float fromSlider = Mathf.Clamp01((float)preRp / threshold);
-        float toSlider = Mathf.Clamp01((float)newRp / threshold);
+        // 10. NextRankValue（次ランク帯までの残り RP）＋ 帯内進捗スライダー
+        int fromRemain = PlayerRank.GetRemainingRpToNextTier(preRp);
+        int toRemain = PlayerRank.GetRemainingRpToNextTier(newRp);
+        float fromSlider = PlayerRank.GetProgressInCurrentTier01(preRp);
+        float toSlider = PlayerRank.GetProgressInCurrentTier01(newRp);
 
         await CountUpWithSliderAsync(
             nextRankValueText,
@@ -286,13 +284,26 @@ public class GameResultController : MonoBehaviour
             nextRankCountDuration,
             ct);
 
+        if (nextRankValueText != null && PlayerRank.IsMaxRank(newRp))
+            nextRankValueText.text = "—";
+
         // 11. BackToMain を押せるようにする
         if (backToMainButton != null)
             backToMainButton.interactable = true;
 
-        // 12. プレースホルダー RP 反映
+        // 12. ランタイム RP と永続化（GameProfile が無い環境でも newRp を必ず保存）
         if (GameProfile.I != null)
-            GameProfile.I.ApplyBattleResult(total);
+            GameProfile.I.SetCurrentRpAfterBattleResult(newRp);
+
+        string summonId = "unknown";
+        if (SummonSelectionManager.I != null)
+        {
+            var sd = SummonSelectionManager.I.GetSelectedSummonData();
+            if (sd != null)
+                summonId = sd.StableSummonId;
+        }
+
+        PlayerProfileService.RecordMatchEnd(kind, summonId, newRp);
     }
 
     private async Task StartResultBgmForKindAsync(ResultKind kind, CancellationToken ct)
@@ -461,12 +472,18 @@ public class GameResultController : MonoBehaviour
         }
     }
 
-    private void ApplyProfileTexts()
+    /// <param name="rpForRankLabel">表示するランク算出用 RP（リザルトでは適用後の RP）。</param>
+    private void ApplyProfileTexts(int rpForRankLabel)
     {
         string name = (GameProfile.I != null) ? GameProfile.I.PlayerName : "プレイヤー";
-        string rank = (GameProfile.I != null) ? GameProfile.I.RankDisplayName : "Placeholder";
+        if (GameProfile.I == null)
+        {
+            PlayerProfileService.EnsureLoaded();
+            name = PlayerProfileService.Data.displayName;
+        }
+
         SetTextIfPresent(playerNameText, name);
-        SetTextIfPresent(playerRankText, rank);
+        SetTextIfPresent(playerRankText, PlayerRank.GetDisplayName(rpForRankLabel));
     }
 
     private void ApplyRankIcons()
@@ -527,7 +544,7 @@ public class GameResultController : MonoBehaviour
         float elapsed = 0f;
 
         if (target != null)
-            target.text = FormatNextRankRemain(fromRemain);
+            target.text = $"{Mathf.Max(0, fromRemain)} RP";
         if (slider != null)
         {
             slider.minValue = 0f;
@@ -542,14 +559,14 @@ public class GameResultController : MonoBehaviour
             float t = Mathf.Clamp01(elapsed / dur);
             int remain = Mathf.RoundToInt(Mathf.Lerp(fromRemain, toRemain, t));
             if (target != null)
-                target.text = FormatNextRankRemain(remain);
+                target.text = $"{Mathf.Max(0, remain)} RP";
             if (slider != null)
                 slider.value = Mathf.Lerp(fromSlider, toSlider, t);
             await Task.Yield();
         }
 
         if (target != null)
-            target.text = FormatNextRankRemain(toRemain);
+            target.text = $"{Mathf.Max(0, toRemain)} RP";
         if (slider != null)
             slider.value = toSlider;
     }
@@ -558,11 +575,6 @@ public class GameResultController : MonoBehaviour
     {
         if (!formatSigned) return value.ToString();
         return value > 0 ? $"+{value}" : value.ToString();
-    }
-
-    private static string FormatNextRankRemain(int remain)
-    {
-        return $"{remain} RP";
     }
 
     private static Task DelaySeconds(float seconds, CancellationToken ct)

@@ -1,19 +1,29 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 public class CardUI : MonoBehaviour
 {
-    public Image cardImage;          // カード UIのImage（Inspectorでセット）
-    public TMP_Text cardNameText;    // カード名表示
-    public Button button;            // ボタンクリック用
-    public Image highlightBorder;    // ハイライト用の青色枠
+    public Image cardImage;
+    [Header("手札用ステータス表示（ATK/DEF・属性・特殊性）")]
+    [SerializeField] private TMP_Text cardStatusText;
+    public Button button;
+    public Image highlightBorder;
 
     [Header("レア演出（任意・手札裏面のみ）")]
     [Tooltip("未設定時は実行時に CardImage と同レイアウトで生成します。")]
     [SerializeField] private Image rareBackRainbowOverlay;
     [Tooltip("RainbowOutline の不透明度。大きいほど虹がはっきり見えます。")]
     [Range(0.1f, 1f)] [SerializeField] private float rareRainbowIntensity = 0.65f;
+
+    private const float AtkDefOutlineWidth = 0.2f;
+    private const float HealOutlineWidth = 0.2f;
+    private static readonly Color HealTextColor = Color.green;
+    private static readonly Color HealOutlineColor = Color.white;
+    private static readonly Color AtkDefNoneElementFillColor = Color.black;
+    private static readonly Color AtkDefNoneElementOutlineColor = Color.white;
+    private static readonly Color AtkDefOutlineColor = Color.black;
 
     private CardData cardData;
     private Sprite backSprite;
@@ -28,17 +38,15 @@ public class CardUI : MonoBehaviour
         isFaceUp = false;
         this.playerHandRareBackPresentation = playerHandRareBackPresentation;
 
-        ShowBack();                  // 裏面を表示
+        ShowBack();
         if (button) button.interactable = false;
 
-        // クリック登録をリセット
         if (button)
         {
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(OnClick);  // クリックイベント
+            button.onClick.AddListener(OnClick);
         }
-        
-        // ハイライトを初期化
+
         SetHighlight(false);
     }
 
@@ -52,14 +60,18 @@ public class CardUI : MonoBehaviour
         if (cardData == null) return;
 
         if (cardImage) cardImage.sprite = cardData.cardImage;
-        if (cardNameText) cardNameText.text = cardData.cardName;
+        CardHandStatusText.Apply(cardStatusText, cardData, CardHandStatusText.GetIncomingSnapshotForReactiveHandLabelOrNull());
         if (button) button.interactable = true;
     }
 
     private void ShowBack()
     {
         if (cardImage) cardImage.sprite = backSprite;
-        if (cardNameText) cardNameText.text = "";
+        if (cardStatusText)
+        {
+            cardStatusText.text = "";
+            cardStatusText.richText = false;
+        }
 
         UpdateRareBackOverlayForCurrentState();
     }
@@ -147,8 +159,6 @@ public class CardUI : MonoBehaviour
     {
         if (!button || !button.interactable || cardData == null) return;
 
-        // カード選択処理（CardData ではなく CardUI を渡す）
-        //   BattleManager の新しい API に合わせる
         if (BattleManager.I != null)
         {
             BattleManager.I.SetSelectedCard(this);
@@ -160,11 +170,7 @@ public class CardUI : MonoBehaviour
     }
 
     public CardData GetCardData() => cardData;
-    
-    /// <summary>
-    /// ハイライト表示を設定
-    /// </summary>
-    /// <param name="highlight">ハイライトするかどうか</param>
+
     public void SetHighlight(bool highlight)
     {
         isHighlighted = highlight;
@@ -173,14 +179,214 @@ public class CardUI : MonoBehaviour
             highlightBorder.gameObject.SetActive(highlight);
         }
     }
-    
-    /// <summary>
-    /// 現在ハイライトされているかどうか
-    /// </summary>
+
     public bool IsHighlighted => isHighlighted;
 
-    /// <summary>
-    /// カードが裏向きかどうか
-    /// </summary>
     public bool IsFaceDown() => !isFaceUp;
+
+    /// <summary>被攻撃スナップショットが変わったあと、表向き手札のステータス文字を再適用する（防御フェーズ等）。</summary>
+    public void RefreshHandStatusText()
+    {
+        if (cardData == null || !isFaceUp || cardStatusText == null) return;
+        CardHandStatusText.Apply(cardStatusText, cardData, CardHandStatusText.GetIncomingSnapshotForReactiveHandLabelOrNull());
+    }
+
+    /// <summary>手札カード 1 枚の <see cref="cardStatusText"/> 文言・色。プレハブ差し替え用に静的でも利用可。</summary>
+    public static class CardHandStatusText
+    {
+        /// <summary>
+        /// 防御選択で手札操作可能（<see cref="BattleUIManager.IsHandInputBlocked"/> が false）なときだけ被攻撃スナップを返す。
+        /// 演出待ち・SE 前・ポップアップ中は null（DEF/ATK 等の通常表記）。
+        /// </summary>
+        public static IReadOnlyList<CardData> GetIncomingSnapshotForReactiveHandLabelOrNull()
+        {
+            if (BattleUIManager.I != null && BattleUIManager.I.IsHandInputBlocked) return null;
+            return BattleManager.I != null ? BattleManager.I.GetIncomingAttackSnapshotForDefenseUi() : null;
+        }
+
+        /// <param name="incomingForDefenseReactive">
+        /// 反応系ラベル用。原則 <see cref="GetIncomingSnapshotForReactiveHandLabelOrNull"/>。手渡し null なら常に通常表記。
+        /// </param>
+        public static void Apply(
+            TMP_Text text,
+            CardData c,
+            IReadOnlyList<CardData> incomingForDefenseReactive = null)
+        {
+            if (text == null) return;
+            if (c == null)
+            {
+                text.text = "";
+                return;
+            }
+
+            text.richText = false;
+            if (IsRecoveryByCardData(c))
+            {
+                text.text = BuildRecoveryLabel(c);
+                SetHealTextStyle(text);
+                return;
+            }
+
+            if (TryGetDefenseReactiveHandLabel(c, incomingForDefenseReactive, out string spec))
+            {
+                text.text = spec;
+                SetAtkDefTextStyle(text, c.element);
+                return;
+            }
+
+            switch (c.cardType)
+            {
+                case CardType.Attack:
+                    text.text = BuildAttackTypeLabel(c);
+                    SetAtkDefTextStyle(text, c.element);
+                    return;
+                case CardType.Defense:
+                    text.text = $"DEF{c.defensePower}";
+                    SetAtkDefTextStyle(text, c.element);
+                    return;
+                case CardType.Magic:
+                case CardType.ArchMagic:
+                    text.text = BuildMagicOrArchLabel(c);
+                    SetAtkDefTextStyle(text, c.element);
+                    return;
+                case CardType.Recovery:
+                    text.text = "SPECIAL";
+                    SetAtkDefTextStyle(text, c.element);
+                    return;
+                default:
+                    text.text = "SPECIAL";
+                    SetAtkDefTextStyle(text, c.element);
+                    return;
+            }
+        }
+
+        public static bool IsRecoveryByCardData(CardData c)
+        {
+            if (c == null) return false;
+            if (c.cardType == CardType.Recovery) return true;
+            if (c.cardType == CardType.Magic || c.cardType == CardType.ArchMagic)
+            {
+                return c.healsHP || c.healsMP || c.healsGP || c.isRecovery
+                       || c.cureAllStatusEffects;
+            }
+            return false;
+        }
+
+        private static string BuildRecoveryLabel(CardData c)
+        {
+            if (c.cureAllStatusEffects) return "CURE";
+
+            int nHealKinds = (c.healsHP ? 1 : 0) + (c.healsMP ? 1 : 0) + (c.healsGP ? 1 : 0);
+            if (nHealKinds >= 2) return $"HP+{c.recoveryAmount}";
+            if (c.healsHP) return $"HP+{c.recoveryAmount}";
+            if (c.healsMP) return $"MP+{c.recoveryAmount}";
+            if (c.healsGP) return $"GP+{c.recoveryAmount}";
+            return "SPECIAL";
+        }
+
+        /// <summary>被攻撃に合う反応系だけ REFLECT / PARRY / BLOCKING。防御 <see cref="CardType.Magic"/>（アイアンクラッド等）も含む。</summary>
+        private static bool TryGetDefenseReactiveHandLabel(
+            CardData c,
+            IReadOnlyList<CardData> incoming,
+            out string label)
+        {
+            label = null;
+            if (c == null) return false;
+            if (c.cardType != CardType.Defense
+                && c.cardType != CardType.Attack
+                && c.cardType != CardType.Magic)
+            {
+                return false;
+            }
+            if (c.cardType == CardType.Magic)
+            {
+                if (c.isRecovery || c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects) return false;
+                if (c.attackPower > 0 && c.usableInAttackPhase) return false;
+                if (c.reflectionKind == ReflectionKind.None
+                    && c.parryKind == ParryKind.None
+                    && c.blockingKind == BlockingKind.None)
+                {
+                    return false;
+                }
+            }
+            if (incoming == null || incoming.Count == 0) return false;
+
+            if (c.reflectionKind != ReflectionKind.None)
+            {
+                if (ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, incoming)
+                    || ReflectionRules.CanUseMagicReflectionAgainstAttack(c, incoming))
+                {
+                    label = "REFLECT";
+                    return true;
+                }
+                return false;
+            }
+            if (c.parryKind != ParryKind.None)
+            {
+                if (ParryRules.CanParryIncoming(c, incoming))
+                {
+                    label = "PARRY";
+                    return true;
+                }
+                return false;
+            }
+            if (c.blockingKind != BlockingKind.None)
+            {
+                if (BlockingRules.RequiresBlockingExclusiveLock(c, incoming))
+                {
+                    label = "BLOCKING";
+                    return true;
+                }
+                return false;
+            }
+            return false;
+        }
+
+        private static string BuildAttackTypeLabel(CardData c)
+        {
+            if (c.attackPower == 0 && c.defensePower == 0) return "SPECIAL";
+            if (WantsAtkPlusNotation(c)) return $"ATK+{c.attackPower}";
+            return $"ATK{c.attackPower}";
+        }
+
+        private static string BuildMagicOrArchLabel(CardData c)
+        {
+            if (c.attackPower == 0 && c.defensePower == 0) return "SPECIAL";
+            if (c.attackPower == 0 && c.defensePower > 0) return "SPECIAL";
+            if (c.attackPower > 0)
+                return WantsAtkPlusNotation(c) ? $"ATK+{c.attackPower}" : $"ATK{c.attackPower}";
+            return "SPECIAL";
+        }
+
+        private static bool WantsAtkPlusNotation(CardData c)
+        {
+            if (c == null) return false;
+            if (c.attackPhaseUseRule == AttackPhaseUseRule.Flexible) return true;
+            if (c.attackPhaseUseRule == AttackPhaseUseRule.AddOn)
+                return c.attackPower > 0;
+            return false;
+        }
+
+        private static void SetAtkDefTextStyle(TMP_Text tmp, ElementType element)
+        {
+            if (element == ElementType.None)
+            {
+                tmp.color = AtkDefNoneElementFillColor;
+                tmp.outlineColor = AtkDefNoneElementOutlineColor;
+            }
+            else
+            {
+                tmp.color = ElementHelper.GetElementColor(element);
+                tmp.outlineColor = AtkDefOutlineColor;
+            }
+            tmp.outlineWidth = AtkDefOutlineWidth;
+        }
+
+        private static void SetHealTextStyle(TMP_Text tmp)
+        {
+            tmp.color = HealTextColor;
+            tmp.outlineColor = HealOutlineColor;
+            tmp.outlineWidth = HealOutlineWidth;
+        }
+    }
 }

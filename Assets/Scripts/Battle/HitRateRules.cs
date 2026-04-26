@@ -10,7 +10,7 @@ public static class HitRateRules
     public const int SmokeAccuracyPenalty = 25;
 
     /// <summary>
-    /// Primary の攻撃カードを解決（isPrimaryAttack 優先、なければリスト先頭）。
+    /// 命中率の主対象: AddOn 以外の先頭（Primary / Flexible / Standalone 等）。無ければ先頭。
     /// </summary>
     public static CardData GetPrimaryForHitRate(IReadOnlyList<CardData> attackCards)
     {
@@ -18,7 +18,7 @@ public static class HitRateRules
         for (int i = 0; i < attackCards.Count; i++)
         {
             var c = attackCards[i];
-            if (c != null && c.isPrimaryAttack) return c;
+            if (c != null && c.attackPhaseUseRule != AttackPhaseUseRule.AddOn) return c;
         }
         return attackCards[0];
     }

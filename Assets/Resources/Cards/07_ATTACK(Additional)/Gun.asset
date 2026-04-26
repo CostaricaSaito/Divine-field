@@ -18,25 +18,42 @@ MonoBehaviour:
   description: "9mm\u30D1\u30E9\u30D9\u30E9\u30E0"
   attackPower: 3
   defensePower: 0
+  cardValue: 5
   element: 0
   hitRate: 100
   mpCost: 0
   maxUses: 0
-  isCombinationMagic: 0
   recoveryAmount: 0
   healsHP: 0
   healsMP: 0
   healsGP: 0
+  cureAllStatusEffects: 0
   usableInAttackPhase: 1
   usableInDefensePhase: 0
-  isPrimaryAttack: 0
-  isAdditionalAttack: 1
   isPrimaryDefense: 0
   isCounterAttack: 0
   isRecovery: 0
   isSpecialEffect: 0
   canApplyStatusEffect: 0
   statusEffectChance: 0
-  cardValue: 5
-  attackPhaseRole: 3
-  defensePhaseRole: 0
+  statusEffectToApply: 0
+  statusEffectApplyTiming: 0
+  isRare: 0
+  attackPhaseUseRule: 2
+  defensePhaseUseRule: 0
+  reactiveInteraction: 0
+  specialAttackRule: {fileID: 0}
+  specialCardEffect: {fileID: 0}
+  cardDisplayFrameSprite: {fileID: 0}
+  _legacyReflection: 0
+  _legacyBlocking: 0
+  _legacyParry: 0
+  _legacyReactiveImported: 1
+  _legacyAttackPhaseRole: 3
+  _legacyComboPick: 0
+  _legacyIsCombinationMagic: 0
+  _legacyAttackComboImported: 1
+  _migIsPrimaryAttack: 0
+  _migIsAdditionalAttack: 0
+  _migPrimaryAdditionalImported: 1
+  _migV1Hcm: -1
