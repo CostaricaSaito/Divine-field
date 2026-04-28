@@ -7,16 +7,16 @@ public class SummonSkillCutInController : MonoBehaviour
 {
     public static SummonSkillCutInController I;
 
-    [Header("UIQÆ")]
-    public RectTransform imageRectTransform; // ƒXƒ‰ƒCƒh—p
-    public CanvasGroup canvasGroup;         // ƒtƒF[ƒhƒCƒ“EƒAƒEƒg—p
+    [Header("UIÅ½QÂÃ†")]
+    public RectTransform imageRectTransform; // Æ’XÆ’â€°Æ’CÆ’hâ€”p
+    public CanvasGroup canvasGroup;         // Æ’tÆ’FÂ[Æ’hÆ’CÆ’â€œÂEÆ’AÆ’EÆ’gâ€”p
     public Image backgroundImage;
     public TMP_Text skillText;
-    public Image whiteFlashImage;            // ”’ƒtƒ‰ƒbƒVƒ…—p Imagei‘S‰æ–ÊE”’EÅ‘O–Êj
+    public Image whiteFlashImage;            // â€â€™Æ’tÆ’â€°Æ’bÆ’VÆ’â€¦â€”p ImageÂiâ€˜Sâ€°Ã¦â€“ÃŠÂEâ€â€™ÂEÂÃ…â€˜Oâ€“ÃŠÂj
 
-    [Header("‰‰oİ’è")]
-    public float slideDuration = 0.5f;     // ƒXƒ‰ƒCƒh‚É‚©‚©‚éŠÔ
-    public float totalDuration = 1.0f;     // ‰‰o‘S‘Ì‚ÌŠÔi1•b„§j
+    [Header("â€°â€°ÂoÂÃâ€™Ã¨")]
+    public float slideDuration = 0.5f;     // Æ’XÆ’â€°Æ’CÆ’hâ€šÃ‰â€šÂ©â€šÂ©â€šÃ©Å½Å¾Å Ã”
+    public float totalDuration = 1.0f;     // â€°â€°Âoâ€˜Sâ€˜ÃŒâ€šÃŒÅ½Å¾Å Ã”Âi1â€¢bÂâ€ÂÂ§Âj
     public AudioClip cutInSE;
     private AudioSource audioSource;
 
@@ -28,11 +28,11 @@ public class SummonSkillCutInController : MonoBehaviour
         if (I != null && I != this) { Destroy(gameObject); return; }
         I = this;
 
-        canvasGroup.alpha = 0f;  // Å‰‚Í“§–¾‚É
-        whiteFlashImage.color = new Color(1, 1, 1, 0f); // Å‰‚Í“§–¾
-        // SetActive(false) ‚ÍíœI
+        canvasGroup.alpha = 0f;  // ÂÃ…Ââ€°â€šÃâ€œÂ§â€“Â¾â€šÃ‰
+        whiteFlashImage.color = new Color(1, 1, 1, 0f); // ÂÃ…Ââ€°â€šÃâ€œÂ§â€“Â¾
+        // SetActive(false) â€šÃÂÃ­ÂÅ“ÂI
         audioSource = GetComponent<AudioSource>();
-        rectTransform = GetComponent<RectTransform>(); // ©•ª©g
+        rectTransform = GetComponent<RectTransform>(); // Å½Â©â€¢ÂªÅ½Â©Âg
 
     }
 
@@ -72,18 +72,20 @@ public class SummonSkillCutInController : MonoBehaviour
 
     private IEnumerator ShakeUI(RectTransform target, float duration, float magnitude)
     {
-        //—h‚ç‚·ƒGƒtƒFƒNƒg‚­‚ñ
         Vector2 originalPos = target.anchoredPosition;
+        float signX = Random.value < 0.5f ? -1f : 1f;
+        float signY = Random.value < 0.5f ? -1f : 1f;
         float elapsed = 0f;
 
         while (elapsed < duration)
         {
-            float x = Random.Range(-1f, 1f) * magnitude;
-            float y = Random.Range(-1f, 1f) * magnitude;
-
-            target.anchoredPosition = originalPos + new Vector2(x, y);
-
             elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float envelope = Mathf.Sin(Mathf.PI * t);
+            target.anchoredPosition = originalPos + new Vector2(
+                signX * magnitude * envelope,
+                signY * magnitude * envelope);
+
             yield return null;
         }
 
@@ -92,37 +94,37 @@ public class SummonSkillCutInController : MonoBehaviour
 
     private IEnumerator ShowCutIn(Sprite bg, string skillName)
     {
-        // ‰Šúİ’è
+        // Ââ€°Å ÃºÂÃâ€™Ã¨
         backgroundImage.sprite = bg;
         skillText.text = skillName;
 
         Vector2 startPos = new Vector2(800f, 500f);
         Vector2 centerPos = Vector2.zero;
-        Vector2 driftPos = new Vector2(-10f, -15f); // ¶‚É­‚µƒYƒŒ‚éˆÊ’ui’²®‰Â”\j
+        Vector2 driftPos = new Vector2(-10f, -15f); // ÂÂ¶â€šÃ‰ÂÂ­â€šÂµÆ’YÆ’Å’â€šÃ©Ë†ÃŠâ€™uÂiâ€™Â²ÂÂ®â€°Ã‚â€\Âj
 
         imageRectTransform.anchoredPosition = startPos;
         canvasGroup.alpha = 0f;
 
-        // SEÄ¶
+        // SEÂÃ„ÂÂ¶
         if (cutInSE != null && audioSource != null)
             audioSource.PlayOneShot(cutInSE);
 
-        // “¯‚ÉÄ¶‚·‚éi”’ƒtƒ‰ƒbƒVƒ…‚ÆƒJƒbƒgƒCƒ“j
+        // â€œÂ¯Å½Å¾â€šÃ‰ÂÃ„ÂÂ¶â€šÂ·â€šÃ©Âiâ€â€™Æ’tÆ’â€°Æ’bÆ’VÆ’â€¦â€šÃ†Æ’JÆ’bÆ’gÆ’CÆ’â€œÂj
         StartCoroutine(FlashWhite(0.4f));
         yield return StartCoroutine(SlideInCutIn(0.5f, startPos, centerPos));
 
         StartCoroutine(ShakeUI(rectTransform, 1f, 10f));
 
-        // uƒYƒYƒbcv‚Æ¶‚É—¬‚ê‚é‚æ‚¤‚É”÷’²®
+        // ÂuÆ’YÆ’YÆ’bÂcÂvâ€šÃ†ÂÂ¶â€šÃ‰â€”Â¬â€šÃªâ€šÃ©â€šÃ¦â€šÂ¤â€šÃ‰â€Ã·â€™Â²ÂÂ®
         yield return StartCoroutine(SlideDrift(centerPos, driftPos, 2f));
 
-        // •\¦‚ğ1•bƒL[ƒv
+        // â€¢\Å½Â¦â€šÃ°1â€¢bÆ’LÂ[Æ’v
         yield return new WaitForSeconds(0.1f);
 
-        // I—¹ˆ—
+        // ÂIâ€”Â¹ÂË†â€”Â
         canvasGroup.alpha = 0f;
 
-        // ”’ƒtƒ‰ƒbƒVƒ…i”²‚¯j‚ğ’Ç‰Á‚·‚é‚È‚ç‚±‚±‚Å‚à‚¤1‰ñ
+        // â€â€™Æ’tÆ’â€°Æ’bÆ’VÆ’â€¦Âiâ€Â²â€šÂ¯Âjâ€šÃ°â€™Ã‡â€°Ãâ€šÂ·â€šÃ©â€šÃˆâ€šÃ§â€šÂ±â€šÂ±â€šÃ…â€šÃ â€šÂ¤1â€°Ã±
         yield return StartCoroutine(FlashWhite(0.4f));
 
 
@@ -133,7 +135,7 @@ public class SummonSkillCutInController : MonoBehaviour
         float half = duration / 2f;
         float t = 0f;
 
-        // ƒtƒF[ƒhƒCƒ“
+        // Æ’tÆ’FÂ[Æ’hÆ’CÆ’â€œ
         while (t < half)
         {
             whiteFlashImage.color = new Color(1, 1, 1, t / half);
@@ -141,7 +143,7 @@ public class SummonSkillCutInController : MonoBehaviour
             yield return null;
         }
 
-        // ƒtƒF[ƒhƒAƒEƒg
+        // Æ’tÆ’FÂ[Æ’hÆ’AÆ’EÆ’g
         t = 0f;
         while (t < half)
         {
