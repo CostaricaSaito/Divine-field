@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,10 +23,13 @@ public sealed class TitleLogoIntroController : MonoBehaviour
     [SerializeField] private RectTransform swordRect;
     [SerializeField] private GameObject subRoot;
 
+    [Tooltip("Main のフェード開始まで MagicCircle のルートを非表示にし、Main と同タイミングで表示＋発光フェードを開始します。")]
+    [SerializeField] private bool hideMagicCircleUntilMainFadeStarts = true;
+
     [Header("フェード・間隔（秒） — デザイナー向け")]
     [SerializeField] [Min(0.01f)] private float mainFadeDuration = 0.5f;
-    [Tooltip("Main フェード開始からの遅延。ここから MagicCircle をフェード＋発光。")]
-    [SerializeField] [Min(0f)] private float magicCircleDelayFromMainStart = 0.2f;
+    [Tooltip("Main フェード開始からの遅延。0 で Main と同時に MagicCircle 発光を開始。")]
+    [SerializeField] [Min(0f)] private float magicCircleDelayFromMainStart = 0f;
     [SerializeField] [Min(0.01f)] private float magicCircleFadeDuration = 1f;
     [SerializeField] [Min(0.01f)] private float swordSlideDuration = 0.2f;
     [SerializeField] [Min(1f)] private float whiteFlashDurationMs = 50f;
@@ -107,6 +110,9 @@ public sealed class TitleLogoIntroController : MonoBehaviour
         LeanTween.init();
         ApplyIntroInitialState();
 
+        if (hideMagicCircleUntilMainFadeStarts && magicCircleRect != null)
+            magicCircleRect.gameObject.SetActive(true);
+
         if (mainGraphic != null)
         {
             var cStart = _mainColorEnd;
@@ -122,8 +128,13 @@ public sealed class TitleLogoIntroController : MonoBehaviour
             if (useUnscaledTime) tMain.setIgnoreTimeScale(true);
         }
 
-        var dcMc = LeanTween.delayedCall(gameObject, magicCircleDelayFromMainStart, PlayMagicCircleIntro);
-        if (useUnscaledTime) dcMc.setIgnoreTimeScale(true);
+        if (magicCircleDelayFromMainStart <= 0.0001f)
+            PlayMagicCircleIntro();
+        else
+        {
+            var dcMc = LeanTween.delayedCall(gameObject, magicCircleDelayFromMainStart, PlayMagicCircleIntro);
+            if (useUnscaledTime) dcMc.setIgnoreTimeScale(true);
+        }
 
         var dcSword = LeanTween.delayedCall(gameObject, mainFadeDuration, PlaySwordIntro);
         if (useUnscaledTime) dcSword.setIgnoreTimeScale(true);
@@ -323,6 +334,9 @@ public sealed class TitleLogoIntroController : MonoBehaviour
 
         if (magicCircleGraphic != null)
             magicCircleGraphic.color = magicCircleColorStart;
+
+        if (hideMagicCircleUntilMainFadeStarts && magicCircleRect != null)
+            magicCircleRect.gameObject.SetActive(false);
 
         if (swordRect != null)
         {

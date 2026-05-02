@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,6 +12,8 @@ using UnityEngine.UI;
 public sealed class TitleLogoRandomBlink : MonoBehaviour
 {
     [Header("白オーバーレイ（推奨・TitleLogo White）")]
+    [Tooltip("点滅中以外は非アクティブにするルート。未指定なら CanvasGroup / Graphic の GameObject を使います。")]
+    [SerializeField] private GameObject whiteFlashOverlayRoot;
     [Tooltip("TitleLogo(White) に CanvasGroup を付けて割り当て。alpha のみ点滅します。")]
     [SerializeField] private CanvasGroup whiteFlashOverlay;
     [Tooltip("CanvasGroup が無いとき。白画像 Image など。RGB は 1 にし、A のみ点滅します。")]
@@ -40,6 +42,20 @@ public sealed class TitleLogoRandomBlink : MonoBehaviour
     private bool UsesWhiteOverlay =>
         whiteFlashOverlay != null || whiteFlashGraphic != null;
 
+    private GameObject ResolveWhiteFlashOverlayRoot()
+    {
+        if (whiteFlashOverlayRoot != null) return whiteFlashOverlayRoot;
+        if (whiteFlashOverlay != null) return whiteFlashOverlay.gameObject;
+        if (whiteFlashGraphic != null) return whiteFlashGraphic.gameObject;
+        return null;
+    }
+
+    private void SetWhiteOverlayRootActive(bool active)
+    {
+        var root = ResolveWhiteFlashOverlayRoot();
+        if (root != null) root.SetActive(active);
+    }
+
     private void Awake()
     {
         CacheBaseColors();
@@ -52,6 +68,9 @@ public sealed class TitleLogoRandomBlink : MonoBehaviour
         if (_loop != null) StopCoroutine(_loop);
 
         HideWhiteOverlayStrength();
+
+        if (UsesWhiteOverlay)
+            SetWhiteOverlayRootActive(false);
 
         if (!CanRunBlinkLoop()) return;
 
@@ -80,6 +99,7 @@ public sealed class TitleLogoRandomBlink : MonoBehaviour
 
         HideWhiteOverlayStrength();
         RestoreAllColors();
+        SetWhiteOverlayRootActive(false);
     }
 
     private void CacheBaseColors()
@@ -146,6 +166,8 @@ public sealed class TitleLogoRandomBlink : MonoBehaviour
 
     private IEnumerator FlashWhiteOverlay()
     {
+        SetWhiteOverlayRootActive(true);
+
         float Delta() => useUnscaledTime ? Time.unscaledDeltaTime : Time.deltaTime;
 
         var e = 0f;
@@ -171,6 +193,7 @@ public sealed class TitleLogoRandomBlink : MonoBehaviour
         }
 
         SetWhiteOverlayStrength(0f);
+        SetWhiteOverlayRootActive(false);
     }
 
     private void SetWhiteOverlayStrength(float alpha01)

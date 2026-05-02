@@ -11,6 +11,15 @@ public class SceneTransitionManager : MonoBehaviour
     public Image fadeImage;
     public float fadeDuration = 0.5f;
 
+    [Header("フェード Canvas（Screen Space に合わせる）")]
+    [Tooltip("未設定なら FadeCanvas を子から検索。UI 用カメラが MainCamera と違う場合だけ指定してください。")]
+    public Canvas fadeCanvas;
+
+    [Tooltip("null のとき Camera.main を使用します。")]
+    public Camera fadeCameraOverride;
+
+    Canvas _fadeCanvasResolved;
+
     void Awake()
     {
         Debug.Log("SceneTransitionManager Awake 開始");
@@ -27,6 +36,44 @@ public class SceneTransitionManager : MonoBehaviour
         Debug.Log("SceneTransitionManager 登録完了");
 
         TryFindFadeImage(); // 初回取得
+
+        ResolveFadeCanvas();
+        BindFadeCanvasCamera();
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    void OnSceneLoaded(Scene _, LoadSceneMode __)
+    {
+        BindFadeCanvasCamera();
+        TryFindFadeImage();
+    }
+
+    void ResolveFadeCanvas()
+    {
+        _fadeCanvasResolved = fadeCanvas != null ? fadeCanvas : GetComponentInChildren<Canvas>(true);
+    }
+
+    /// <summary>
+    /// Overlay の場合は Scene ビューでカメラ系 UI と表示がずれるため、Camera モードにして UI カメラへ紐付けます。
+    /// </summary>
+    void BindFadeCanvasCamera()
+    {
+        if (_fadeCanvasResolved == null)
+            ResolveFadeCanvas();
+        if (_fadeCanvasResolved == null)
+            return;
+
+        var cam = fadeCameraOverride != null ? fadeCameraOverride : Camera.main;
+        if (cam == null)
+            return;
+
+        _fadeCanvasResolved.renderMode = RenderMode.ScreenSpaceCamera;
+        _fadeCanvasResolved.worldCamera = cam;
     }
 
     public void FadeToScene(string sceneName)
