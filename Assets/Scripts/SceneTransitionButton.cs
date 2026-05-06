@@ -1,9 +1,9 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 
 public class SceneTransitionButton : MonoBehaviour
 {
-    public string targetSceneName;           // Inspector‚Åİ’è
+    public string targetSceneName;           // Inspectorâ€šÃ…ÂÃâ€™Ã¨
     private Button button;
 
     void Awake()
@@ -17,16 +17,8 @@ public class SceneTransitionButton : MonoBehaviour
 
     void OnClickTransition()
     {
-        if (!string.IsNullOrEmpty(targetSceneName)
-            && SceneTransitionManager.I != null
-            && SceneTransitionManager.I.gameObject.activeInHierarchy)
-        {
-            button.interactable = false; // ƒOƒŒ[ƒAƒEƒg
-            SceneTransitionManager.I.FadeToScene(targetSceneName);
-        }
-        else
-        {
-            Debug.LogWarning("SceneTransitionManager ‚ª null ‚Ü‚½‚Í”ñƒAƒNƒeƒBƒu‚Å‚·");
-        }
+        if (button == null) return;
+        if (SceneFadeNavigation.TryFadeToScene(targetSceneName))
+            button.interactable = false;
     }
 }
