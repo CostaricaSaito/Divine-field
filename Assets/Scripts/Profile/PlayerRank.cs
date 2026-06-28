@@ -4,9 +4,23 @@
 /// RP に基づくランク（プロファイル表示・リザルト・マッチング用）。
 /// 各区間は [最小, 最大)（最大は含まない）。レジェンドのみ 3600 以上。
 /// </summary>
+/// <summary>ランク帯 ID（<see cref="PlayerRank"/> の Tiers 配列順と一致）。</summary>
+public enum RankTierId
+{
+    Novice = 0,
+    Bronze,
+    Silver,
+    Gold,
+    Platinum,
+    Diamond,
+    Master,
+    Legend,
+}
+
 public static class PlayerRank
 {
     public const int DefaultStartingRp = 1500;
+    public const int TierCount = 8;
 
     private static readonly RankTier[] Tiers =
     {
@@ -34,20 +48,46 @@ public static class PlayerRank
         }
     }
 
-    public static string GetDisplayName(int rp)
+    public static int GetTierIndex(int rp)
     {
         rp = Mathf.Max(0, rp);
         if (rp < Tiers[0].MinInclusive)
-            return Tiers[0].DisplayNameJa;
+            return 0;
 
-        for (int i = 0; i < Tiers.Length; i++)
+        for (var i = 0; i < Tiers.Length; i++)
         {
             var t = Tiers[i];
             if (rp >= t.MinInclusive && rp < t.MaxExclusive)
-                return t.DisplayNameJa;
+                return i;
         }
 
-        return Tiers[Tiers.Length - 1].DisplayNameJa;
+        return Tiers.Length - 1;
+    }
+
+    public static RankTierId GetTierId(int rp) => (RankTierId)GetTierIndex(rp);
+
+    public static string GetDisplayName(int rp) => GetDisplayNameForTier(GetTierIndex(rp));
+
+    public static string GetDisplayNameForTier(int tierIndex)
+    {
+        tierIndex = Mathf.Clamp(tierIndex, 0, Tiers.Length - 1);
+        return Tiers[tierIndex].DisplayNameJa;
+    }
+
+    public static string GetDisplayName(RankTierId tier) => GetDisplayNameForTier((int)tier);
+
+    public static bool TryGetNextTierId(int rp, out RankTierId nextTier)
+    {
+        nextTier = default;
+        if (IsMaxRank(rp))
+            return false;
+
+        var nextIndex = GetTierIndex(rp) + 1;
+        if (nextIndex >= Tiers.Length)
+            return false;
+
+        nextTier = (RankTierId)nextIndex;
+        return true;
     }
 
     public static bool IsMaxRank(int rp) => rp >= 3600;
@@ -59,17 +99,15 @@ public static class PlayerRank
         if (IsMaxRank(rp))
             return 0;
 
+        var tierIndex = GetTierIndex(rp);
+        if (tierIndex >= Tiers.Length - 1)
+            return 0;
+
         if (rp < Tiers[0].MinInclusive)
             return Tiers[0].MaxExclusive - rp;
 
-        for (int i = 0; i < Tiers.Length; i++)
-        {
-            var t = Tiers[i];
-            if (rp >= t.MinInclusive && rp < t.MaxExclusive)
-                return t.MaxExclusive - rp;
-        }
-
-        return 0;
+        var t = Tiers[tierIndex];
+        return t.MaxExclusive - rp;
     }
 
     /// <summary>現在のランク帯内での進捗 0〜1。レジェンドは 1。ノービス未満は 0。</summary>
@@ -82,18 +120,11 @@ public static class PlayerRank
         if (rp < Tiers[0].MinInclusive)
             return 0f;
 
-        for (int i = 0; i < Tiers.Length; i++)
-        {
-            var t = Tiers[i];
-            if (rp >= t.MinInclusive && rp < t.MaxExclusive)
-            {
-                int span = t.MaxExclusive - t.MinInclusive;
-                if (span <= 0) return 1f;
-                return Mathf.Clamp01((float)(rp - t.MinInclusive) / span);
-            }
-        }
-
-        return 1f;
+        var tierIndex = GetTierIndex(rp);
+        var t = Tiers[tierIndex];
+        var span = t.MaxExclusive - t.MinInclusive;
+        if (span <= 0) return 1f;
+        return Mathf.Clamp01((float)(rp - t.MinInclusive) / span);
     }
 }
 

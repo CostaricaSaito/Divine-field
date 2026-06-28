@@ -209,7 +209,7 @@ public class GameResultController : MonoBehaviour
 
         ApplyHeaderTexts(kind);
         ApplyProfileTexts(newRpPreview);
-        ApplyRankIcons();
+        ApplyRankIcons(newRpPreview);
         EnsureResultBgmSource();
 
         PrepareResultTitleIntroStart();
@@ -486,13 +486,25 @@ public class GameResultController : MonoBehaviour
         SetTextIfPresent(playerRankText, PlayerRank.GetDisplayName(rpForRankLabel));
     }
 
-    private void ApplyRankIcons()
+    private void ApplyRankIcons(int rpForIcons)
     {
-        if (GameProfile.I == null) return;
-        if (rankIconAsIsImage != null && GameProfile.I.CurrentRankIcon != null)
-            rankIconAsIsImage.sprite = GameProfile.I.CurrentRankIcon;
-        if (rankIconNextImage != null && GameProfile.I.NextRankIcon != null)
-            rankIconNextImage.sprite = GameProfile.I.NextRankIcon;
+        var settings = RankIconSettings.Resolve();
+        if (settings == null) return;
+
+        var current = settings.GetIconForRp(rpForIcons);
+        var next = settings.GetIconForNextTier(rpForIcons);
+
+        if (rankIconAsIsImage != null)
+        {
+            rankIconAsIsImage.sprite = current;
+            rankIconAsIsImage.enabled = current != null;
+        }
+
+        if (rankIconNextImage != null)
+        {
+            rankIconNextImage.sprite = next;
+            rankIconNextImage.enabled = next != null;
+        }
     }
 
     private async Task FadeRootAsync(float from, float to, float seconds, CancellationToken ct)

@@ -41,6 +41,9 @@ public sealed class MainMenuPrimaryButtonsController : MonoBehaviour
     [Header("SE（各ボタンが着地点に達したとき）")]
     [SerializeField] private string landSoundAddress = "Assets/SE/メインボタン移動.mp3";
 
+    [Header("ランクマッチ")]
+    [SerializeField] private MainRankMatchPopupController rankMatchPopup;
+
     readonly List<(MainMenuButtonSlot slot, Vector2 rest)> _active = new List<(MainMenuButtonSlot, Vector2)>();
 
     void Awake()
@@ -89,8 +92,22 @@ public sealed class MainMenuPrimaryButtonsController : MonoBehaviour
             var scene = slot.sceneName;
             var btn = EnsureButton(slot.root);
             btn.onClick.RemoveAllListeners();
+
+            if (IsRankMatchSlot(slot))
+            {
+                btn.onClick.AddListener(() => rankMatchPopup.TryOpen(btn));
+                continue;
+            }
+
             btn.onClick.AddListener(() => OnPrimaryClicked(scene, btn));
         }
+    }
+
+    bool IsRankMatchSlot(MainMenuButtonSlot slot)
+    {
+        return rankMatchPopup != null
+            && slot.root != null
+            && slot.root == battle.root;
     }
 
     static Button EnsureButton(RectTransform root)

@@ -12,12 +12,13 @@ public class GameProfile : MonoBehaviour
     [Tooltip("現在のランクポイント。既定 1500。バトル開始時点は CaptureBattleStartRP で PreBattleRP に退避。")]
     [SerializeField] private int currentRP = PlayerRank.DefaultStartingRp;
 
-    [Header("ランクアイコン（任意・未設定なら非表示のまま）")]
-    [SerializeField] private Sprite currentRankIcon;
-    [SerializeField] private Sprite nextRankIcon;
+    [Header("ランクアイコン")]
+    [Tooltip("未割当なら Resources/Profile/RankIconSettings を使用します。")]
+    [SerializeField] private RankIconSettings rankIconSettings;
 
     public string PlayerName => playerName;
     public string EnemyName => enemyName;
+    public RankIconSettings RankIconSettings => rankIconSettings;
 
     /// <summary>バトル開始時点のランクポイント（リザルト画面のカウント起点）。</summary>
     public int PreBattleRP { get; private set; }
@@ -27,8 +28,14 @@ public class GameProfile : MonoBehaviour
 
     /// <summary>現在 RP に対応するランク名（<see cref="PlayerRank"/>）。</summary>
     public string RankDisplayName => PlayerRank.GetDisplayName(currentRP);
-    public Sprite CurrentRankIcon => currentRankIcon;
-    public Sprite NextRankIcon => nextRankIcon;
+
+    public Sprite GetRankIcon(int rp) => RankIconSettings.Resolve()?.GetIconForRp(rp);
+
+    public Sprite GetNextRankIcon(int rp) => RankIconSettings.Resolve()?.GetIconForNextTier(rp);
+
+    public Sprite CurrentRankIcon => GetRankIcon(currentRP);
+
+    public Sprite NextRankIcon => GetNextRankIcon(currentRP);
 
     private void Awake()
     {

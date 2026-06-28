@@ -32,6 +32,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f75054ec9c20d1429715cc59d33afff
+    m_Address: "Assets/SE/\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F4.mp3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 135a3a1c26a9ec944ab581ccc757d3b4
     m_Address: "Assets/SE/\u4ECB\u5165.mp3"
     m_ReadOnly: 0
