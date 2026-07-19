@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System.Collections;
@@ -7,35 +7,35 @@ public class SceneTransitionManager : MonoBehaviour
 {
     public static SceneTransitionManager I;
 
-    [Header("ƒtƒF[ƒh—pUI")]
+    [Header("Fade UI")]
     public Image fadeImage;
     public float fadeDuration = 0.5f;
 
-    [Header("ƒtƒF[ƒh CanvasiScreen Space ‚É‡‚í‚¹‚éj")]
-    [Tooltip("–¢İ’è‚È‚ç FadeCanvas ‚ğq‚©‚çŒŸõBUI —pƒJƒƒ‰‚ª MainCamera ‚Æˆá‚¤ê‡‚¾‚¯w’è‚µ‚Ä‚­‚¾‚³‚¢B")]
+    [Header("Fade Canvas (Screen Space)")]
+    [Tooltip("If empty, searches child FadeCanvas. Set when UI camera differs from MainCamera.")]
     public Canvas fadeCanvas;
 
-    [Tooltip("null ‚Ì‚Æ‚« Camera.main ‚ğg—p‚µ‚Ü‚·B")]
+    [Tooltip("Uses Camera.main when null.")]
     public Camera fadeCameraOverride;
 
     Canvas _fadeCanvasResolved;
 
     void Awake()
     {
-        Debug.Log("SceneTransitionManager Awake ŠJn");
+        Debug.Log("SceneTransitionManager Awake start");
 
         if (I != null && I != this)
         {
-            Debug.Log("Šù‚ÉSceneTransitionManager‚ª‚ ‚é‚½‚ßA©•ª‚Í”jŠü‚³‚ê‚Ü‚·");
+            Debug.Log("SceneTransitionManager already exists; destroying duplicate.");
             Destroy(gameObject);
             return;
         }
 
         I = this;
         DontDestroyOnLoad(gameObject);
-        Debug.Log("SceneTransitionManager “o˜^Š®—¹");
+        Debug.Log("SceneTransitionManager registered");
 
-        TryFindFadeImage(); // ‰‰ñæ“¾
+        TryFindFadeImage();
 
         ResolveFadeCanvas();
         BindFadeCanvasCamera();
@@ -59,7 +59,7 @@ public class SceneTransitionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Overlay ‚Ìê‡‚Í Scene ƒrƒ…[‚ÅƒJƒƒ‰Œn UI ‚Æ•\¦‚ª‚¸‚ê‚é‚½‚ßACamera ƒ‚[ƒh‚É‚µ‚Ä UI ƒJƒƒ‰‚Ö•R•t‚¯‚Ü‚·B
+    /// Overlay mode can misalign with camera-space UI; switch to Camera mode and bind the UI camera.
     /// </summary>
     void BindFadeCanvasCamera()
     {
@@ -79,54 +79,48 @@ public class SceneTransitionManager : MonoBehaviour
     public void FadeToScene(string sceneName)
     {
         if (fadeImage == null)
-        {
-            Debug.LogWarning("FadeToScene ‚ªŒÄ‚Î‚ê‚Ü‚µ‚½‚ª fadeImage ‚ª null ‚Å‚·B");
-        }
+            Debug.LogWarning("FadeToScene called but fadeImage is null.");
 
         StartCoroutine(FadeAndLoad(sceneName));
     }
 
     private IEnumerator FadeAndLoad(string sceneName)
     {
-        Debug.Log("ƒtƒF[ƒhƒAƒEƒgŠJn");
+        Debug.Log("Fade out start");
 
-        yield return StartCoroutine(Fade(1)); // ƒtƒF[ƒhƒAƒEƒg
+        yield return StartCoroutine(Fade(1));
 
-        Debug.Log("ƒV[ƒ“Ø‚è‘Ö‚¦’† ¨ " + sceneName);
+        Debug.Log("Loading scene -> " + sceneName);
 
-        var sePlayer = FindObjectOfType<AudioSource>();
-        if (sePlayer != null && sePlayer.isPlaying)
-        {
-            sePlayer.Stop();
-            Debug.Log("Ä¶’†‚ÌAudioSource‚ğ’â~‚µ‚Ü‚µ‚½");
-        }
+        // Stop all playing SE right before the new scene loads (BGM untouched).
+        SoundEffectPlayer.I?.StopAll();
 
         SceneManager.LoadScene(sceneName);
 
-        yield return new WaitForSecondsRealtime(0.1f); // ‚Ü‚½‚Í 0.2f
+        yield return new WaitForSecondsRealtime(0.1f);
 
         if (fadeImage == null)
         {
-            Transform fadeCanvas = GameObject.Find("FadeCanvas")?.transform;
-            if (fadeCanvas != null)
-                fadeImage = fadeCanvas.GetComponentInChildren<Image>();
+            Transform fadeCanvasTf = GameObject.Find("FadeCanvas")?.transform;
+            if (fadeCanvasTf != null)
+                fadeImage = fadeCanvasTf.GetComponentInChildren<Image>();
         }
 
         if (fadeImage != null)
             fadeImage.color = new Color(0, 0, 0, 1f);
 
-        TryFindFadeImage(); // VƒV[ƒ“‚Å‚àFadeCanvas‚ğÄŒŸõi¸‚Á‚Ä‚¢‚½ê‡‚Ì•ÛŒ¯j
+        TryFindFadeImage();
 
-        Debug.Log("ƒtƒF[ƒhƒCƒ“ŠJn");
+        Debug.Log("Fade in start");
         yield return new WaitForSecondsRealtime(0.1f);
-        yield return StartCoroutine(Fade(0)); // ƒtƒF[ƒhƒCƒ“
+        yield return StartCoroutine(Fade(0));
     }
 
     private IEnumerator Fade(float targetAlpha)
     {
         if (fadeImage == null)
         {
-            Debug.LogWarning("fadeImage ‚ª null ‚Ì‚½‚ßAƒtƒF[ƒhˆ—ƒXƒLƒbƒv");
+            Debug.LogWarning("fadeImage is null; skipping fade.");
             yield break;
         }
 
@@ -151,17 +145,17 @@ public class SceneTransitionManager : MonoBehaviour
     {
         if (fadeImage != null) return;
 
-        var fadeCanvas = GameObject.Find("FadeCanvas");
-        if (fadeCanvas != null)
+        var fadeCanvasGo = GameObject.Find("FadeCanvas");
+        if (fadeCanvasGo != null)
         {
-            fadeImage = fadeCanvas.GetComponentInChildren<Image>();
+            fadeImage = fadeCanvasGo.GetComponentInChildren<Image>();
             if (fadeImage != null)
             {
-                Debug.Log("fadeImage ‚ğÄæ“¾‚µ‚Ü‚µ‚½");
+                Debug.Log("fadeImage reacquired");
                 return;
             }
         }
 
-        Debug.LogWarning("fadeImage ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ‚Å‚µ‚½BFadeCanvas‚ªƒV[ƒ“‚É‘¶İ‚·‚é‚©Šm”F‚µ‚Ä‚­‚¾‚³‚¢B");
+        Debug.LogWarning("fadeImage not found. Confirm FadeCanvas exists in the scene.");
     }
 }

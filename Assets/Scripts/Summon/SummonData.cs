@@ -19,69 +19,77 @@ public class SummonData : ScriptableObject
     [TextArea(2, 4)]
     public string summonName;
 
-    [Tooltip("統計・オンライン連携用の不変ID（例: garuda）。空のときはこのアセットの Unity 名（ファイル名）を使います。")]
+    [Tooltip("NewSummon subtitle (e.g. Flame Beast).")]
+    public string summonNameSubtitle;
+
+    [Tooltip("NewSummon English name.")]
+    public string summonNameEng;
+
+    [Tooltip("Stable id for stats/network (e.g. garuda). Empty uses asset name.")]
     [SerializeField]
     private string summonId;
 
-    /// <summary>統計・ネットワークで用いる不変の召喚獣ID。</summary>
+    /// <summary>Stable summon id for stats/network.</summary>
     public string StableSummonId =>
         string.IsNullOrWhiteSpace(summonId) ? name : summonId.Trim();
 
     [TextArea(2, 4)]
     public string description;
 
-    [TextArea(2, 4)]
-    public string passiveSkill;
+    [Header("Skills")]
+    public string passiveSkillName;
 
     [TextArea(2, 4)]
-    public string activeSkill;
+    public string passiveSkillDescription;
+
+    public string activeSkillName;
+
+    [TextArea(2, 4)]
+    public string activeSkillDescription;
 
     public Sprite characterSprite;
     public Sprite backgroundSprite;
     public Sprite foregroundSprite;
 
-    [Tooltip("戦闘中の PlayerSummon / EnemySummon 用の正方形アイコン（Images/01_召喚獣アイコン用 など）。未設定時は Character Sprite を使用します。")]
+    [Tooltip("Battle status icon. Falls back to characterSprite.")]
     public Sprite summonIcon;
     public AudioClip summonSE;
 
     /// <summary>
-    /// 戦闘ステータス行のアイコン。インスペクターで <see cref="summonIcon"/> を指定していればそれを、無ければ <see cref="characterSprite"/> を返す。
+    /// Battle status icon sprite. Uses summonIcon if set, otherwise characterSprite.
     /// </summary>
     public Sprite GetBattleStatusIconSprite()
     {
         return summonIcon != null ? summonIcon : characterSprite;
     }
 
+    [Header("Text Style")]
+    [Tooltip("Shared by NewSummon name/subtitle/skill names and battle popup skill name.")]
+    public SummonTextStyle textStyle;
 
-    [Header("召喚獣選択画面でのテキストスタイル")]
-    public SummonTextStyle nameStyle;
-    public SummonTextStyle descriptionStyle;
-    public SummonTextStyle passiveSkillStyle;
-    public SummonTextStyle activeSkillStyle;
-
-    [Header("スペシャルスキル")]
+    [Header("Special skill")]
     public string specialSkillName;
 
     [TextArea(2, 4)]
     public string specialSkillDescription;
 
-    public SummonTextStyle popupSkillNameStyle;
+    [Tooltip("Description style for battle special skill popup.")]
     public SummonTextStyle popupSkillDescStyle;
 
-    public Sprite specialSkillCutInSprite;  // 全画面演出用イラスト
-    public AudioClip specialSkillSE;        // 発動時のSE（任意）
+    public Sprite specialSkillCutInSprite;
+    public AudioClip specialSkillSE;
 
-    [Header("顕現スキル")]
-    [Tooltip("窮地から発動時に表示・自動解決する顕現カード。未設定なら顕現ボタンは無効扱い。")]
+    [Header("Manifestation")]
+    [Tooltip("Card resolved on manifestation. Empty disables manifestation button.")]
     public CardData manifestationCard;
 
-    [Header("加護（パッシブ・ランタイム）")]
+    [Header("Passive blessing (runtime)")]
     [SerializeField]
-    [Tooltip("Auto: アセット名（Ifrit 等）で加護を決定。None で無効、Ifrit で明示。")]
+    [Tooltip("Auto: resolve by asset name. None disables. Explicit modes available.")]
     private SummonPassiveBlessingMode passiveBlessingMode = SummonPassiveBlessingMode.AutoByAssetName;
 
     /// <summary>
-    /// <see cref="passiveBlessingMode"/> に応じた加護インスタンスを返す。
+    /// Returns blessing instance for the configured mode.
     /// </summary>
     public SummonPassiveBlessing GetEffectivePassiveBlessing()
     {
@@ -89,7 +97,7 @@ public class SummonData : ScriptableObject
     }
 
     /// <summary>
-    /// ガルーダの開始時＋5nターン終了ドロー等のライフサイクル対象か（攻撃加護の有無とは独立）。
+    /// Whether Garuda lifecycle rules apply.
     /// </summary>
     public bool IsGarudaLifecycle()
     {
@@ -98,8 +106,7 @@ public class SummonData : ScriptableObject
     }
 
     /// <summary>
-    /// ディアボロス「ダークプリパレーション」：開幕手札の1枚目を闇属性から抽選。メッセージは配布完了後・表向け前。
-    /// 戦闘中の数値加護は <see cref="GetEffectivePassiveBlessing"/> とは別（ガルーダと同様ライフサイクル側）。
+    /// Whether Diabolos Dark Preparation opening applies.
     /// </summary>
     public bool IsDiabolosDarkPreparation()
     {

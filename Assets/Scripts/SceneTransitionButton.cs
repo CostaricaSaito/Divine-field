@@ -4,6 +4,7 @@ using UnityEngine.UI;
 public class SceneTransitionButton : MonoBehaviour
 {
     public string targetSceneName;           // Inspector‚ÅÝ’è
+    [SerializeField] private string clickSeAddress;
     private Button button;
 
     void Awake()
@@ -18,6 +19,8 @@ public class SceneTransitionButton : MonoBehaviour
     void OnClickTransition()
     {
         if (button == null) return;
+        if (!string.IsNullOrEmpty(clickSeAddress))
+            SoundEffectPlayer.I?.Play(clickSeAddress);
         if (SceneFadeNavigation.TryFadeToScene(targetSceneName))
             button.interactable = false;
     }

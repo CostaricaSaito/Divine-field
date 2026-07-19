@@ -1,13 +1,13 @@
 {
   "dependencies": {
     "com.coffee.ui-effect": {
-      "version": "https://github.com/mob-sakai/UIEffect.git?path=Packages/src",
+      "version": "https://github.com/mob-sakai/UIEffect.git?path=Packages/src#5.10.9",
       "depth": 0,
       "source": "git",
       "dependencies": {
         "com.unity.ugui": "1.0.0"
       },
-      "hash": "70937d2ce39b61c29c4feb4d13642c65bb553d6c"
+      "hash": "a2c550c523763c8a26d1725a86cde1d5db85755a"
     },
     "com.unity.2d.animation": {
       "version": "9.2.0",
@@ -185,11 +185,11 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.ide.visualstudio": {
-      "version": "2.0.22",
+      "version": "2.0.27",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.unity.test-framework": "1.1.9"
+        "com.unity.test-framework": "1.1.33"
       },
       "url": "https://packages.unity.com"
     },

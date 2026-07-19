@@ -30,6 +30,7 @@ public class SoundEffectPlayer : MonoBehaviour
     [Tooltip("ループ用 SE（電子ルーレット等）。未設定のとき起動時に子オブジェクトに生成する。")]
     [SerializeField] private AudioSource loopSeSource;
     private Dictionary<string, AudioClip> clipCache = new();
+    private int _playGeneration;
 
     private static bool bootstrapInitialized;
 
@@ -101,10 +102,13 @@ public class SoundEffectPlayer : MonoBehaviour
         }
 
         // 非同期読み込み
+        int generation = _playGeneration;
         try
         {
             Addressables.LoadAssetAsync<AudioClip>(addressKey).Completed += handle =>
             {
+                if (generation != _playGeneration) return;
+
                 if (handle.Status == AsyncOperationStatus.Succeeded)
                 {
                     AudioClip clip = handle.Result;
@@ -154,11 +158,13 @@ public class SoundEffectPlayer : MonoBehaviour
             loopSeSource.Play();
             return;
         }
+        int generation = _playGeneration;
         Addressables.LoadAssetAsync<AudioClip>(addressKey).Completed += handle =>
         {
             if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null) return;
             clipCache[addressKey] = handle.Result;
             if (loopSeSource == null) return;
+            if (generation != _playGeneration) return;
             loopSeSource.Stop();
             loopSeSource.clip = handle.Result;
             loopSeSource.loop = true;
@@ -171,6 +177,7 @@ public class SoundEffectPlayer : MonoBehaviour
     public async Task StartLoopingAsync(string addressKey)
     {
         if (string.IsNullOrEmpty(addressKey) || loopSeSource == null) return;
+        int generation = _playGeneration;
         if (!clipCache.TryGetValue(addressKey, out var clip) || clip == null)
         {
             var h = Addressables.LoadAssetAsync<AudioClip>(addressKey);
@@ -187,7 +194,7 @@ public class SoundEffectPlayer : MonoBehaviour
             };
             clip = await tcs.Task;
         }
-        if (clip == null) return;
+        if (clip == null || generation != _playGeneration || loopSeSource == null) return;
         loopSeSource.Stop();
         loopSeSource.clip = clip;
         loopSeSource.loop = true;
@@ -218,7 +225,25 @@ public class SoundEffectPlayer : MonoBehaviour
     /// <summary>ループ再生などを停止。</summary>
     public void Stop()
     {
-        seSource.Stop();
+        if (seSource != null)
+            seSource.Stop();
+    }
+
+    /// <summary>
+    /// 再生中の SE（ワンショット・ループ）をすべて停止する。
+    /// 進行中の Addressable 読み込み完了後の再生も無効化する。
+    /// </summary>
+    public void StopAll()
+    {
+        _playGeneration++;
+
+        if (seSource != null)
+        {
+            seSource.Stop();
+            seSource.clip = null;
+        }
+
+        StopLooping();
     }
 
     /// <summary>

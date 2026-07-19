@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -33,6 +33,9 @@ public sealed class RankMatchPopupView : MonoBehaviour
 
     [Header("UI（任意）")]
     [SerializeField] private Button closeButton;
+    [SerializeField] private Button rankRuleButton;
+    [Tooltip("未割当なら Resources/Prefab/RankMatchRule を使用。")]
+    [SerializeField] private RankMatchRulePopupView rankRulePopupPrefab;
 
     [Header("ポップアップ寸法（ContentRoot のサイズと揃える）")]
     [SerializeField] [Min(1f)] private float popupWidth = 920f;
@@ -64,6 +67,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
     bool _isOpen;
     bool _isAnimating;
     Action _onOpenComplete;
+    RankMatchRulePopupView _rankRulePopupInstance;
 
     public bool IsOpen => _isOpen;
     public bool IsAnimating => _isAnimating;
@@ -75,6 +79,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         SyncPopupMetricsFromContent();
         CacheShutterTargets();
         WireCloseButton();
+        WireRankRuleButton();
         ApplyInitialHiddenState();
     }
 
@@ -91,6 +96,12 @@ public sealed class RankMatchPopupView : MonoBehaviour
             closeButton.onClick.RemoveListener(OnCloseButtonClicked);
             closeButton.onClick.RemoveListener(CloseImmediate);
         }
+
+        if (rankRuleButton != null)
+            rankRuleButton.onClick.RemoveListener(OnRankRuleButtonClicked);
+
+        if (_rankRulePopupInstance != null)
+            _rankRulePopupInstance.Closed -= OnRankRulePopupClosed;
     }
 
     /// <summary>開く演出を再生します。既に開いている／再生中は false。</summary>
@@ -113,6 +124,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         _isAnimating = true;
         _onOpenComplete = onComplete;
         SetCloseButtonInteractable(false);
+        SetRankRuleButtonInteractable(false);
         PlayLineAppear();
         return true;
     }
@@ -126,6 +138,8 @@ public sealed class RankMatchPopupView : MonoBehaviour
         CacheShutterTargets();
         _isAnimating = true;
         SetCloseButtonInteractable(false);
+        SetRankRuleButtonInteractable(false);
+        _rankRulePopupInstance?.Close();
         PlayShutterClose();
         return true;
     }
@@ -142,6 +156,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         _isOpen = false;
         _isAnimating = false;
         _onOpenComplete = null;
+        _rankRulePopupInstance?.Close();
         gameObject.SetActive(false);
         Closed?.Invoke();
     }
@@ -158,6 +173,8 @@ public sealed class RankMatchPopupView : MonoBehaviour
             contentCanvasGroup = contentRoot.GetComponent<CanvasGroup>();
         if (closeButton == null && contentRoot != null)
             closeButton = contentRoot.Find("CloseButton")?.GetComponent<Button>();
+        if (rankRuleButton == null && contentRoot != null)
+            rankRuleButton = contentRoot.Find("RankRuleButton")?.GetComponent<Button>();
         if (profileBinder == null)
             profileBinder = GetComponent<RankMatchPopupProfileBinder>();
     }
@@ -203,6 +220,64 @@ public sealed class RankMatchPopupView : MonoBehaviour
         closeButton.onClick.RemoveListener(OnCloseButtonClicked);
         closeButton.onClick.RemoveListener(CloseImmediate);
         closeButton.onClick.AddListener(OnCloseButtonClicked);
+    }
+
+    void WireRankRuleButton()
+    {
+        if (rankRuleButton == null) return;
+        rankRuleButton.onClick.RemoveListener(OnRankRuleButtonClicked);
+        rankRuleButton.onClick.AddListener(OnRankRuleButtonClicked);
+    }
+
+    void OnRankRuleButtonClicked()
+    {
+        if (!_isOpen || _isAnimating) return;
+
+        var popup = EnsureRankRulePopupInstance();
+        if (popup == null) return;
+
+        SetRankRuleButtonInteractable(false);
+        popup.Open();
+    }
+
+    RankMatchRulePopupView EnsureRankRulePopupInstance()
+    {
+        if (_rankRulePopupInstance != null)
+            return _rankRulePopupInstance;
+
+        var prefab = rankRulePopupPrefab;
+        if (prefab == null)
+        {
+            prefab = Resources.Load<RankMatchRulePopupView>("Prefab/RankMatchRule");
+            if (prefab == null)
+            {
+                var prefabGo = Resources.Load<GameObject>("Prefab/RankMatchRule");
+                if (prefabGo != null)
+                    prefab = prefabGo.GetComponent<RankMatchRulePopupView>();
+            }
+        }
+
+        if (prefab == null)
+        {
+            Debug.LogError("[RankMatchPopupView] RankMatchRule プレハブが見つかりません。", this);
+            return null;
+        }
+
+        var parent = overlayRoot != null ? overlayRoot : transform;
+        _rankRulePopupInstance = Instantiate(prefab, parent, false);
+        _rankRulePopupInstance.Closed += OnRankRulePopupClosed;
+        return _rankRulePopupInstance;
+    }
+
+    void OnRankRulePopupClosed()
+    {
+        SetRankRuleButtonInteractable(true);
+    }
+
+    void SetRankRuleButtonInteractable(bool interactable)
+    {
+        if (rankRuleButton != null)
+            rankRuleButton.interactable = interactable;
     }
 
     bool ValidateRequiredReferences()
@@ -278,6 +353,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         _isAnimating = false;
         _isOpen = true;
         SetCloseButtonInteractable(true);
+        SetRankRuleButtonInteractable(true);
         _onOpenComplete?.Invoke();
         _onOpenComplete = null;
     }

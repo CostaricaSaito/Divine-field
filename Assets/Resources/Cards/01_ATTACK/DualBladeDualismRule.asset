@@ -1,14 +1,3 @@
-%YAML 1.1
-%TAG !u! tag:unity3d.com,2011:
---- !u!114 &11400000
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f2a3b4c5d6e7f8091a2b3c4d5e6f7081, type: 3}
-  m_Name: DualBladeDualismRule
-  m_EditorClassIdentifier: 
+version https://git-lfs.github.com/spec/v1
+oid sha256:8df2b469366b1c373cf7df61ee498c7208d12471dce1e2776e95084de63b3c97
+size 409

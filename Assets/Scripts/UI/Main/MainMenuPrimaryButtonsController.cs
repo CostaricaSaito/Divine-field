@@ -13,7 +13,7 @@ public sealed class MainMenuPrimaryButtonsController : MonoBehaviour
     public struct MainMenuButtonSlot
     {
         public RectTransform root;
-        [Tooltip("Build Settings のシーン名。空ならクリックしても遷移しません（Summon は SummonSelect.unity を想定）。")]
+        [Tooltip("Build Settings のシーン名。空ならクリックしても遷移しません（Summon は NewSummon.unity を想定）。")]
         public string sceneName;
         [Tooltip("着地点の anchoredPosition に対する開始オフセット（＋が右・上）。画面外から飛ばす量です。")]
         public Vector2 flyInStartOffset;

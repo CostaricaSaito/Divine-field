@@ -1,17 +1,3 @@
-%YAML 1.1
-%TAG !u! tag:unity3d.com,2011:
---- !u!114 &11400000
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5a1c9f2e8b4d4f7a9e1c3d6b8a2f5e1a, type: 3}
-  m_Name: UltimateEndRule
-  m_EditorClassIdentifier: 
-  castTurns: 3
-  backgroundSprite: {fileID: 21300000, guid: a7543b4f7996280479111cf54204186e, type: 3}
-  displayNameForRelease: "\u5996\u661F\u4E71\u821E"
+version https://git-lfs.github.com/spec/v1
+oid sha256:d11b5ccd485603270dd4ab22e9246f9cb7866324d2258f337caf3e32124d5aec
+size 559

@@ -2402,7 +2402,7 @@ public class BattleManager : MonoBehaviour
         if (nameT != null)
         {
             nameT.text = summon.specialSkillName;
-            summon.ApplyStyleTo(nameT, summon.popupSkillNameStyle);
+            summon.ApplyStyleTo(nameT, summon.textStyle);
         }
         if (descT != null)
         {
