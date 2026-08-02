@@ -92,6 +92,33 @@ public class BattleManager : MonoBehaviour
     /// <summary>反射連鎖で敵の防御選択に使用する。</summary>
     public EnemyAI GetEnemyAI() => enemyAI;
 
+    /// <summary>オンライン対戦中か（機能制限・入力送信の判定用）。</summary>
+    public bool IsOnlineMatch => OnlineMatchContext.IsOnline;
+
+    /// <summary>オンライン：相手の複数枚攻撃（受信値）。戦闘解決時に enemy 側の攻撃リストとして使う。</summary>
+    private List<CardData> _onlineEnemyAttackCombo;
+
+    /// <summary>CPU／演出用：相手ターン開始時の攻撃コンボ（複数枚時の合算属性判定用）。</summary>
+    private List<CardData> _enemyAttackComboForCombat;
+
+    public void SetEnemyAttackComboForCombat(List<CardData> cards)
+        => _enemyAttackComboForCombat = cards != null && cards.Count > 0
+            ? new List<CardData>(cards) : null;
+
+    public void ClearEnemyAttackComboForCombat() => _enemyAttackComboForCombat = null;
+
+    public void SetOnlineEnemyAttackCombo(List<CardData> cards)
+        => _onlineEnemyAttackCombo = cards != null ? new List<CardData>(cards) : null;
+
+    /// <summary>プレイヤー攻撃確定後の複数枚コンボ（UI 選択クリア後も戦闘・演出で参照）。</summary>
+    private List<CardData> _playerAttackComboForCombat;
+
+    public void SetPlayerAttackComboForCombat(List<CardData> cards)
+        => _playerAttackComboForCombat = cards != null && cards.Count > 0
+            ? new List<CardData>(cards) : null;
+
+    public void ClearPlayerAttackComboForCombat() => _playerAttackComboForCombat = null;
+
     /// <summary>
     /// 相手側 MagicPool のコピー（カード参照＋残り回数）。プレイヤー側から「相手がチャージしている魔法」を参照する用途。
     /// <see cref="MagicPoolManager"/> 更新時に同期される。
@@ -120,6 +147,9 @@ public class BattleManager : MonoBehaviour
 
     public GameState CurrentState { get; private set; } = GameState.OpeningPhase;
     public PlayerType CurrentTurnOwner { get; private set; } = PlayerType.Player;
+
+    /// <summary>Opening first-turn owner (for summon turn-end ordering).</summary>
+    public PlayerType OpeningTurnOwner { get; private set; } = PlayerType.Player;
 
     private CardData currentAttackCard;
 
@@ -226,6 +256,37 @@ public class BattleManager : MonoBehaviour
         _magicalExplosionMpSnapActive = false;
     }
 
+    /// <summary>気狂いハンマー：演出で決定したランダム攻撃力（ダメージ計算・表示用）。</summary>
+    private bool _hammadnessRollSnapActive;
+    private int _hammadnessRolledAttackPower;
+
+    public void SetHammadnessRollSnapshot(int rolledAttackPower)
+    {
+        _hammadnessRollSnapActive = true;
+        _hammadnessRolledAttackPower = Mathf.Clamp(
+            rolledAttackPower,
+            HammadnessRules.MinRollInclusive,
+            HammadnessRules.MaxRollInclusive);
+    }
+
+    public bool TryGetHammadnessRollSnapshot(out int rolledAttackPower)
+    {
+        if (_hammadnessRollSnapActive)
+        {
+            rolledAttackPower = _hammadnessRolledAttackPower;
+            return true;
+        }
+
+        rolledAttackPower = 0;
+        return false;
+    }
+
+    public void ClearHammadnessRollSnapshot()
+    {
+        _hammadnessRollSnapActive = false;
+        _hammadnessRolledAttackPower = 0;
+    }
+
     /// <summary>マジカルソード：MP 支払いで上乗せする攻撃力（プレイヤー今回分）。0 のとき上乗せなし。</summary>
     private int _magicalSwordAttackPowerBonus;
 
@@ -246,6 +307,28 @@ public class BattleManager : MonoBehaviour
     {
         _magicalSwordAttackPowerBonus = 0;
         _magicalSwordPlayerPreMeRampVisualDone = false;
+    }
+
+    /// <summary>オンライン：相手（enemy 側）がマジカルソードで支払った上乗せ攻撃力（RemotePlayerAgent が受信して設定）。</summary>
+    private int _magicalSwordEnemyAttackPowerBonus;
+
+    public int MagicalSwordEnemyAttackPowerBonus => _magicalSwordEnemyAttackPowerBonus;
+
+    public void SetMagicalSwordEnemyAttackPowerBonus(int value) => _magicalSwordEnemyAttackPowerBonus = Mathf.Max(0, value);
+
+    public void ClearMagicalSwordEnemyAttackPowerBonus() => _magicalSwordEnemyAttackPowerBonus = 0;
+
+    /// <summary>マジカルエクスプロージョン演出前：敵マジカルソード ATK ランプ済み（Resolve 内重複防止）。</summary>
+    private bool _magicalSwordEnemyPreMeRampVisualDone;
+
+    public bool MagicalSwordEnemyPreMeRampVisualDone => _magicalSwordEnemyPreMeRampVisualDone;
+
+    public void SetMagicalSwordEnemyPreMeRampVisualDone(bool value) => _magicalSwordEnemyPreMeRampVisualDone = value;
+
+    public void ClearMagicalSwordEnemyAttackState()
+    {
+        _magicalSwordEnemyAttackPowerBonus = 0;
+        _magicalSwordEnemyPreMeRampVisualDone = false;
     }
 
     /// <summary>敵の双剣デュアリズム：プレイヤー防御1回目解決直後=0、2回目の防御入力待ち中=1。</summary>
@@ -299,11 +382,13 @@ public class BattleManager : MonoBehaviour
 
             if (currentAttackCard != null)
             {
-                BattleUIManager.I?.ShowCardSheetVisualOnly(currentAttackCard, Side.Enemy);
-                cardStatsDisplay?.SetSequenceCards(
-                    new List<CardData> { currentAttackCard },
-                    "攻撃",
-                    Side.Enemy);
+                var atkList = GetAttackCardsForCombat();
+                if (atkList == null || atkList.Count == 0)
+                    atkList = new List<CardData> { currentAttackCard };
+
+                BattleUIManager.I?.ClearAllCardDisplaysAndSelectionImmediate();
+                BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(atkList, Side.Enemy);
+                cardStatsDisplay?.SetSequenceCards(atkList, "攻撃", Side.Enemy);
                 cardStatsDisplay?.UpdateDisplay();
                 SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             }
@@ -320,6 +405,7 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.SetUseButtonLabel("許す");
             RefreshPlayerDefensePhaseInteractivity();
             BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            TryAutoPassPlayerDefenseIfChantingArchMagic();
         }
         finally
         {
@@ -333,6 +419,11 @@ public class BattleManager : MonoBehaviour
     public void SetCurrentAttackCard(CardData card)
     {
         currentAttackCard = card;
+        if (card == null)
+        {
+            ClearPlayerAttackComboForCombat();
+            ClearEnemyAttackComboForCombat();
+        }
     }
 
     /// <summary>
@@ -382,6 +473,24 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
+        if (fromDefense || fromIntervention || fromDualBladeSecond || fromReflectionChain || fromParryRerun)
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi();
+            if (BlockingRules.IsPhysicalBlockingCard(card)
+                && (incoming == null || !BlockingRules.CanUsePhysicalBlockingAgainstAttack(card, incoming)))
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                    "無属性の物理攻撃にのみ使えます", new Color(0.85f, 0.25f, 0.2f));
+                return;
+            }
+            if (card.cardType == CardType.Magic && playerStatus != null
+                && !BlockingRules.CanAffordMagicDefenseMp(card, playerStatus))
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                return;
+            }
+        }
+
         // ShowCardDetail 内で AddCardSelection / CancelCardSelection が処理される
         selectedCard = card;
         BattleUIManager.I?.ShowCardDetail(card, Side.Player);
@@ -416,6 +525,10 @@ public class BattleManager : MonoBehaviour
     private bool isProcessingUseButton;
     public bool IsUseButtonLocked => isProcessingUseButton;
 
+    /// <summary>DefensePhase で「許す／使用」確定後、戦闘解決完了まで true。</summary>
+    private bool _playerDefenseCombatResolving;
+    public bool IsPlayerDefenseCombatResolving => _playerDefenseCombatResolving;
+
     /// <summary>
     /// 選択中のカードを取得（CardStatsDisplayから使用）
     /// </summary>
@@ -435,12 +548,12 @@ public class BattleManager : MonoBehaviour
         ElementType attackElement = ElementHelper.GetCombinedElement(playerAttackCards);
         selectedDefenseCard = await enemyAI.ExecuteDefenseSelectAsync(cpuHand, attackElement, playerAttackCards);
         cardStatsDisplay?.UpdateDisplay();
-        if (selectedDefenseCard != null)
-        {
-            BattleUIManager.I?.ShowCardDetail(selectedDefenseCard, Side.Enemy);
-            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-            await Task.Delay(500);
-        }
+
+        var defenseCards = GetEnemyDefenseCardsForCombat();
+        if (defenseCards == null || defenseCards.Count == 0)
+            return;
+
+        await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCards);
     }
 
     private CancellationTokenSource _phaseCts;
@@ -484,6 +597,7 @@ public class BattleManager : MonoBehaviour
 
         RefreshPlayerDefensePhaseInteractivity();
         BattleUIManager.I?.SetHandClickable(true);
+        TryAutoPassPlayerDefenseIfChantingArchMagic();
     }
 
     public async Task WaitForInterventionPlayerDefenseSubmitAsync(CancellationToken ct)
@@ -517,10 +631,88 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
+        if (IsOnlineMatch && selectedDefenseCards.Count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetUseButtonInteractable(true);
+            BattleUIManager.I?.SetHandClickable(true);
+            return;
+        }
+
+        // オンライン：介入防御の確定選択（空＝許す）を相手へ送信
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+
         _interventionDefenseSubmitTcs?.TrySetResult(true);
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
         isProcessingUseButton = false;
+    }
+
+    private bool IsPlayerChantingArchMagicWhileDefending()
+    {
+        if (playerStatus == null || !playerStatus.IsCastingArchMagic)
+            return false;
+
+        return (CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
+            || IsInterventionDefenseWaitActive()
+            || IsPlayerDualBladeSecondDefenseWaitActive()
+            || IsReflectionChainDefensePending()
+            || IsParryRerunDefensePending();
+    }
+
+    private void ApplyArchMagicChantingDefenseBlockUi()
+    {
+        if (BattleUIManager.I == null) return;
+        BattleUIManager.I.RefreshDefenseInteractivity(playerHand, new List<CardData>());
+        BattleUIManager.I.UpdateDefenseButtonLabel();
+        RefreshPlayerHandStatusTextForDefenseSnapshot();
+    }
+
+    /// <summary>詠唱中プレイヤーは防御不可。「許す」相当で即進行する。</summary>
+    private bool TryAutoPassPlayerDefenseIfChantingArchMagic()
+    {
+        if (!IsPlayerChantingArchMagicWhileDefending())
+            return false;
+
+        ApplyArchMagicChantingDefenseBlockUi();
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.SetHandClickable(false);
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+        isProcessingUseButton = false;
+
+        if (IsInterventionDefenseWaitActive())
+        {
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(null);
+            _interventionDefenseSubmitTcs?.TrySetResult(true);
+            return true;
+        }
+
+        if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
+        {
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(null);
+            _reflectionChainDefenseTcs.TrySetResult(new List<CardData>());
+            UpdateTotalATKDEFDisplay();
+            return true;
+        }
+
+        if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
+        {
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(null);
+            _parryRerunDefenseTcs.TrySetResult(new List<CardData>());
+            UpdateTotalATKDEFDisplay();
+            return true;
+        }
+
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(null);
+        HandleNoDefenseCard();
+        return true;
     }
 
     /// <summary>
@@ -541,6 +733,12 @@ public class BattleManager : MonoBehaviour
             && !parryRerunWait)
             return;
         if (BattleUIManager.I == null) return;
+
+        if (IsPlayerChantingArchMagicWhileDefending())
+        {
+            ApplyArchMagicChantingDefenseBlockUi();
+            return;
+        }
 
         List<CardData> attackSource;
         if (interventionDefense && _interventionAttackForDefenseUi != null)
@@ -675,6 +873,8 @@ public class BattleManager : MonoBehaviour
         RefreshPlayerDefensePhaseInteractivity();
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+        TryAutoPassPlayerDefenseIfChantingArchMagic();
+
         try
         {
             using (cancellationToken.Register(() =>
@@ -768,6 +968,7 @@ public class BattleManager : MonoBehaviour
         RefreshReflectionChainInteractivity(attackSnapshot);
         RefreshPlayerDefensePhaseInteractivity();
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        TryAutoPassPlayerDefenseIfChantingArchMagic();
 
         try
         {
@@ -799,6 +1000,12 @@ public class BattleManager : MonoBehaviour
     private void RefreshReflectionChainInteractivity(List<CardData> attackSnapshot)
     {
         if (BattleUIManager.I == null || attackSnapshot == null) return;
+
+        if (IsPlayerChantingArchMagicWhileDefending())
+        {
+            ApplyArchMagicChantingDefenseBlockUi();
+            return;
+        }
 
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackSnapshot))
         {
@@ -917,17 +1124,27 @@ public class BattleManager : MonoBehaviour
 
     void Start()
     {
+        // オンライン対戦：決定的乱数を初期化し、敵入力をリモートエージェントへ差し替える
+        if (OnlineMatchContext.IsOnline)
+        {
+            BattleRandom.InitOnline(OnlineMatchContext.RandomSeed, OnlineMatchContext.IsHost);
+            enemyAI = new RemotePlayerAgent();
+            Debug.Log($"[BattleManager] Online mode (host={OnlineMatchContext.IsHost}, opponent={OnlineMatchContext.RemotePlayerName})");
+        }
+
         // ステータス初期化
         playerStatus = new PlayerStatus();
         enemyStatus = new PlayerStatus();
         playerStatus.InitializeAsPlayer();
         enemyStatus.InitializeAsEnemy();
 
-        // 召喚データ（プレイヤー：選択済み、敵：ランダム）
+        // 召喚データ（プレイヤー：選択済み、敵：オンラインは相手の選択・CPUはランダム）
         if (SummonSelectionManager.I != null)
         {
             playerStatus.summonData = SummonSelectionManager.I.GetSelectedSummonData();
-            enemyStatus.summonData = GetRandomEnemySummon();
+            enemyStatus.summonData = OnlineMatchContext.IsOnline
+                ? enemyAI.SelectRandomEnemySummon()
+                : GetRandomEnemySummon();
         }
         else
         {
@@ -944,8 +1161,11 @@ public class BattleManager : MonoBehaviour
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        var battleDebug = FindObjectOfType<BattleDebugTools>();
-        battleDebug?.ApplyInitialSummonOverrides(playerStatus, enemyStatus);
+        if (!OnlineMatchContext.IsOnline)
+        {
+            var battleDebug = FindObjectOfType<BattleDebugTools>();
+            battleDebug?.ApplyInitialSummonOverrides(playerStatus, enemyStatus);
+        }
 #endif
 
         summonSkillButton?.Configure(playerStatus, enemyStatus);
@@ -1123,7 +1343,6 @@ public class BattleManager : MonoBehaviour
         await RunOpeningDealAsync(openingPlayer, openingCpu);
 
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
 
         await System.Threading.Tasks.Task.Delay(System.TimeSpan.FromSeconds(cutInDelay));
 
@@ -1148,6 +1367,15 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private void DetermineOpeningFirstTurn()
     {
+        // オンライン対戦：ハンドシェイクでホストが決定済み（自分視点に変換済み）
+        if (OnlineMatchContext.IsOnline)
+        {
+            CurrentTurnOwner = OnlineMatchContext.LocalPlayerGoesFirst ? PlayerType.Player : PlayerType.Enemy;
+            OpeningTurnOwner = CurrentTurnOwner;
+            Debug.Log($"[BattleManager] 先攻(オンライン): {CurrentTurnOwner}");
+            return;
+        }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         var dbg = FindObjectOfType<BattleDebugTools>();
         if (dbg != null)
@@ -1157,6 +1385,7 @@ public class BattleManager : MonoBehaviour
 #else
         CurrentTurnOwner = RollRandomOpeningTurnOwner();
 #endif
+        OpeningTurnOwner = CurrentTurnOwner;
         Debug.Log($"[BattleManager] 先攻: {CurrentTurnOwner}");
     }
 
@@ -1168,7 +1397,7 @@ public class BattleManager : MonoBehaviour
     private void OnStandByPhaseEntered()
     {
         BattleUIManager.I?.HideYurusuButton();
-        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters);
+        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters, CurrentTurnOwner);
 
         if (CurrentTurnOwner == PlayerType.Player)
         {
@@ -1190,6 +1419,8 @@ public class BattleManager : MonoBehaviour
 
         BattleUIManager.I?.HideAllCardDetails();
         currentAttackCard = null;
+        _onlineEnemyAttackCombo = null;
+        ClearMagicalSwordEnemyAttackState();
         SetSuppressEnemyStaleAttackerInTotalByOrb(false);
         cardStatsDisplay?.UpdateDisplay();
 
@@ -1225,7 +1456,9 @@ public class BattleManager : MonoBehaviour
 
         // 大魔法詠唱中は通常の攻撃フェーズを差し替え、詠唱演出 → TurnEnd（または発動）を走らせる。
         var castOwner = Attacker == PlayerType.Player ? playerStatus : enemyStatus;
-        if (castOwner != null && castOwner.IsCastingArchMagic && cardSequenceManager != null)
+        if (castOwner != null && castOwner.IsCastingArchMagic && cardSequenceManager != null
+            && !cardSequenceManager.IsArchMagicCastIntroInProgress
+            && !cardSequenceManager.IsArchMagicCountdownInProgress)
         {
             BattleUIManager.I?.SetHandClickable(false);
             BattleUIManager.I?.SetUseButtonInteractable(false);
@@ -1271,10 +1504,11 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 敵が攻撃側の AttackPhase：AI が攻撃を選ぶまでプレイヤーは防御選択しない（DefensePhase まで待つ）
+            // 敵が攻撃側の AttackPhase：相手の選択待ち。手札・魔法パネルはすべてグレーアウト
             BattleUIManager.I?.SetHandClickable(false);
             BattleUIManager.I?.SetUseButtonInteractable(false);
-            BattleUIManager.I?.SetIntroModeUI(playerHand);
+            BattleUIManager.I?.SetHandGrayedOut(playerHand, grayedOut: true);
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         }
 
         RefreshSummonSkillButtonInteractables();
@@ -1344,6 +1578,7 @@ public class BattleManager : MonoBehaviour
                 RefreshPlayerDefensePhaseInteractivity();
 
                 BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+                TryAutoPassPlayerDefenseIfChantingArchMagic();
             }
         }
         finally
@@ -1395,21 +1630,11 @@ public class BattleManager : MonoBehaviour
                 return;
             }
 
-            // 敵の単一防御カードの処理
-            var defenseCardToDisplay = selectedDefenseCard;
-            if (defenseCardToDisplay != null)
+            // 敵の防御カードの処理（複数枚対応）
+            var defenseCardsToDisplay = GetEnemyDefenseCardsForCombat();
+            if (defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0)
             {
-                // 敵の防御カードを表示
-                BattleUIManager.I?.ShowCardDetail(defenseCardToDisplay, Side.Enemy);
-
-                // 防御カード表示時の効果音
-                SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-
-                Debug.Log($"[BattleManager] 防御カード表示: {defenseCardToDisplay.cardName}");
-
-                // 0.5秒待機
-                await Task.Delay(500);
-                Debug.Log("[BattleManager] 防御カード表示完了、0.5秒待機");
+                await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCardsToDisplay);
             }
 
             var atk = (Attacker == PlayerType.Player) ? playerStatus : enemyStatus;
@@ -1417,9 +1642,22 @@ public class BattleManager : MonoBehaviour
             var defHand = (Defender == PlayerType.Player) ? playerHand : cpuHand;
 
             List<CardData> attackCards = GetAttackCardsForCombat();
+            var defenseCardsForCombat = defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0
+                ? defenseCardsToDisplay
+                : new List<CardData>();
+            CardData enemyDefenseCard = defenseCardsForCombat.Count > 0 ? defenseCardsForCombat[0] : null;
+
+            bool enemyPhysicalReflect = enemyDefenseCard != null
+                && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(enemyDefenseCard, attackCards);
+            bool enemyMagicReflect = enemyDefenseCard != null
+                && ReflectionRules.CanUseMagicReflectionAgainstAttack(enemyDefenseCard, attackCards);
+            bool enemyPhysicalBlock = enemyDefenseCard != null
+                && BlockingRules.CanUsePhysicalBlockingAgainstAttack(enemyDefenseCard, attackCards);
+            bool enemyParry = enemyDefenseCard != null
+                && ParryRules.RequiresParryExclusiveLock(enemyDefenseCard, attackCards);
 
             bool showYurusuDuringCombat =
-                Defender == PlayerType.Enemy && selectedDefenseCard == null && BattleUIManager.I != null;
+                Defender == PlayerType.Enemy && defenseCardsForCombat.Count == 0 && BattleUIManager.I != null;
             if (showYurusuDuringCombat)
                 BattleUIManager.I.ShowYurusuDisplay();
 
@@ -1431,9 +1669,49 @@ public class BattleManager : MonoBehaviour
                     await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, _phaseCts.Token);
                     await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
                 }
+                else if (enemyPhysicalReflect || enemyMagicReflect)
+                {
+                    await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
+                        this,
+                        battleProcessor,
+                        handRefill,
+                        enemyAI,
+                        attackCards,
+                        enemyDefenseCard,
+                        _phaseCts.Token);
+                }
+                else if (enemyParry)
+                {
+                    await ParryFlow.RunEnemyDefenderParriesPlayerAttackAsync(
+                        this,
+                        battleProcessor,
+                        handRefill,
+                        enemyAI,
+                        attackCards,
+                        enemyDefenseCard,
+                        _phaseCts.Token);
+                }
+                else if (enemyPhysicalBlock)
+                {
+                    if (enemyDefenseCard.cardType == CardType.Magic && cardSequenceManager != null)
+                        await cardSequenceManager.ApplyEnemyMagicDefenseFromHandOrPoolAsync(enemyDefenseCard);
+                    await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                        this,
+                        battleProcessor,
+                        handRefill,
+                        attackCards,
+                        enemyDefenseCard,
+                        _phaseCts.Token,
+                        defenseCardAlreadyConsumed: enemyDefenseCard.cardType == CardType.Magic);
+                }
+                else if (defenseCardsForCombat.Count > 1)
+                {
+                    await battleProcessor.ResolveCombatAsync(attackCards, defenseCardsForCombat, atk, def, defHand);
+                }
                 else
                 {
-                    await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand);
+                    CardData singleDef = defenseCardsForCombat.Count == 1 ? defenseCardsForCombat[0] : null;
+                    await battleProcessor.ResolveCombatAsync(attackCards, singleDef, atk, def, defHand);
                 }
             }
             finally
@@ -1445,17 +1723,23 @@ public class BattleManager : MonoBehaviour
             if (_phaseCts.Token.IsCancellationRequested) return;
 
             ClearMagicalExplosionComboMpPoolSnapshot();
-            // ダメージ処理完了後、全カード表示をクリア
+            ClearHammadnessRollSnapshot();
             BattleUIManager.I?.HideAllCardDetails();
 
-            // 敵の防御カード使用処理（裏向きにする）
-            if (defenseCardToDisplay != null
-                && !(attackCards != null && attackCards.Count == 1 && attackCards[0] != null
-                    && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)))
+            bool skipPostCombatEnemyDefenseUse = enemyPhysicalReflect || enemyMagicReflect || enemyParry
+                || enemyPhysicalBlock
+                || (attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+                    && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards));
+            if (defenseCardsForCombat.Count > 0 && !skipPostCombatEnemyDefenseUse)
             {
-                // HandRefillServiceに使用を記録（UseCardの前に呼ぶ必要がある）
-                handRefill?.RecordEnemyUse(defenseCardToDisplay);
-                battleProcessor.UseCard(defenseCardToDisplay, defHand);
+                foreach (var defenseCardToUse in defenseCardsForCombat)
+                {
+                    if (defenseCardToUse == null) continue;
+                    if (IsOnlineMatch && defenseCardToUse.cardType == CardType.Magic)
+                        continue;
+                    handRefill?.RecordEnemyUse(defenseCardToUse);
+                    battleProcessor.UseCard(defenseCardToUse, defHand);
+                }
             }
 
             cardStatsDisplay?.ClearSequenceCards();
@@ -1478,6 +1762,12 @@ public class BattleManager : MonoBehaviour
 
         try
         {
+            if (CurrentState != GameState.CombatResolvePhase) return;
+
+            // オンライン：戦闘解決直後のダメージ結果（HP/MP/GP）をホスト権威で同期する
+            ClearMagicalSwordEnemyAttackState();
+            await RunOnlineResolveStateSyncAsync(phaseToken);
+
             if (CurrentState != GameState.CombatResolvePhase) return;
 
             // 戦闘ダメージで大魔法詠唱がキャンセルされた場合の演出を先に消化する。
@@ -1543,14 +1833,14 @@ public class BattleManager : MonoBehaviour
 
             if (CurrentState != GameState.EndPhase) return;
 
-            // ガルーダ：5n ターン終了時はメッセージ → インターバル → 裏向きドロー → 表向け（Refill より前）
+            // Summon turn-end passives (Garuda draw / Indra hand destroy) before Refill
             try
             {
-                await SummonGarudaLifecycle.ProcessTurnEndBonusAsync(this, _summonTurnCounters, phaseToken);
+                await SummonTurnEndLifecycle.ProcessTurnEndAsync(this, _summonTurnCounters, phaseToken);
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("[BattleManager] SummonGarudaLifecycle: キャンセル");
+                Debug.Log("[BattleManager] SummonTurnEndLifecycle: cancelled");
             }
             catch (Exception ex)
             {
@@ -1594,7 +1884,16 @@ public class BattleManager : MonoBehaviour
 
             shouldGrayOutCards = true;
 
-            ToggleTurnOwner();
+            // オンライン：両者の演出完了を待ち合わせ、ホスト権威で
+            // HP/MP/GP・手札全リスト・次ターン所有者・ターンカウンタを同期してから次ターンへ
+            bool turnOwnerAppliedBySync = false;
+            if (IsOnlineMatch && !_gameEndTriggered)
+                turnOwnerAppliedBySync = await RunOnlineTurnBoundarySyncAsync(phaseToken);
+
+            if (CurrentState != GameState.EndPhase) return;
+
+            if (!turnOwnerAppliedBySync)
+                ToggleTurnOwner();
             SetGameState(GameState.StandByPhase);
         }
         catch (Exception ex)
@@ -1657,15 +1956,27 @@ public class BattleManager : MonoBehaviour
         _playerDefenseVsEnemyDualBladeStreakIndex = 0;
 
         var token = _phaseCts != null ? _phaseCts.Token : default;
+        var atkList = GetEnemyAttackCardsForTurn(attack);
+        SetEnemyAttackComboForCombat(atkList);
 
-        if (MagicalExplosionRules.IsMagicalExplosionCard(attack) && cardSequenceManager != null)
+        if (atkList.Count == 1 && ArchMagicRules.IsArchMagicCard(attack))
         {
-            Debug.Log("[BattleManager] 敵マジカルエクスプロージョン演出（MP 全喪失・ATK ランプ）");
-            await cardSequenceManager.PresentEnemyMagicalExplosionAttackAsync(attack, token);
-            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
-            cardStatsDisplay?.UpdateDisplay();
+            Debug.Log($"[BattleManager] Enemy ArchMagic cast start: {attack.cardName}");
+            if (cardSequenceManager != null)
+            {
+                try
+                {
+                    await cardSequenceManager.StartArchMagicCastIntroAsync(attack, Side.Enemy, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                return;
+            }
         }
-        else if (CardRules.IsImmediateAction(attack))
+
+        if (CardRules.IsImmediateAction(attack) && atkList.Count == 1)
         {
             Debug.Log($"[BattleManager] 相手の即時カード: {attack.cardName}");
             try
@@ -1693,6 +2004,7 @@ public class BattleManager : MonoBehaviour
                     cardStatsDisplay?.ClearSequenceCards();
                     currentAttackCard = null;
                     ClearMagicalExplosionComboMpPoolSnapshot();
+                    ClearHammadnessRollSnapshot();
                     BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
                     cardStatsDisplay?.UpdateDisplay();
                     SetGameState(GameState.CombatResolvePhase);
@@ -1702,6 +2014,13 @@ public class BattleManager : MonoBehaviour
 
             SetGameState(GameState.DefensePhase);
             return;
+        }
+        else if (ShouldUseEnemyAttackPresentationSequence(atkList, attack))
+        {
+            Debug.Log($"[BattleManager] 敵攻撃演出: {atkList.Count}枚");
+            await cardSequenceManager.PresentOnlineEnemyAttackSequenceAsync(atkList, token);
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            cardStatsDisplay?.UpdateDisplay();
         }
         else
         {
@@ -1714,10 +2033,8 @@ public class BattleManager : MonoBehaviour
             await Task.Delay(1000);
         }
 
-        var atkList = new List<CardData> { attack };
-
         bool confusedEnemy = enemyStatus != null && enemyStatus.HasConfusionEffect();
-        bool confusionTargetSelf = confusedEnemy && UnityEngine.Random.Range(0, 2) == 0;
+        bool confusionTargetSelf = confusedEnemy && BattleRandom.Range(0, 2) == 0;
         if (confusedEnemy)
             SetConfusionAttackTargetResolvedForDisplay(confusionTargetSelf);
 
@@ -1745,6 +2062,32 @@ public class BattleManager : MonoBehaviour
         if (confusedEnemy)
             cardStatsDisplay?.UpdateDisplay();
 
+        // オンライン：相手が TOTAL 切替で「自分自身」を攻撃対象にした場合、
+        // こちらの防御フェーズはなく、相手自身に対して解決する（相手側の selfAttack 分岐のミラー）
+        if (!confusedEnemy && IsOnlineMatch
+            && enemyAI is RemotePlayerAgent remoteSelfAgent && remoteSelfAgent.LastAttackTargetSelf)
+        {
+            Debug.Log("[BattleManager] オンライン: 相手の自己対象攻撃を相手自身に解決（防御フェーズなし）");
+            cardStatsDisplay?.UpdateDisplay();
+            await Task.Delay(500);
+            if (cardSequenceManager != null)
+            {
+                bool selfAttackFinished = await cardSequenceManager.ResolvePlayerAttackCombatAsync(
+                    atkList, enemyStatus, enemyStatus, cpuHand, token);
+                BattleUIManager.I?.HideAllCardDetails();
+                currentAttackCard = null;
+                cardStatsDisplay?.UpdateDisplay();
+                if (!selfAttackFinished)
+                    return;
+                SetGameState(GameState.CombatResolvePhase);
+                return;
+            }
+
+            Debug.LogError("[BattleManager] CardSequenceManager が未設定のため、相手の自己対象攻撃を解決できません");
+            SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
         int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus, playerStatus);
         bool rolledHit = HitRateRules.RollHit(finalPct);
@@ -1756,7 +2099,10 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.HideAllCardDetails();
             cardStatsDisplay?.ClearSequenceCards();
             cardStatsDisplay?.ClearMagicalExplosionAttackDisplayLocks();
+            cardStatsDisplay?.ClearHammadnessAttackDisplayLocks();
             ClearMagicalExplosionComboMpPoolSnapshot();
+            ClearHammadnessRollSnapshot();
+            ClearMagicalSwordEnemyAttackState();
             currentAttackCard = null;
             SetGameState(GameState.CombatResolvePhase);
             return;
@@ -1771,7 +2117,39 @@ public class BattleManager : MonoBehaviour
             await DamagePopup.WaitAfterPopupLifetimeAsync(popupSec);
         }
 
+        if (cardSequenceManager != null)
+            await cardSequenceManager.PlayAttackModifierRampsAfterHitAsync(atkList, enemyStatus, playerStatus, token);
+
         SetGameState(GameState.DefensePhase);
+    }
+
+    private List<CardData> GetEnemyAttackCardsForTurn(CardData primary)
+    {
+        if (_onlineEnemyAttackCombo != null && _onlineEnemyAttackCombo.Count > 0)
+            return new List<CardData>(_onlineEnemyAttackCombo);
+        if (enemyAI?.LastAttackSelection != null && enemyAI.LastAttackSelection.Count > 0)
+            return new List<CardData>(enemyAI.LastAttackSelection);
+        return primary != null ? new List<CardData> { primary } : new List<CardData>();
+    }
+
+    private bool ShouldUseEnemyAttackPresentationSequence(List<CardData> atkList, CardData primary)
+    {
+        if (cardSequenceManager == null || atkList == null || atkList.Count == 0) return false;
+        if (RemotePlayerAgent.ShouldDeferRemoteAttackBookkeeping(atkList)) return true;
+        if (atkList.Count > 1) return true;
+        if (MagicalExplosionRules.ContainsMagicalExplosion(atkList)) return true;
+        if (HammadnessRules.ContainsHammadness(atkList)) return true;
+        return false;
+    }
+
+    public List<CardData> GetEnemyDefenseCardsForCombat()
+    {
+        if (enemyAI is RemotePlayerAgent remote
+            && remote.LastDefenseSelection != null && remote.LastDefenseSelection.Count > 0)
+            return new List<CardData>(remote.LastDefenseSelection);
+        if (selectedDefenseCard != null)
+            return new List<CardData> { selectedDefenseCard };
+        return new List<CardData>();
     }
 
     public void SetSelectedCard(CardUI ui)
@@ -1876,7 +2254,7 @@ public class BattleManager : MonoBehaviour
 
     public void OnUseButtonPressed()
     {
-        if (isProcessingUseButton) return;
+        if (isProcessingUseButton || _playerDefenseCombatResolving) return;
         isProcessingUseButton = true;
         BattleUIManager.I?.SetUseButtonInteractable(false);
         BattleUIManager.I?.SetHandClickable(false);
@@ -1927,22 +2305,25 @@ public class BattleManager : MonoBehaviour
     private PlayerStatus ComputeImmediateEffectTargetForPlayerAttack(CardData card)
     {
         if (playerStatus != null && playerStatus.HasConfusionEffect())
-            return UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+            return BattleRandom.Range(0, 2) == 0 ? playerStatus : enemyStatus;
         bool recover = card != null && CardRules.IsRecoveryCard(card);
         if (recover)
             return _playerSelfAttackTargetMode ? enemyStatus : playerStatus;
         return _playerSelfAttackTargetMode ? playerStatus : enemyStatus;
     }
 
-    /// <summary>敵ターンの即時効果の対象（回復＝自分、それ以外＝プレイヤー。混乱時はランダム）。</summary>
+    /// <summary>敵ターンの即時効果の対象（回復＝自分、それ以外＝プレイヤー。混乱時はランダム）。
+    /// オンラインでは相手が送ってきた対象トグル（自分へ攻撃／相手へ回復）を反映する。</summary>
     private PlayerStatus ResolveCpuImmediateEffectTarget(CardData attack)
     {
         if (attack == null) return playerStatus;
         if (enemyStatus != null && enemyStatus.HasConfusionEffect())
-            return UnityEngine.Random.Range(0, 2) == 0 ? enemyStatus : playerStatus;
+            return BattleRandom.Range(0, 2) == 0 ? enemyStatus : playerStatus;
+        bool remoteTargetToggled = IsOnlineMatch
+            && enemyAI is RemotePlayerAgent remoteAgent && remoteAgent.LastAttackTargetSelf;
         if (CardRules.IsRecoveryCard(attack))
-            return enemyStatus;
-        return playerStatus;
+            return remoteTargetToggled ? playerStatus : enemyStatus;
+        return remoteTargetToggled ? enemyStatus : playerStatus;
     }
 
     private async Task ResolveImmediateEffectAsync(CardData card, int slotIndex, PlayerStatus presetEffectTarget = null)
@@ -1960,7 +2341,7 @@ public class BattleManager : MonoBehaviour
             if (playerStatus != null && playerStatus.HasConfusionEffect())
             {
                 ClearPlayerSelfAttackTargetMode();
-                effectTarget = UnityEngine.Random.Range(0, 2) == 0 ? playerStatus : enemyStatus;
+                effectTarget = BattleRandom.Range(0, 2) == 0 ? playerStatus : enemyStatus;
             }
             else
             {
@@ -2112,6 +2493,15 @@ public class BattleManager : MonoBehaviour
         var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
         if (selectedAttackCards == null || selectedAttackCards.Count == 0)
         {
+            // オンライン：攻撃可能カードなし＝「祈り」でターンをパスし、相手に空の攻撃を通知する
+            if (IsOnlineMatch && CardRules.GetAttackChoices(playerHand).Count == 0)
+            {
+                Debug.Log("[BattleManager] オンライン: 攻撃パス（祈り）");
+                NetworkBattleBridge.SendAttackSelection(null);
+                SetGameState(GameState.CombatResolvePhase);
+                return;
+            }
+
             Debug.LogWarning("攻撃カードが選択されていません");
             isProcessingUseButton = false;
             BattleUIManager.I?.SetUseButtonInteractable(false);
@@ -2131,6 +2521,15 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        if (!AttackComboSelectionRules.IsValidAttackSelection(selectedAttackCards))
+        {
+            isProcessingUseButton = false;
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("先に攻撃カードを選んでください", new Color(0.85f, 0.35f, 0.15f));
+            BattleUIManager.I?.SetHandClickable(true);
+            UpdateTotalATKDEFDisplay();
+            return;
+        }
+
         int totalMagicMp = playerStatus.GetTotalEffectiveMagicMpForCards(selectedAttackCards);
         if (totalMagicMp > playerStatus.currentMP)
         {
@@ -2140,6 +2539,11 @@ public class BattleManager : MonoBehaviour
             UpdateTotalATKDEFDisplay();
             return;
         }
+
+        // オンライン：検証を通過した確定選択を相手へ送信（相手側では RemotePlayerAgent が受信して同じ処理を実行）
+        // 対象トグル（自分へ攻撃／相手へ回復）も一緒に送り、相手側で同じ対象解決を行う
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendAttackSelection(selectedAttackCards, _playerSelfAttackTargetMode);
 
         // 即時効果（回復・OnCardEffectResolve の状態異常など）の場合は通常処理
         // ※魔法カードはここでも MagicPool へ登録する（従来は即時分岐のみだと CardSequenceManager を経由せずプールに載らなかった）
@@ -2171,9 +2575,22 @@ public class BattleManager : MonoBehaviour
 
     private void HandleDefenseUse()
     {
+        if (_playerDefenseCombatResolving)
+            return;
+
+        if (IsPlayerChantingArchMagicWhileDefending())
+        {
+            TryAutoPassPlayerDefenseIfChantingArchMagic();
+            return;
+        }
+
         var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
         if (selectedDefenseCards == null || selectedDefenseCards.Count == 0)
         {
+            // オンライン：空＝「許す」を相手へ通知
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(null);
+
             if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
             {
                 _reflectionChainDefenseTcs.TrySetResult(new List<CardData>());
@@ -2206,6 +2623,9 @@ public class BattleManager : MonoBehaviour
                 return;
             }
 
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+
             _reflectionChainDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
             BattleUIManager.I?.ClearAllSelections();
             UpdateTotalATKDEFDisplay();
@@ -2222,6 +2642,9 @@ public class BattleManager : MonoBehaviour
                 return;
             }
 
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+
             _parryRerunDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
             BattleUIManager.I?.ClearAllSelections();
             UpdateTotalATKDEFDisplay();
@@ -2235,6 +2658,33 @@ public class BattleManager : MonoBehaviour
         {
             BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
             return;
+        }
+
+        // オンライン：確定した防御選択を相手へ送信
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+
+        if (Defender == PlayerType.Player && selectedDefenseCards.Count > 0)
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi();
+            foreach (var defCard in selectedDefenseCards)
+            {
+                if (defCard == null) continue;
+                if (defCard.cardType == CardType.Magic && playerStatus != null
+                    && !BlockingRules.CanAffordMagicDefenseMp(defCard, playerStatus))
+                {
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                    return;
+                }
+                if (BlockingRules.IsPhysicalBlockingCard(defCard)
+                    && (incoming == null
+                        || !BlockingRules.CanUsePhysicalBlockingAgainstAttack(defCard, incoming)))
+                {
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                        "無属性の物理攻撃にのみ使えます", new Color(0.85f, 0.25f, 0.2f));
+                    return;
+                }
+            }
         }
 
         // 防御カードの演出フローをCardSequenceManagerに委譲
@@ -2253,9 +2703,18 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private async void HandleNoDefenseCard()
     {
+        if (_playerDefenseCombatResolving)
+            return;
+
+        _playerDefenseCombatResolving = true;
+        BattleUIManager.I?.SetHandClickable(false);
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+
         // キャンセルトークンを先にキャプチャ（await 後に _phaseCts が Dispose される可能性があるため）
         var token = _phaseCts.Token;
 
+        try
+        {
         // 選択状態をクリア
         BattleUIManager.I?.ClearAllSelections();
         UpdateTotalATKDEFDisplay();
@@ -2273,6 +2732,7 @@ public class BattleManager : MonoBehaviour
             await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
             if (token.IsCancellationRequested) return;
             ClearMagicalExplosionComboMpPoolSnapshot();
+            ClearHammadnessRollSnapshot();
             BattleUIManager.I?.HideAllCardDetails();
             cardStatsDisplay?.ClearSequenceCards();
             currentAttackCard = null;
@@ -2291,11 +2751,18 @@ public class BattleManager : MonoBehaviour
             return;
 
         ClearMagicalExplosionComboMpPoolSnapshot();
+        ClearHammadnessRollSnapshot();
         // ダメージ処理完了後、全カード表示をクリア
         BattleUIManager.I?.HideAllCardDetails();
 
         // 防御カード確定後の処理
         SetGameState(GameState.CombatResolvePhase);
+        }
+        finally
+        {
+            _playerDefenseCombatResolving = false;
+            isProcessingUseButton = false;
+        }
     }
 
 
@@ -2307,14 +2774,25 @@ public class BattleManager : MonoBehaviour
         if (Attacker == PlayerType.Player)
         {
             var uiAttackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
-            if (uiAttackCards.Count == 0 && currentAttackCard != null)
-            {
-                uiAttackCards = new List<CardData> { currentAttackCard };
-            }
+            if (uiAttackCards.Count > 0)
+                return uiAttackCards;
+            if (_playerAttackComboForCombat != null && _playerAttackComboForCombat.Count > 0)
+                return new List<CardData>(_playerAttackComboForCombat);
+            if (currentAttackCard != null)
+                return new List<CardData> { currentAttackCard };
             return uiAttackCards;
         }
         else
         {
+            if (_enemyAttackComboForCombat != null && _enemyAttackComboForCombat.Count > 0)
+                return new List<CardData>(_enemyAttackComboForCombat);
+            if (_onlineEnemyAttackCombo != null && currentAttackCard != null
+                && _onlineEnemyAttackCombo.Contains(currentAttackCard))
+                return new List<CardData>(_onlineEnemyAttackCombo);
+            if (IsOnlineMatch && enemyAI is RemotePlayerAgent remote
+                && remote.LastAttackSelection != null && remote.LastAttackSelection.Count > 0
+                && currentAttackCard != null && remote.LastAttackSelection.Contains(currentAttackCard))
+                return new List<CardData>(remote.LastAttackSelection);
             return new List<CardData> { currentAttackCard };
         }
     }
@@ -2327,6 +2805,8 @@ public class BattleManager : MonoBehaviour
 
     public bool TryOpenSummonSkillPopup(PlayerStatus summoner, PlayerStatus opponent)
     {
+        // オンライン対戦（PoC）：顕現スキルは未対応
+        if (IsOnlineMatch) return false;
         if (_summonSkillPopupRoot != null || summoner == null || opponent == null) return false;
         if (summoner.hasUsedManifestationSkill) return false;
         if (CurrentState != GameState.AttackPhase) return false;
@@ -2491,7 +2971,7 @@ public class BattleManager : MonoBehaviour
 
         if (enemyStatus.HasConfusionEffect())
         {
-            bool confusionTargetSelf = UnityEngine.Random.Range(0, 2) == 0;
+            bool confusionTargetSelf = BattleRandom.Range(0, 2) == 0;
             SetConfusionAttackTargetResolvedForDisplay(confusionTargetSelf);
             if (confusionTargetSelf)
             {
@@ -2543,6 +3023,351 @@ public class BattleManager : MonoBehaviour
     {
         CurrentTurnOwner = (CurrentTurnOwner == PlayerType.Player) ? PlayerType.Enemy : PlayerType.Player;
         Debug.Log($"[Turn] 手番変更: {CurrentTurnOwner}");
+    }
+
+    // ================ オンライン：ホスト権威の状態同期 ================
+
+    /// <summary>戦闘解決後の HP/MP/GP 同期をクライアントが待つ最大時間。</summary>
+    private const int OnlineResolveSyncTimeoutMs = 20000;
+    /// <summary>ターン境界の待ち合わせ（演出完了の相互確認）の最大時間。</summary>
+    private const int OnlineTurnSyncTimeoutMs = 45000;
+
+    /// <summary>両クライアントで一致するターン識別タグ（古い同期メッセージの読み捨て用）。</summary>
+    private int OnlineTurnTag => _summonTurnCounters.PlayerOwnTurnsEnded + _summonTurnCounters.EnemyOwnTurnsEnded;
+
+    private static NetworkBattleBridge.SideStatus CaptureSideStatus(PlayerStatus s) => new NetworkBattleBridge.SideStatus
+    {
+        Hp = s != null ? s.currentHP : 0,
+        Mp = s != null ? s.currentMP : 0,
+        Gp = s != null ? s.currentGP : 0,
+    };
+
+    /// <summary>ホストの権威値でローカルの HP/MP/GP を上書きする（差分があれば警告ログ）。</summary>
+    private static void ApplyAuthoritativeSideStatus(PlayerStatus target, NetworkBattleBridge.SideStatus a, string label)
+    {
+        if (target == null) return;
+        if (target.currentHP == a.Hp && target.currentMP == a.Mp && target.currentGP == a.Gp) return;
+
+        Debug.LogWarning(
+            $"[OnlineSync] {label}のステータスをホスト値へ補正: " +
+            $"HP {target.currentHP}→{a.Hp}, MP {target.currentMP}→{a.Mp}, GP {target.currentGP}→{a.Gp}");
+        target.currentHP = Mathf.Clamp(a.Hp, 0, target.maxHP);
+        target.currentMP = Mathf.Clamp(a.Mp, 0, target.maxMP);
+        target.currentGP = Mathf.Clamp(a.Gp, 0, target.maxGP);
+    }
+
+    /// <summary>
+    /// 戦闘解決フェーズ入口：ダメージ結果（HP/MP/GP）のホスト権威同期。
+    /// ホストは自分の解決結果を送信し、クライアントは受信して自分の値を上書きする。
+    /// </summary>
+    private async Task RunOnlineResolveStateSyncAsync(CancellationToken ct)
+    {
+        if (!IsOnlineMatch || _gameEndTriggered) return;
+
+        try
+        {
+            if (OnlineMatchContext.IsHost)
+            {
+                NetworkBattleBridge.SendResolveState(new NetworkBattleBridge.ResolveStateSync
+                {
+                    TurnTag = OnlineTurnTag,
+                    Host = CaptureSideStatus(playerStatus),
+                    Client = CaptureSideStatus(enemyStatus),
+                });
+                return;
+            }
+
+            // クライアント：ホストの解決結果を待つ（古いタグは読み捨て）
+            NetworkBattleBridge.ResolveStateSync sync;
+            for (int attempt = 0; ; attempt++)
+            {
+                var waitTask = NetworkBattleBridge.WaitForResolveStateAsync(ct);
+                var finished = await Task.WhenAny(waitTask, Task.Delay(OnlineResolveSyncTimeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[OnlineSync] ResolveState 待ちがタイムアウト。ローカル値のまま続行します（ターン境界で補正）");
+                    return;
+                }
+                sync = await waitTask;
+                if (sync.TurnTag >= OnlineTurnTag || attempt >= 3) break;
+                Debug.Log($"[OnlineSync] 古い ResolveState (tag={sync.TurnTag}) を読み捨て");
+            }
+
+            // クライアント視点：Client=自分、Host=相手
+            ApplyAuthoritativeSideStatus(playerStatus, sync.Client, "自分");
+            ApplyAuthoritativeSideStatus(enemyStatus, sync.Host, "相手");
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+            // 権威補正で HP0 になった場合の終了処理
+            await TryHandleDeathIfAnyAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[OnlineSync] ResolveState 同期がキャンセルされました");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+    }
+
+    /// <summary>
+    /// ターン境界（EndPhase 末尾）：両者の演出完了を待ち合わせ、ホスト権威で
+    /// HP/MP/GP・手札全リスト・次ターン所有者・ターンカウンタ・召喚獣を同期する。
+    /// </summary>
+    /// <returns>true = ターン所有者を同期側で適用済み（呼び出し側の ToggleTurnOwner は不要）。</returns>
+    private async Task<bool> RunOnlineTurnBoundarySyncAsync(CancellationToken ct)
+    {
+        if (!IsOnlineMatch || _gameEndTriggered) return false;
+
+        try
+        {
+            if (OnlineMatchContext.IsHost)
+            {
+                // クライアントの演出完了（TurnReady）を待つ
+                var readyTask = NetworkBattleBridge.WaitForTurnReadyAsync(ct);
+                var finished = await Task.WhenAny(readyTask, Task.Delay(OnlineTurnSyncTimeoutMs, ct));
+                if (finished != readyTask)
+                    Debug.LogWarning("[OnlineSync] TurnReady 待ちがタイムアウト。同期を送信して続行します");
+
+                var nextOwner = CurrentTurnOwner == PlayerType.Player ? PlayerType.Enemy : PlayerType.Player;
+                NetworkBattleBridge.SendTurnSync(new NetworkBattleBridge.TurnBoundarySync
+                {
+                    TurnTag = OnlineTurnTag,
+                    HostOwnsNextTurn = nextOwner == PlayerType.Player,
+                    Host = CaptureSideStatus(playerStatus),
+                    Client = CaptureSideStatus(enemyStatus),
+                    HostSummonIndex = FindSummonIndex(playerStatus != null ? playerStatus.summonData : null),
+                    ClientSummonIndex = FindSummonIndex(enemyStatus != null ? enemyStatus.summonData : null),
+                    HostOwnTurnsEnded = _summonTurnCounters.PlayerOwnTurnsEnded,
+                    ClientOwnTurnsEnded = _summonTurnCounters.EnemyOwnTurnsEnded,
+                    HostHand = CollectCardNames(playerHand),
+                    ClientHand = CollectCardNames(cpuHand),
+                    HostArchMagic = CaptureArchMagicSideSync(playerStatus),
+                    ClientArchMagic = CaptureArchMagicSideSync(enemyStatus),
+                });
+
+                CurrentTurnOwner = nextOwner;
+                Debug.Log($"[Turn] 手番変更(ホスト権威): {CurrentTurnOwner}");
+                return true;
+            }
+            else
+            {
+                // クライアント：自分の演出完了を通知し、ホストの権威状態を待つ
+                NetworkBattleBridge.SendTurnReady(OnlineTurnTag);
+
+                NetworkBattleBridge.TurnBoundarySync sync;
+                for (int attempt = 0; ; attempt++)
+                {
+                    var syncTask = NetworkBattleBridge.WaitForTurnSyncAsync(ct);
+                    var finished = await Task.WhenAny(syncTask, Task.Delay(OnlineTurnSyncTimeoutMs, ct));
+                    if (finished != syncTask || ct.IsCancellationRequested)
+                    {
+                        Debug.LogWarning("[OnlineSync] TurnSync 待ちがタイムアウト。ローカル値のまま続行します");
+                        return false;
+                    }
+
+                    sync = await syncTask;
+                    if (sync.TurnTag >= OnlineTurnTag || attempt >= 3) break;
+                    Debug.Log($"[OnlineSync] 古い TurnSync (tag={sync.TurnTag}) を読み捨て");
+                }
+
+                ApplyAuthoritativeTurnBoundary(sync);
+
+                // 権威補正で HP0 になった場合の終了処理
+                await TryHandleDeathIfAnyAsync(ct);
+                return true;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[OnlineSync] ターン境界同期がキャンセルされました");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            return false;
+        }
+    }
+
+    /// <summary>クライアント：ホストのターン境界同期を自分視点（Client=自分 / Host=相手）で適用する。</summary>
+    private void ApplyAuthoritativeTurnBoundary(NetworkBattleBridge.TurnBoundarySync sync)
+    {
+        ApplyAuthoritativeSideStatus(playerStatus, sync.Client, "自分");
+        ApplyAuthoritativeSideStatus(enemyStatus, sync.Host, "相手");
+
+        _summonTurnCounters.PlayerOwnTurnsEnded = sync.ClientOwnTurnsEnded;
+        _summonTurnCounters.EnemyOwnTurnsEnded = sync.HostOwnTurnsEnded;
+
+        VerifyOrFixSummon(playerStatus, sync.ClientSummonIndex, "自分");
+        VerifyOrFixSummon(enemyStatus, sync.HostSummonIndex, "相手");
+
+        ReconcileHandToAuthoritative(playerHand, sync.ClientHand, withUi: true, label: "自分手札");
+        ReconcileHandToAuthoritative(cpuHand, sync.HostHand, withUi: false, label: "相手手札");
+
+        ApplyAuthoritativeArchMagicSide(playerStatus, sync.ClientArchMagic);
+        ApplyAuthoritativeArchMagicSide(enemyStatus, sync.HostArchMagic);
+
+        CurrentTurnOwner = sync.HostOwnsNextTurn ? PlayerType.Enemy : PlayerType.Player;
+        Debug.Log($"[Turn] 手番変更(ホスト権威): {CurrentTurnOwner}");
+
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        BattleUIManager.I?.RefreshTurnCountDisplay(_summonTurnCounters, CurrentTurnOwner);
+    }
+
+    /// <summary>SummonSelectionManager の一覧内インデックス（ハンドシェイクと同じ基準）。</summary>
+    private static int FindSummonIndex(SummonData data)
+    {
+        var list = SummonSelectionManager.I != null ? SummonSelectionManager.I.GetAllSummonData() : null;
+        if (list == null || data == null) return -1;
+        for (int i = 0; i < list.Length; i++)
+        {
+            if (list[i] == data) return i;
+            if (list[i] != null && list[i].name == data.name) return i;
+        }
+        return -1;
+    }
+
+    private void VerifyOrFixSummon(PlayerStatus status, int authoritativeIndex, string label)
+    {
+        if (status == null || authoritativeIndex < 0) return;
+        int local = FindSummonIndex(status.summonData);
+        if (local == authoritativeIndex) return;
+
+        var list = SummonSelectionManager.I != null ? SummonSelectionManager.I.GetAllSummonData() : null;
+        if (list == null || authoritativeIndex >= list.Length || list[authoritativeIndex] == null) return;
+
+        Debug.LogWarning($"[OnlineSync] {label}の召喚獣がホストと不一致（local={local}, host={authoritativeIndex}）。ホスト値を採用します");
+        status.SetSummonData(list[authoritativeIndex]);
+    }
+
+    private static NetworkBattleBridge.ArchMagicSideSync CaptureArchMagicSideSync(PlayerStatus status)
+    {
+        if (status == null || !status.IsCastingArchMagic)
+            return default;
+
+        var card = status.archMagicCastingCard;
+        return new NetworkBattleBridge.ArchMagicSideSync
+        {
+            RemainingTurns = status.archMagicRemainingTurns,
+            BarrierRemaining = status.archMagicBarrierRemaining,
+            CardName = card != null ? (string.IsNullOrEmpty(card.cardName) ? card.name : card.cardName) : "",
+            TargetSelf = status.archMagicEffectTarget == status,
+        };
+    }
+
+    private void ApplyAuthoritativeArchMagicSide(PlayerStatus status, NetworkBattleBridge.ArchMagicSideSync sync)
+    {
+        if (status == null) return;
+
+        if (sync.RemainingTurns <= 0 || string.IsNullOrEmpty(sync.CardName))
+        {
+            if (status.IsCastingArchMagic && !status.archMagicCancelPending)
+                status.ClearArchMagicCastingState();
+            RefreshArchMagicBarrierUi(status);
+            return;
+        }
+
+        var template = ArchMagicRules.FindTemplateByDisplayOrAssetName(sync.CardName);
+        if (template == null)
+        {
+            Debug.LogWarning($"[OnlineSync] ArchMagic template not found: {sync.CardName}");
+            return;
+        }
+
+        PlayerStatus effectTarget = sync.TargetSelf
+            ? status
+            : (ReferenceEquals(status, playerStatus) ? enemyStatus : playerStatus);
+        status.ApplyAuthoritativeArchMagicCasting(template, sync.RemainingTurns, effectTarget, sync.BarrierRemaining);
+        RefreshArchMagicBarrierUi(status);
+    }
+
+    private void RefreshArchMagicBarrierUi(PlayerStatus status)
+    {
+        if (status == null) return;
+        Side side = ReferenceEquals(status, playerStatus) ? Side.Player : Side.Enemy;
+        if (status.IsCastingArchMagic)
+            BattleUIManager.I?.ShowArchMagicBarrier(side, status.archMagicBarrierRemaining);
+        else
+            BattleUIManager.I?.HideArchMagicBarrier(side);
+    }
+
+    private static List<string> CollectCardNames(List<CardData> hand)
+    {
+        var names = new List<string>(hand != null ? hand.Count : 0);
+        if (hand == null) return names;
+        foreach (var c in hand)
+        {
+            if (c != null)
+                names.Add(c.cardName ?? "");
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// クライアント：手札のカードリストをホストの権威リストへ合わせる。
+    /// 余分なカードは除去（UI ごと破棄）、不足分はテンプレートから生成して追加する。
+    /// </summary>
+    private void ReconcileHandToAuthoritative(List<CardData> hand, List<string> authoritative, bool withUi, string label)
+    {
+        if (hand == null || authoritative == null) return;
+
+        var need = new Dictionary<string, int>();
+        foreach (var n in authoritative)
+        {
+            if (string.IsNullOrEmpty(n)) continue;
+            need.TryGetValue(n, out int c);
+            need[n] = c + 1;
+        }
+
+        bool changed = false;
+
+        // 余分なカードを除去（後ろから走査）
+        for (int i = hand.Count - 1; i >= 0; i--)
+        {
+            var card = hand[i];
+            string nm = card != null ? card.cardName : null;
+            if (!string.IsNullOrEmpty(nm) && need.TryGetValue(nm, out int remain) && remain > 0)
+            {
+                need[nm] = remain - 1;
+                continue;
+            }
+
+            Debug.LogWarning($"[OnlineSync] {label}: ホストに無いカード '{nm}' を除去します");
+            if (withUi && card != null && card.cardUI != null)
+                Destroy(card.cardUI.gameObject);
+            hand.RemoveAt(i);
+            changed = true;
+        }
+
+        // 不足分をテンプレートから補充
+        foreach (var kv in need)
+        {
+            for (int k = 0; k < kv.Value; k++)
+            {
+                var template = cardDealer != null ? cardDealer.FindTemplateByName(kv.Key) : null;
+                if (template == null)
+                {
+                    Debug.LogError($"[OnlineSync] {label}: カード '{kv.Key}' のテンプレートが見つかりません");
+                    continue;
+                }
+
+                var instance = cardDealer.InstantiateCardFromTemplate(template);
+                if (instance == null) continue;
+                hand.Add(instance);
+                if (withUi)
+                {
+                    var ui = cardDealer.CreateCardUIForHand(instance);
+                    ui?.Reveal();
+                }
+                changed = true;
+                Debug.LogWarning($"[OnlineSync] {label}: 不足カード '{kv.Key}' をホスト値に合わせて追加しました");
+            }
+        }
+
+        if (changed && withUi)
+            BattleUIManager.I?.SetIntroModeUI(playerHand);
     }
 
     public void ClearSelectedCards()

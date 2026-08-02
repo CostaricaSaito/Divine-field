@@ -57,6 +57,6 @@ public static class StatusEffectCatalog
     {
         var a = AllAilments;
         if (a == null || a.Length == 0) return StatusEffectType.None;
-        return a[Random.Range(0, a.Length)];
+        return a[BattleRandom.Range(0, a.Length)];
     }
 }

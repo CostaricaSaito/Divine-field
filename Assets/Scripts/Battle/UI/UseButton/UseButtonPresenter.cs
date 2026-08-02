@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -157,6 +157,12 @@ public class UseButtonPresenter : MonoBehaviour
             && !parryRerunWait)
             return;
 
+        if (bm.IsUseButtonLocked || bm.IsPlayerDefenseCombatResolving)
+        {
+            SetUseButtonInteractable(false);
+            return;
+        }
+
         if (BattleUIManager.I != null)
             BattleUIManager.I.HideYurusuButton();
 
@@ -207,6 +213,15 @@ public class UseButtonPresenter : MonoBehaviour
 
         if (showBlockingNullify)
         {
+            var ps = bm.GetPlayerStatus();
+            if (ps != null && selectedDefenseCards[0].cardType == CardType.Magic
+                && !BlockingRules.CanAffordMagicDefenseMp(selectedDefenseCards[0], ps))
+            {
+                SetUseButtonLabel("MPが足りない");
+                SetUseButtonInteractable(false);
+                return;
+            }
+
             ApplyBlockingNullifyUseButtonStyle();
             SetUseButtonInteractable(true);
             return;

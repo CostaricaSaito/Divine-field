@@ -193,7 +193,7 @@ public static class PhysicalReflectionFlow
                 if (pick != null && BlockingRules.IsPhysicalBlockingCard(pick)
                     && BlockingRules.CanBlockPhysical(incomingAttackCards))
                 {
-                    BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                     battleManager.SetStatsDisplaySequenceCards(
                         new List<CardData> { pick }, "防御", Side.Enemy);
                     await Task.Delay(500, cancellationToken);
@@ -212,7 +212,7 @@ public static class PhysicalReflectionFlow
                 {
                     // 敵側パネルのみ削除（攻撃シートは反対側。同一 CardData で DestroyCardSheetForCardData すると攻撃も消える）
                     BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
-                    BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                     await Task.Delay(500, cancellationToken);
 
                     float sec = BattleUIManager.I != null
@@ -239,7 +239,7 @@ public static class PhysicalReflectionFlow
 
                 if (pick != null)
                 {
-                    BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                     battleManager.SetStatsDisplaySequenceCards(
                         new List<CardData> { pick }, "防御", Side.Enemy);
                     SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);

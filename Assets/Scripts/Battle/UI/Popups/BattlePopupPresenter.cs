@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,6 +21,8 @@ public class BattlePopupPresenter : MonoBehaviour
 {
     [Header("ダメージ / 情報 ポップアップ")]
     [SerializeField] private GameObject damagePopupPrefab;
+    [Tooltip("大魔法バリア被ダメ演出。未設定時は Resources.Load(\"Prefab/BarriarDamage\")")]
+    [SerializeField] private GameObject barrierDamagePopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
     [SerializeField] private GameObject importantPopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/OjyouPopup\") を試す")]
@@ -52,6 +54,44 @@ public class BattlePopupPresenter : MonoBehaviour
 
         Debug.LogWarning("[BattlePopupPresenter] DamagePopup コンポーネントが見つかりません");
         return 0f;
+    }
+
+    /// <summary>大魔法 HP バリア被ダメ専用ポップアップ（BarriarDamage.prefab）。</summary>
+    public async Task<float> ShowBarriarDamagePopupAsync(
+        int valueBefore,
+        int valueAfter,
+        bool barrierBroken,
+        PlayerStatus target,
+        CancellationToken cancellationToken = default)
+    {
+        GameObject prefab = barrierDamagePopupPrefab != null
+            ? barrierDamagePopupPrefab
+            : Resources.Load<GameObject>("Prefab/BarriarDamage");
+        if (prefab == null || target == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] BarriarDamage prefab or target is missing");
+            return 0f;
+        }
+
+        bool isPlayer = target == BattleManager.I?.GetPlayerStatus();
+        Transform parent = isPlayer
+            ? (BattleUIManager.I != null ? BattleUIManager.I.GetPlayerCardDisplayPanel() : null)
+            : (BattleUIManager.I != null ? BattleUIManager.I.GetEnemyCardDisplayPanel() : null);
+        if (parent == null)
+        {
+            var canvas = BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
+            parent = canvas != null ? canvas.transform : null;
+        }
+        if (parent == null) return 0f;
+
+        var go = Instantiate(prefab, parent, false);
+        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
+
+        var popup = go.GetComponent<BarriarDamagePopup>();
+        if (popup == null)
+            popup = go.AddComponent<BarriarDamagePopup>();
+
+        return await popup.PlayAsync(valueBefore, valueAfter, barrierBroken, target, cancellationToken);
     }
 
     /// <summary>状態異常一括解除時、次のポップを出すまでの間隔（秒）。</summary>
@@ -282,6 +322,31 @@ public class BattlePopupPresenter : MonoBehaviour
         Color fg = Color.white;
         Color ol = new Color(212f / 255f, 62f / 255f, 212f / 255f, 1f);
         damageText.SetupHandReload("リロード", bg, fg, ol);
+        return damageText.fadeDuration;
+    }
+
+    /// <summary>運命の宝札：手札引き直し（HandReload と同系統の演出）。</summary>
+    public float ShowHandDiscardRestartPopup(PlayerStatus target)
+    {
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] DiscardRestart popup spawn failed");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] DamagePopup missing (DiscardRestart)");
+            return 0f;
+        }
+
+        SoundEffectPlayer.I?.Play("Assets/SE/リロード.mp3");
+        Color bg = new Color(140f / 255f, 96f / 255f, 138f / 255f, 1f);
+        Color fg = Color.white;
+        Color ol = new Color(212f / 255f, 62f / 255f, 212f / 255f, 1f);
+        damageText.SetupHandReload("引き直し", bg, fg, ol);
         return damageText.fadeDuration;
     }
 

@@ -95,7 +95,12 @@ public static class MagicalSwordRules
     {
         if (attackCards == null || attackingPlayer == null || !ContainsMagicalSword(attackCards)) return 0;
         if (BattleManager.I == null) return 0;
-        if (!ReferenceEquals(attackingPlayer, BattleManager.I.GetPlayerStatus())) return 0;
-        return BattleManager.I.MagicalSwordAttackPowerBonus;
+        if (ReferenceEquals(attackingPlayer, BattleManager.I.GetPlayerStatus()))
+            return BattleManager.I.MagicalSwordAttackPowerBonus;
+        // Online: the remote attacker's paid boost mirrored via RemotePlayerAgent.
+        if (BattleManager.I.IsOnlineMatch
+            && ReferenceEquals(attackingPlayer, BattleManager.I.GetEnemyStatus()))
+            return BattleManager.I.MagicalSwordEnemyAttackPowerBonus;
+        return 0;
     }
 }

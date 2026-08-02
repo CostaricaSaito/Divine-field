@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -8,6 +8,8 @@ public class CardUI : MonoBehaviour
     public Image cardImage;
     [Header("手札用ステータス表示（ATK/DEF・属性・特殊性）")]
     [SerializeField] private TMP_Text cardStatusText;
+    [Tooltip("未設定時は子オブジェクト Card Hit Rate Text を検索")]
+    [SerializeField] private TMP_Text cardHitRateText;
     public Button button;
     public Image highlightBorder;
 
@@ -30,6 +32,11 @@ public class CardUI : MonoBehaviour
     private bool isFaceUp = false;
     private bool isHighlighted = false;
     private bool playerHandRareBackPresentation;
+
+    private void Awake()
+    {
+        EnsureHitRateTextRef();
+    }
 
     public void Setup(CardData data, Sprite back, bool playerHandRareBackPresentation = false)
     {
@@ -61,6 +68,7 @@ public class CardUI : MonoBehaviour
 
         if (cardImage) cardImage.sprite = cardData.cardImage;
         CardHandStatusText.Apply(cardStatusText, cardData, CardHandStatusText.GetIncomingSnapshotForReactiveHandLabelOrNull());
+        ApplyHitRateDisplay(cardData);
         if (button) button.interactable = true;
     }
 
@@ -73,7 +81,39 @@ public class CardUI : MonoBehaviour
             cardStatusText.richText = false;
         }
 
+        ApplyHitRateDisplay(null);
         UpdateRareBackOverlayForCurrentState();
+    }
+
+    private void EnsureHitRateTextRef()
+    {
+        if (cardHitRateText != null) return;
+        var texts = GetComponentsInChildren<TMP_Text>(true);
+        for (int i = 0; i < texts.Length; i++)
+        {
+            if (texts[i] != null && texts[i].name == "Card Hit Rate Text")
+            {
+                cardHitRateText = texts[i];
+                break;
+            }
+        }
+    }
+
+    private void ApplyHitRateDisplay(CardData c)
+    {
+        EnsureHitRateTextRef();
+        if (cardHitRateText == null) return;
+
+        if (c != null && HitRateRules.HasCustomHitRate(c))
+        {
+            cardHitRateText.text = HitRateRules.FormatHitRateLabel(c.hitRate);
+            cardHitRateText.gameObject.SetActive(true);
+        }
+        else
+        {
+            cardHitRateText.text = "";
+            cardHitRateText.gameObject.SetActive(false);
+        }
     }
 
     private void UpdateRareBackOverlayForCurrentState()
@@ -189,6 +229,7 @@ public class CardUI : MonoBehaviour
     {
         if (cardData == null || !isFaceUp || cardStatusText == null) return;
         CardHandStatusText.Apply(cardStatusText, cardData, CardHandStatusText.GetIncomingSnapshotForReactiveHandLabelOrNull());
+        ApplyHitRateDisplay(cardData);
     }
 
     /// <summary>手札カード 1 枚の <see cref="cardStatusText"/> 文言・色。プレハブ差し替え用に静的でも利用可。</summary>
@@ -230,6 +271,19 @@ public class CardUI : MonoBehaviour
             if (TryGetDefenseReactiveHandLabel(c, incomingForDefenseReactive, out string spec))
             {
                 text.text = spec;
+                SetAtkDefTextStyle(text, c.element);
+                return;
+            }
+
+            if (c.cardType == CardType.Attack
+                && CardRules.IsUsableInDefensePhase(c)
+                && c.defensePower > 0
+                && incomingForDefenseReactive != null
+                && c.reflectionKind == ReflectionKind.None
+                && c.parryKind == ParryKind.None
+                && c.blockingKind == BlockingKind.None)
+            {
+                text.text = $"DEF{c.defensePower}";
                 SetAtkDefTextStyle(text, c.element);
                 return;
             }
@@ -330,9 +384,9 @@ public class CardUI : MonoBehaviour
                 }
                 return false;
             }
-            if (c.blockingKind != BlockingKind.None)
+            if (BlockingRules.IsPhysicalBlockingCard(c))
             {
-                if (BlockingRules.RequiresBlockingExclusiveLock(c, incoming))
+                if (BlockingRules.CanUsePhysicalBlockingAgainstAttack(c, incoming))
                 {
                     label = "BLOCKING";
                     return true;
@@ -344,6 +398,8 @@ public class CardUI : MonoBehaviour
 
         private static string BuildAttackTypeLabel(CardData c)
         {
+            if (HammadnessRules.IsHammadnessCard(c))
+                return HammadnessRules.AtkQuestionMarkLabel;
             if (c.attackPower == 0 && c.defensePower == 0) return "SPECIAL";
             if (WantsAtkPlusNotation(c)) return $"ATK+{c.attackPower}";
             return $"ATK{c.attackPower}";

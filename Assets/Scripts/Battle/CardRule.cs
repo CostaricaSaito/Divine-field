@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 /// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
@@ -185,7 +185,7 @@ public static class CardRules
         var filtered = new List<CardData>();
         foreach (var sel in selectedDefenseCards)
         {
-            if (sel == null || !IsDefenseCard(sel)) continue;
+            if (sel == null || !IsUsableInDefensePhase(sel)) continue;
 
             CardData matchInChoices = null;
             foreach (var ch in defenseChoices)
@@ -261,14 +261,16 @@ public static class CardRules
         return true;
     }
 
-    /// <summary>反射・ブロッキングではない通常の盾防御（濃霧付与などでは防げない）。</summary>
+    /// <summary>反射・ブロッキング・打ち払いではない通常の盾防御（濃霧付与などでは防げない）。</summary>
     public static bool IsNormalPhysicalDefenseCard(CardData c)
     {
-        if (c == null || c.cardType != CardType.Defense) return false;
+        if (c == null) return false;
         if (c.reflectionKind != ReflectionKind.None) return false;
         if (c.blockingKind != BlockingKind.None) return false;
         if (c.parryKind != ParryKind.None) return false;
-        return true;
+        if (c.defensePower <= 0) return false;
+        if (c.cardType == CardType.Defense) return true;
+        return c.cardType == CardType.Attack && c.usableInDefensePhase;
     }
 
     /// <summary>防御リストに通常防具が含まれるか（誤選択時の状態異常抑止用）。</summary>

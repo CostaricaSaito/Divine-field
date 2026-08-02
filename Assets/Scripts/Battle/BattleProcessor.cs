@@ -204,7 +204,7 @@ public class BattleProcessor : MonoBehaviour
     {
         if (recipient == null || effectType == StatusEffectType.None) return;
 
-        int roll = Random.Range(0, 100);
+        int roll = BattleRandom.Range(0, 100);
         if (roll >= chance0To100) return;
 
         var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
@@ -253,6 +253,9 @@ public class BattleProcessor : MonoBehaviour
             return;
         }
 
+        if (defender.IsCastingArchMagic)
+            defenseCard = null;
+
         // 攻撃カード名をログ出力
         string attackCardNames = string.Join(" + ", attackCards.Select(c => c.cardName));
         Debug.Log($"[BattleProcessor] ===== 戦闘解決開始 =====");
@@ -296,6 +299,30 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
+    /// ダイナマイト反動：第1段与ダメージを攻撃者へ適用しポップアップ演出まで待つ。
+    /// </summary>
+    private async Task ApplyDynamiteRecoilAsync(PlayerStatus attacker, int recoilDamage)
+    {
+        if (attacker == null || recoilDamage <= 0) return;
+
+        await Task.Delay(DamagePopup.PreDamagePopupBeatMs);
+
+        ApplyDamage(attacker, recoilDamage);
+        Debug.Log($"[BattleProcessor] Dynamite recoil: {recoilDamage} -> {attacker.DisplayName}");
+
+        float recoilPopupLifetimeSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowDamagePopup(recoilDamage, attacker)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        if (recoilPopupLifetimeSec <= 0f)
+            recoilPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+
+        PlayDamageSE(recoilDamage);
+        UpdateStatusDisplay();
+
+        await DamagePopup.WaitAfterPopupLifetimeAsync(recoilPopupLifetimeSec);
+    }
+
+    /// <summary>
     /// 反射で跳ね返す攻撃の「既存パイプライン適用後」の攻撃力（加護・防御側抑制まで）。
     /// 元の攻撃者／防御者（例：敵がプレイヤーを狙ったとき）で計算する。
     /// </summary>
@@ -324,6 +351,9 @@ public class BattleProcessor : MonoBehaviour
             Debug.LogWarning("[BattleProcessor] ResolveReflectedCombatAsync: 無効なパラメータ");
             return;
         }
+
+        if (defender.IsCastingArchMagic)
+            defenseCard = null;
 
         int defensePower = CalculateTotalDefensePower(defenseCard, defender);
         ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
@@ -370,6 +400,9 @@ public class BattleProcessor : MonoBehaviour
             return;
         }
 
+        if (counterTarget.IsCastingArchMagic)
+            defenseCard = null;
+
         int attackPower = GetOrbCounterDisplayedAttackPower(attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
         int defensePower = CalculateTotalDefensePower(defenseCard, counterTarget);
         ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
@@ -402,7 +435,8 @@ public class BattleProcessor : MonoBehaviour
             attackPower,
             defensePower,
             defenseList,
-            skipDefenseOrbReactions: true);
+            skipDefenseOrbReactions: true,
+            applyDynamiteRecoil: false);
     }
 
     /// <summary>宝玉反撃力（TOTAL 表示用と戦闘解決のどちらでも同式）。</summary>
@@ -425,6 +459,8 @@ public class BattleProcessor : MonoBehaviour
     {
         if (attackCards == null || attackCards.Count == 0 || attacker == null) return 0;
         if (MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
+            return CalculateTotalAttackPower(attackCards, attacker, defender);
+        if (HammadnessRules.ContainsHammadness(attackCards))
             return CalculateTotalAttackPower(attackCards, attacker, defender);
 
         int totalAttackPower = Mathf.Max(0, forcedBaseSum);
@@ -471,7 +507,7 @@ public class BattleProcessor : MonoBehaviour
             if (card.statusEffectToApply == StatusEffectType.None) continue;
             if (card.statusEffectApplyTiming == StatusEffectApplyTiming.WithDamageThrough && finalDamage <= 0)
                 continue;
-            if (Random.Range(0, 100) >= card.statusEffectChance) continue;
+            if (BattleRandom.Range(0, 100) >= card.statusEffectChance) continue;
 
             // ダメージ通過時の付与は常にダメージを受けた側へ（混沌の球等の RandomOneAilment 含む）
             PlayerStatus recipient = defender;
@@ -532,6 +568,11 @@ public class BattleProcessor : MonoBehaviour
         {
             totalAttackPower = MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attacker);
             Debug.Log($"[BattleProcessor] マジカルエクスプロージョン込みのカード合計（加護前）: {totalAttackPower}");
+        }
+        else if (HammadnessRules.ContainsHammadness(attackCards))
+        {
+            totalAttackPower = HammadnessRules.SumCardAttackPowerForHammadnessCombo(attackCards, attacker);
+            Debug.Log($"[BattleProcessor] 気狂いハンマー込みのカード合計（加護前）: {totalAttackPower}");
         }
         else
         {
@@ -670,6 +711,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "HP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/power09(DFHP回復).wav");
+                UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -688,6 +730,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "MP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す25.mp3");
+                UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -706,6 +749,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "GP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play("Assets/SE/レジスターで精算.mp3");
+                UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -758,11 +802,12 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// ステータス表示を更新する
+    /// ステータス表示を更新する。
+    /// <paramref name="snapHpmgp"/> が true のとき HP/MP/GP 数値をポップアップと同時に即反映する（カウントアップ演出なし）。
     /// </summary>
-    private void UpdateStatusDisplay()
+    private void UpdateStatusDisplay(bool snapHpmgp = false)
     {
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus, snapHpmgp);
     }
 
     /// <summary>命中後：0 は「ピコッ」、1〜29 は <see cref="DamagePopupSfx.Slash"/>、30 以上は <see cref="DamagePopupSfx.Explosion"/>（Addressables）。</summary>
@@ -812,6 +857,9 @@ public class BattleProcessor : MonoBehaviour
             Debug.LogWarning("[BattleProcessor] 戦闘解決に必要なパラメータがnullです");
             return;
         }
+
+        if (defender.IsCastingArchMagic)
+            defenseCards = null;
 
         // 攻撃カード名をログ出力
         string attackCardNames = string.Join(" + ", attackCards.Select(c => c.cardName));
@@ -864,7 +912,8 @@ public class BattleProcessor : MonoBehaviour
         int attackPower,
         int defensePower,
         IReadOnlyList<CardData> defenseCardsForStatusRule = null,
-        bool skipDefenseOrbReactions = false)
+        bool skipDefenseOrbReactions = false,
+        bool applyDynamiteRecoil = true)
     {
         if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
         {
@@ -885,6 +934,13 @@ public class BattleProcessor : MonoBehaviour
         Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
         Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
         Debug.Log($"[BattleProcessor] 第1段（超過・与ダメ補正後）: {firstPhaseDamage}");
+
+        if (defender.IsCastingArchMagic)
+        {
+            await ApplyArchMagicBarrierDamageSequenceAsync(
+                attackElement, defender, firstPhaseDamage);
+            return;
+        }
 
         await Task.Delay(DamagePopup.PreDamagePopupBeatMs);
 
@@ -912,6 +968,13 @@ public class BattleProcessor : MonoBehaviour
         UpdateStatusDisplay();
 
         await DamagePopup.WaitAfterPopupLifetimeAsync(normalPopupLifetimeSec);
+
+        if (applyDynamiteRecoil
+            && firstPhaseDamage > 0
+            && DynamiteRules.ContainsDynamite(attackCards))
+        {
+            await ApplyDynamiteRecoilAsync(attacker, firstPhaseDamage);
+        }
 
         if (attackElement == ElementType.Dark && firstPhaseDamage > 0 && defender.currentHP > 0)
         {
@@ -965,5 +1028,50 @@ public class BattleProcessor : MonoBehaviour
 
         await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs);
         Debug.Log($"[BattleProcessor] 戦闘解決完了");
+    }
+
+    private static int ApplyIncomingDamageModifiers(PlayerStatus defender, int amount)
+    {
+        if (defender == null || amount <= 0) return amount;
+        int modified = amount;
+        foreach (var effect in defender.activeEffects)
+        {
+            if (effect != null)
+                modified = effect.ModifyDamage(modified);
+        }
+        return modified;
+    }
+
+    /// <summary>大魔法詠唱中：実 HP ではなくバリアへダメージ。状態異常・反動・闇即死は発生しない。</summary>
+    private async Task ApplyArchMagicBarrierDamageSequenceAsync(
+        ElementType attackElement,
+        PlayerStatus defender,
+        int firstPhaseDamage)
+    {
+        int barrierDamage = ApplyIncomingDamageModifiers(defender, firstPhaseDamage);
+        int barrierBefore = defender.archMagicBarrierRemaining;
+
+        await Task.Delay(DamagePopup.PreDamagePopupBeatMs);
+
+        if (barrierDamage > 0)
+        {
+            bool broken = defender.ApplyArchMagicBarrierDamage(barrierDamage, attackElement);
+            int barrierAfter = defender.archMagicBarrierRemaining;
+            Debug.Log($"[BattleProcessor] ArchMagic barrier: {barrierDamage} -> {defender.DisplayName} (rest {barrierAfter}, broken={broken})");
+
+            if (BattleUIManager.I != null)
+                await BattleUIManager.I.ShowBarriarDamagePopupAsync(
+                    barrierBefore, barrierAfter, broken, defender, CancellationToken.None);
+
+            BattleUIManager.I?.UpdateArchMagicBarrierForStatus(defender, barrierAfter);
+        }
+        else
+        {
+            Debug.Log($"[BattleProcessor] ArchMagic barrier: 0 damage (no change, rest {barrierBefore})");
+        }
+
+        UpdateStatusDisplay();
+        await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs);
+        Debug.Log("[BattleProcessor] 大魔法バリア解決完了");
     }
 }

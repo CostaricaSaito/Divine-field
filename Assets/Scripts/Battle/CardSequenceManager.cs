@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +32,12 @@ public class CardSequenceManager : MonoBehaviour
 
     /// <summary>マジカルエクスプロージョン演出内で魔法の MP 消費・プール処理を済ませたため <see cref="ProcessMultipleCardsAsync"/> で魔法ループをスキップする。</summary>
     private bool _skipMagicProcessingInProcessCardsBecauseMagicalExplosion;
+
+    /// <summary>大魔法「詠唱開始」演出中。カウントダウン演出と競合させない。</summary>
+    public bool IsArchMagicCastIntroInProgress { get; private set; }
+
+    /// <summary>大魔法カウントダウン演出中。EnterAttackPhase からの二重起動を防ぐ。</summary>
+    public bool IsArchMagicCountdownInProgress { get; private set; }
 
     /// <summary>
     /// 初期化
@@ -91,6 +97,16 @@ public class CardSequenceManager : MonoBehaviour
                 }
                 else
                     battleManager.SetMagicalSwordAttackPowerBonus(0);
+
+                // オンライン：支払い選択を相手へ通知（辞退・支払い不可でも必ず送る。相手側はこれを待っている）
+                if (battleManager.IsOnlineMatch)
+                {
+                    bool msPaid = battleManager.MagicalSwordAttackPowerBonus > 0;
+                    NetworkBattleBridge.SendMagicalSwordChoice(
+                        msPaid,
+                        battleManager.MagicalSwordAttackPowerBonus,
+                        msPaid ? msRule.optionalMpCost : 0);
+                }
             }
         }
 
@@ -104,6 +120,8 @@ public class CardSequenceManager : MonoBehaviour
 
         if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
             cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+            cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
 
         bool spellbookElementRevealPending = cardType == "攻撃"
             && SpellbookRules.NeedsElementRevealSequence(selectedCards);
@@ -111,6 +129,7 @@ public class CardSequenceManager : MonoBehaviour
             cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearConfusionAttackTargetResolvedForDisplay();
 
         _magicPanelBonusDrawsPendingReveal.Clear();
@@ -144,6 +163,8 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 if (cardType == "攻撃")
                     cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (cardType == "攻撃" && side == Side.Player)
@@ -171,6 +192,8 @@ public class CardSequenceManager : MonoBehaviour
         {
             if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                 cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+                cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
             if (cardType == "攻撃")
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
             if (cardType == "攻撃" && side == Side.Player)
@@ -189,6 +212,8 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (side == Side.Player)
                     PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
@@ -207,6 +232,8 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (side == Side.Player)
                     PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
@@ -271,7 +298,25 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
+        if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+        {
+            PlayerStatus psHam = battleManager.GetPlayerStatus();
+            PlayerStatus esHam = battleManager.GetEnemyStatus();
+            PlayerStatus atkOwnerHam = battleManager.AttackerPublic == PlayerType.Player ? psHam : esHam;
+            if (atkOwnerHam != null)
+            {
+                await RunHammadnessAttackIntroAsync(selectedCards, atkOwnerHam, cancellationToken);
+            }
+            else
+            {
+                cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+            }
+        }
+
         // ③カードの処理
+        if (cardType == "攻撃" && side == Side.Player && selectedCards != null && selectedCards.Count > 0)
+            battleManager.SetPlayerAttackComboForCombat(selectedCards);
+
         await ProcessCardsAsync(selectedCards, cardType);
 
         // 選択状態をクリア（ProcessCardsで既に設定済み）
@@ -290,7 +335,7 @@ public class CardSequenceManager : MonoBehaviour
         if (cardType == "攻撃" && atk != null && atk.HasConfusionEffect())
         {
             battleManager.ClearPlayerSelfAttackTargetMode();
-            bool targetSelf = UnityEngine.Random.Range(0, 2) == 0;
+            bool targetSelf = BattleRandom.Range(0, 2) == 0;
             battleManager.SetConfusionAttackTargetResolvedForDisplay(targetSelf);
             if (targetSelf)
             {
@@ -364,9 +409,8 @@ public class CardSequenceManager : MonoBehaviour
                 && battleManager.DefenderPublic == PlayerType.Player
                 && ReflectionRules.CanUseMagicReflectionAgainstAttack(selectedCards[0], attackCards);
             bool playerPhysicalBlock = selectedCards.Count == 1
-                && BlockingRules.IsPhysicalBlockingCard(selectedCards[0])
                 && battleManager.DefenderPublic == PlayerType.Player
-                && BlockingRules.CanBlockPhysical(attackCards);
+                && BlockingRules.CanUsePhysicalBlockingAgainstAttack(selectedCards[0], attackCards);
             bool playerParry = selectedCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
                 && ParryRules.RequiresParryExclusiveLock(selectedCards[0], attackCards);
@@ -436,7 +480,10 @@ public class CardSequenceManager : MonoBehaviour
 
         battleManager.SetGameState(GameState.CombatResolvePhase);
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearMagicalSwordPlayerAttackState();
+        battleManager.ClearMagicalSwordEnemyAttackState();
+        battleManager.ClearPlayerAttackComboForCombat();
     }
 
     /// <summary>
@@ -451,7 +498,7 @@ public class CardSequenceManager : MonoBehaviour
         if (cancellationToken.IsCancellationRequested) return;
 
         // 4. 一度クリア
-        BattleUIManager.I?.HideAllCardDetails();
+        BattleUIManager.I?.ClearAllCardDisplaysAndSelectionImmediate();
         cardStatsDisplay?.ClearSequenceCards();
         cardStatsDisplay?.UpdateDisplay();
 
@@ -461,11 +508,14 @@ public class CardSequenceManager : MonoBehaviour
         bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
         Side displaySide = attackerIsPlayer ? Side.Player : Side.Enemy;
 
-        // 5. 再度：攻撃の使用カードを一括表示（CardLayout は選択中カード数が0だと再配置されないためバッチ専用API）
-        var full = new List<CardData>(attackCards.Count);
-        for (int i = 0; i < attackCards.Count; i++)
+        var full = battleManager.GetAttackCardsForCombatPublic();
+        if (full == null || full.Count == 0)
         {
-            if (attackCards[i] != null) full.Add(attackCards[i]);
+            full = new List<CardData>(attackCards.Count);
+            for (int i = 0; i < attackCards.Count; i++)
+            {
+                if (attackCards[i] != null) full.Add(attackCards[i]);
+            }
         }
         if (full.Count == 0) return;
         BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(full, displaySide);
@@ -502,9 +552,13 @@ public class CardSequenceManager : MonoBehaviour
             await RevealMagicPanelBonusDrawsAsync(cancellationToken);
             BattleUIManager.I?.HideAllCardDetails();
             cardStatsDisplay?.ClearSequenceCards();
+            cardStatsDisplay?.ClearMagicalExplosionAttackDisplayLocks();
+            cardStatsDisplay?.ClearHammadnessAttackDisplayLocks();
             battleManager.SetCurrentAttackCard(null);
             cardStatsDisplay?.UpdateDisplay();
             battleManager.SetGameState(GameState.CombatResolvePhase);
+            battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+            battleManager.ClearHammadnessRollSnapshot();
             battleManager.ClearMagicalSwordPlayerAttackState();
             return false;
         }
@@ -518,50 +572,8 @@ public class CardSequenceManager : MonoBehaviour
             await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
         }
 
-        var meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
-            && GodrageRules.IsGodrageDoublingCombo(attackCards);
-        var godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
-            && !MagicalExplosionRules.ContainsMagicalExplosion(attackCards);
-        bool playGodRamps = meGodCombo || godRageOnlyCombo;
-        int msBonusRuntime = battleManager.MagicalSwordAttackPowerBonus;
-        bool hasMsSword = MagicalSwordRules.ContainsMagicalSword(attackCards);
-        bool msBoost = hasMsSword && msBonusRuntime > 0;
-        bool preMeMsDone = battleManager.MagicalSwordPlayerPreMeRampVisualDone;
-        bool needMsRampInResolve = msBoost && !preMeMsDone;
-        MagicalSwordRules.TryGetFirstMagicalSwordRule(attackCards, out var msRuleForRamp);
-        int attackBoost = msRuleForRamp != null ? msRuleForRamp.attackPowerBonus : 0;
-        var msDataCard = MagicalSwordRules.FindFirstMagicalSwordCard(attackCards);
-
-        // 1本目で既に出したランプ。2本目は直前の「まっさら→再表示」を潰さないようスキップ。
-        if (atk == battleManager.GetPlayerStatus() && cardStatsDisplay != null
-            && dualBladeStrikeIndex == 0)
-        {
-            if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
-            {
-                if (playGodRamps)
-                {
-                    // マジカルソード+ゴッドレイジ：MS 前に長い遅延は入れない
-                }
-                else
-                    await Task.Delay(500, cancellationToken);
-                await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
-                    attackCards, atk, def, msDataCard, attackBoost, 0.2f, cancellationToken);
-            }
-
-            if (playGodRamps)
-            {
-                if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
-                    await Task.Delay(500, cancellationToken);
-                else if (meGodCombo)
-                    await Task.Delay(1000, cancellationToken);
-                else
-                    await Task.Delay(500, cancellationToken);
-                int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
-                int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
-                await cardStatsDisplay.PlayGodRageAttackRampAsync(
-                    attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
-            }
-        }
+        if (cardStatsDisplay != null && dualBladeStrikeIndex == 0)
+            await PlayAttackModifierRampsAfterHitAsync(attackCards, atk, def, cancellationToken);
 
         bool selfAttack = ReferenceEquals(atk, def);
         if (selfAttack)
@@ -578,9 +590,10 @@ public class CardSequenceManager : MonoBehaviour
 
         await battleManager.PickAndDisplayEnemyDefenseAfterPlayerHitAsync(attackCards);
 
-        var selectedDefenseCard = battleManager.GetSelectedDefenseCard();
+        var defenseCards = battleManager.GetEnemyDefenseCardsForCombat();
+        CardData selectedDefenseCard = defenseCards.Count > 0 ? defenseCards[0] : null;
         bool showYurusuDuringCombat =
-            battleManager.DefenderPublic == PlayerType.Enemy && selectedDefenseCard == null && BattleUIManager.I != null;
+            battleManager.DefenderPublic == PlayerType.Enemy && defenseCards.Count == 0 && BattleUIManager.I != null;
         if (showYurusuDuringCombat)
             BattleUIManager.I.ShowYurusuDisplay();
 
@@ -589,8 +602,7 @@ public class CardSequenceManager : MonoBehaviour
         bool enemyMagicReflect = selectedDefenseCard != null
             && ReflectionRules.CanUseMagicReflectionAgainstAttack(selectedDefenseCard, attackCards);
         bool enemyPhysicalBlock = selectedDefenseCard != null
-            && BlockingRules.IsPhysicalBlockingCard(selectedDefenseCard)
-            && BlockingRules.CanBlockPhysical(attackCards);
+            && BlockingRules.CanUsePhysicalBlockingAgainstAttack(selectedDefenseCard, attackCards);
         bool enemyParry = selectedDefenseCard != null
             && ParryRules.RequiresParryExclusiveLock(selectedDefenseCard, attackCards);
 
@@ -630,7 +642,10 @@ public class CardSequenceManager : MonoBehaviour
             }
             else
             {
-                await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
+                if (defenseCards.Count > 1)
+                    await battleProcessor.ResolveCombatAsync(attackCards, defenseCards, atk, def, defHand, skipHitCheck: true);
+                else
+                    await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
             }
         }
         finally
@@ -639,10 +654,18 @@ public class CardSequenceManager : MonoBehaviour
                 BattleUIManager.I?.HideYurusuButton();
         }
 
-        if (selectedDefenseCard != null && !enemyPhysicalReflect && !enemyMagicReflect && !enemyPhysicalBlock && !enemyParry)
+        // オンラインの魔法防御は RemotePlayerAgent 側で記録・プール処理済みのため二重計上しない
+        if (defenseCards.Count > 0
+            && !enemyPhysicalReflect && !enemyMagicReflect && !enemyPhysicalBlock && !enemyParry)
         {
-            handRefill?.RecordEnemyUse(selectedDefenseCard);
-            battleProcessor.UseCard(selectedDefenseCard, defHand);
+            foreach (var defCard in defenseCards)
+            {
+                if (defCard == null) continue;
+                if (battleManager != null && battleManager.IsOnlineMatch && defCard.cardType == CardType.Magic)
+                    continue;
+                handRefill?.RecordEnemyUse(defCard);
+                battleProcessor.UseCard(defCard, defHand);
+            }
         }
 
         if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
@@ -655,6 +678,68 @@ public class CardSequenceManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 命中確定後：マジカルソード／ゴッドレイジの ATK ランプ（プレイヤー・敵攻撃共通）。
+    /// </summary>
+    public async Task PlayAttackModifierRampsAfterHitAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        PlayerStatus def,
+        CancellationToken cancellationToken,
+        int dualBladeStrikeIndex = 0)
+    {
+        if (cardStatsDisplay == null || dualBladeStrikeIndex != 0 || attackCards == null || atk == null)
+            return;
+
+        bool atkIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
+        bool atkIsEnemy = ReferenceEquals(atk, battleManager.GetEnemyStatus());
+        if (!atkIsPlayer && !atkIsEnemy) return;
+
+        var meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
+            && GodrageRules.IsGodrageDoublingCombo(attackCards);
+        var hammadnessGodCombo = HammadnessRules.ContainsHammadness(attackCards)
+            && GodrageRules.IsGodrageDoublingCombo(attackCards);
+        var godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
+            && !MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
+            && !HammadnessRules.ContainsHammadness(attackCards);
+        bool playGodRamps = meGodCombo || hammadnessGodCombo || godRageOnlyCombo;
+
+        int msBonusRuntime = atkIsPlayer
+            ? battleManager.MagicalSwordAttackPowerBonus
+            : battleManager.MagicalSwordEnemyAttackPowerBonus;
+        bool hasMsSword = MagicalSwordRules.ContainsMagicalSword(attackCards);
+        bool msBoost = hasMsSword && msBonusRuntime > 0;
+        bool preMeMsDone = atkIsPlayer
+            ? battleManager.MagicalSwordPlayerPreMeRampVisualDone
+            : battleManager.MagicalSwordEnemyPreMeRampVisualDone;
+        bool needMsRampInResolve = msBoost && !preMeMsDone;
+        MagicalSwordRules.TryGetFirstMagicalSwordRule(attackCards, out var msRuleForRamp);
+        int attackBoost = msRuleForRamp != null ? msRuleForRamp.attackPowerBonus : 0;
+        var msDataCard = MagicalSwordRules.FindFirstMagicalSwordCard(attackCards);
+
+        if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
+        {
+            if (!playGodRamps)
+                await Task.Delay(500, cancellationToken);
+            await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
+                attackCards, atk, def, msDataCard, attackBoost, 0.2f, cancellationToken);
+        }
+
+        if (playGodRamps)
+        {
+            if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
+                await Task.Delay(500, cancellationToken);
+            else if (meGodCombo || hammadnessGodCombo)
+                await Task.Delay(1000, cancellationToken);
+            else
+                await Task.Delay(500, cancellationToken);
+            int fromAtk = cardStatsDisplay.ComputeGodRageRampFrom(attackCards, atk, def);
+            int toAtk = cardStatsDisplay.ComputeGodRageRampTo(attackCards, atk, def);
+            await cardStatsDisplay.PlayGodRageAttackRampAsync(
+                attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -774,6 +859,15 @@ public class CardSequenceManager : MonoBehaviour
     /// <summary>
     /// 反射連鎖・パリィ再防御など、<see cref="StartCardSequenceAsync"/> を通さない経路で魔法をプールへ載せる。
     /// </summary>
+    /// <summary>敵の魔法防御（<<アイアンクラッド>> 等）：MP 消費と手札／プール処理。</summary>
+    public async Task ApplyEnemyMagicDefenseFromHandOrPoolAsync(CardData card)
+    {
+        if (card == null || card.cardType != CardType.Magic) return;
+        bool isFromHand = BattleUIManager.I == null
+            || !BattleUIManager.I.IsEnemyMagicCardUiOnMagicPanel(card);
+        await ApplyEnemyMagicCardToPoolAsync(card, isFromHand);
+    }
+
     public async Task ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(CardData card, CancellationToken cancellationToken = default)
     {
         if (card == null || card.cardType != CardType.Magic) return;
@@ -785,9 +879,9 @@ public class CardSequenceManager : MonoBehaviour
 
     private async System.Threading.Tasks.Task ApplyMagicCardToPoolAsync(CardData card, bool isFromHand)
     {
-        if (MagicPoolManager.I == null) return;
+        if (card == null) return;
 
-        // MP消費（眼精疲労で倍率）
+        // MP消費（眼精疲労で倍率）— MagicPoolManager の有無に関わらず先に適用
         var playerStatus = battleManager.GetPlayerStatus();
         if (playerStatus != null && card.mpCost > 0)
         {
@@ -796,6 +890,8 @@ public class CardSequenceManager : MonoBehaviour
             Debug.Log($"[CardSequenceManager] MP消費: {card.cardName} -{pay}MP (残り={playerStatus.currentMP})");
             BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
         }
+
+        if (MagicPoolManager.I == null) return;
 
         if (isFromHand)
         {
@@ -868,6 +964,181 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
+    /// オンライン／複数枚：相手攻撃を CardSequenceManager と同じ手順で表示（戦闘解決は行わない）。
+    /// </summary>
+    public async Task PresentOnlineEnemyAttackSequenceAsync(
+        List<CardData> selectedCards,
+        CancellationToken cancellationToken)
+    {
+        if (selectedCards == null || selectedCards.Count == 0 || battleManager == null)
+            return;
+
+        Debug.Log($"[CardSequenceManager] Enemy attack presentation: {selectedCards.Count} cards");
+
+        if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+            cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (HammadnessRules.ContainsHammadness(selectedCards))
+            cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
+
+        bool spellbookElementRevealPending = SpellbookRules.NeedsElementRevealSequence(selectedCards);
+        if (spellbookElementRevealPending)
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
+
+        battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearHammadnessRollSnapshot();
+        battleManager.ClearConfusionAttackTargetResolvedForDisplay();
+
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃", Side.Enemy);
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+        await Task.Delay(300, cancellationToken);
+
+        for (int i = 0; i < selectedCards.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var card = selectedCards[i];
+            BattleUIManager.I?.ShowCardDetail(card, Side.Enemy);
+            var sequenceCards = new List<CardData>(selectedCards.GetRange(0, i + 1));
+            cardStatsDisplay?.SetSequenceCards(sequenceCards, "攻撃", Side.Enemy);
+            cardStatsDisplay?.UpdateDisplay();
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            await Task.Delay(500, cancellationToken);
+        }
+
+        if (spellbookElementRevealPending
+            && SpellbookRules.TryGetForcedComboElement(selectedCards, out var spellbookFlashElement))
+        {
+            await Task.Delay(500, cancellationToken);
+            const float spellbookColorFlashMs = 50f;
+            Color spellbookFlashColor = ElementHelper.GetElementColor(spellbookFlashElement);
+            SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
+            BattleUIManager.I?.PlayFullscreenColorFlashMs(spellbookFlashColor, spellbookColorFlashMs);
+            await Task.Delay((int)spellbookColorFlashMs, cancellationToken);
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+            cardStatsDisplay?.UpdateDisplay();
+        }
+
+        var psPre = battleManager.GetPlayerStatus();
+        var esPre = battleManager.GetEnemyStatus();
+        if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards)
+            && MagicalSwordRules.ContainsMagicalSword(selectedCards)
+            && battleManager.MagicalSwordEnemyAttackPowerBonus > 0
+            && cardStatsDisplay != null
+            && MagicalSwordRules.TryGetFirstMagicalSwordRule(selectedCards, out var msRForPreMeRamp)
+            && esPre != null && psPre != null)
+        {
+            var msCardPre = MagicalSwordRules.FindFirstMagicalSwordCard(selectedCards);
+            if (msCardPre != null)
+            {
+                await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
+                    selectedCards,
+                    esPre,
+                    psPre,
+                    msCardPre,
+                    msRForPreMeRamp.attackPowerBonus,
+                    0.2f,
+                    cancellationToken);
+                battleManager.SetMagicalSwordEnemyPreMeRampVisualDone(true);
+            }
+        }
+
+        if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards) && esPre != null)
+            await RunMagicalExplosionAttackIntroAsync(selectedCards, esPre, psPre, cancellationToken);
+        else
+            cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+
+        if (HammadnessRules.ContainsHammadness(selectedCards) && esPre != null)
+            await RunHammadnessAttackIntroAsync(selectedCards, esPre, cancellationToken);
+        else
+            cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+
+        await ProcessEnemyAttackCardsAsync(selectedCards);
+
+        CardData primaryNormal = null;
+        foreach (var c in selectedCards)
+        {
+            if (c != null && c.cardType != CardType.Magic)
+            {
+                primaryNormal = c;
+                break;
+            }
+        }
+        battleManager.SetCurrentAttackCard(primaryNormal != null ? primaryNormal : selectedCards[0]);
+        if (selectedCards.Count > 1 || MagicalExplosionRules.ContainsMagicalExplosion(selectedCards)
+            || HammadnessRules.ContainsHammadness(selectedCards))
+            battleManager.SetOnlineEnemyAttackCombo(selectedCards);
+
+        cardStatsDisplay?.UpdateDisplay();
+    }
+
+    private async Task ProcessEnemyAttackCardsAsync(List<CardData> cards)
+    {
+        if (cards == null || cards.Count == 0) return;
+
+        var magicCards = cards.FindAll(c => c != null && c.cardType == CardType.Magic);
+        var normalCards = cards.FindAll(c => c != null && c.cardType != CardType.Magic);
+
+        if (!_skipMagicProcessingInProcessCardsBecauseMagicalExplosion)
+        {
+            foreach (var magic in magicCards)
+            {
+                bool isFromHand = BattleUIManager.I == null
+                    || !BattleUIManager.I.IsEnemyMagicCardUiOnMagicPanel(magic);
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
+            }
+        }
+        else
+        {
+            _skipMagicProcessingInProcessCardsBecauseMagicalExplosion = false;
+        }
+
+        foreach (var card in normalCards)
+        {
+            handRefill?.RecordEnemyUse(card);
+            battleProcessor.UseCard(card, battleManager.cpuHand);
+        }
+    }
+
+    private async Task ApplyEnemyMagicCardToPoolAsync(CardData card, bool isFromHand)
+    {
+        if (MagicPoolManager.I == null || card == null) return;
+
+        var enemyStatus = battleManager.GetEnemyStatus();
+        if (enemyStatus != null && card.mpCost > 0)
+        {
+            int pay = enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
+            enemyStatus.UseMP(pay);
+            BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), enemyStatus);
+        }
+
+        if (isFromHand)
+        {
+            handRefill?.RecordEnemyUse(card);
+            battleProcessor.UseCard(card, battleManager.cpuHand);
+            MagicPoolManager.I.TryUseMagicCard(
+                card,
+                battleManager.cpuHand,
+                battleManager.GetHandMaxCount(),
+                () =>
+                {
+                    var drawn = battleManager.cardDealer?.DrawRandomCard(PlayerType.Enemy);
+                    if (drawn != null)
+                        battleManager.cpuHand.Add(drawn);
+                },
+                PlayerType.Enemy);
+        }
+        else
+        {
+            MagicPoolManager.I.ConsumeUse(card, PlayerType.Enemy);
+            var drawn = battleManager.cardDealer?.DrawRandomCard(PlayerType.Enemy);
+            if (drawn != null)
+                battleManager.cpuHand.Add(drawn);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
     /// 敵攻撃：マジカルエクスプロージョンをプレイヤーと同じ手順（1 枚出す→<see cref="RunMagicalExplosionAttackIntroAsync"/>）で処理し、その後手札から除去する。
     /// </summary>
     public async Task PresentEnemyMagicalExplosionAttackAsync(CardData meCard, CancellationToken cancellationToken)
@@ -876,6 +1147,7 @@ public class CardSequenceManager : MonoBehaviour
             return;
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearHammadnessRollSnapshot();
         cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
 
         BattleUIManager.I?.ClearAllSelections();
@@ -935,7 +1207,11 @@ public class CardSequenceManager : MonoBehaviour
         {
             bool isFromHand = BattleUIManager.I == null
                 || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
-            await ApplyMagicCardToPoolAsync(magic, isFromHand);
+            bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
+            if (attackerIsPlayer)
+                await ApplyMagicCardToPoolAsync(magic, isFromHand);
+            else
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
         }
 
         _skipMagicProcessingInProcessCardsBecauseMagicalExplosion = true;
@@ -974,15 +1250,73 @@ public class CardSequenceManager : MonoBehaviour
             cancellationToken);
     }
 
+    /// <summary>
+    /// 全シート表示後：500ms → SE・白フラッシュ → ランダム ATK 決定 → TOTAL / 気狂いハンマー シートのカウントアップ。
+    /// </summary>
+    private async Task RunHammadnessAttackIntroAsync(
+        List<CardData> selectedCards,
+        PlayerStatus atk,
+        CancellationToken cancellationToken)
+    {
+        if (cardStatsDisplay == null)
+            return;
+        if (atk == null || selectedCards == null)
+        {
+            cardStatsDisplay.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+            return;
+        }
+
+        int fromTotal = cardStatsDisplay.ComputeHammadnessRampFrom(selectedCards, atk);
+        cardStatsDisplay.SetHammadnessPreRampAttackDisplay(fromTotal);
+        cardStatsDisplay.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+        cardStatsDisplay.UpdateDisplay();
+
+        await Task.Delay(500, cancellationToken);
+
+        int rolled = HammadnessRules.RollRandomAttackPower();
+        battleManager.SetHammadnessRollSnapshot(rolled);
+
+        SoundEffectPlayer.I?.Play(OrbDefenseReactionFlow.OrbGaugeRecoverySe);
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+
+        int toTotal = cardStatsDisplay.ComputeHammadnessRampTo(selectedCards, atk);
+        CardData hammadnessCard = HammadnessRules.FindFirstHammadnessCard(selectedCards);
+
+        await cardStatsDisplay.PlayHammadnessAttackRampAsync(
+            selectedCards,
+            atk,
+            hammadnessCard,
+            rolled,
+            fromTotal,
+            toTotal,
+            0.2f,
+            cancellationToken);
+    }
+
     // ==================== 大魔法（ArchMagic） ====================
 
     /// <summary>
     /// 大魔法の「詠唱開始」フロー。カード演出→500ms→ポップアップ「魔力が吹き荒れる」+SE→200ms→背景差し替え（1000ms）→TurnEnd。
+    /// 「残り x ターン」オーバーレイは出さない（次の AttackSelect で <see cref="RunArchMagicCastingTurnAsync"/> が担当）。
     /// </summary>
     public async Task StartArchMagicCastIntroAsync(CardData archMagicCard, Side side, CancellationToken cancellationToken)
     {
         if (archMagicCard == null) return;
 
+        IsArchMagicCastIntroInProgress = true;
+        try
+        {
+            await StartArchMagicCastIntroCoreAsync(archMagicCard, side, cancellationToken);
+        }
+        finally
+        {
+            IsArchMagicCastIntroInProgress = false;
+            BattleUIManager.I?.HideArchMagicCastOverlayImmediate();
+        }
+    }
+
+    private async Task StartArchMagicCastIntroCoreAsync(CardData archMagicCard, Side side, CancellationToken cancellationToken)
+    {
         // 表示ゾーンクリア
         BattleUIManager.I?.ClearAllSelections();
         BattleUIManager.I?.HideAllCardDetails();
@@ -1042,9 +1376,14 @@ public class CardSequenceManager : MonoBehaviour
             spellTarget = battleManager.IsPlayerSelfAttackTargetMode ? ps : es;
             battleManager.ClearPlayerSelfAttackTargetMode();
         }
+        else if (battleManager.GetEnemyAI() is RemotePlayerAgent remoteAgent && remoteAgent.LastAttackTargetSelf)
+            spellTarget = es;
         else
             spellTarget = ps;
         atk?.BeginArchMagicCasting(archMagicCard, turns, spellTarget);
+
+        Side chanterSide = side;
+        BattleUIManager.I?.ShowArchMagicBarrier(chanterSide, atk != null ? atk.archMagicBarrierRemaining : 0);
 
         // 表示を片付けて TurnEnd
         BattleUIManager.I?.HideAllCardDetails();
@@ -1060,11 +1399,45 @@ public class CardSequenceManager : MonoBehaviour
     /// </summary>
     public async Task RunArchMagicCastingTurnAsync(PlayerStatus owner, Side ownerSide, CancellationToken cancellationToken)
     {
+        if (IsArchMagicCastIntroInProgress || IsArchMagicCountdownInProgress)
+            return;
+
         if (owner == null || !owner.IsCastingArchMagic)
         {
             battleManager.SetGameState(GameState.CombatResolvePhase);
             return;
         }
+
+        IsArchMagicCountdownInProgress = true;
+        try
+        {
+            await RunArchMagicCastingTurnCoreAsync(owner, ownerSide, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            BattleUIManager.I?.HideArchMagicCastOverlayImmediate();
+            if (owner != null && owner.IsCastingArchMagic
+                && battleManager.CurrentState == GameState.AttackPhase)
+            {
+                battleManager.SetGameState(GameState.CombatResolvePhase);
+            }
+            throw;
+        }
+        finally
+        {
+            IsArchMagicCountdownInProgress = false;
+        }
+    }
+
+    private async Task RunArchMagicCastingTurnCoreAsync(PlayerStatus owner, Side ownerSide, CancellationToken cancellationToken)
+    {
+        if (owner == null || !owner.IsCastingArchMagic)
+        {
+            battleManager.SetGameState(GameState.CombatResolvePhase);
+            return;
+        }
+
+        BattleUIManager.I?.HideArchMagicCastOverlayImmediate();
 
         var card = owner.archMagicCastingCard;
 
@@ -1077,6 +1450,8 @@ public class CardSequenceManager : MonoBehaviour
         // ポップアップ待ち中にキャンセルされていたらここで終了
         if (owner.archMagicCancelPending || !owner.IsCastingArchMagic)
         {
+            Side ownerSideCancel = ownerSide;
+            BattleUIManager.I?.HideArchMagicBarrier(ownerSideCancel);
             battleManager.SetGameState(GameState.CombatResolvePhase);
             return;
         }
@@ -1086,24 +1461,25 @@ public class CardSequenceManager : MonoBehaviour
 
         // 3. ディム＋中央フェードイン（残り= current）
         int remainingBefore = owner.archMagicRemainingTurns;
+        int barrierBefore = owner.archMagicBarrierRemaining;
         Sprite spr = card != null ? card.cardImage : null;
         if (BattleUIManager.I != null)
-            await BattleUIManager.I.FadeInArchMagicCastOverlayAsync(spr, remainingBefore, 520, cancellationToken);
+            await BattleUIManager.I.FadeInArchMagicCastOverlayAsync(spr, remainingBefore, barrierBefore, cancellationToken);
 
         // 4. 視認用インターバル
         await Task.Delay(400, cancellationToken);
 
         // 5. 残りターンを -1 + SE
         owner.DecrementArchMagicRemainingTurns();
-        BattleUIManager.I?.UpdateArchMagicCastOverlayRemaining(owner.archMagicRemainingTurns);
+        BattleUIManager.I?.UpdateArchMagicCastOverlayRemaining(owner.archMagicRemainingTurns, owner.archMagicBarrierRemaining);
         SoundEffectPlayer.I?.Play("Assets/SE/心臓の鼓動2.mp3");
 
         // カウントダウン数値・SE の視認用
         await Task.Delay(1200, cancellationToken);
 
-        // 6. オーバーレイをフェードアウト
+        // 6. カウントダウン終了時はフェードアウト（次の AttackSelect で再度フェードイン）
         if (BattleUIManager.I != null)
-            await BattleUIManager.I.FadeOutArchMagicCastOverlayAsync(480, cancellationToken);
+            await BattleUIManager.I.FadeOutArchMagicCastOverlayAsync(cancellationToken);
 
         // 7. 残りが 0 になったら発動フローへ、そうでなければ TurnEnd
         if (owner.archMagicRemainingTurns <= 0)
@@ -1156,6 +1532,7 @@ public class CardSequenceManager : MonoBehaviour
             def = ReferenceEquals(owner, player) ? enemy : player;
         var defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
 
+        bool enteredOnlineEnemyDefense = false;
         try
         {
             if (ownerSide == Side.Player)
@@ -1163,19 +1540,29 @@ public class CardSequenceManager : MonoBehaviour
                 // プレイヤー発動：通常の攻撃ルートに乗せる（反射・無効化は内部でスキップ）
                 await ResolvePlayerAttackCombatAsync(attackCards, owner, def, defHand, cancellationToken);
             }
+            else if (battleManager.IsOnlineMatch)
+            {
+                battleManager.SetGameState(GameState.DefensePhase);
+                enteredOnlineEnemyDefense = true;
+            }
             else
             {
-                // 敵発動（将来の拡張用・現状は AI が大魔法を選ばない想定の単純解決）
+                // 敵発動（オフライン AI は大魔法を選ばない想定の単純解決）
                 await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, owner, def, defHand, skipHitCheck: true);
             }
         }
         finally
         {
             owner?.ClearArchMagicCastingState();
+            BattleUIManager.I?.HideArchMagicCastOverlayImmediate();
+            BattleUIManager.I?.HideArchMagicBarrier(ownerSide);
             var bgm = BattleBgmController.Instance;
             if (bgm != null)
                 await bgm.CrossfadeFromArchMagicBackgroundAsync(1000, cancellationToken);
         }
+
+        if (enteredOnlineEnemyDefense)
+            return;
 
         BattleUIManager.I?.HideAllCardDetails();
         cardStatsDisplay?.ClearSequenceCards();
@@ -1185,17 +1572,27 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 詠唱キャンセル演出。「詠唱失敗」ポップアップ + ガラスが割れる2.mp3 → 背景を 1000ms で復帰。
-    /// ダメージ適用側で <see cref="PlayerStatus.archMagicCancelPending"/> が立っているときに呼ぶ。
+    /// 詠唱キャンセル演出。「詠唱中断」ポップアップ → 背景を 1000ms で復帰。
+    /// バリア破壊演出は BarriarDamage 側で再生済みの場合、割れる SE は省略する。
     /// </summary>
     public async Task RunArchMagicCastCancelAsync(PlayerStatus owner, CancellationToken cancellationToken)
     {
         if (owner == null) return;
-        owner.archMagicCancelPending = false;
 
-        SoundEffectPlayer.I?.Play("Assets/SE/ガラスが割れる2.mp3");
-        DamagePopup popup = BattleUIManager.I?.ShowInfoPopupOnCardPanel("詠唱失敗", new Color(0.85f, 0.25f, 0.2f));
-        float life = popup != null ? popup.fadeDuration : DamagePopup.DefaultFadeDurationIfUnknown;
+        bool breakFxAlreadyPlayed = owner.archMagicBarrierBreakFxPlayed;
+        owner.archMagicCancelPending = false;
+        owner.archMagicBarrierBreakFxPlayed = false;
+
+        BattleUIManager.I?.HideArchMagicCastOverlayImmediate();
+        Side ownerSide = ReferenceEquals(owner, battleManager.GetPlayerStatus()) ? Side.Player : Side.Enemy;
+        BattleUIManager.I?.HideArchMagicBarrier(ownerSide);
+
+        if (!breakFxAlreadyPlayed)
+            SoundEffectPlayer.I?.Play("Assets/SE/ガラスが割れる2.mp3");
+
+        float life = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowMessagePopupForTarget(owner, "詠唱中断", new Color(0.85f, 0.25f, 0.2f))
+            : DamagePopup.DefaultFadeDurationIfUnknown;
         await DamagePopup.WaitAfterPopupLifetimeAsync(life, cancellationToken);
 
         var bgmRestore = BattleBgmController.Instance;
@@ -1289,9 +1686,7 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            var currentAttackCard = battleManager.GetCurrentAttackCard();
-            Debug.Log($"[CardSequenceManager] 敵の攻撃カード: {currentAttackCard?.cardName ?? "なし"}");
-            return new List<CardData> { currentAttackCard };
+            return battleManager.GetAttackCardsForCombatPublic();
         }
     }
 }

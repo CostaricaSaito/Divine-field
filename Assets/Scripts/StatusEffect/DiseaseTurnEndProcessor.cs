@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -54,7 +54,7 @@ public static class DiseaseTurnEndProcessor
 
         bool worsenRoll =
             s.debugAlwaysWorsenNaturalProgress
-            || UnityEngine.Random.value < s.worsenChance;
+            || BattleRandom.Value < s.worsenChance;
 
         if (stage != StatusEffectType.ParadiseSickness && worsenRoll)
         {
@@ -236,7 +236,7 @@ public static class DiseaseTurnEndProcessor
         bool showPurgatoryToParadiseProgressionIntro = false)
     {
         var s = Active;
-        if (!skipEcstasyRoll && UnityEngine.Random.value < s.ecstasyChance)
+        if (!skipEcstasyRoll && BattleRandom.Value < s.ecstasyChance)
         {
             await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
             await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
@@ -277,7 +277,7 @@ public static class DiseaseTurnEndProcessor
     {
         var bm = BattleManager.I;
         if (bm == null || BattleUIManager.I == null) return;
-        BattleUIManager.I.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
+        BattleUIManager.I.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus(), snapHpmgpNumbers: true);
     }
 
     private static Task ShatterPlaceholderAsync(int durationMs, CancellationToken ct)

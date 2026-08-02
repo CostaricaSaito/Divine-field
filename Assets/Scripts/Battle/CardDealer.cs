@@ -78,9 +78,15 @@ public class CardDealer : MonoBehaviour
         // カードデータの読み込み（Resources/ Cards フォルダ）
         allCards = Resources.LoadAll<CardData>("Cards");
         if (allCards == null || allCards.Length == 0)
+        {
             Debug.LogError("[CardDealer] Cards フォルダから CardData を読み込めませんでした");
+        }
         else
+        {
+            // オンライン対戦の決定的乱数のため、両クライアントで並び順を固定する
+            System.Array.Sort(allCards, (a, b) => string.CompareOrdinal(a?.name, b?.name));
             Debug.Log($"[CardDealer] 読み込まれたカード数: {allCards.Length}");
+        }
 
         BuildDarkCardTemplatePool();
     }
@@ -138,8 +144,8 @@ public class CardDealer : MonoBehaviour
         {
             if (playerHand.Count < playerTarget && cpuHand.Count < cpuTarget)
             {
-                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep);
-                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep);
+                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep, PlayerType.Player);
+                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep, PlayerType.Enemy);
                 if (playerCardInstance == null || enemyCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: カード生成に失敗しました");
@@ -156,7 +162,7 @@ public class CardDealer : MonoBehaviour
             }
             else if (playerHand.Count < playerTarget)
             {
-                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep);
+                var playerCardInstance = DrawOpeningCardInstance(playerHand.Count == 0 && playerDarkPrep, PlayerType.Player);
                 if (playerCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: プレイヤーカード生成に失敗しました");
@@ -172,7 +178,7 @@ public class CardDealer : MonoBehaviour
             }
             else
             {
-                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep);
+                var enemyCardInstance = DrawOpeningCardInstance(cpuHand.Count == 0 && enemyDarkPrep, PlayerType.Enemy);
                 if (enemyCardInstance == null)
                 {
                     Debug.LogError("[CardDealer] DealOpeningHands: CPUカード生成に失敗しました");
@@ -211,18 +217,18 @@ public class CardDealer : MonoBehaviour
     }
 
     /// <summary>開幕1枚目：ダークプリパレーションなら闇プール、それ以外は通常。</summary>
-    private CardData DrawOpeningCardInstance(bool useDarkPoolFirst)
+    private CardData DrawOpeningCardInstance(bool useDarkPoolFirst, PlayerType forSide)
     {
         if (useDarkPoolFirst)
-            return DrawRandomDarkCardInstance();
-        return DrawRandomCardInstance();
+            return DrawRandomDarkCardInstance(forSide);
+        return DrawRandomCardInstance(forSide);
     }
 
     /// <summary>
     /// カードデータから1枚ランダムに選んでカードインスタンスを返す
     /// </summary>
     /// <returns>生成されたカードインスタンス</returns>
-    private CardData DrawRandomCardInstance()
+    private CardData DrawRandomCardInstance(PlayerType forSide)
     {
         if (allCards == null || allCards.Length == 0) return null;
 
@@ -230,7 +236,7 @@ public class CardDealer : MonoBehaviour
         CardData template = null;
         for (int a = 0; a < maxAttempts; a++)
         {
-            var pick = allCards[Random.Range(0, allCards.Length)];
+            var pick = allCards[BattleRandom.DrawRange(forSide, 0, allCards.Length)];
             if (pick != null && pick.cardType != CardType.Ultimate)
             {
                 template = pick;
@@ -246,13 +252,13 @@ public class CardDealer : MonoBehaviour
     }
 
     /// <summary>闇属性（<see cref="CardData.element"/> == Dark）のテンプレートから1枚。プールが空なら通常抽選。</summary>
-    private CardData DrawRandomDarkCardInstance()
+    private CardData DrawRandomDarkCardInstance(PlayerType forSide)
     {
         if (_darkCardTemplates == null || _darkCardTemplates.Length == 0)
-            return DrawRandomCardInstance();
+            return DrawRandomCardInstance(forSide);
 
-        var template = _darkCardTemplates[Random.Range(0, _darkCardTemplates.Length)];
-        if (template == null) return DrawRandomCardInstance();
+        var template = _darkCardTemplates[BattleRandom.DrawRange(forSide, 0, _darkCardTemplates.Length)];
+        if (template == null) return DrawRandomCardInstance(forSide);
 
         var instance = ScriptableObject.Instantiate(template);
         instance.name = template.name;
@@ -261,10 +267,15 @@ public class CardDealer : MonoBehaviour
     }
 
     /// <summary>
-    /// ランダムカードを取得する（外部用）
+    /// ランダムカードを取得する（外部用・プレイヤー側の抽選ストリームを使用）
     /// </summary>
     /// <returns>生成されたカードインスタンス</returns>
-    public CardData DrawRandomCard()
+    public CardData DrawRandomCard() => DrawRandomCard(PlayerType.Player);
+
+    /// <summary>
+    /// ランダムカードを取得する（外部用）。オンライン同期のため、どちらの手札向けかを指定する。
+    /// </summary>
+    public CardData DrawRandomCard(PlayerType forSide)
     {
         if (allCards == null || allCards.Length == 0)
         {
@@ -276,7 +287,7 @@ public class CardDealer : MonoBehaviour
         CardData src = null;
         for (int a = 0; a < maxAttempts; a++)
         {
-            var pick = allCards[Random.Range(0, allCards.Length)];
+            var pick = allCards[BattleRandom.DrawRange(forSide, 0, allCards.Length)];
             if (pick != null && pick.cardType != CardType.Ultimate)
             {
                 src = pick;
@@ -298,6 +309,20 @@ public class CardDealer : MonoBehaviour
         
         instance.cardUI = null; // UIは後で生成
         return instance;
+    }
+
+    /// <summary>
+    /// カード名（cardName）からテンプレートを検索する（オンライン同期の手札補正用）。
+    /// </summary>
+    public CardData FindTemplateByName(string cardName)
+    {
+        if (string.IsNullOrEmpty(cardName) || allCards == null) return null;
+        foreach (var c in allCards)
+        {
+            if (c != null && c.cardName == cardName)
+                return c;
+        }
+        return null;
     }
 
     /// <summary>

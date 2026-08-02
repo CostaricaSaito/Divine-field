@@ -8,6 +8,23 @@ using UnityEngine;
 public static class HitRateRules
 {
     public const int SmokeAccuracyPenalty = 25;
+    /// <summary>未設定（必中）扱いのデフォルト命中率。</summary>
+    public const int DefaultHitRatePercent = 100;
+
+    public static bool HasCustomHitRate(CardData card)
+    {
+        return card != null && HasCustomHitRate(card.hitRate);
+    }
+
+    public static bool HasCustomHitRate(int hitRatePercent)
+    {
+        return hitRatePercent != DefaultHitRatePercent;
+    }
+
+    public static string FormatHitRateLabel(int hitRatePercent)
+    {
+        return $"{hitRatePercent}%";
+    }
 
     /// <summary>
     /// 命中率の主対象: AddOn 以外の先頭（Primary / Flexible / Standalone 等）。無ければ先頭。
@@ -70,6 +87,6 @@ public static class HitRateRules
     {
         if (finalPercent >= 100) return true;
         if (finalPercent <= 0) return false;
-        return Random.Range(0, 100) < finalPercent;
+        return BattleRandom.Range(0, 100) < finalPercent;
     }
 }

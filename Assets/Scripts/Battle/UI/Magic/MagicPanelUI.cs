@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -64,6 +64,27 @@ public class MagicPanelUI : MonoBehaviour
         foreach (var slot in slots)
         {
             slot.SetInteractable(interactable);
+        }
+    }
+
+    /// <summary>
+    /// 防御フェーズ：スロットごとに属性・MP を見て選択可否を切り替える。
+    /// </summary>
+    public void SetSlotsInteractableForDefense(
+        bool panelEnabled,
+        System.Collections.Generic.IReadOnlyList<CardData> incomingAttack,
+        PlayerStatus defender)
+    {
+        currentInteractable = panelEnabled;
+        foreach (var slot in slots)
+        {
+            var card = slot.GetCardData();
+            bool slotOk = panelEnabled && card != null;
+            if (slotOk && BlockingRules.IsPhysicalBlockingCard(card))
+                slotOk = BlockingRules.CanPlayerSelectPhysicalBlockingDefense(card, incomingAttack, defender);
+            else if (slotOk && card.cardType == CardType.Magic)
+                slotOk = BlockingRules.CanAffordMagicDefenseMp(card, defender);
+            slot.SetInteractable(slotOk);
         }
     }
 

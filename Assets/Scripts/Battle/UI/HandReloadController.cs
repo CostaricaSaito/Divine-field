@@ -160,6 +160,8 @@ public class HandReloadController : MonoBehaviour
     public bool PlayerCanUseReloadEntry()
     {
         if (BattleManager.I == null) return false;
+        // オンライン対戦（PoC）：手札リロードは未対応
+        if (BattleManager.I.IsOnlineMatch) return false;
         if (!BattleManager.I.IsBattleOpeningSequenceComplete) return false;
         if (BattleManager.I.CurrentState != GameState.AttackPhase) return false;
         if (BattleManager.I.CurrentBattleStep != BattleStep.MainActionSelect) return false;

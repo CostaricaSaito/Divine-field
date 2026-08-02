@@ -1,4 +1,4 @@
-﻿// BattleDebugTools.cs
+// BattleDebugTools.cs
 using System;
 using System.Threading;
 using UnityEngine;
@@ -100,7 +100,7 @@ public class BattleDebugTools : MonoBehaviour
 
     [Header("敵手札リアルタイム（Editor / Development・再生中）")]
     [Tooltip("cpuHand の一覧を表示。使用・消費の確認用。")]
-    [SerializeField] private bool showEnemyHandDebugPanel = true;
+    [SerializeField] private bool showEnemyHandDebugPanel = false;
     [SerializeField] private BattleDebugPanelLayout enemyHandPanelLayout = new BattleDebugPanelLayout
     {
         placement = BattleDebugPanelPlacement.Custom,
@@ -138,6 +138,8 @@ public class BattleDebugTools : MonoBehaviour
     private Rect _cardCheatWindowRect;
     private Rect _enemyHandWindowRect;
     private bool _debugPanelRectsInitialized;
+    private bool _showCardCheatPanelCached;
+    private bool _showCardCheatPanelCacheInitialized;
 
     [ContextMenu("デバッグ：プレイヤーHPを10に設定")]
     public void SetPlayerHPTo10()
@@ -232,13 +234,22 @@ public class BattleDebugTools : MonoBehaviour
     private void OnEnable()
     {
         _debugPanelRectsInitialized = false;
+        _showCardCheatPanelCacheInitialized = false;
     }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        HandleShowCardCheatPanelToggle();
+    }
+#endif
 
     private void OnGUI()
     {
         if (!Application.isPlaying || battleManager == null)
             return;
 
+        HandleShowCardCheatPanelToggle();
         EnsureDebugPanelRects();
 
         // 後に描いたウィンドウが手前（重なり時は GameState を最前面に）
@@ -291,6 +302,22 @@ public class BattleDebugTools : MonoBehaviour
         _cardCheatWindowRect = ComputeInitialRect(cardCheatPanelLayout);
         _enemyHandWindowRect = ComputeInitialRect(enemyHandPanelLayout);
         _debugPanelRectsInitialized = true;
+    }
+
+    private void HandleShowCardCheatPanelToggle()
+    {
+        if (!_showCardCheatPanelCacheInitialized)
+        {
+            _showCardCheatPanelCached = showCardCheatPanel;
+            _showCardCheatPanelCacheInitialized = true;
+            return;
+        }
+
+        if (showCardCheatPanel == _showCardCheatPanelCached)
+            return;
+
+        _cardCheatWindowRect = ComputeInitialRect(cardCheatPanelLayout);
+        _showCardCheatPanelCached = showCardCheatPanel;
     }
 
     private static Rect ComputeInitialRect(BattleDebugPanelLayout layout)

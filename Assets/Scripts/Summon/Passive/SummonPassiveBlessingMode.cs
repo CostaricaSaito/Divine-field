@@ -15,4 +15,6 @@ public enum SummonPassiveBlessingMode
     Leviathan = 4,
     /// <summary>ディアボロス（開幕ダークプリパレーション。戦闘数値加護は別・ライフサイクル）</summary>
     Diabolos = 5,
+    /// <summary>インドラ（5n ターン終了で相手手札破壊）</summary>
+    Indra = 6,
 }

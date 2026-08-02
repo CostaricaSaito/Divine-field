@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 public enum Side { Player, Enemy }
@@ -47,14 +48,20 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private EconomicUIHandler economicHandler;
     [SerializeField] private BattleEffectPresenter effectPresenter;
     [SerializeField] private ArchMagicOverlayPresenter archMagicPresenter;
+    [SerializeField] private ArchMagicBarrierPresenter archMagicBarrierPresenter;
     [SerializeField] private RestraintHeavyOverlayPresenter restraintHeavyPresenter;
     [SerializeField] private MagicPanelPresenter magicPanelPresenter;
     [SerializeField] private BattlePopupPresenter popupPresenter;
     [SerializeField] private BattleCardUIController cardController;
 
     [Header("ターン表示（Canvas の TurnCount / TurnCountText）")]
+    [SerializeField] private GameObject turnCountRoot;
+    [SerializeField] private Image turnCountBackground;
     [SerializeField] private TMP_Text turnCountText;
     private bool _turnCountTextStyled;
+
+    private static readonly Color TurnBgColorPlayer = new Color(0x39 / 255f, 0x32 / 255f, 0xE2 / 255f);
+    private static readonly Color TurnBgColorEnemy = new Color(0xE2 / 255f, 0x4C / 255f, 0x32 / 255f);
 
     [Header("メイン Canvas")]
     [SerializeField] private Canvas uiCanvas;
@@ -66,16 +73,43 @@ public class BattleUIManager : MonoBehaviour
     {
         if (I != null && I != this) { Destroy(gameObject); return; }
         I = this;
+
+        if (turnCountRoot == null && turnCountText != null)
+            turnCountRoot = turnCountText.transform.parent != null ? turnCountText.transform.parent.gameObject : null;
+        if (turnCountBackground == null && turnCountRoot != null)
+            turnCountBackground = turnCountRoot.GetComponent<Image>();
+        if (turnCountRoot != null)
+            turnCountRoot.SetActive(false);
+
+        if (archMagicBarrierPresenter == null)
+            archMagicBarrierPresenter = GetComponent<ArchMagicBarrierPresenter>();
+        if (archMagicBarrierPresenter == null)
+            archMagicBarrierPresenter = gameObject.AddComponent<ArchMagicBarrierPresenter>();
+
+        if (archMagicBarrierPresenter != null && statusUI != null)
+            archMagicBarrierPresenter.BindNameAnchors(statusUI.playerNameText, statusUI.enemyNameText);
     }
 
     /// <summary>
-    /// <see cref="SummonTurnCounterState"/> に基づき「ターンN」を表示。黒字・白アウトラインは初回のみ適用。
+    /// <see cref="SummonTurnCounterState"/> に基づき「ターンN」を表示。
+    /// 初回呼び出しで TurnCount を表示し、手番所有者に応じて背景色を切り替える。
     /// </summary>
-    public void RefreshTurnCountDisplay(SummonTurnCounterState counters)
+    public void RefreshTurnCountDisplay(SummonTurnCounterState counters, PlayerType turnOwner)
     {
         if (turnCountText == null || counters == null) return;
+
+        if (turnCountRoot != null && !turnCountRoot.activeSelf)
+            turnCountRoot.SetActive(true);
+
         EnsureTurnCountTextStyle();
         turnCountText.text = $"ターン{counters.CurrentBattleTurnDisplay}";
+
+        if (turnCountBackground != null)
+        {
+            var bg = turnOwner == PlayerType.Player ? TurnBgColorPlayer : TurnBgColorEnemy;
+            var alpha = turnCountBackground.color.a;
+            turnCountBackground.color = new Color(bg.r, bg.g, bg.b, alpha);
+        }
     }
 
     private void EnsureTurnCountTextStyle()
@@ -98,13 +132,13 @@ public class BattleUIManager : MonoBehaviour
     public void HideYurusuButton() => useButtonPresenter?.HideYurusuDisplay();
 
     //==== パブリックAPI：ステータス表示 =====
-    public void UpdateStatus(PlayerStatus player, PlayerStatus enemy)
+    public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, bool snapHpmgpNumbers = false)
     {
         // 手札の枚数を取得（通常は現在の手札枚数を参照）
         int playerHandCount = BattleManager.I?.playerHand?.Count ?? 0;
         int enemyHandCount = BattleManager.I?.cpuHand?.Count ?? 0;
 
-        statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount);
+        statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount, snapHpmgpNumbers);
         BattleManager.I?.RefreshSummonSkillButtonInteractables();
     }
 
@@ -156,6 +190,41 @@ public class BattleUIManager : MonoBehaviour
 
     /// <summary>手札カードのクリック受付のみを切り替える（見た目は変更しない）。</summary>
     public void SetHandClickable(bool clickable) => cardController?.SetHandClickable(clickable);
+
+    /// <summary>手札をすべてグレーアウト（操作不可の見た目）にする／解除する。</summary>
+    public void SetHandGrayedOut(List<CardData> hand, bool grayedOut)
+        => cardController?.SetHandInteractivity(hand, !grayedOut);
+
+    /// <summary>
+    /// 相手の防御カードを表示（手札選択を介さない）。
+    /// マジックパネル上の魔法防御（アイアンクラッド等）は <see cref="ShowCardDetail"/> だと
+    /// 容量チェック等で失敗するため、こちらを使う。
+    /// </summary>
+    public void ShowEnemyDefenseCardPresentation(CardData card)
+        => ShowCardSheetVisualOnly(card, Side.Enemy);
+
+    /// <summary>相手の複数枚防御を順次表示（0.5秒/枚）。</summary>
+    public async Task ShowEnemyDefenseCardsPresentationSequenceAsync(IReadOnlyList<CardData> cards)
+    {
+        if (cardController == null || cards == null || cards.Count == 0) return;
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var partial = new List<CardData>(i + 1);
+            for (int j = 0; j <= i; j++)
+            {
+                if (cards[j] != null) partial.Add(cards[j]);
+            }
+            if (partial.Count == 0) continue;
+
+            cardController.HideEnemyCardDetails();
+            cardController.ShowCardSheetsVisualOnlyBatch(partial, Side.Enemy);
+            BattleManager.I?.SetStatsDisplaySequenceCards(partial, "防御", Side.Enemy);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            if (i < cards.Count - 1)
+                await Task.Delay(500);
+        }
+    }
 
     //==== パブリックAPI：手札管理（BattleCardUIController へ委譲） =====
     public void SetHandInteractivity(List<CardData> hand, bool interactable)
@@ -259,6 +328,9 @@ public class BattleUIManager : MonoBehaviour
     public float ShowHandReloadPopup(PlayerStatus target)
         => popupPresenter != null ? popupPresenter.ShowHandReloadPopup(target) : 0f;
 
+    public float ShowHandDiscardRestartPopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowHandDiscardRestartPopup(target) : 0f;
+
     /// <summary>
     /// 濃霧ポップアップ寿命（fade）と <see cref="DamagePopup.PostPopupIntervalMs"/> 経過後に濃霧画面演出を有効化する。
     /// Popup Presenter からファサード経由で呼ばれる。
@@ -296,6 +368,16 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>ステータス付近に任意メッセージのポップアップ。</summary>
     public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
         => popupPresenter != null ? popupPresenter.ShowMessagePopupForTarget(target, message, color) : 0f;
+
+    public Task<float> ShowBarriarDamagePopupAsync(
+        int valueBefore,
+        int valueAfter,
+        bool barrierBroken,
+        PlayerStatus target,
+        CancellationToken cancellationToken = default)
+        => popupPresenter != null
+            ? popupPresenter.ShowBarriarDamagePopupAsync(valueBefore, valueAfter, barrierBroken, target, cancellationToken)
+            : Task.FromResult(0f);
 
     /// <summary>対象のカードパネル中央にポップアップを生成し <see cref="DamagePopup"/> を返す（病系シーケンス用）。</summary>
     public DamagePopup SpawnDamagePopupForTarget(PlayerStatus target)
@@ -492,22 +574,54 @@ public class BattleUIManager : MonoBehaviour
     // ===== 大魔法（ArchMagic）詠唱中央オーバーレイ：ArchMagicOverlayPresenter へ委譲 =====
 
     /// <summary>詠唱中：全画面ディム + 中央に大魔法アイコン + 残りターンをフェードイン表示する。</summary>
-    public Task FadeInArchMagicCastOverlayAsync(Sprite magicSprite, int remainingTurns, int fadeMs, CancellationToken ct)
+    public Task FadeInArchMagicCastOverlayAsync(Sprite magicSprite, int remainingTurns, int barrierRemaining, CancellationToken ct)
         => archMagicPresenter != null
-            ? archMagicPresenter.FadeInAsync(magicSprite, remainingTurns, fadeMs, ct)
+            ? archMagicPresenter.FadeInAsync(magicSprite, remainingTurns, barrierRemaining, ct)
             : Task.CompletedTask;
 
-    /// <summary>残りターン数のみ差し替える（ダウンカウント表現用）。</summary>
-    public void UpdateArchMagicCastOverlayRemaining(int remainingTurns)
-        => archMagicPresenter?.UpdateRemaining(remainingTurns);
+    /// <summary>残りターン数と残バリアを差し替える（ダウンカウント表現用）。</summary>
+    public void UpdateArchMagicCastOverlayRemaining(int remainingTurns, int barrierRemaining = -1)
+        => archMagicPresenter?.UpdateRemaining(remainingTurns, barrierRemaining);
 
     /// <summary>詠唱中央オーバーレイを消す（フェード）。</summary>
-    public Task FadeOutArchMagicCastOverlayAsync(int fadeMs, CancellationToken ct)
+    public Task FadeOutArchMagicCastOverlayAsync(CancellationToken ct)
         => archMagicPresenter != null
-            ? archMagicPresenter.FadeOutAsync(fadeMs, ct)
+            ? archMagicPresenter.FadeOutAsync(ct)
             : Task.CompletedTask;
 
     public void HideArchMagicCastOverlayImmediate()
         => archMagicPresenter?.HideImmediate();
+
+    /// <summary>詠唱中の残りターンを常時表示（ターン間も維持）。</summary>
+    public void ShowArchMagicCastOverlayPersistent(Sprite magicSprite, int remainingTurns, int barrierRemaining = -1)
+        => archMagicPresenter?.ShowPersistent(magicSprite, remainingTurns, barrierRemaining);
+
+    // ===== 大魔法 HP バリア（Barriar.prefab）：ArchMagicBarrierPresenter へ委譲 =====
+
+    public void ShowArchMagicBarrier(Side side, int remaining)
+        => archMagicBarrierPresenter?.Show(side, remaining);
+
+    public void UpdateArchMagicBarrier(Side side, int remaining)
+        => archMagicBarrierPresenter?.UpdateRemaining(side, remaining);
+
+    public void HideArchMagicBarrier(Side side)
+        => archMagicBarrierPresenter?.Hide(side);
+
+    public void HideAllArchMagicBarriers()
+        => archMagicBarrierPresenter?.HideAll();
+
+    public void UpdateArchMagicBarrierForStatus(PlayerStatus status, int remaining)
+    {
+        if (status == null) return;
+        var bm = BattleManager.I;
+        if (bm == null) return;
+        Side side = ReferenceEquals(status, bm.GetPlayerStatus()) ? Side.Player : Side.Enemy;
+        if (!status.IsCastingArchMagic || remaining <= 0)
+        {
+            HideArchMagicBarrier(side);
+            return;
+        }
+        ShowArchMagicBarrier(side, remaining);
+    }
 
 }

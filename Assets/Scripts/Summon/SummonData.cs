@@ -114,6 +114,15 @@ public class SummonData : ScriptableObject
         return name == "Diabolos";
     }
 
+    /// <summary>
+    /// Whether Indra turn-end hand destroy lifecycle applies.
+    /// </summary>
+    public bool IsIndraLifecycle()
+    {
+        if (passiveBlessingMode == SummonPassiveBlessingMode.Indra) return true;
+        return name == "Indra" || StableSummonId == "indra";
+    }
+
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)
     {
         if (text == null || style == null) return;

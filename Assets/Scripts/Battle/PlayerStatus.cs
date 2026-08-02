@@ -41,8 +41,12 @@ public class PlayerStatus
     public PlayerStatus archMagicEffectTarget { get; private set; }
     /// <summary>残り詠唱ターン数。0 になった自分の攻撃フェーズで発動する。</summary>
     public int archMagicRemainingTurns { get; private set; }
-    /// <summary>直近 <see cref="TakeDamage"/> 中にダメージを受けたことで詠唱がキャンセルされたか（BattleManager が消費）。</summary>
+    /// <summary>残り HP バリア（0 以下で詠唱中断。実 HP とは別）。</summary>
+    public int archMagicBarrierRemaining { get; private set; }
+    /// <summary>バリア破壊により詠唱がキャンセルされたか（BattleManager が消費）。</summary>
     public bool archMagicCancelPending;
+    /// <summary>バリア破壊演出（Dissolve + SE）を BarriarDamage 側で再生済みか。</summary>
+    public bool archMagicBarrierBreakFxPlayed;
 
     public bool IsCastingArchMagic => archMagicCastingCard != null;
 
@@ -52,7 +56,9 @@ public class PlayerStatus
         archMagicCastingCard = card;
         archMagicEffectTarget = effectTarget;
         archMagicRemainingTurns = Mathf.Max(1, turns);
+        archMagicBarrierRemaining = ArchMagicRules.GetBarrierHp(card);
         archMagicCancelPending = false;
+        archMagicBarrierBreakFxPlayed = false;
     }
 
     /// <summary>自分の攻撃フェーズでの残りターン減算。0 になったとき発動可能。</summary>
@@ -67,7 +73,69 @@ public class PlayerStatus
         archMagicCastingCard = null;
         archMagicEffectTarget = null;
         archMagicRemainingTurns = 0;
+        archMagicBarrierRemaining = 0;
         archMagicCancelPending = false;
+        archMagicBarrierBreakFxPlayed = false;
+    }
+
+    /// <summary>ターン境界同期用。詠唱中なら残りターン・バリア・対象を権威値で揃える。</summary>
+    public void ApplyAuthoritativeArchMagicCasting(CardData card, int remainingTurns, PlayerStatus effectTarget, int barrierRemaining)
+    {
+        if (card == null || remainingTurns <= 0)
+        {
+            if (!archMagicCancelPending)
+                ClearArchMagicCastingState();
+            return;
+        }
+
+        if (IsCastingArchMagic && archMagicCastingCard != null && ArchMagicRules.NamesMatch(archMagicCastingCard, card))
+        {
+            archMagicRemainingTurns = Mathf.Max(0, remainingTurns);
+            archMagicBarrierRemaining = Mathf.Max(0, barrierRemaining);
+            archMagicEffectTarget = effectTarget;
+            archMagicCancelPending = false;
+            return;
+        }
+
+        archMagicCastingCard = card;
+        archMagicEffectTarget = effectTarget;
+        archMagicRemainingTurns = Mathf.Max(0, remainingTurns);
+        archMagicBarrierRemaining = Mathf.Max(0, barrierRemaining);
+        archMagicCancelPending = false;
+    }
+
+    /// <summary>
+    /// 詠唱中の HP バリアへダメージ。闇属性は即 0。残り 0 以下で詠唱中断フラグを立てる。
+    /// </summary>
+    /// <returns>バリア破壊（詠唱中断）したか。</returns>
+    public bool ApplyArchMagicBarrierDamage(int damage, ElementType attackElement)
+    {
+        if (!IsCastingArchMagic || damage <= 0) return false;
+
+        if (attackElement == ElementType.Dark)
+        {
+            archMagicBarrierRemaining = 0;
+            MarkArchMagicBarrierBroken();
+            return true;
+        }
+
+        archMagicBarrierRemaining -= damage;
+        if (archMagicBarrierRemaining <= 0)
+        {
+            archMagicBarrierRemaining = 0;
+            MarkArchMagicBarrierBroken();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void MarkArchMagicBarrierBroken()
+    {
+        archMagicCancelPending = true;
+        archMagicCastingCard = null;
+        archMagicEffectTarget = null;
+        archMagicRemainingTurns = 0;
     }
 
     // ===== 顕現スキル（1バトル1回） =====
@@ -110,10 +178,6 @@ public class PlayerStatus
 
         currentHP = Mathf.Max(currentHP - modifiedAmount, 0);
         Debug.Log($"{DisplayName} に {modifiedAmount} ダメージ（元値: {amount}）");
-
-        // 大魔法詠唱中に 1 でもダメージを受けたらキャンセル確定（MP は返らない）。
-        // 実際のキャンセル演出（ポップアップ・背景復帰）は BattleManager が次の安全地帯で消費する。
-        CancelArchMagicCastingOnDamageEvent(modifiedAmount);
     }
 
     /// <summary>
@@ -128,19 +192,6 @@ public class PlayerStatus
         int lost = before - currentHP;
         if (lost > 0)
             Debug.Log($"{DisplayName} に {lost} ダメージ（raw、元指示: {amount}）");
-        CancelArchMagicCastingOnDamageEvent(lost);
-    }
-
-    /// <param name="damageForArchMagicRule">
-    /// 大魔法「いかなるダメージも中断」の判定用。被ダメ補正後の量（<see cref="TakeDamage"/>）または raw 経路では実損 <see cref="ApplyRawHpDamage"/>。
-    /// </param>
-    private void CancelArchMagicCastingOnDamageEvent(int damageForArchMagicRule)
-    {
-        if (damageForArchMagicRule <= 0 || !IsCastingArchMagic) return;
-        archMagicCancelPending = true;
-        archMagicCastingCard = null;
-        archMagicEffectTarget = null;
-        archMagicRemainingTurns = 0;
     }
 
     /// <summary>

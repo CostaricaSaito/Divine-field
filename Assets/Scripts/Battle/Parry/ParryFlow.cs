@@ -43,7 +43,7 @@ public static class ParryFlow
 
         await Task.Delay(1000, cancellationToken);
 
-        bool redirectToOriginalDefender = UnityEngine.Random.Range(0, 2) == 0;
+        bool redirectToOriginalDefender = BattleRandom.Range(0, 2) == 0;
 
         if (redirectToOriginalDefender)
         {
@@ -150,7 +150,7 @@ public static class ParryFlow
 
         await Task.Delay(1000, cancellationToken);
 
-        bool redirectToOriginalDefender = UnityEngine.Random.Range(0, 2) == 0;
+        bool redirectToOriginalDefender = BattleRandom.Range(0, 2) == 0;
 
         if (redirectToOriginalDefender)
         {
@@ -164,12 +164,25 @@ public static class ParryFlow
                 BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(enemyParryDefenseCard, Side.Enemy);
 
             ElementType atkEl = ElementHelper.GetCombinedElement(incomingPlayerAttackCards);
-            CardData second = await enemyAI.ExecuteDefenseSelectAsync(
-                battleManager.cpuHand, atkEl, incomingPlayerAttackCards);
+            CardData second = await enemyAI.ExecuteParryRerunDefenseSelectAsync(
+                battleManager.cpuHand, atkEl, incomingPlayerAttackCards, enemyParryDefenseCard);
+
+            if (second != null && ParryRules.RequiresParryExclusiveLock(second, incomingPlayerAttackCards))
+            {
+                await RunEnemyDefenderParriesPlayerAttackAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    enemyAI,
+                    incomingPlayerAttackCards,
+                    second,
+                    cancellationToken);
+                return;
+            }
 
             if (second != null)
             {
-                BattleUIManager.I?.ShowCardDetail(second, Side.Enemy);
+                BattleUIManager.I?.ShowEnemyDefenseCardPresentation(second);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                 await Task.Delay(500, cancellationToken);
             }

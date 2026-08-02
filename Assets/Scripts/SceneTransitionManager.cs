@@ -33,6 +33,7 @@ public class SceneTransitionManager : MonoBehaviour
 
         I = this;
         DontDestroyOnLoad(gameObject);
+        DisableFadeCameraAudioListener();
         Debug.Log("SceneTransitionManager registered");
 
         TryFindFadeImage();
@@ -74,6 +75,15 @@ public class SceneTransitionManager : MonoBehaviour
 
         _fadeCanvasResolved.renderMode = RenderMode.ScreenSpaceCamera;
         _fadeCanvasResolved.worldCamera = cam;
+    }
+
+    /// <summary>
+    /// Fade overlay camera must not host an AudioListener (Main Camera keeps the single listener).
+    /// </summary>
+    void DisableFadeCameraAudioListener()
+    {
+        foreach (var listener in GetComponentsInChildren<AudioListener>(true))
+            listener.enabled = false;
     }
 
     public void FadeToScene(string sceneName)

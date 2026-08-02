@@ -602,6 +602,10 @@ public class GameResultController : MonoBehaviour
 
     private void OnBackToMainClicked()
     {
+        // オンライン対戦のセッション後始末（オフラインでは何もしない）
+        if (OnlineMatchContext.IsOnline)
+            MatchmakingService.EndOnlineSession();
+
         SoundEffectPlayer.I?.Play(seBackToMainCursorAddress);
         if (SceneTransitionManager.I != null)
         {

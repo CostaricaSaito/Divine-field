@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -12,6 +12,9 @@ using UnityEngine;
 public static class InterventionTurnEndProcessor
 {
     public const float TriggerChance = 0.25f;
+
+    /// <summary>介入の解決シーケンス中か（オンライン同期：この間の魔法防御はプール・MP を消費しない）。</summary>
+    public static bool IsResolving { get; private set; }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     /// <summary>デバッグ用: true のとき介入のランダム発生を必ず通す（本番では false のまま）。</summary>
@@ -41,13 +44,13 @@ public static class InterventionTurnEndProcessor
         PlayerStatus attackerStatus = attackerOwner == PlayerType.Player ? bm.GetPlayerStatus() : bm.GetEnemyStatus();
         if (attackerStatus == null || !attackerStatus.HasInterventionEffect()) return;
 
-        if (UnityEngine.Random.value > EffectiveTriggerChance) return;
+        if (BattleRandom.Value > EffectiveTriggerChance) return;
 
         List<CardData> hand = attackerOwner == PlayerType.Player ? bm.playerHand : bm.cpuHand;
         var candidates = BuildInterventionCandidates(hand, attackerOwner, attackerStatus);
         if (candidates.Count == 0) return;
 
-        int idx = UnityEngine.Random.Range(0, candidates.Count);
+        int idx = BattleRandom.Range(0, candidates.Count);
         CardData source = candidates[idx];
         bool fromHand = hand != null && hand.Contains(source);
 
@@ -67,6 +70,7 @@ public static class InterventionTurnEndProcessor
 
         var atkList = new List<CardData> { combatCard };
 
+        IsResolving = true;
         try
         {
             if (attackerOwner == PlayerType.Player)
@@ -94,6 +98,7 @@ public static class InterventionTurnEndProcessor
         }
         finally
         {
+            IsResolving = false;
             UnityEngine.Object.Destroy(combatCard);
             BattleUIManager.I?.HideAllCardDetails();
             BattleUIManager.I?.ClearAllSelections();

@@ -57,6 +57,17 @@ public class CardStatsDisplay : MonoBehaviour
     /// </summary>
     private bool _suppressMagicalExplosionPredictionDuringSequenceReveal;
 
+    /// <summary>気狂いハンマー：演出直前（ランダム加算前相当）。</summary>
+    private bool _hammadnessPreRampLocked;
+    private int _hammadnessPreRampAtkDisplayValue;
+
+    /// <summary>気狂いハンマー：ランプ後のリッチ表示ロック。</summary>
+    private bool _hammadnessPlayerAtkDisplayLocked;
+    private string _hammadnessPlayerAtkDisplayRichText;
+
+    /// <summary>攻撃＋気狂いハンマーの Prefab シーケンス中は TOTAL にランダム ATK の予測を含めない。</summary>
+    private bool _suppressHammadnessPredictionDuringSequenceReveal;
+
     /// <summary>
     /// 魔導書：カード表示中は合算属性を魔導書適用前で表示し、フラッシュ後に強制属性へ切り替える。
     /// </summary>
@@ -167,6 +178,8 @@ public class CardStatsDisplay : MonoBehaviour
             if (c != null) list.Add(c);
         }
         if (list.Count == 0) return false;
+        if (list.Count == 1 && HammadnessRules.IsHammadnessCard(list[0]))
+            return false;
         return GetDisplayedAttackStrength(list, BattleManager.I.GetPlayerStatus()) <= 0;
     }
 
@@ -214,6 +227,7 @@ public class CardStatsDisplay : MonoBehaviour
         ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
         ClearPlayerPreGodRageStackedDisplaySuppressions();
         ClearMagicalExplosionAttackDisplayLocks();
+        ClearHammadnessAttackDisplayLocks();
     }
 
     /// <summary>ゴッドレイジの ATK 表示ロックを解除（次の攻撃・演出用）。</summary>
@@ -221,6 +235,36 @@ public class CardStatsDisplay : MonoBehaviour
     {
         _godRagePlayerAtkDisplayLocked = false;
         _godRagePlayerAtkDisplayRichText = null;
+    }
+
+    /// <summary>気狂いハンマーの表示ロックを解除。</summary>
+    public void ClearHammadnessAttackDisplayLocks()
+    {
+        _hammadnessPreRampLocked = false;
+        _hammadnessPreRampAtkDisplayValue = 0;
+        _hammadnessPlayerAtkDisplayLocked = false;
+        _hammadnessPlayerAtkDisplayRichText = null;
+        _suppressHammadnessPredictionDuringSequenceReveal = false;
+    }
+
+    /// <summary>気狂いハンマー：ランプ完了後のリッチ表示のみ解除（続けてゴッドレイジ演出を行うとき）。</summary>
+    public void ClearHammadnessPlayerAtkDisplayLockOnly()
+    {
+        _hammadnessPlayerAtkDisplayLocked = false;
+        _hammadnessPlayerAtkDisplayRichText = null;
+    }
+
+    /// <summary>気狂いハンマー：ランダム ATK の予測を TOTAL に含めない期間。</summary>
+    public void SetSuppressHammadnessPredictionDuringSequenceReveal(bool value)
+    {
+        _suppressHammadnessPredictionDuringSequenceReveal = value;
+    }
+
+    /// <summary>気狂いハンマー演出直前：TOTAL をランダム加算前の強さで固定表示する。</summary>
+    public void SetHammadnessPreRampAttackDisplay(int displayedAtkStrength)
+    {
+        _hammadnessPreRampAtkDisplayValue = displayedAtkStrength;
+        _hammadnessPreRampLocked = true;
     }
 
     /// <summary>マジカルエクスプロージョンの表示ロックを解除。</summary>
@@ -806,6 +850,10 @@ public class CardStatsDisplay : MonoBehaviour
                     return _magicalExplosionPlayerAtkDisplayRichText;
                 if (_magicalExplosionPreRampLocked)
                     return $"ATK {_magicalExplosionPreRampAtkDisplayValue}";
+                if (_hammadnessPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_hammadnessPlayerAtkDisplayRichText))
+                    return _hammadnessPlayerAtkDisplayRichText;
+                if (_hammadnessPreRampLocked)
+                    return $"ATK {_hammadnessPreRampAtkDisplayValue}";
                 if (_godRagePlayerAtkDisplayLocked && !string.IsNullOrEmpty(_godRagePlayerAtkDisplayRichText))
                     return _godRagePlayerAtkDisplayRichText;
                 if (_magicalSwordSubGodRagePlayerAtkDisplayLocked
@@ -941,6 +989,9 @@ public class CardStatsDisplay : MonoBehaviour
     private static List<CardData> ResolveEnemyDefenseCardsForDisplay(BattleManager bm)
     {
         if (bm == null) return null;
+        var combat = bm.GetEnemyDefenseCardsForCombat();
+        if (combat != null && combat.Count > 0)
+            return combat;
         var ui = BattleUIManager.I?.GetSelectedDefenseCards();
         if (ui != null && ui.Count > 0)
             return ui;
@@ -1060,6 +1111,15 @@ public class CardStatsDisplay : MonoBehaviour
                 return MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(attackCards);
             return MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attackerForMeRule);
         }
+        if (attackerForMeRule != null && HammadnessRules.ContainsHammadness(attackCards))
+        {
+            if (_suppressHammadnessPredictionDuringSequenceReveal)
+                return HammadnessRules.SumAttackPowerExcludingHammadness(attackCards)
+                    + (_playerAttackDisplaySuppressMagicalSwordBonus
+                        ? 0
+                        : MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule));
+            return HammadnessRules.SumCardAttackPowerForHammadnessCombo(attackCards, attackerForMeRule);
+        }
         int plain = CalculateTotalPower(attackCards, true);
         if (attackerForMeRule != null && !_playerAttackDisplaySuppressMagicalSwordBonus)
             plain += MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule);
@@ -1159,6 +1219,98 @@ public class CardStatsDisplay : MonoBehaviour
         UpdateDisplay();
     }
 
+    /// <summary>気狂いハンマー演出：カード合計のみ（加護・2倍前）。</summary>
+    public int ComputeHammadnessRampFrom(List<CardData> cards, PlayerStatus attacker)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sum = HammadnessRules.SumAttackPowerExcludingHammadness(cards);
+        sum += MagicalSwordRules.GetActivePowerBonus(cards, attacker);
+        return sum;
+    }
+
+    /// <summary>気狂いハンマー演出：ランダム決定後のカード合計（加護・2倍前）。</summary>
+    public int ComputeHammadnessRampTo(List<CardData> cards, PlayerStatus attacker)
+    {
+        if (cards == null || attacker == null) return 0;
+        return HammadnessRules.SumCardAttackPowerForHammadnessCombo(cards, attacker);
+    }
+
+    /// <summary>
+    /// TOTAL と気狂いハンマーの CardSheet ATK を同時にカウントアップ。完了後リッチ表示ロック。
+    /// </summary>
+    public async Task PlayHammadnessAttackRampAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        CardData hammadnessCard,
+        int hammadnessSheetAtkTarget,
+        int fromTotal,
+        int toTotal,
+        float totalDurationSec,
+        CancellationToken cancellationToken)
+    {
+        _hammadnessPreRampLocked = false;
+
+        if (atkdefText == null || totalDurationSec <= 0f)
+        {
+            _hammadnessPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _hammadnessPlayerAtkDisplayLocked = true;
+            UpdateDisplay();
+            return;
+        }
+
+        if (fromTotal == toTotal)
+        {
+            _hammadnessPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _hammadnessPlayerAtkDisplayLocked = true;
+            UpdateDisplay();
+            return;
+        }
+
+        int lo = Mathf.Min(fromTotal, toTotal);
+        int hi = Mathf.Max(fromTotal, toTotal);
+        int span = hi - lo;
+        float stepSec = span > 0 ? totalDurationSec / span : 0f;
+
+        CardSheetDisplay hammadnessSheet = null;
+        if (hammadnessCard != null && BattleUIManager.I != null
+            && BattleUIManager.I.TryGetCardSheetDisplayForCardData(hammadnessCard, out var sh))
+            hammadnessSheet = sh;
+
+        int defPow = hammadnessCard != null ? hammadnessCard.defensePower : 0;
+
+        atkdefText.richText = false;
+        {
+            var el = attackCards != null && attackCards.Count > 0
+                ? ElementHelper.GetCombinedElement(attackCards)
+                : ElementType.None;
+            atkdefText.color = ElementHelper.GetElementColor(el);
+            ApplyTotalAtkDefElementImage(atkdefElement, el);
+        }
+
+        float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
+        for (int v = lo; v <= hi; v++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            float t = (v - lo) * invSpan;
+            int sheetAtkVal = Mathf.RoundToInt(Mathf.Lerp(0f, hammadnessSheetAtkTarget, t));
+            if (v == hi)
+                sheetAtkVal = hammadnessSheetAtkTarget;
+            if (hammadnessSheet != null)
+                hammadnessSheet.SetAtkDefenseNumbers(sheetAtkVal, defPow);
+
+            atkdefText.text = $"ATK {v}";
+            if (v < hi && stepSec > 0f)
+                await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
+        }
+
+        if (hammadnessSheet != null && hammadnessSheetAtkTarget >= 0)
+            hammadnessSheet.SetAtkDefenseNumbers(hammadnessSheetAtkTarget, defPow);
+
+        _hammadnessPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+        _hammadnessPlayerAtkDisplayLocked = true;
+        UpdateDisplay();
+    }
+
     /// <summary>
     /// タグなし部分（「ATK 10」など）のベース色。無属性は黒、その他は <see cref="ElementHelper.GetElementColor"/>。
     /// +n / -n はリッチテキストの &lt;color&gt; で上書き。
@@ -1212,11 +1364,18 @@ public class CardStatsDisplay : MonoBehaviour
         if (cards == null || cards.Count == 0 || attacker == null) return "";
 
         int rawCombo = CalculateTotalAttackPower(cards, attacker);
-        if (rawCombo <= 0) return "";
+        if (rawCombo <= 0)
+        {
+            if (HammadnessRules.ContainsHammadness(cards))
+                return "ATK 0";
+            return "";
+        }
 
         bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble
             && !_playerAttackDisplaySuppressGodRageDouble;
         if (_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            applyGodDouble = false;
+        if (_suppressHammadnessPredictionDuringSequenceReveal && HammadnessRules.ContainsHammadness(cards))
             applyGodDouble = false;
         int baseForBlessings = applyGodDouble ? rawCombo * 2 : rawCombo;
 
@@ -1308,6 +1467,7 @@ public class CardStatsDisplay : MonoBehaviour
         int sum = CalculateTotalAttackPower(cards, attacker);
         bool godDouble = GodrageRules.IsGodrageDoublingCombo(cards)
             && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            && !(_suppressHammadnessPredictionDuringSequenceReveal && HammadnessRules.ContainsHammadness(cards))
             && !_playerAttackDisplaySuppressGodRageDouble;
         if (godDouble)
             sum *= 2;
@@ -1361,6 +1521,7 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearHammadnessPlayerAtkDisplayLockOnly();
         ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
         ClearPlayerPreGodRageStackedDisplaySuppressions();
 
@@ -1440,6 +1601,7 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearHammadnessPlayerAtkDisplayLockOnly();
         ClearGodRagePlayerAttackDisplayLock();
         ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
         if (GodrageRules.IsGodrageDoublingCombo(attackCards)

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 /// <summary>
 /// 攻撃フェーズの手札選択可否（組み合わせ専用カードと単独利用可能カードの区別）。
@@ -20,6 +20,72 @@ public static class AttackComboSelectionRules
     }
 
     /// <summary>
+    /// Every card in the selection must be pickable given the other selected attack cards (AddOn needs a base).
+    /// </summary>
+    public static bool IsValidAttackSelection(IReadOnlyList<CardData> selection)
+    {
+        if (selection == null || selection.Count == 0) return false;
+
+        for (int i = 0; i < selection.Count; i++)
+        {
+            var c = selection[i];
+            if (c == null) continue;
+
+            var others = new List<CardData>();
+            for (int j = 0; j < selection.Count; j++)
+            {
+                if (j == i) continue;
+                var o = selection[j];
+                if (o != null) others.Add(o);
+            }
+
+            if (!CanPickAttackCardNow(c, others))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Remove attack cards that no longer satisfy <see cref="CanPickAttackCardNow"/> (e.g. AddOn after base canceled).
+    /// </summary>
+    public static List<CardData> PruneInvalidAttackSelections(
+        List<CardData> selectedCards,
+        System.Func<CardData, bool> isAttackCard)
+    {
+        var removed = new List<CardData>();
+        if (selectedCards == null || isAttackCard == null) return removed;
+
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = selectedCards.Count - 1; i >= 0; i--)
+            {
+                var c = selectedCards[i];
+                if (c == null || !isAttackCard(c)) continue;
+
+                var others = new List<CardData>();
+                for (int j = 0; j < selectedCards.Count; j++)
+                {
+                    if (j == i) continue;
+                    var o = selectedCards[j];
+                    if (o != null) others.Add(o);
+                }
+
+                if (!CanPickAttackCardNow(c, others))
+                {
+                    removed.Add(c);
+                    selectedCards.RemoveAt(i);
+                    changed = true;
+                }
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>
     /// 攻撃候補のうち、現在の選択状況で手札からクリック可能なカードだけを集める。
     /// </summary>
     public static List<CardData> FilterAttackChoicesForCurrentSelection(
@@ -37,5 +103,206 @@ public static class AttackComboSelectionRules
                 list.Add(c);
         }
         return list;
+    }
+
+    public static bool IsAttackCardForComboSelection(CardData card)
+    {
+        if (card == null) return false;
+        if (card.cardType == CardType.Magic && !card.isRecovery)
+            return CardRules.IsUsableInAttackPhase(card);
+        if (card.cardType == CardType.ArchMagic) return true;
+        if (card.cardType == CardType.Special) return true;
+        if (card.cardType == CardType.Ultimate) return true;
+        return card.cardType == CardType.Attack || card.isRecovery;
+    }
+
+    public static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
+        IReadOnlyList<CardData> currentSelection,
+        CardData adding)
+    {
+        if (adding == null) return false;
+        bool hasMagicPrimary = false;
+        bool hasPhysicalFlexible = false;
+        for (int i = 0; i < (currentSelection?.Count ?? 0); i++)
+        {
+            var c = currentSelection[i];
+            if (c == null) continue;
+            if (IsMagicPrimaryAttackInCombo(c)) hasMagicPrimary = true;
+            if (IsPhysicalAttackFlexibleInCombo(c)) hasPhysicalFlexible = true;
+        }
+        if (IsMagicPrimaryAttackInCombo(adding)) hasMagicPrimary = true;
+        if (IsPhysicalAttackFlexibleInCombo(adding)) hasPhysicalFlexible = true;
+        return hasMagicPrimary && hasPhysicalFlexible;
+    }
+
+    /// <summary>
+    /// Player UI / AI: whether <paramref name="card"/> may join the current attack selection.
+    /// </summary>
+    public static bool CanAddToAttackSelection(
+        IReadOnlyList<CardData> selection,
+        CardData card,
+        PlayerStatus attackerStatus,
+        PlayerType handOwner)
+    {
+        if (card == null || selection == null) return false;
+        if (!IsAttackCardForComboSelection(card)) return false;
+        if (ArchMagicRules.IsArchMagicCard(card)) return false;
+
+        if (card.cardType == CardType.Magic
+            && !CardRules.IsUsableInAttackPhaseForHandRespectingMagicPool(card, handOwner))
+        {
+            if (MagicPoolManager.I == null || !MagicPoolManager.I.IsInPool(card, handOwner))
+                return false;
+        }
+        else if (!CardRules.IsUsableInAttackPhaseForHandRespectingMagicPool(card, handOwner))
+        {
+            return false;
+        }
+
+        if (!CardRules.IsUsableInAttackPhase(card))
+            return false;
+
+        int pickId = card.GetInstanceID();
+        for (int i = 0; i < selection.Count; i++)
+        {
+            var s = selection[i];
+            if (s != null && s.GetInstanceID() == pickId)
+                return false;
+        }
+
+        if (GrandMagicRules.ContainsGrandMagicStyleAttack(selection)
+            && !GrandMagicRules.IsGrandMagicStyleAttackCard(card))
+            return false;
+
+        if (ConflictsMagicPrimaryWithPhysicalAttackFlexible(selection, card))
+            return false;
+
+        SelectionRole role = card.attackPhaseRole;
+        if (role is SelectionRole.Standalone or SelectionRole.Primary)
+            return selection.Count == 0;
+
+        if (role == SelectionRole.Addable)
+        {
+            if (HasRoleInSelection(selection, SelectionRole.Standalone))
+                return false;
+            if (card.cardType == CardType.Magic && HasMagicInSelection(selection))
+                return false;
+        }
+
+        if (!CanPickAttackCardNow(card, selection))
+            return false;
+
+        if (attackerStatus != null && card.cardType == CardType.Magic && !card.isRecovery)
+        {
+            if (attackerStatus.IsMagicUseForbidden()) return false;
+            var test = new List<CardData>();
+            for (int i = 0; i < selection.Count; i++)
+            {
+                if (selection[i] != null) test.Add(selection[i]);
+            }
+            test.Add(card);
+            if (attackerStatus.GetTotalEffectiveMagicMpForCards(test) > attackerStatus.currentMP)
+                return false;
+        }
+
+        var tentative = new List<CardData>();
+        for (int i = 0; i < selection.Count; i++)
+        {
+            if (selection[i] != null) tentative.Add(selection[i]);
+        }
+        tentative.Add(card);
+        return IsValidAttackSelection(tentative);
+    }
+
+    /// <summary>
+    /// AI: build the largest valid combo starting from <paramref name="primary"/> (player rules).
+    /// </summary>
+    public static List<CardData> BuildGreedyAttackCombo(
+        IReadOnlyList<CardData> handCandidates,
+        IReadOnlyList<CardData> extraCandidates,
+        CardData primary,
+        PlayerStatus attackerStatus,
+        PlayerType handOwner)
+    {
+        if (primary == null) return new List<CardData>();
+
+        var combo = new List<CardData> { primary };
+        if (primary.attackPhaseUseRule == AttackPhaseUseRule.Standalone)
+            return combo;
+        if (ArchMagicRules.IsArchMagicCard(primary))
+            return combo;
+        if (combo.Count == 1 && CardRules.IsImmediateAction(primary))
+            return combo;
+
+        var allCandidates = new List<CardData>();
+        if (handCandidates != null) allCandidates.AddRange(handCandidates);
+        if (extraCandidates != null) allCandidates.AddRange(extraCandidates);
+
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = 0; i < allCandidates.Count; i++)
+            {
+                var c = allCandidates[i];
+                if (c == null) continue;
+                if (ContainsInstance(combo, c)) continue;
+                if (!CanAddToAttackSelection(combo, c, attackerStatus, handOwner))
+                    continue;
+                combo.Add(c);
+                changed = true;
+            }
+        }
+
+        return IsValidAttackSelection(combo) ? combo : new List<CardData> { primary };
+    }
+
+    private static bool IsMagicPrimaryAttackInCombo(CardData c)
+    {
+        return c != null
+            && c.cardType == CardType.Magic
+            && !c.isRecovery
+            && c.attackPhaseUseRule == AttackPhaseUseRule.Primary;
+    }
+
+    private static bool IsPhysicalAttackFlexibleInCombo(CardData c)
+    {
+        return c != null
+            && c.cardType == CardType.Attack
+            && c.attackPhaseUseRule == AttackPhaseUseRule.Flexible;
+    }
+
+    private static bool HasMagicInSelection(IReadOnlyList<CardData> selection)
+    {
+        for (int i = 0; i < (selection?.Count ?? 0); i++)
+        {
+            var c = selection[i];
+            if (c != null && c.cardType == CardType.Magic && !c.isRecovery)
+                return true;
+        }
+        return false;
+    }
+
+    private static bool HasRoleInSelection(IReadOnlyList<CardData> selection, SelectionRole role)
+    {
+        for (int i = 0; i < (selection?.Count ?? 0); i++)
+        {
+            var c = selection[i];
+            if (c != null && c.attackPhaseRole == role)
+                return true;
+        }
+        return false;
+    }
+
+    private static bool ContainsInstance(IReadOnlyList<CardData> selection, CardData card)
+    {
+        int id = card.GetInstanceID();
+        for (int i = 0; i < selection.Count; i++)
+        {
+            var c = selection[i];
+            if (c != null && c.GetInstanceID() == id)
+                return true;
+        }
+        return false;
     }
 }

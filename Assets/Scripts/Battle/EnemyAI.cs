@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -7,10 +7,13 @@ using UnityEngine;
 /// </summary>
 public class EnemyAI
 {
+    /// <summary>直近の攻撃コンボ（CPU 単体／オンライン RemotePlayerAgent 共通）。</summary>
+    public List<CardData> LastAttackSelection { get; protected set; }
+
     /// <summary>
     /// ランダムに敵の召喚データを選択する
     /// </summary>
-    public SummonData SelectRandomEnemySummon()
+    public virtual SummonData SelectRandomEnemySummon()
     {
         var list = SummonSelectionManager.I?.GetAllSummonData();
         if (list == null || list.Length == 0)
@@ -130,19 +133,37 @@ public class EnemyAI
     }
 
     /// <summary>
+    /// 敵手札でまだ選べるカードか（使用済み＝裏向きは除外）。
+    /// </summary>
+    public static bool IsEnemyHandCardSelectable(CardData c)
+    {
+        if (c == null) return false;
+        if (c.cardUI != null && c.cardUI.IsFaceDown()) return false;
+        return CardRules.IsUsableInDefensePhase(c);
+    }
+
+    /// <summary>
     /// 防御カードの選び方。プレイヤーと同じく属性＋濃霧付与などの攻撃内容を考慮した候補から、
     /// PrimaryDefense／Defense型を優先して選ぶ。候補がなければ null（許す）。
     /// </summary>
     public CardData SelectDefenseCard(
         List<CardData> enemyHand,
         ElementType attackElement,
-        IReadOnlyList<CardData> attackCards = null)
+        IReadOnlyList<CardData> attackCards = null,
+        CardData excludeInstance = null)
     {
         if (enemyHand == null || enemyHand.Count == 0) return null;
 
         var choices = CardRules.GetDefenseChoicesAgainstAttack(enemyHand, attackElement, attackCards);
         if (choices == null || choices.Count == 0)
             return null;
+
+        choices.RemoveAll(c => !IsEnemyHandCardSelectable(c));
+        if (excludeInstance != null)
+        {
+            int excludeId = excludeInstance.GetInstanceID();
+            choices.RemoveAll(c => c != null && c.GetInstanceID() == excludeId);
+        }
 
         // 物理無効・打ち払いは専用ルート（ExecuteDefenseSelectAsync 先頭の優先分岐）のみ
         choices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
@@ -152,14 +173,19 @@ public class EnemyAI
 
         foreach (var c in choices)
         {
-            if (c != null && CardRules.IsUsableInDefensePhase(c)
-                && (c.isPrimaryDefense || c.cardType == CardType.Defense))
+            if (c != null && CardRules.IsNormalPhysicalDefenseCard(c))
                 return c;
         }
 
         foreach (var c in choices)
         {
-            if (c != null && CardRules.IsUsableInDefensePhase(c))
+            if (c != null && (c.isPrimaryDefense || c.cardType == CardType.Defense))
+                return c;
+        }
+
+        foreach (var c in choices)
+        {
+            if (c != null)
                 return c;
         }
 
@@ -167,9 +193,149 @@ public class EnemyAI
     }
 
     /// <summary>
+    /// 打ち払い失敗後の再防御。通常防具を優先し、なければ未使用の別枚打ち払いを許可。それもなければ null（許す）。
+    /// </summary>
+    public async Task<CardData> ExecuteParryRerunDefenseSelectAsync(
+        List<CardData> cpuHand,
+        ElementType attackElement,
+        List<CardData> incomingAttack,
+        CardData usedParryCard)
+    {
+        Debug.Log("[EnemyAI] Parry rerun defense select");
+
+        CardData normal = SelectDefenseCard(cpuHand, attackElement, incomingAttack, usedParryCard);
+        if (normal != null)
+        {
+            await Task.Delay(500);
+            return normal;
+        }
+
+        if (incomingAttack != null && incomingAttack.Count > 0 && cpuHand != null)
+        {
+            int usedId = usedParryCard != null ? usedParryCard.GetInstanceID() : 0;
+            foreach (var c in cpuHand)
+            {
+                if (!IsEnemyHandCardSelectable(c)) continue;
+                if (usedParryCard != null && c.GetInstanceID() == usedId) continue;
+                if (ParryRules.RequiresParryExclusiveLock(c, incomingAttack))
+                {
+                    Debug.Log($"[EnemyAI] Parry rerun: another parry card {c.cardName}");
+                    await Task.Delay(500);
+                    return c;
+                }
+            }
+        }
+
+        Debug.Log("[EnemyAI] Parry rerun: no defense, accept damage");
+        await Task.Delay(500);
+        return null;
+    }
+
+    /// <summary>MagicPool から攻撃可能な魔法候補。</summary>
+    protected List<CardData> GetPoolAttackCandidates(PlayerStatus enemyStatus)
+    {
+        var list = new List<CardData>();
+        if (MagicPoolManager.I == null) return list;
+
+        foreach (var entry in MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy))
+        {
+            var c = entry.cardData;
+            if (c == null) continue;
+            if (!CardRules.IsUsableInAttackPhase(c)) continue;
+            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
+            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(c.mpCost)) continue;
+            list.Add(c);
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// プレイヤーと同じコンボルールで攻撃カード群を選ぶ。
+    /// </summary>
+    public virtual List<CardData> SelectAttackCombo(List<CardData> enemyHand, PlayerStatus enemyStatus)
+    {
+        var handCandidates = CardRules.GetAttackChoices(enemyHand, PlayerType.Enemy);
+        handCandidates.RemoveAll(c => c == null || ArchMagicRules.IsArchMagicCard(c));
+
+        var poolCandidates = GetPoolAttackCandidates(enemyStatus);
+
+        var primary = SelectAttackCard(enemyHand, enemyStatus);
+        if (primary == null && poolCandidates.Count > 0)
+            primary = poolCandidates[0];
+
+        if (primary == null)
+            return null;
+
+        return AttackComboSelectionRules.BuildGreedyAttackCombo(
+            handCandidates,
+            poolCandidates,
+            primary,
+            enemyStatus,
+            PlayerType.Enemy);
+    }
+
+    private static CardData GetPrimaryFromAttackCombo(List<CardData> combo)
+    {
+        if (combo == null || combo.Count == 0) return null;
+        foreach (var c in combo)
+        {
+            if (c != null && c.cardType != CardType.Magic)
+                return c;
+        }
+        return combo[0];
+    }
+
+    private void ApplyEnemyAttackBookkeeping(
+        List<CardData> combo,
+        List<CardData> cpuHand,
+        BattleProcessor battleProcessor,
+        HandRefillService handRefill,
+        PlayerStatus enemyStatus)
+    {
+        if (combo == null) return;
+
+        foreach (var card in combo)
+        {
+            if (card == null || card.cardType != CardType.Magic) continue;
+
+            bool isFromPool = MagicPoolManager.I != null && MagicPoolManager.I.IsInPool(card, PlayerType.Enemy);
+            if (enemyStatus != null && card.mpCost > 0)
+            {
+                int pay = enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
+                enemyStatus.UseMP(pay);
+                Debug.Log($"[EnemyAI] MP消費: {card.cardName} -{pay}MP (残り={enemyStatus.currentMP})");
+            }
+
+            if (isFromPool)
+            {
+                MagicPoolManager.I?.ConsumeUse(card, PlayerType.Enemy);
+                Debug.Log($"[EnemyAI] プールカード使用回数消費: {card.cardName}");
+            }
+            else
+            {
+                MagicPoolManager.I?.TryUseMagicCard(card, cpuHand, 10, null, PlayerType.Enemy);
+                battleProcessor.UseCard(card, cpuHand);
+                handRefill?.RecordEnemyUse(card);
+                Debug.Log($"[EnemyAI] 手札魔法をプール登録: {card.cardName}");
+            }
+        }
+
+        foreach (var card in combo)
+        {
+            if (card == null || card.cardType == CardType.Magic) continue;
+            if (MagicalExplosionRules.IsMagicalExplosionCard(card)
+                || HammadnessRules.IsHammadnessCard(card))
+                continue;
+
+            battleProcessor.UseCard(card, cpuHand);
+            handRefill?.RecordEnemyUse(card);
+        }
+    }
+
+    /// <summary>
     /// 敵の攻撃ターンを実行する（魔法カード・MagicPool対応）
     /// </summary>
-    public async Task<CardData> ExecuteAttackTurnAsync(
+    public virtual async Task<CardData> ExecuteAttackTurnAsync(
         List<CardData> cpuHand,
         BattleProcessor battleProcessor,
         HandRefillService handRefill,
@@ -180,62 +346,35 @@ public class EnemyAI
 
         await Task.Delay(500);
 
-        // 手札から攻撃カードを選択
-        var attack = SelectAttackCard(cpuHand, enemyStatus);
-        bool isFromPool = false;
-
-        // 手札にカードがなければプールから
-        if (attack == null)
-        {
-            attack = SelectAttackFromPool(enemyStatus);
-            isFromPool = true;
-        }
-
-        if (attack == null)
+        LastAttackSelection = SelectAttackCombo(cpuHand, enemyStatus);
+        if (LastAttackSelection == null || LastAttackSelection.Count == 0)
         {
             Debug.Log("[EnemyAI] 攻撃カードが見つからないため、ターン終了");
             return null;
         }
 
-        // 魔法カードの場合はMP消費＋プール処理
-        if (attack.cardType == CardType.Magic)
-        {
-            if (enemyStatus != null && attack.mpCost > 0)
-            {
-                int pay = enemyStatus.GetEffectiveMagicMpCost(attack.mpCost);
-                enemyStatus.UseMP(pay);
-                Debug.Log($"[EnemyAI] MP消費: {attack.cardName} -{pay}MP (残り={enemyStatus.currentMP})");
-            }
+        var attack = GetPrimaryFromAttackCombo(LastAttackSelection);
+        bool deferBookkeeping = RemotePlayerAgent.ShouldDeferRemoteAttackBookkeeping(LastAttackSelection);
 
-            if (isFromPool)
-            {
-                MagicPoolManager.I?.ConsumeUse(attack, PlayerType.Enemy);
-                Debug.Log($"[EnemyAI] プールカード使用回数消費: {attack.cardName}");
-            }
-            else
-            {
-                // 手札の魔法 → 敵プールに登録
-                MagicPoolManager.I?.TryUseMagicCard(attack, cpuHand, 10, null, PlayerType.Enemy);
-                battleProcessor.UseCard(attack, cpuHand);
-                handRefill?.RecordEnemyUse(attack);
-                Debug.Log($"[EnemyAI] 手札魔法をプール登録: {attack.cardName}");
-            }
+        if (MagicalExplosionRules.IsMagicalExplosionCard(attack))
+        {
+            Debug.Log("[EnemyAI] マジカルエクスプロージョンは演出完了後に手札から除去します");
+            return attack;
         }
+        if (HammadnessRules.IsHammadnessCard(attack))
+        {
+            Debug.Log("[EnemyAI] 気狂いハンマーは演出完了後に手札から除去します");
+            return attack;
+        }
+
+        if (!deferBookkeeping)
+            ApplyEnemyAttackBookkeeping(LastAttackSelection, cpuHand, battleProcessor, handRefill, enemyStatus);
+
+        if (LastAttackSelection.Count > 1)
+            Debug.Log($"[EnemyAI] 攻撃コンボ選択: {attack.cardName} +{LastAttackSelection.Count - 1}枚");
         else
-        {
-            // マジカルエクスプロージョンは白フラッシュ→MP 全喪失→ATK ランプのあと手札から除去（CardSequence 側）
-            if (MagicalExplosionRules.IsMagicalExplosionCard(attack))
-            {
-                Debug.Log("[EnemyAI] マジカルエクスプロージョンは演出完了後に手札から除去します");
-                return attack;
-            }
+            Debug.Log($"[EnemyAI] 攻撃カード選択: {attack.cardName}");
 
-            // 通常カード
-            battleProcessor.UseCard(attack, cpuHand);
-            handRefill?.RecordEnemyUse(attack);
-        }
-
-        Debug.Log($"[EnemyAI] 攻撃カード選択: {attack.cardName}");
         return attack;
     }
 
@@ -244,12 +383,20 @@ public class EnemyAI
     /// </summary>
     /// <param name="attackElement">攻撃側の合算属性（<see cref="ElementHelper.GetCombinedElement"/> と一致させる）</param>
     /// <param name="incomingForReflection">反射可否判定用の攻撃カード一覧（null なら反射優先なし）</param>
-    public async Task<CardData> ExecuteDefenseSelectAsync(
+    public virtual async Task<CardData> ExecuteDefenseSelectAsync(
         List<CardData> cpuHand,
         ElementType attackElement,
         List<CardData> incomingForReflection = null)
     {
         Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
+
+        var enemyStatus = BattleManager.I != null ? BattleManager.I.GetEnemyStatus() : null;
+        if (enemyStatus != null && enemyStatus.IsCastingArchMagic)
+        {
+            Debug.Log("[EnemyAI] 大魔法詠唱中のため防御不可");
+            await Task.Delay(500);
+            return null;
+        }
 
         if (incomingForReflection != null
             && CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingForReflection))
@@ -266,7 +413,8 @@ public class EnemyAI
             {
                 foreach (var c in cpuHand)
                 {
-                    if (c != null && ReflectionRules.IsPhysicalReflectionCard(c))
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsPhysicalReflectionCard(c))
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 物理反射を優先: {defenseCard.cardName}");
@@ -278,7 +426,8 @@ public class EnemyAI
             {
                 foreach (var c in cpuHand)
                 {
-                    if (c != null && ReflectionRules.IsMagicReflectionCard(c))
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsMagicReflectionCard(c))
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 魔法反射を優先: {defenseCard.cardName}");
@@ -291,7 +440,8 @@ public class EnemyAI
             {
                 foreach (var c in cpuHand)
                 {
-                    if (c != null && ParryRules.RequiresParryExclusiveLock(c, incomingForReflection))
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ParryRules.RequiresParryExclusiveLock(c, incomingForReflection))
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 打ち払いを優先: {defenseCard.cardName}");
@@ -304,7 +454,9 @@ public class EnemyAI
             {
                 foreach (var c in cpuHand)
                 {
-                    if (c != null && BlockingRules.IsPhysicalBlockingCard(c))
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (BlockingRules.CanUsePhysicalBlockingAgainstAttack(c, incomingForReflection)
+                        && BlockingRules.CanAffordMagicDefenseMp(c, enemyStatus))
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 物理無効を優先: {defenseCard.cardName}");

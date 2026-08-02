@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -123,7 +123,34 @@ public class CardSelectionManager : MonoBehaviour
                 return false;
             }
 
-            // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。ここでは単体MP不足で弾かない。
+            // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。防御フェーズはここでも単体不足を弾く。
+            bool defenseMagicContext = BattleManager.I != null
+                && (BattleManager.I.CurrentState == GameState.DefensePhase
+                    || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase
+                        && (BattleManager.I.IsInterventionDefenseWaitActive()
+                            || BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
+                    || BattleManager.I.IsReflectionChainDefensePending()
+                    || BattleManager.I.IsParryRerunDefensePending())
+                && IsDefenseCard(card);
+            if (defenseMagicContext && magicUserStatus != null
+                && !BlockingRules.CanAffordMagicDefenseMp(card, magicUserStatus))
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                return false;
+            }
+
+            if (defenseMagicContext && BlockingRules.IsPhysicalBlockingCard(card))
+            {
+                var incomingBlock = BattleManager.I.GetIncomingAttackSnapshotForDefenseUi();
+                if (incomingBlock == null
+                    || !BlockingRules.CanUsePhysicalBlockingAgainstAttack(card, incomingBlock))
+                {
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                        "無属性の物理攻撃にのみ使えます", new Color(0.85f, 0.25f, 0.2f));
+                    return false;
+                }
+            }
 
             // MagicPool 容量チェックは「手札からプールへ載せる」場合のみ。MagicPanel 表示中のカードは既にプール内。
             // プールは手番ごとに分離（プレイヤー満杯でも敵の空きは別）。
@@ -175,7 +202,7 @@ public class CardSelectionManager : MonoBehaviour
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player
             && !BattleManager.I.IsReflectionChainDefensePending()
-            && ConflictsMagicPrimaryWithPhysicalAttackFlexible(selectedCards, card))
+            && AttackComboSelectionRules.ConflictsMagicPrimaryWithPhysicalAttackFlexible(selectedCards, card))
         {
             ClearAllWithUI();
         }
@@ -212,16 +239,28 @@ public class CardSelectionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// カード選択をキャンセル
+    /// カード選択をキャンセル。AddOn 等の前提が消えたカードも連鎖で外す。
     /// </summary>
-    public bool CancelCardSelection(CardData card)
+    /// <returns>外したカード（最初に指定したカード＋連鎖分）。</returns>
+    public List<CardData> CancelCardSelection(CardData card)
     {
-        if (card == null) return false;
+        var removed = new List<CardData>();
+        if (card == null) return removed;
 
-        // ScriptableObject でも参照が一致しないケースがあるため InstanceID で除去（表示と選択の不整合防止）
         int id = card.GetInstanceID();
-        int n = selectedCards.RemoveAll(c => c != null && c.GetInstanceID() == id);
-        return n > 0;
+        if (selectedCards.RemoveAll(c => c != null && c.GetInstanceID() == id) > 0)
+            removed.Add(card);
+
+        removed.AddRange(PruneDependentAttackSelectionsAfterCancel());
+        return removed;
+    }
+
+    private List<CardData> PruneDependentAttackSelectionsAfterCancel()
+    {
+        if (BattleManager.I == null || BattleManager.I.CurrentState != GameState.AttackPhase)
+            return new List<CardData>();
+
+        return AttackComboSelectionRules.PruneInvalidAttackSelections(selectedCards, IsAttackCard);
     }
 
     /// <summary>
@@ -391,42 +430,29 @@ public class CardSelectionManager : MonoBehaviour
 
     private bool IsDefenseCard(CardData card)
     {
-        return card.cardType == CardType.Defense || card.isPrimaryDefense || card.isCounterAttack;
+        if (card == null || !IsDefenseSelectionContext()) return false;
+        if (IsLocalPlayerChantingArchMagic()) return false;
+        return CardRules.IsUsableInDefensePhase(card);
     }
 
-    /// <summary>回復以外の <see cref="CardType.Magic"/> かつ <see cref="AttackPhaseUseRule.Primary"/>。</summary>
-    private static bool IsMagicPrimaryAttackInCombo(CardData c)
+    private static bool IsLocalPlayerChantingArchMagic()
     {
-        return c != null
-            && c.cardType == CardType.Magic
-            && !c.isRecovery
-            && c.attackPhaseUseRule == AttackPhaseUseRule.Primary;
+        var bm = BattleManager.I;
+        return bm != null
+            && bm.GetPlayerStatus() != null
+            && bm.GetPlayerStatus().IsCastingArchMagic;
     }
 
-    /// <summary><see cref="CardType.Attack"/> かつ <see cref="AttackPhaseUseRule.Flexible"/>（武器の追撃枠）。</summary>
-    private static bool IsPhysicalAttackFlexibleInCombo(CardData c)
+    private static bool IsDefenseSelectionContext()
     {
-        return c != null
-            && c.cardType == CardType.Attack
-            && c.attackPhaseUseRule == AttackPhaseUseRule.Flexible;
-    }
-
-    /// <summary>上記2種を同一コンボに揃おうとしたら真（呼び出し側で既存をクリアして新カードのみに差し替える）。</summary>
-    private static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
-        IReadOnlyList<CardData> currentSelection, CardData adding)
-    {
-        if (adding == null) return false;
-        bool hasMagicPrimary = false;
-        bool hasPhysicalFlexible = false;
-        for (int i = 0; i < currentSelection.Count; i++)
-        {
-            var c = currentSelection[i];
-            if (c == null) continue;
-            if (IsMagicPrimaryAttackInCombo(c)) hasMagicPrimary = true;
-            if (IsPhysicalAttackFlexibleInCombo(c)) hasPhysicalFlexible = true;
-        }
-        if (IsMagicPrimaryAttackInCombo(adding)) hasMagicPrimary = true;
-        if (IsPhysicalAttackFlexibleInCombo(adding)) hasPhysicalFlexible = true;
-        return hasMagicPrimary && hasPhysicalFlexible;
+        if (BattleManager.I == null) return false;
+        var bm = BattleManager.I;
+        var state = bm.CurrentState;
+        return state == GameState.DefensePhase
+            || state == GameState.DefenseConfirmPhase
+            || (state == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive())
+            || (state == GameState.CombatResolvePhase && bm.IsPlayerDualBladeSecondDefenseWaitActive())
+            || bm.IsReflectionChainDefensePending()
+            || bm.IsParryRerunDefensePending();
     }
 }

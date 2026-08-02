@@ -6,19 +6,26 @@ using TMPro;
 /// <summary>
 /// 両替ポップアップのUIロジックを担当するクラス
 ///
-/// 【役割】
-/// - HP/MP/GP の現在値表示
-/// - MP/GP の増減ボタン操作（HP を対価として消費）
-/// - 上限・下限チェックとボタン有効/無効制御
-/// - HP が 0 以下になる場合の警告表示
-/// - 確定・キャンセルの非同期待機
+/// 【振替ルール】
+/// ① HP ⇔ MP（1:1）
+/// ② GP ⇔ MP（GP増は MP 優先、MP0 なら HP。GP減は MP に戻す）
+/// ③ 各ステータスは 0〜99。±10 等は上限・下限まで部分適用し、それ以上は動かさない。
+///    これ以上動かせないときのみボタンをグレーアウトする。
 /// </summary>
 public class ExchangePopupUI : MonoBehaviour
 {
+    private const string SelectorButtonSe = "Assets/SE/普通カード.mp3";
+
     [Header("ステータス表示")]
     [SerializeField] private TMP_Text hpValueText;
     [SerializeField] private TMP_Text mpValueText;
     [SerializeField] private TMP_Text gpValueText;
+
+    [Header("HP 操作ボタン")]
+    [SerializeField] private Button hpPlus10Button;
+    [SerializeField] private Button hpPlus1Button;
+    [SerializeField] private Button hpMinus1Button;
+    [SerializeField] private Button hpMinus10Button;
 
     [Header("MP 操作ボタン")]
     [SerializeField] private Button mpPlus10Button;
@@ -37,7 +44,6 @@ public class ExchangePopupUI : MonoBehaviour
     [SerializeField] private Button confirmButton;
     [SerializeField] private Button cancelButton;
 
-    // 操作中の仮ステータス値
     private int currentHP;
     private int currentMP;
     private int currentGP;
@@ -45,14 +51,9 @@ public class ExchangePopupUI : MonoBehaviour
     private int maxMP;
     private int maxGP;
 
-    // 非同期待機用
     private TaskCompletionSource<bool> tcs;
+    private bool listenersBound;
 
-    // ===== 初期化 =====
-
-    /// <summary>
-    /// ポップアップを初期化してプレイヤーの現在値をセットする
-    /// </summary>
     public void Setup(PlayerStatus ps)
     {
         currentHP = ps.currentHP;
@@ -62,77 +63,183 @@ public class ExchangePopupUI : MonoBehaviour
         maxMP = ps.maxMP;
         maxGP = ps.maxGP;
 
-        // ボタンのリスナー登録
-        mpPlus10Button.onClick.AddListener(() => OnMPChange(+10));
-        mpPlus1Button.onClick.AddListener(() => OnMPChange(+1));
-        mpMinus1Button.onClick.AddListener(() => OnMPChange(-1));
-        mpMinus10Button.onClick.AddListener(() => OnMPChange(-10));
+        BindButtonListenersOnce();
 
-        gpPlus10Button.onClick.AddListener(() => OnGPChange(+10));
-        gpPlus1Button.onClick.AddListener(() => OnGPChange(+1));
-        gpMinus1Button.onClick.AddListener(() => OnGPChange(-1));
-        gpMinus10Button.onClick.AddListener(() => OnGPChange(-10));
+        if (warningText != null)
+            warningText.gameObject.SetActive(false);
+
+        Refresh();
+    }
+
+    private void BindButtonListenersOnce()
+    {
+        if (listenersBound) return;
+        listenersBound = true;
+
+        BindStatButtons(hpPlus10Button, () => ApplyHPChange(+10));
+        BindStatButtons(hpPlus1Button, () => ApplyHPChange(+1));
+        BindStatButtons(hpMinus1Button, () => ApplyHPChange(-1));
+        BindStatButtons(hpMinus10Button, () => ApplyHPChange(-10));
+
+        BindStatButtons(mpPlus10Button, () => ApplyMPChange(+10));
+        BindStatButtons(mpPlus1Button, () => ApplyMPChange(+1));
+        BindStatButtons(mpMinus1Button, () => ApplyMPChange(-1));
+        BindStatButtons(mpMinus10Button, () => ApplyMPChange(-10));
+
+        BindStatButtons(gpPlus10Button, () => ApplyGPChange(+10));
+        BindStatButtons(gpPlus1Button, () => ApplyGPChange(+1));
+        BindStatButtons(gpMinus1Button, () => ApplyGPChange(-1));
+        BindStatButtons(gpMinus10Button, () => ApplyGPChange(-10));
 
         confirmButton.onClick.AddListener(OnConfirm);
         cancelButton.onClick.AddListener(OnCancel);
+    }
 
-        // 警告テキストは最初は非表示
-        if (warningText != null)
+    private static void BindStatButtons(Button button, UnityEngine.Events.UnityAction action)
+    {
+        if (button == null) return;
+        button.onClick.AddListener(action);
+    }
+
+    private void PlaySelectorSound()
+    {
+        SoundEffectPlayer.I?.Play(SelectorButtonSe);
+    }
+
+    /// <summary>HP±n：MP と 1:1 で振替（上限・下限まで部分適用）。</summary>
+    private void ApplyHPChange(int requestedHpDelta)
+    {
+        int applied = ComputeHpMpTransferHpDelta(requestedHpDelta);
+        if (applied == 0) return;
+
+        PlaySelectorSound();
+        currentHP += applied;
+        currentMP -= applied;
+        Refresh();
+    }
+
+    /// <summary>MP±n：HP と 1:1 で振替（上限・下限まで部分適用）。</summary>
+    private void ApplyMPChange(int requestedMpDelta)
+    {
+        int applied = ComputeHpMpTransferHpDelta(-requestedMpDelta);
+        if (applied == 0) return;
+
+        PlaySelectorSound();
+        currentHP += applied;
+        currentMP -= applied;
+        Refresh();
+    }
+
+    /// <summary>GP±n：増は MP 優先（MP0 なら HP）、減は MP に戻す。部分適用あり。</summary>
+    private void ApplyGPChange(int delta)
+    {
+        if (delta > 0)
         {
-            warningText.gameObject.SetActive(false);
+            int gain = ComputeMaxGpGain(delta);
+            if (gain <= 0) return;
+
+            PlaySelectorSound();
+            currentGP += gain;
+            int remaining = gain;
+            int fromMp = Mathf.Min(remaining, currentMP);
+            currentMP -= fromMp;
+            remaining -= fromMp;
+            if (remaining > 0)
+                currentHP -= remaining;
+        }
+        else
+        {
+            int loss = ComputeGpLossToMp(-delta);
+            if (loss <= 0) return;
+
+            PlaySelectorSound();
+            currentGP -= loss;
+            currentMP += loss;
         }
 
         Refresh();
     }
 
-    // ===== 操作ロジック =====
-
     /// <summary>
-    /// MP を delta 分変更する。HP を対価として消費/回収する。
-    /// MP の上限は maxMP、下限は 0。HP の下限は 0（警告のみ）。
+    /// HP↔MP 1:1 振替で実際に動かせる HP 変化量。正＝HP増・MP減、負＝HP減・MP増。
     /// </summary>
-    private void OnMPChange(int delta)
+    private int ComputeHpMpTransferHpDelta(int requestedHpDelta)
     {
-        // 変更後の MP を計算（上限・下限クランプ）
-        int newMP = Mathf.Clamp(currentMP + delta, 0, maxMP);
-        int actualDelta = newMP - currentMP; // 実際に変化した量
+        if (requestedHpDelta == 0) return 0;
 
-        if (actualDelta == 0) return;
+        if (requestedHpDelta > 0)
+        {
+            int hpRoom = maxHP - currentHP;
+            int mpAvail = currentMP;
+            if (hpRoom <= 0 || mpAvail <= 0) return 0;
+            return Mathf.Min(requestedHpDelta, hpRoom, mpAvail);
+        }
 
-        currentMP = newMP;
-        currentHP -= actualDelta; // HP は対価（MP が増えれば HP が減る）
-
-        Refresh();
+        int hpAvail = currentHP;
+        int mpRoom = maxMP - currentMP;
+        if (hpAvail <= 0 || mpRoom <= 0) return 0;
+        return -Mathf.Min(-requestedHpDelta, hpAvail, mpRoom);
     }
 
-    /// <summary>
-    /// GP を delta 分変更する。HP を対価として消費/回収する。
-    /// GP の上限は maxGP、下限は 0。HP の下限は 0（警告のみ）。
-    /// </summary>
-    private void OnGPChange(int delta)
+    private bool CanApplyHPChange(int delta) => ComputeHpMpTransferHpDelta(delta) != 0;
+
+    private bool CanApplyMPChange(int delta) => ComputeHpMpTransferHpDelta(-delta) != 0;
+
+    private bool CanApplyGPChange(int delta)
     {
-        int newGP = Mathf.Clamp(currentGP + delta, 0, maxGP);
-        int actualDelta = newGP - currentGP;
-
-        if (actualDelta == 0) return;
-
-        currentGP = newGP;
-        currentHP -= actualDelta;
-
-        Refresh();
+        if (delta == 0) return false;
+        return delta > 0 ? ComputeMaxGpGain(delta) > 0 : ComputeGpLossToMp(-delta) > 0;
     }
 
-    /// <summary>
-    /// 表示を更新し、ボタンの有効/無効・警告テキストを制御する
-    /// </summary>
+    /// <summary>GP を減らして MP に戻すとき、実際に動かせる GP 減少量。</summary>
+    private int ComputeGpLossToMp(int requestedLoss)
+    {
+        if (requestedLoss <= 0) return 0;
+        if (currentGP <= 0) return 0;
+
+        int mpRoom = maxMP - currentMP;
+        if (mpRoom <= 0) return 0;
+
+        return Mathf.Min(requestedLoss, currentGP, mpRoom);
+    }
+
+    /// <summary>GP を増やすとき、MP→HP の順で requested まで何ポイント増やせるか。</summary>
+    private int ComputeMaxGpGain(int requested)
+    {
+        int room = maxGP - currentGP;
+        if (room <= 0 || requested <= 0) return 0;
+
+        int want = Mathf.Min(requested, room);
+        int mpPool = currentMP;
+        int hpPool = currentHP;
+        int gain = 0;
+        for (int i = 0; i < want; i++)
+        {
+            if (mpPool > 0)
+            {
+                mpPool--;
+                gain++;
+            }
+            else if (hpPool > 0)
+            {
+                hpPool--;
+                gain++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return gain;
+    }
+
     private void Refresh()
     {
-        // テキスト更新
         if (hpValueText != null) hpValueText.text = currentHP.ToString();
         if (mpValueText != null) mpValueText.text = currentMP.ToString();
         if (gpValueText != null) gpValueText.text = currentGP.ToString();
 
-        // HP が 0 以下の場合は警告表示
         bool hpDanger = currentHP <= 0;
         if (warningText != null)
         {
@@ -141,20 +248,26 @@ public class ExchangePopupUI : MonoBehaviour
             warningText.color = Color.red;
         }
 
-        // MP ボタンの有効/無効
-        if (mpPlus10Button != null) mpPlus10Button.interactable = (currentMP < maxMP);
-        if (mpPlus1Button != null)  mpPlus1Button.interactable  = (currentMP < maxMP);
-        if (mpMinus1Button != null) mpMinus1Button.interactable  = (currentMP > 0);
-        if (mpMinus10Button != null) mpMinus10Button.interactable = (currentMP > 0);
+        SetButtonInteractable(hpPlus10Button, CanApplyHPChange(+10));
+        SetButtonInteractable(hpPlus1Button, CanApplyHPChange(+1));
+        SetButtonInteractable(hpMinus1Button, CanApplyHPChange(-1));
+        SetButtonInteractable(hpMinus10Button, CanApplyHPChange(-10));
 
-        // GP ボタンの有効/無効
-        if (gpPlus10Button != null) gpPlus10Button.interactable = (currentGP < maxGP);
-        if (gpPlus1Button != null)  gpPlus1Button.interactable  = (currentGP < maxGP);
-        if (gpMinus1Button != null) gpMinus1Button.interactable  = (currentGP > 0);
-        if (gpMinus10Button != null) gpMinus10Button.interactable = (currentGP > 0);
+        SetButtonInteractable(mpPlus10Button, CanApplyMPChange(+10));
+        SetButtonInteractable(mpPlus1Button, CanApplyMPChange(+1));
+        SetButtonInteractable(mpMinus1Button, CanApplyMPChange(-1));
+        SetButtonInteractable(mpMinus10Button, CanApplyMPChange(-10));
+
+        SetButtonInteractable(gpPlus10Button, CanApplyGPChange(+10));
+        SetButtonInteractable(gpPlus1Button, CanApplyGPChange(+1));
+        SetButtonInteractable(gpMinus1Button, CanApplyGPChange(-1));
+        SetButtonInteractable(gpMinus10Button, CanApplyGPChange(-10));
     }
 
-    // ===== 確定・キャンセル =====
+    private static void SetButtonInteractable(Button button, bool interactable)
+    {
+        if (button != null) button.interactable = interactable;
+    }
 
     private void OnConfirm()
     {
@@ -166,32 +279,18 @@ public class ExchangePopupUI : MonoBehaviour
         tcs?.TrySetResult(false);
     }
 
-    /// <summary>
-    /// 外部から強制的にキャンセルする（両替ボタン再押下時に使用）
-    /// </summary>
     public void ForceCancel()
     {
         tcs?.TrySetResult(false);
     }
 
-    /// <summary>
-    /// 確定またはキャンセルが押されるまで非同期で待機する
-    /// </summary>
-    /// <returns>確定なら true、キャンセルなら false</returns>
     public Task<bool> WaitForDecisionAsync()
     {
         tcs = new TaskCompletionSource<bool>();
         return tcs.Task;
     }
 
-    // ===== 結果取得 =====
-
-    /// <summary>確定後の HP 値を返す</summary>
     public int GetResultHP() => currentHP;
-
-    /// <summary>確定後の MP 値を返す</summary>
     public int GetResultMP() => currentMP;
-
-    /// <summary>確定後の GP 値を返す</summary>
     public int GetResultGP() => currentGP;
 }

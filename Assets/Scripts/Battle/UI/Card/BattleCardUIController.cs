@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -391,7 +391,10 @@ public class BattleCardUIController : MonoBehaviour
         if (card == null) return;
         RemoveCardFromDisplay(card);
         if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
-            cardSelectionManager.CancelCardSelection(card);
+        {
+            foreach (var removed in cardSelectionManager.CancelCardSelection(card))
+                RemoveCardFromDisplay(removed);
+        }
         cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
         cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
         cardLayoutManager?.HandleCardCancellation();
@@ -424,7 +427,10 @@ public class BattleCardUIController : MonoBehaviour
         }
         if (!removed) return;
         if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
-            cardSelectionManager.CancelCardSelection(card);
+        {
+            foreach (var cascadeRemoved in cardSelectionManager.CancelCardSelection(card))
+                RemoveCardFromDisplay(cascadeRemoved);
+        }
         cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
         cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
         cardLayoutManager?.HandleCardCancellation();
@@ -452,7 +458,10 @@ public class BattleCardUIController : MonoBehaviour
                 Destroy(cardObj);
                 activeCardSheets.RemoveAt(i);
                 if (cardSelectionManager != null && cardSelectionManager.IsCardSelected(card))
-                    cardSelectionManager.CancelCardSelection(card);
+                {
+                    foreach (var cascadeRemoved in cardSelectionManager.CancelCardSelection(card))
+                        RemoveCardFromDisplay(cascadeRemoved);
+                }
                 cardLayoutManager?.SetActiveCardSheets(activeCardSheets);
                 cardLayoutManager?.SetSelectedCards(cardSelectionManager != null ? cardSelectionManager.GetSelectedCards() : new List<CardData>());
                 cardLayoutManager?.HandleCardCancellation();
@@ -606,10 +615,13 @@ public class BattleCardUIController : MonoBehaviour
     //==== プライベート =====
     private void CancelCardSelection(CardData card)
     {
-        bool removed = cardSelectionManager.CancelCardSelection(card);
-        Debug.Log($"[BattleCardUIController] カード選択をキャンセル: {card.cardName} (削除成功: {removed}, selectedCards数: {cardSelectionManager.SelectedCardCount})");
+        var removed = cardSelectionManager.CancelCardSelection(card);
+        if (removed.Count == 0) return;
 
-        RemoveCardFromDisplay(card);
+        Debug.Log($"[BattleCardUIController] カード選択をキャンセル: {string.Join(", ", removed.ConvertAll(c => c.cardName))} (selectedCards数: {cardSelectionManager.SelectedCardCount})");
+
+        foreach (var r in removed)
+            RemoveCardFromDisplay(r);
 
         UpdateHandCardHighlights();
 

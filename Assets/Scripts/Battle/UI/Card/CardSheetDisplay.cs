@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using TMPro;
@@ -50,10 +50,16 @@ public class CardSheetDisplay : MonoBehaviour
         SetupArtwork(cardData);
         if (cardNameText) cardNameText.text = cardData.cardName;
         bool atkLineLikeAttack = cardData.cardType == CardType.Attack || cardData.cardType == CardType.Ultimate;
-        if (atkDefText) atkDefText.text = FormatAtkDefLine(
-            cardData.attackPower,
-            cardData.defensePower,
-            atkLineLikeAttack);
+        if (atkDefText)
+        {
+            atkDefText.text = HammadnessRules.IsHammadnessCard(cardData)
+                ? HammadnessRules.AtkQuestionMarkLabel
+                : FormatAtkDefLine(
+                    cardData.attackPower,
+                    cardData.defensePower,
+                    atkLineLikeAttack,
+                    cardData.hitRate);
+        }
         if (descText) descText.text = cardData.description;
         SetupElementDisplay(cardData);
         SetupGoldOrMpCostDisplay(cardData, ownerForMpDisplay);
@@ -67,33 +73,51 @@ public class CardSheetDisplay : MonoBehaviour
         if (atkDefText == null) return;
         bool attackCard = currentCardData != null
             && (currentCardData.cardType == CardType.Attack || currentCardData.cardType == CardType.Ultimate);
-        atkDefText.text = FormatAtkDefLine(attack, defense, attackCard);
+        int hitRate = currentCardData != null ? currentCardData.hitRate : HitRateRules.DefaultHitRatePercent;
+        atkDefText.text = FormatAtkDefLine(attack, defense, attackCard, hitRate);
     }
 
     /// <summary>
     /// 非 <see cref="CardType.Attack"/>: ATK0→DEFのみ、DEF0→ATKのみ、両方0→空欄。
     /// Attack: 基礎ATK0でも行を確保（マジカルエクスプロージョン等の数値差し替え用）。ATK0かつDEF1+のAttackは想定外だが、出た場合は ATK 0 も併記。
+    /// 命中率が 100% 以外のとき末尾に「 / 50%」形式で付与。
     /// </summary>
-    private static string FormatAtkDefLine(int attack, int defense, bool isAttackTypeCard)
+    private static string FormatAtkDefLine(int attack, int defense, bool isAttackTypeCard, int hitRate = HitRateRules.DefaultHitRatePercent)
     {
+        string line;
         if (isAttackTypeCard)
         {
             if (attack == 0 && defense == 0)
-                return "ATK 0";
-            if (attack == 0)
-                return $"ATK 0 / DEF {defense}";
-            if (defense == 0)
-                return $"ATK {attack}";
-            return $"ATK {attack} / DEF {defense}";
+                line = "ATK 0";
+            else if (attack == 0)
+                line = $"ATK 0 / DEF {defense}";
+            else if (defense == 0)
+                line = $"ATK {attack}";
+            else
+                line = $"ATK {attack} / DEF {defense}";
+        }
+        else if (attack == 0 && defense == 0)
+        {
+            line = "";
+        }
+        else if (attack == 0)
+        {
+            line = $"DEF {defense}";
+        }
+        else if (defense == 0)
+        {
+            line = $"ATK {attack}";
+        }
+        else
+        {
+            line = $"ATK {attack} / DEF {defense}";
         }
 
-        if (attack == 0 && defense == 0)
-            return "";
-        if (attack == 0)
-            return $"DEF {defense}";
-        if (defense == 0)
-            return $"ATK {attack}";
-        return $"ATK {attack} / DEF {defense}";
+        if (!HitRateRules.HasCustomHitRate(hitRate))
+            return line;
+
+        string hitLabel = HitRateRules.FormatHitRateLabel(hitRate);
+        return string.IsNullOrEmpty(line) ? hitLabel : $"{line} / {hitLabel}";
     }
 
     /// <summary>

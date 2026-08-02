@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Text;
 using System.Threading;
@@ -60,9 +60,9 @@ public class DamagePopup : MonoBehaviour
     [Header("ダメージ0「無傷」")]
     [SerializeField] private DamagePopupNumericAppearance noDamageAppearance = new DamagePopupNumericAppearance
     {
-        textFill = new Color(1f, 0.92f, 0.15f),
+        textFill = new Color(0f, 1f, 72f / 255f),
         outlineColor = Color.white,
-        panelBackground = new Color(0f, 0f, 0f, 0f)
+        panelBackground = new Color(49f / 255f, 49f / 255f, 49f / 255f, 1f)
     };
 
     [Header("闇属性・第2段（数値の色は上のプレイヤー／敵と同じ。ここはパネルのみ）")]

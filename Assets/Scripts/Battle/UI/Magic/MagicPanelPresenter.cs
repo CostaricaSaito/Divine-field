@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -155,6 +155,25 @@ public class MagicPanelPresenter : MonoBehaviour
             // 反射連鎖／パリィ再防御は GameState が攻撃フェーズのまま等の場合があり、通常の Defense 条件だけでは無効のままになる
             || bm.IsReflectionChainDefensePending()
             || bm.IsParryRerunDefensePending());
-        magicPanelUI.SetAllInteractable(allowMagicPanel);
+
+        bool defenseMagicPanel = allowMagicPanel && bm != null
+            && (bm.CurrentState == GameState.DefensePhase
+                || bm.CurrentState == GameState.DefenseConfirmPhase
+                || (bm.CurrentState == GameState.CombatResolvePhase
+                    && (bm.IsInterventionDefenseWaitActive()
+                        || bm.IsPlayerDualBladeSecondDefenseWaitActive()))
+                || bm.IsReflectionChainDefensePending()
+                || bm.IsParryRerunDefensePending());
+
+        if (defenseMagicPanel)
+        {
+            var incoming = bm.GetIncomingAttackSnapshotForDefenseUi();
+            var ps = bm.GetPlayerStatus();
+            magicPanelUI.SetSlotsInteractableForDefense(allowMagicPanel, incoming, ps);
+        }
+        else
+        {
+            magicPanelUI.SetAllInteractable(allowMagicPanel);
+        }
     }
 }

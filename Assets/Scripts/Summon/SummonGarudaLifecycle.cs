@@ -1,27 +1,20 @@
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// ガルーダ：開幕手札 +2（合計12枚側）、自分のターン終了時に 5,10,15… 回目で最大2枚ドロー（手札上限18まで）。
-/// 将来的にインドラ等のターン起因加護を足す場合は、共通の Summon ライフサイクル層へ寄せる想定。
+/// Garuda: opening hand +2, own turn end at 5/10/15… draws up to 2 cards (cap 18).
+/// Turn-end orchestration: <see cref="SummonTurnEndLifecycle"/>.
 /// </summary>
 public static class SummonGarudaLifecycle
 {
     public const int DefaultOpeningHand = 10;
     public const int GarudaOpeningHand = 12;
 
-    /// <summary>5n ターン終了ドロー前のメッセージ（DamagePopup）。</summary>
     public const string TurnEndBonusMessage = "風が手札を増やす";
-
-    /// <summary>上記メッセージ表示時の SE（Addressables: <c>Assets/SE/ジャンプ.mp3</c>）。</summary>
     public const string TurnEndBonusSeAddress = "Assets/SE/ジャンプ.mp3";
 
-    /// <summary>
-    /// 開幕配布枚数。ガルーダを持つ側だけ 12、それ以外は 10。
-    /// </summary>
     public static void GetOpeningHandTargets(PlayerStatus playerStatus, PlayerStatus enemyStatus, out int playerCards, out int cpuCards)
     {
         bool pGaruda = playerStatus?.summonData != null && playerStatus.summonData.IsGarudaLifecycle();
@@ -31,51 +24,70 @@ public static class SummonGarudaLifecycle
     }
 
     /// <summary>
-    /// <see cref="BattleManager.RunEndPhaseAsync"/> 内、病系処理の直後・Refill より前。
-    /// メッセージ → 規定インターバル → 裏向きドロー → 表向け。
+    /// Host/offline: decide which cards to draw (RNG). Does not mutate hand.
     /// </summary>
-    public static async Task ProcessTurnEndBonusAsync(BattleManager bm, SummonTurnCounterState ctr, CancellationToken ct)
+    public static List<CardData> ComputeTurnEndDrawPlan(
+        BattleManager bm,
+        PlayerStatus owner,
+        List<CardData> hand,
+        bool isPlayerHand)
     {
-        if (bm == null || ctr == null) return;
-        if (ct.IsCancellationRequested || bm.CurrentState != GameState.EndPhase) return;
+        var result = new List<CardData>();
+        if (bm == null || owner == null || hand == null) return result;
 
-        bool isPlayerTurn = bm.CurrentTurnOwner == PlayerType.Player;
-        if (isPlayerTurn)
+        int cap = isPlayerHand ? bm.GetHandMaxCount() : bm.GetEnemyHandCapacity();
+        int space = Mathf.Max(0, cap - hand.Count);
+        int toDraw = Mathf.Min(2, space);
+        if (toDraw <= 0) return result;
+
+        for (int i = 0; i < toDraw; i++)
         {
-            ctr.PlayerOwnTurnsEnded++;
-            if (ctr.PlayerOwnTurnsEnded % 5 != 0) return;
-            var sd = bm.GetPlayerStatus()?.summonData;
-            if (sd == null || !sd.IsGarudaLifecycle()) return;
-            var owner = bm.GetPlayerStatus();
-            // 呪縛中は 5n ボーナスのみスキップ（カウンタは既に進行済み）。開幕12枚は別経路のため対象外。
-            if (owner != null && !owner.HasCurseBindEffect())
-                await RunGarudaTurnEndDrawSequenceAsync(bm, owner, bm.playerHand, isPlayerHand: true, ct);
-        }
-        else
-        {
-            ctr.EnemyOwnTurnsEnded++;
-            if (ctr.EnemyOwnTurnsEnded % 5 != 0) return;
-            var sd = bm.GetEnemyStatus()?.summonData;
-            if (sd == null || !sd.IsGarudaLifecycle()) return;
-            var owner = bm.GetEnemyStatus();
-            if (owner != null && !owner.HasCurseBindEffect())
-                await RunGarudaTurnEndDrawSequenceAsync(bm, owner, bm.cpuHand, isPlayerHand: false, ct);
+            CardData card = isPlayerHand
+                ? bm.cardDealer?.DrawRandomCard(PlayerType.Player)
+                : bm.cardDealer?.DrawRandomCard(PlayerType.Enemy);
+            if (card != null)
+                result.Add(card);
         }
 
-        if (ct.IsCancellationRequested) return;
-        BattleUIManager.I?.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
-        BattleUIManager.I?.RefreshMagicCardInteractivity(bm.playerHand);
+        return result;
     }
 
-    private static async Task RunGarudaTurnEndDrawSequenceAsync(
+    /// <summary>
+    /// Instantiate drawn cards from synced names (online client).
+    /// </summary>
+    public static List<CardData> InstantiateDrawPlanFromNames(BattleManager bm, IReadOnlyList<string> names)
+    {
+        var result = new List<CardData>();
+        if (bm?.cardDealer == null || names == null) return result;
+
+        foreach (var name in names)
+        {
+            if (string.IsNullOrEmpty(name)) continue;
+            var template = bm.cardDealer.FindTemplateByName(name);
+            if (template == null)
+            {
+                Debug.LogWarning($"[SummonGarudaLifecycle] Template not found: {name}");
+                continue;
+            }
+
+            var instance = bm.cardDealer.InstantiateCardFromTemplate(template);
+            if (instance != null)
+                result.Add(instance);
+        }
+
+        return result;
+    }
+
+    public static async Task RunTurnEndDrawSequenceAsync(
         BattleManager bm,
         PlayerStatus owner,
         List<CardData> hand,
         bool isPlayerHand,
+        IReadOnlyList<CardData> drawPlan,
         CancellationToken ct)
     {
         var ui = BattleUIManager.I;
-        if (ui == null || owner == null) return;
+        if (ui == null || owner == null || drawPlan == null || drawPlan.Count == 0) return;
 
         Color messageColor = new Color(0.5f, 0.92f, 0.72f);
         SoundEffectPlayer.I?.Play(TurnEndBonusSeAddress);
@@ -83,28 +95,23 @@ public static class SummonGarudaLifecycle
         await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
         if (ct.IsCancellationRequested) return;
 
-        int cap = isPlayerHand ? bm.GetHandMaxCount() : bm.GetEnemyHandCapacity();
-        int space = Mathf.Max(0, cap - hand.Count);
-        int toDraw = Mathf.Min(2, space);
-        if (toDraw <= 0) return;
-
         var drawn = new List<CardData>();
         var refill = bm.HandRefill;
 
-        for (int i = 0; i < toDraw; i++)
+        foreach (var card in drawPlan)
         {
             if (ct.IsCancellationRequested) return;
+            if (card == null) continue;
+
+            int cap = isPlayerHand ? bm.GetHandMaxCount() : bm.GetEnemyHandCapacity();
+            if (hand.Count >= cap) break;
+
+            hand.Add(card);
+            drawn.Add(card);
+
             if (isPlayerHand)
             {
-                if (refill == null || hand.Count >= bm.GetHandMaxCount()) break;
-                var card = await refill.DrawCardAsync(hand, trailingDelayMs: 0, playSoundOnDraw: false);
-                if (card != null) drawn.Add(card);
-            }
-            else
-            {
-                if (hand.Count >= bm.GetEnemyHandCapacity()) break;
-                var card = bm.cardDealer.DrawRandomCard();
-                if (card != null) hand.Add(card);
+                bm.cardDealer?.CreateCardUIForHand(card);
             }
         }
 

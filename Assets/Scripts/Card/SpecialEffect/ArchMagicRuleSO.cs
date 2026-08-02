@@ -12,6 +12,9 @@ public class ArchMagicRuleSO : SpecialAttackRuleSO
     [Tooltip("詠唱ターン数。使用ターンの次の自分ターンから数え、0 になった自分ターンに発動する。")]
     [Min(1)] public int castTurns = 2;
 
+    [Tooltip("詠唱中の HP バリア（残り 0 以下で詠唱中断）。実 HP とは別管理。")]
+    [Min(1)] public int barrierHp = 30;
+
     [Header("演出")]
     [Tooltip("詠唱中に両プレイヤー背景を差し替えるスプライト。null のときは背景を変更しない。")]
     public Sprite backgroundSprite;

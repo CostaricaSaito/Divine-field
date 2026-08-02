@@ -133,7 +133,7 @@ public class HandRefillService : MonoBehaviour
             int idx = enemyHand.IndexOf(source);
             if (idx >= 0)
             {
-                var newCard = DrawRandomCard();
+                var newCard = DrawRandomCard(PlayerType.Enemy);
                 if (newCard != null)
                 {
                     enemyHand[idx] = newCard;
@@ -168,7 +168,7 @@ public class HandRefillService : MonoBehaviour
         if (ui == null && handPanel != null && handIndex >= 0 && handIndex < handPanel.childCount)
             ui = handPanel.GetChild(handIndex)?.GetComponent<CardUI>();
 
-        var newCard = DrawRandomCard();
+        var newCard = DrawRandomCard(PlayerType.Player);
         if (newCard == null)
         {
             Debug.LogWarning($"[HandRefillService] 介入: プレイヤー表向きカードの置換に失敗 ({source?.cardName})");
@@ -196,7 +196,7 @@ public class HandRefillService : MonoBehaviour
 
         if (slot.ui == null) return;
 
-        var newCard = DrawRandomCard();
+        var newCard = DrawRandomCard(PlayerType.Player);
         if (newCard == null)
         {
             Debug.LogWarning("[HandRefillService] カードの取得に失敗しました（裏向きスロット）");
@@ -260,7 +260,7 @@ public class HandRefillService : MonoBehaviour
             var usedCard = _enemyUsedCardsThisTurn[i];
             if (usedCard == null) continue;
 
-            var newCard = DrawRandomCard();
+            var newCard = DrawRandomCard(PlayerType.Enemy);
             if (newCard == null)
             {
                 Debug.LogWarning($"[HandRefillService] 敵のカード取得に失敗しました (使用済みカード: {usedCard?.cardName ?? "null"})");
@@ -289,11 +289,10 @@ public class HandRefillService : MonoBehaviour
         _enemyUsedCardsThisTurn.Clear();
     }
 
-    // CardDealer からカードを1枚取得（CardDealer の public API を用意してください）
-    private CardData DrawRandomCard()
+    // CardDealer からカードを1枚取得（オンライン同期のためどちらの手札向けかを指定）
+    private CardData DrawRandomCard(PlayerType forSide = PlayerType.Player)
     {
-        // 暫定実装。CardDealer の public API を用意してください
-        return (cardDealer != null) ? cardDealer.DrawRandomCard() : null;
+        return (cardDealer != null) ? cardDealer.DrawRandomCard(forSide) : null;
     }
 
     /// <summary>
@@ -370,7 +369,8 @@ public class HandRefillService : MonoBehaviour
     /// </summary>
     public IReadOnlyList<HandReloadSlotWork> BeginHandReloadReplaceAllFaceDown(
         IReadOnlyList<CardData> oldCards,
-        List<CardData> playerHand)
+        List<CardData> playerHand,
+        PlayerType drawForSide = PlayerType.Player)
     {
         var result = new List<HandReloadSlotWork>();
         if (oldCards == null || playerHand == null) return result;
@@ -384,7 +384,7 @@ public class HandRefillService : MonoBehaviour
             var ui = old.cardUI;
             if (ui == null) continue;
 
-            var newC = DrawRandomCard();
+            var newC = DrawRandomCard(drawForSide);
             if (newC == null)
             {
                 Debug.LogWarning("[HandRefillService] リロード: 新カードの抽選失敗");
@@ -423,5 +423,117 @@ public class HandRefillService : MonoBehaviour
             w.Ui.Reveal();
             await Task.Delay(100, ct);
         }
+    }
+
+    /// <summary>
+    /// DiscardRestart: all hand slots except <paramref name="excludeCard"/> (already face-down used slot).
+    /// </summary>
+    public static List<CardData> CollectHandDiscardRestartTargets(List<CardData> hand, CardData excludeCard)
+    {
+        var targets = new List<CardData>();
+        if (hand == null) return targets;
+
+        int excludeId = excludeCard != null ? excludeCard.GetInstanceID() : 0;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            var c = hand[i];
+            if (c == null) continue;
+            if (excludeCard != null && (c == excludeCard || c.GetInstanceID() == excludeId)) continue;
+            if (c.cardUI == null) continue;
+            targets.Add(c);
+        }
+
+        return targets;
+    }
+
+    private void RemovePlayerBackSlotsAtHandIndices(IReadOnlyList<HandReloadSlotWork> work)
+    {
+        if (work == null || work.Count == 0) return;
+        for (int w = 0; w < work.Count; w++)
+        {
+            int handIdx = work[w].HandIndex;
+            for (int i = _playerBackSlotsThisTurn.Count - 1; i >= 0; i--)
+            {
+                if (_playerBackSlotsThisTurn[i].index == handIdx)
+                    _playerBackSlotsThisTurn.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Player hand discard-restart: face-down replace then reveal left-to-right (HandReload-style).
+    /// </summary>
+    public async Task RunPlayerHandDiscardRestartAsync(
+        List<CardData> playerHand,
+        PlayerStatus popupTarget,
+        CardData excludeCard,
+        CancellationToken ct)
+    {
+        var targets = CollectHandDiscardRestartTargets(playerHand, excludeCard);
+        if (targets.Count == 0) return;
+
+        var work = BeginHandReloadReplaceAllFaceDown(targets, playerHand, PlayerType.Player);
+        if (work == null || work.Count == 0) return;
+
+        RemovePlayerBackSlotsAtHandIndices(work);
+
+        BattleUIManager.I?.SetHandClickable(false);
+
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowHandDiscardRestartPopup(popupTarget)
+            : 0f;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
+        await Task.Delay(HandReloadAfterPopupWaitMs, ct);
+        await RevealHandReloadSlotsSequentially(work, ct);
+
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+    }
+
+    /// <summary>
+    /// Enemy hand discard-restart: swap CardData only (no hand UI). Used card slot may stay excluded.
+    /// </summary>
+    public async Task RunEnemyHandDiscardRestartAsync(
+        List<CardData> enemyHand,
+        PlayerStatus popupTarget,
+        CardData excludeCard,
+        CancellationToken ct)
+    {
+        if (enemyHand == null || enemyHand.Count == 0) return;
+
+        int excludeId = excludeCard != null ? excludeCard.GetInstanceID() : 0;
+        int replaced = 0;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            var old = enemyHand[i];
+            if (old == null) continue;
+            if (excludeCard != null && (old == excludeCard || old.GetInstanceID() == excludeId)) continue;
+
+            var neu = DrawRandomCard(PlayerType.Enemy);
+            if (neu == null)
+            {
+                Debug.LogWarning("[HandRefillService] DiscardRestart: enemy draw failed");
+                continue;
+            }
+
+            int oldId = old.GetInstanceID();
+            enemyHand[i] = neu;
+            _enemyUsedCardsThisTurn.RemoveAll(c => c != null && c.GetInstanceID() == oldId);
+            DestroyCardDataInstance(old);
+            replaced++;
+        }
+
+        if (replaced == 0) return;
+
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowHandDiscardRestartPopup(popupTarget)
+            : 0f;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
+        await Task.Delay(HandReloadAfterPopupWaitMs, ct);
+
+        var bm = BattleManager.I;
+        if (bm != null)
+            BattleUIManager.I?.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
     }
 }

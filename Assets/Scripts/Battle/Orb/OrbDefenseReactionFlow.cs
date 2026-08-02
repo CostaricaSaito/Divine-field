@@ -171,7 +171,7 @@ public static class OrbDefenseReactionFlow
             {
                 bm.HandRefill?.RecordEnemyUse(pick);
                 battleProcessor.UseCard(pick, bm.cpuHand);
-                BattleUIManager.I?.ShowCardDetail(pick, Side.Enemy);
+                BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                 bm.SetStatsDisplaySequenceCards(new List<CardData> { pick }, "防御", Side.Enemy);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             }

@@ -38,7 +38,8 @@ public static class BlockingNullifyFlow
         HandRefillService handRefill,
         List<CardData> incomingPlayerAttackCards,
         CardData enemyBlockingDefenseCard,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool defenseCardAlreadyConsumed = false)
     {
         if (battleManager == null || battleProcessor == null || incomingPlayerAttackCards == null
             || incomingPlayerAttackCards.Count == 0)
@@ -46,7 +47,7 @@ public static class BlockingNullifyFlow
 
         var enemy = battleManager.GetEnemyStatus();
 
-        if (enemyBlockingDefenseCard != null)
+        if (enemyBlockingDefenseCard != null && !defenseCardAlreadyConsumed)
         {
             handRefill?.RecordEnemyUse(enemyBlockingDefenseCard);
             battleProcessor.UseCard(enemyBlockingDefenseCard, battleManager.cpuHand);

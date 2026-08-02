@@ -1,4 +1,6 @@
-using System;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -34,6 +36,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
     [Header("UI（任意）")]
     [SerializeField] private Button closeButton;
     [SerializeField] private Button rankRuleButton;
+    [SerializeField] private Button battleReadyButton;
     [Tooltip("未割当なら Resources/Prefab/RankMatchRule を使用。")]
     [SerializeField] private RankMatchRulePopupView rankRulePopupPrefab;
 
@@ -68,6 +71,8 @@ public sealed class RankMatchPopupView : MonoBehaviour
     bool _isAnimating;
     Action _onOpenComplete;
     RankMatchRulePopupView _rankRulePopupInstance;
+    CancellationTokenSource _matchmakingCts;
+    MatchingOverlayView _matchingOverlay;
 
     public bool IsOpen => _isOpen;
     public bool IsAnimating => _isAnimating;
@@ -80,6 +85,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         CacheShutterTargets();
         WireCloseButton();
         WireRankRuleButton();
+        WireBattleReadyButton();
         ApplyInitialHiddenState();
     }
 
@@ -99,6 +105,13 @@ public sealed class RankMatchPopupView : MonoBehaviour
 
         if (rankRuleButton != null)
             rankRuleButton.onClick.RemoveListener(OnRankRuleButtonClicked);
+
+        if (battleReadyButton != null)
+            battleReadyButton.onClick.RemoveListener(OnBattleReadyButtonClicked);
+
+        _matchmakingCts?.Cancel();
+        _matchmakingCts?.Dispose();
+        _matchmakingCts = null;
 
         if (_rankRulePopupInstance != null)
             _rankRulePopupInstance.Closed -= OnRankRulePopupClosed;
@@ -175,6 +188,8 @@ public sealed class RankMatchPopupView : MonoBehaviour
             closeButton = contentRoot.Find("CloseButton")?.GetComponent<Button>();
         if (rankRuleButton == null && contentRoot != null)
             rankRuleButton = contentRoot.Find("RankRuleButton")?.GetComponent<Button>();
+        if (battleReadyButton == null && contentRoot != null)
+            battleReadyButton = contentRoot.Find("BattleReadyButton")?.GetComponent<Button>();
         if (profileBinder == null)
             profileBinder = GetComponent<RankMatchPopupProfileBinder>();
     }
@@ -227,6 +242,66 @@ public sealed class RankMatchPopupView : MonoBehaviour
         if (rankRuleButton == null) return;
         rankRuleButton.onClick.RemoveListener(OnRankRuleButtonClicked);
         rankRuleButton.onClick.AddListener(OnRankRuleButtonClicked);
+    }
+
+    void WireBattleReadyButton()
+    {
+        if (battleReadyButton == null) return;
+        battleReadyButton.onClick.RemoveListener(OnBattleReadyButtonClicked);
+        battleReadyButton.onClick.AddListener(OnBattleReadyButtonClicked);
+    }
+
+    void OnBattleReadyButtonClicked()
+    {
+        if (!_isOpen || _isAnimating) return;
+        if (MatchmakingService.IsBusy || _matchingOverlay != null) return;
+        _ = RunMatchmakingAsync();
+    }
+
+    async Task RunMatchmakingAsync()
+    {
+        SetCloseButtonInteractable(false);
+        SetRankRuleButtonInteractable(false);
+        SetBattleReadyButtonInteractable(false);
+
+        _matchmakingCts?.Dispose();
+        _matchmakingCts = new CancellationTokenSource();
+
+        var overlayParent = overlayRoot != null ? overlayRoot : (RectTransform)transform;
+        _matchingOverlay = MatchingOverlayView.Show(overlayParent, () => _matchmakingCts?.Cancel());
+        _matchingOverlay.SetStatus("サーバに接続しています");
+        var progress = new Progress<string>(s => _matchingOverlay?.SetStatus(s));
+
+        bool matched = false;
+        try
+        {
+            matched = await MatchmakingService.FindMatchAsync(_matchmakingCts.Token, progress);
+        }
+        finally
+        {
+            if (matched && this != null)
+            {
+                _matchingOverlay?.SetCancelInteractable(false);
+                _matchingOverlay?.SetStatus($"{OnlineMatchContext.RemotePlayerName} と対戦！");
+                await Task.Delay(800);
+                if (!SceneFadeNavigation.TryFadeToScene("Battle"))
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("Battle");
+            }
+            else if (this != null)
+            {
+                _matchingOverlay?.Close();
+                _matchingOverlay = null;
+                SetCloseButtonInteractable(true);
+                SetRankRuleButtonInteractable(true);
+                SetBattleReadyButtonInteractable(true);
+            }
+        }
+    }
+
+    void SetBattleReadyButtonInteractable(bool interactable)
+    {
+        if (battleReadyButton != null)
+            battleReadyButton.interactable = interactable;
     }
 
     void OnRankRuleButtonClicked()

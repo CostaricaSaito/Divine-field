@@ -53,13 +53,12 @@ public class BattleStatusUI : MonoBehaviour
     /// <summary>濃霧付与ポップアップ表示中は true。内部ステータスは濃霧だが、背景・オーバーレイ・「？」表示はまだ行わない。</summary>
     private bool _deferFogVisionVisuals;
 
-    private const float HpmgpChangeDuration = 0.2f;
+    private const float HpmgpChangeStepSec = BattleStatCountRules.ValueStepSec;
     private Coroutine _hpmgpAnimCoroutine;
     private bool _hpmgpDisplayReady;
     private bool _hpmgpLineWasConcealedByFog;
     private float _dispPHp, _dispPMp, _dispPGp, _dispEHp, _dispEMp, _dispEGp;
     private int _lastPlayerHandForStatusLine, _lastEnemyHandForStatusLine;
-    private float _hmpgpTweenElapsed;
     private float _hmpgFromPHp, _hmpgFromPMp, _hmpgFromPGp, _hmpgFromEHp, _hmpgFromEMp, _hmpgFromEGp;
     private float _hmpgToPHp, _hmpgToPMp, _hmpgToPGp, _hmpgToEHp, _hmpgToEMp, _hmpgToEGp;
 
@@ -96,7 +95,7 @@ public class BattleStatusUI : MonoBehaviour
         }
     }
 
-    public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, int playerHandCount = 0, int enemyHandCount = 0)
+    public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, int playerHandCount = 0, int enemyHandCount = 0, bool snapHpmgpNumbers = false)
     {
         // 濃霧の「視界」は人間プレイヤー（player）に付与されたときだけ。敵だけ濃霧なら見た目は一切変えない。
         // 付与ポップアップ表示〜規定インターバルまでは _deferFogVisionVisuals で演出を遅延。
@@ -130,7 +129,13 @@ public class BattleStatusUI : MonoBehaviour
                 SyncHpmgpDisplayFromStatus(player, enemy);
                 _hpmgpLineWasConcealedByFog = false;
             }
-            RequestHpmgpStatusLineTweenOrApply(player, enemy);
+            if (snapHpmgpNumbers)
+            {
+                StopHpmgpNumberAnimationIfAny();
+                SyncHpmgpDisplayFromStatus(player, enemy);
+            }
+            else
+                RequestHpmgpStatusLineTweenOrApply(player, enemy);
         }
 
         if (player != null)
@@ -356,7 +361,6 @@ public class BattleStatusUI : MonoBehaviour
             _hmpgToEMp = enemy.currentMP;
             _hmpgToEGp = enemy.currentGP;
         }
-        _hmpgpTweenElapsed = 0f;
         StopHpmgpNumberAnimationIfAny();
         _hpmgpAnimCoroutine = StartCoroutine(CoHpmgpCountTween(player, enemy));
     }
@@ -400,25 +404,12 @@ public class BattleStatusUI : MonoBehaviour
 
     private IEnumerator CoHpmgpCountTween(PlayerStatus player, PlayerStatus enemy)
     {
-        while (_hmpgpTweenElapsed < HpmgpChangeDuration)
+        while (StepHpmgpDisplayTowardTargets(player, enemy))
         {
-            _hmpgpTweenElapsed += Time.deltaTime;
-            float u = Mathf.Clamp01(_hmpgpTweenElapsed / HpmgpChangeDuration);
-            if (player != null)
-            {
-                _dispPHp = Mathf.Lerp(_hmpgFromPHp, _hmpgToPHp, u);
-                _dispPMp = Mathf.Lerp(_hmpgFromPMp, _hmpgToPMp, u);
-                _dispPGp = Mathf.Lerp(_hmpgFromPGp, _hmpgToPGp, u);
-            }
-            if (enemy != null)
-            {
-                _dispEHp = Mathf.Lerp(_hmpgFromEHp, _hmpgToEHp, u);
-                _dispEMp = Mathf.Lerp(_hmpgFromEMp, _hmpgToEMp, u);
-                _dispEGp = Mathf.Lerp(_hmpgFromEGp, _hmpgToEGp, u);
-            }
             WriteHpmgpStatusLines(player, enemy, _lastPlayerHandForStatusLine, _lastEnemyHandForStatusLine);
-            yield return null;
+            yield return new WaitForSeconds(HpmgpChangeStepSec);
         }
+
         if (player != null)
         {
             _dispPHp = _hmpgToPHp;
@@ -433,6 +424,38 @@ public class BattleStatusUI : MonoBehaviour
         }
         WriteHpmgpStatusLines(player, enemy, _lastPlayerHandForStatusLine, _lastEnemyHandForStatusLine);
         _hpmgpAnimCoroutine = null;
+    }
+
+    private bool StepHpmgpDisplayTowardTargets(PlayerStatus player, PlayerStatus enemy)
+    {
+        bool any = false;
+        if (player != null)
+        {
+            any |= StepHpmgpOne(ref _dispPHp, _hmpgToPHp);
+            any |= StepHpmgpOne(ref _dispPMp, _hmpgToPMp);
+            any |= StepHpmgpOne(ref _dispPGp, _hmpgToPGp);
+        }
+        if (enemy != null)
+        {
+            any |= StepHpmgpOne(ref _dispEHp, _hmpgToEHp);
+            any |= StepHpmgpOne(ref _dispEMp, _hmpgToEMp);
+            any |= StepHpmgpOne(ref _dispEGp, _hmpgToEGp);
+        }
+        return any;
+    }
+
+    private static bool StepHpmgpOne(ref float displayed, float target)
+    {
+        int current = Mathf.RoundToInt(displayed);
+        int goal = Mathf.RoundToInt(target);
+        if (current == goal)
+        {
+            displayed = target;
+            return false;
+        }
+
+        displayed = current + (goal > current ? 1 : -1);
+        return true;
     }
 
     /// <summary>濃霧視点（人間プレイヤーに濃霧）時：HP/MP/GP/HAND の表示をすべて「？」にする（内部ステータスはそのまま）。</summary>

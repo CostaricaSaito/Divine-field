@@ -17,6 +17,8 @@ public static class SummonPassiveBlessingFallback
                 return new LeviathanPassiveBlessing();
             case SummonPassiveBlessingMode.Diabolos:
                 return null;
+            case SummonPassiveBlessingMode.Indra:
+                return null;
             case SummonPassiveBlessingMode.AutoByAssetName:
             default:
                 return ResolveByAssetName(assetBaseName);
@@ -35,6 +37,8 @@ public static class SummonPassiveBlessingFallback
             case "Leviathan":
                 return new LeviathanPassiveBlessing();
             case "Diabolos":
+                return null;
+            case "Indra":
                 return null;
             default:
                 return null;

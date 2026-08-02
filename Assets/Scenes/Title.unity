@@ -967,6 +967,13 @@ MonoBehaviour:
   crossFadeStartBeforeEndSeconds: 5
   crossFadeEase: 0
   slides:
+  - sprite: {fileID: 21300000, guid: 8cf19c8af2ed6ee429c5cf6c5dfc2bcf, type: 3}
+    backgroundSize: {x: 2172, y: 2900}
+    panAnchoredStart: {x: 0, y: 500}
+    panAnchoredEnd: {x: 0, y: -741}
+    oneWayDurationSeconds: 6
+    overrideEase: 0
+    easeType: 5
   - sprite: {fileID: 21300000, guid: b269afef8acb2d64cb6e1ac151810d54, type: 3}
     backgroundSize: {x: 2080, y: 2900}
     panAnchoredStart: {x: 0, y: 507}
@@ -982,6 +989,20 @@ MonoBehaviour:
     overrideEase: 0
     easeType: 6
   - sprite: {fileID: 21300000, guid: 22877062e0542c0498e3875b76a2cf09, type: 3}
+    backgroundSize: {x: 2172, y: 4235}
+    panAnchoredStart: {x: -200, y: -100}
+    panAnchoredEnd: {x: 546, y: -741}
+    oneWayDurationSeconds: 10
+    overrideEase: 0
+    easeType: 6
+  - sprite: {fileID: 21300000, guid: 8c6b146b16cfe3d4ab6ebdd19467d6cc, type: 3}
+    backgroundSize: {x: 2172, y: 4235}
+    panAnchoredStart: {x: -200, y: -100}
+    panAnchoredEnd: {x: 546, y: -741}
+    oneWayDurationSeconds: 10
+    overrideEase: 0
+    easeType: 6
+  - sprite: {fileID: 21300000, guid: 1e19f8897eb30c049b8f55f161dc7740, type: 3}
     backgroundSize: {x: 2172, y: 4235}
     panAnchoredStart: {x: -200, y: -100}
     panAnchoredEnd: {x: 546, y: -741}
@@ -2820,6 +2841,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fafda660eb0af554084bb0ca8b2ccfda, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  catalog: {fileID: 0}
 --- !u!4 &1010833176
 Transform:
   m_ObjectHideFlags: 0
