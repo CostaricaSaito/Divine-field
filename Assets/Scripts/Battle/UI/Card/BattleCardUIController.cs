@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,6 +80,7 @@ public class BattleCardUIController : MonoBehaviour
                 && BattleManager.I != null
                 && (BattleManager.I.CurrentState == GameState.DefensePhase
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || BattleManager.I.IsPostDeathDefenseWaitActive()
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
         }
@@ -720,6 +721,7 @@ public class BattleCardUIController : MonoBehaviour
                     BattleManager.I.RefreshReflectionChainInteractivityIfPending();
                 else if (BattleManager.I.CurrentState == GameState.DefensePhase
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || BattleManager.I.IsPostDeathDefenseWaitActive()
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
                     BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
                 else if (BattleManager.I.CurrentState == GameState.AttackPhase
@@ -752,6 +754,7 @@ public class BattleCardUIController : MonoBehaviour
             }
             else if (BattleManager.I.CurrentState == GameState.DefensePhase
                      || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || BattleManager.I.IsPostDeathDefenseWaitActive()
                      || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                      || BattleManager.I.IsReflectionChainDefensePending()
                      || BattleManager.I.IsParryRerunDefensePending())

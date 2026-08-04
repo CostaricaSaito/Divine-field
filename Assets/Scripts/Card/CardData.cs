@@ -289,6 +289,10 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Tooltip("cardType=Special 時の即時効果。")]
     public SpecialCardEffectSO specialCardEffect;
 
+    [Header("Post-Death カード")]
+    [Tooltip("HP0 後の PostDeathEffectQueue で解決する効果（攻撃／防御フェーズでは使用不可）。")]
+    public PostDeathCardEffectSO postDeathCardEffect;
+
     [Header("宝玉系（防御・任意）")]
     [Tooltip("第1段の実ダメ通過時に臨時効果。DEF0 だけのカード識別には使わない。")]
     public OrbCardRuleSO orbReactionRule;

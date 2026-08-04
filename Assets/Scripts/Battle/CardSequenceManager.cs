@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,7 +60,7 @@ public class CardSequenceManager : MonoBehaviour
     {
         Debug.Log($"[CardSequenceManager] {cardType}カード演出開始: {selectedCards.Count}枚");
         if (cardType == "攻撃" && side == Side.Player)
-            PlayerAttackTotalDisplayFlow.OnNewPlayerAttackSequenceBegin(cardStatsDisplay);
+            PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
 
         // 大魔法（ArchMagic）は通常の攻撃シーケンスではなく、詠唱開始フローへ分岐する。
         if (cardType == "攻撃" && ArchMagicRules.ContainsArchMagic(selectedCards))
@@ -110,16 +110,33 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
-        if (cardType == "攻撃" && side == Side.Player
-            && GodrageRules.IsGodrageDoublingCombo(selectedCards)
-            && MagicalSwordRules.ContainsMagicalSword(selectedCards))
+        if (cardType == "攻撃" && side == Side.Player)
         {
-            PlayerAttackTotalDisplayFlow.AfterModifierCommitBeforeCardReveal_InterstitialMsPlusGod(
-                cardStatsDisplay, battleManager.MagicalSwordAttackPowerBonus);
+            if (TributeBloodRules.ContainsTributeBlood(selectedCards)
+                && TributeBloodRules.TryGetFirstTributeBloodRule(selectedCards, out var tbRule))
+            {
+                var pTb = battleManager.GetPlayerStatus();
+                if (pTb != null)
+                {
+                    int hpPaid = await TributeBloodPopupUI.ShowAndWaitAsync(pTb, tbRule, cancellationToken);
+                    battleManager.SetTributeBloodPlayerHpPaidSnapshot(hpPaid);
+                    BattleUIManager.I?.UpdateStatus(
+                        battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+                    if (battleManager.IsOnlineMatch)
+                        NetworkBattleBridge.SendTributeBloodChoice(hpPaid);
+                }
+                else
+                    battleManager.SetTributeBloodPlayerHpPaidSnapshot(0);
+            }
         }
 
-        if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+        if (cardType == "攻撃" && side == Side.Player
+            && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
             cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+            cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+            cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(true);
         if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
             cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
 
@@ -129,6 +146,7 @@ public class CardSequenceManager : MonoBehaviour
             cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
         battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearConfusionAttackTargetResolvedForDisplay();
 
@@ -151,10 +169,13 @@ public class CardSequenceManager : MonoBehaviour
         // クリア後のインターバル（まっさらな状態を維持）
         await Task.Delay(300, cancellationToken);
 
-        if (cardType == "攻撃" && side == Side.Player
-            && GodrageRules.IsGodrageDoublingCombo(selectedCards)
-            && MagicalSwordRules.ContainsMagicalSword(selectedCards))
-            PlayerAttackTotalDisplayFlow.EnterSequentialCardReveal_PrimaryAttackBaseOnly_MsWithGodRage(cardStatsDisplay);
+        if (cardType == "攻撃" && side == Side.Player)
+        {
+            PlayerAttackTotalDisplayFlow.EnterSequentialCardReveal_SuppressPendingModifierRamps(
+                cardStatsDisplay,
+                selectedCards,
+                battleManager.MagicalSwordAttackPowerBonus);
+        }
 
         // ②カードを順次表示（0.5秒インターバル）
         for (int i = 0; i < selectedCards.Count; i++)
@@ -163,12 +184,16 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
                 if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
                     cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 if (cardType == "攻撃")
                     cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (cardType == "攻撃" && side == Side.Player)
-                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
+                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
                 return;
             }
 
@@ -192,12 +217,16 @@ public class CardSequenceManager : MonoBehaviour
         {
             if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                 cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+                cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
             if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
                 cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
             if (cardType == "攻撃")
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
             if (cardType == "攻撃" && side == Side.Player)
-                PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
+                PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
             return;
         }
 
@@ -212,11 +241,15 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
                 if (HammadnessRules.ContainsHammadness(selectedCards))
                     cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (side == Side.Player)
-                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
+                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
                 return;
             }
 
@@ -232,11 +265,15 @@ public class CardSequenceManager : MonoBehaviour
             {
                 if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
                     cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
                 if (HammadnessRules.ContainsHammadness(selectedCards))
                     cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (side == Side.Player)
-                    PlayerAttackTotalDisplayFlow.ClearPreRampStateOnPlayerAttackSequenceCancel(cardStatsDisplay);
+                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
                 return;
             }
 
@@ -298,6 +335,48 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
+        if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+        {
+            PlayerStatus psMdb = battleManager.GetPlayerStatus();
+            PlayerStatus esMdb = battleManager.GetEnemyStatus();
+            PlayerStatus atkOwnerMdb = battleManager.AttackerPublic == PlayerType.Player ? psMdb : esMdb;
+            if (atkOwnerMdb != null)
+            {
+                PlayerStatus defForBlessMdb;
+                if (battleManager.IsPlayerSelfAttackTargetMode && ReferenceEquals(atkOwnerMdb, psMdb))
+                    defForBlessMdb = psMdb;
+                else
+                    defForBlessMdb = ReferenceEquals(atkOwnerMdb, psMdb) ? esMdb : psMdb;
+
+                await RunMillionDollarBazookaAttackIntroAsync(selectedCards, atkOwnerMdb, defForBlessMdb, cancellationToken);
+            }
+            else
+            {
+                cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+            }
+        }
+
+        if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+        {
+            PlayerStatus psTb = battleManager.GetPlayerStatus();
+            PlayerStatus esTb = battleManager.GetEnemyStatus();
+            PlayerStatus atkOwnerTb = battleManager.AttackerPublic == PlayerType.Player ? psTb : esTb;
+            if (atkOwnerTb != null)
+            {
+                PlayerStatus defForBlessTb;
+                if (battleManager.IsPlayerSelfAttackTargetMode && ReferenceEquals(atkOwnerTb, psTb))
+                    defForBlessTb = psTb;
+                else
+                    defForBlessTb = ReferenceEquals(atkOwnerTb, psTb) ? esTb : psTb;
+
+                await RunTributeBloodAttackIntroAsync(selectedCards, atkOwnerTb, defForBlessTb, cancellationToken);
+            }
+            else
+            {
+                cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+            }
+        }
+
         if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
         {
             PlayerStatus psHam = battleManager.GetPlayerStatus();
@@ -313,6 +392,28 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
+        if (cardType == "攻撃" && side == Side.Player && selectedCards != null && selectedCards.Count > 0)
+        {
+            PlayerStatus psRamp = battleManager.GetPlayerStatus();
+            PlayerStatus esRamp = battleManager.GetEnemyStatus();
+            if (psRamp != null && esRamp != null
+                && battleManager.AttackerPublic == PlayerType.Player)
+            {
+                PlayerStatus defRamp;
+                if (battleManager.IsPlayerSelfAttackTargetMode)
+                    defRamp = psRamp;
+                else
+                    defRamp = esRamp;
+                await PlayAttackModifierRampsAsync(
+                    selectedCards, psRamp, defRamp, cancellationToken);
+            }
+            else
+            {
+                cardStatsDisplay?.ClearAttackModifierRevealSuppressions();
+                cardStatsDisplay?.UpdateDisplay();
+            }
+        }
+
         // ③カードの処理
         if (cardType == "攻撃" && side == Side.Player && selectedCards != null && selectedCards.Count > 0)
             battleManager.SetPlayerAttackComboForCombat(selectedCards);
@@ -322,6 +423,13 @@ public class CardSequenceManager : MonoBehaviour
         // 選択状態をクリア（ProcessCardsで既に設定済み）
         BattleUIManager.I?.ClearAllSelections();
         cardStatsDisplay?.UpdateDisplay();
+
+        // PostDeath 道連れ：防御掲出のみ（戦闘解決は DeadlyChainFlow が担当）
+        if (cardType == "防御" && battleManager.IsPostDeathSequenceActive)
+        {
+            await BattleUIManager.I?.ShowPlayerDefenseCardsPresentationSequenceAsync(selectedCards);
+            return;
+        }
 
         // ④戦闘解決処理
         PlayerStatus atk;
@@ -474,12 +582,14 @@ public class CardSequenceManager : MonoBehaviour
         if (cancellationToken.IsCancellationRequested) return;
 
         BattleUIManager.I?.HideAllCardDetails();
-        cardStatsDisplay?.ClearSequenceCards();
+        cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
         battleManager.SetCurrentAttackCard(null);
         cardStatsDisplay?.UpdateDisplay();
 
         battleManager.SetGameState(GameState.CombatResolvePhase);
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
+        battleManager.ClearTributeBloodHpPaidSnapshot();
         battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearMagicalSwordPlayerAttackState();
         battleManager.ClearMagicalSwordEnemyAttackState();
@@ -551,13 +661,13 @@ public class CardSequenceManager : MonoBehaviour
             await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, cancellationToken);
             await RevealMagicPanelBonusDrawsAsync(cancellationToken);
             BattleUIManager.I?.HideAllCardDetails();
-            cardStatsDisplay?.ClearSequenceCards();
-            cardStatsDisplay?.ClearMagicalExplosionAttackDisplayLocks();
-            cardStatsDisplay?.ClearHammadnessAttackDisplayLocks();
+            cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
             battleManager.SetCurrentAttackCard(null);
             cardStatsDisplay?.UpdateDisplay();
             battleManager.SetGameState(GameState.CombatResolvePhase);
             battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+            battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
+            battleManager.ClearTributeBloodHpPaidSnapshot();
             battleManager.ClearHammadnessRollSnapshot();
             battleManager.ClearMagicalSwordPlayerAttackState();
             return false;
@@ -572,8 +682,9 @@ public class CardSequenceManager : MonoBehaviour
             await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
         }
 
-        if (cardStatsDisplay != null && dualBladeStrikeIndex == 0)
-            await PlayAttackModifierRampsAfterHitAsync(attackCards, atk, def, cancellationToken);
+        bool atkIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
+        if (cardStatsDisplay != null && dualBladeStrikeIndex == 0 && !atkIsPlayer)
+            await PlayAttackModifierRampsAsync(attackCards, atk, def, cancellationToken);
 
         bool selfAttack = ReferenceEquals(atk, def);
         if (selfAttack)
@@ -681,9 +792,9 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 命中確定後：マジカルソード／ゴッドレイジの ATK ランプ（プレイヤー・敵攻撃共通）。
+    /// カード掲出・特殊 intro 完了後（または混乱自己攻撃など通常シーケンス外）の MS／ゴッドレイジ緑字ランプ。
     /// </summary>
-    public async Task PlayAttackModifierRampsAfterHitAsync(
+    public async Task PlayAttackModifierRampsAsync(
         List<CardData> attackCards,
         PlayerStatus atk,
         PlayerStatus def,
@@ -699,12 +810,15 @@ public class CardSequenceManager : MonoBehaviour
 
         var meGodCombo = MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
             && GodrageRules.IsGodrageDoublingCombo(attackCards);
+        var mdbGodCombo = MillionDollarBazookaRules.ContainsMillionDollarBazooka(attackCards)
+            && GodrageRules.IsGodrageDoublingCombo(attackCards);
         var hammadnessGodCombo = HammadnessRules.ContainsHammadness(attackCards)
             && GodrageRules.IsGodrageDoublingCombo(attackCards);
         var godRageOnlyCombo = GodrageRules.IsGodrageDoublingCombo(attackCards)
             && !MagicalExplosionRules.ContainsMagicalExplosion(attackCards)
+            && !MillionDollarBazookaRules.ContainsMillionDollarBazooka(attackCards)
             && !HammadnessRules.ContainsHammadness(attackCards);
-        bool playGodRamps = meGodCombo || hammadnessGodCombo || godRageOnlyCombo;
+        bool playGodRamps = meGodCombo || mdbGodCombo || hammadnessGodCombo || godRageOnlyCombo;
 
         int msBonusRuntime = atkIsPlayer
             ? battleManager.MagicalSwordAttackPowerBonus
@@ -731,7 +845,7 @@ public class CardSequenceManager : MonoBehaviour
         {
             if (needMsRampInResolve && msDataCard != null && attackBoost > 0)
                 await Task.Delay(500, cancellationToken);
-            else if (meGodCombo || hammadnessGodCombo)
+            else if (meGodCombo || mdbGodCombo || hammadnessGodCombo)
                 await Task.Delay(1000, cancellationToken);
             else
                 await Task.Delay(500, cancellationToken);
@@ -740,6 +854,9 @@ public class CardSequenceManager : MonoBehaviour
             await cardStatsDisplay.PlayGodRageAttackRampAsync(
                 attackCards, atk, def, fromAtk, toAtk, 0.2f, cancellationToken);
         }
+
+        cardStatsDisplay.ClearAttackModifierRevealSuppressions();
+        cardStatsDisplay.UpdateDisplay();
     }
 
     /// <summary>
@@ -977,6 +1094,10 @@ public class CardSequenceManager : MonoBehaviour
 
         if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
             cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+            cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(true);
+        if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+            cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(true);
         if (HammadnessRules.ContainsHammadness(selectedCards))
             cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
 
@@ -985,6 +1106,7 @@ public class CardSequenceManager : MonoBehaviour
             cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
         battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearConfusionAttackTargetResolvedForDisplay();
 
@@ -1047,6 +1169,16 @@ public class CardSequenceManager : MonoBehaviour
         else
             cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
 
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards) && esPre != null)
+            await RunMillionDollarBazookaAttackIntroAsync(selectedCards, esPre, psPre, cancellationToken);
+        else
+            cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+
+        if (TributeBloodRules.ContainsTributeBlood(selectedCards) && esPre != null)
+            await RunTributeBloodAttackIntroAsync(selectedCards, esPre, psPre, cancellationToken);
+        else
+            cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+
         if (HammadnessRules.ContainsHammadness(selectedCards) && esPre != null)
             await RunHammadnessAttackIntroAsync(selectedCards, esPre, cancellationToken);
         else
@@ -1065,6 +1197,8 @@ public class CardSequenceManager : MonoBehaviour
         }
         battleManager.SetCurrentAttackCard(primaryNormal != null ? primaryNormal : selectedCards[0]);
         if (selectedCards.Count > 1 || MagicalExplosionRules.ContainsMagicalExplosion(selectedCards)
+            || MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards)
+            || TributeBloodRules.ContainsTributeBlood(selectedCards)
             || HammadnessRules.ContainsHammadness(selectedCards))
             battleManager.SetOnlineEnemyAttackCombo(selectedCards);
 
@@ -1147,6 +1281,7 @@ public class CardSequenceManager : MonoBehaviour
             return;
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+        battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
         battleManager.ClearHammadnessRollSnapshot();
         cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
 
@@ -1244,6 +1379,119 @@ public class CardSequenceManager : MonoBehaviour
             atk,
             meCard,
             meSheetAtk,
+            fromTotal,
+            toTotal,
+            0.2f,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// After all sheets: magic MP cost -> SE + white flash + drain all GP -> count up TOTAL / bazooka sheet ATK.
+    /// </summary>
+    private async Task RunMillionDollarBazookaAttackIntroAsync(
+        List<CardData> selectedCards,
+        PlayerStatus atk,
+        PlayerStatus defForBless,
+        CancellationToken cancellationToken)
+    {
+        if (cardStatsDisplay == null)
+            return;
+        if (atk == null || selectedCards == null)
+        {
+            cardStatsDisplay.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+            return;
+        }
+
+        int fromTotal = cardStatsDisplay.ComputeMillionDollarBazookaRampFrom(selectedCards, atk, defForBless);
+        cardStatsDisplay.SetMillionDollarBazookaPreRampAttackDisplay(fromTotal);
+        cardStatsDisplay.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+        cardStatsDisplay.UpdateDisplay();
+
+        await Task.Delay(500, cancellationToken);
+
+        var magicCards = selectedCards.FindAll(c =>
+            c != null && c.cardType == CardType.Magic && !MillionDollarBazookaRules.IsMillionDollarBazookaCard(c));
+        foreach (var magic in magicCards)
+        {
+            bool isFromHand = BattleUIManager.I == null
+                || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
+            bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
+            if (attackerIsPlayer)
+                await ApplyMagicCardToPoolAsync(magic, isFromHand);
+            else
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
+        }
+
+        _skipMagicProcessingInProcessCardsBecauseMagicalExplosion = true;
+
+        int gpRemain = atk.currentGP;
+        battleManager.SetMillionDollarBazookaComboGpPoolSnapshot(gpRemain);
+
+        MillionDollarBazookaRules.TryGetFirstMillionDollarBazookaRule(selectedCards, out var mdbRule);
+        int bazookaSheetAtk = MillionDollarBazookaRules.ComputeDamageBonusFromGp(gpRemain, mdbRule);
+
+        SoundEffectPlayer.I?.Play("Assets/SE/マジカルエクスプロージョン.mp3");
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+        atk.UseGP(gpRemain);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+
+        int toTotal = cardStatsDisplay.ComputeMillionDollarBazookaRampTo(selectedCards, atk, defForBless);
+        CardData bazookaCard = MillionDollarBazookaRules.FindFirstMillionDollarBazookaCard(selectedCards);
+
+        await cardStatsDisplay.PlayMagicalExplosionAttackRampAsync(
+            selectedCards,
+            atk,
+            bazookaCard,
+            bazookaSheetAtk,
+            fromTotal,
+            toTotal,
+            0.2f,
+            cancellationToken);
+        cardStatsDisplay.ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        cardStatsDisplay.LockMillionDollarBazookaPlayerAttackDisplay(selectedCards, atk);
+        cardStatsDisplay.UpdateDisplay();
+    }
+
+    /// <summary>
+    /// After all sheets: 500ms -> SE + white flash -> count up TOTAL / Tribute Blood ATK; HP drops during ramp.
+    /// </summary>
+    private async Task RunTributeBloodAttackIntroAsync(
+        List<CardData> selectedCards,
+        PlayerStatus atk,
+        PlayerStatus defForBless,
+        CancellationToken cancellationToken)
+    {
+        if (cardStatsDisplay == null)
+            return;
+        if (atk == null || selectedCards == null)
+        {
+            cardStatsDisplay.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+            return;
+        }
+
+        int fromTotal = cardStatsDisplay.ComputeTributeBloodRampFrom(selectedCards, atk, defForBless);
+        cardStatsDisplay.SetTributeBloodPreRampAttackDisplay(fromTotal);
+        cardStatsDisplay.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+        cardStatsDisplay.UpdateDisplay();
+
+        await Task.Delay(500, cancellationToken);
+
+        int hpPaid = TributeBloodRules.GetActiveHpPaid(selectedCards, atk);
+        TributeBloodRules.TryGetFirstTributeBloodRule(selectedCards, out var tbRule);
+        int tbSheetAtk = TributeBloodRules.ComputeDamageBonusFromHpPaid(hpPaid, tbRule);
+
+        SoundEffectPlayer.I?.Play("Assets/SE/マジカルエクスプロージョン.mp3");
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+
+        int toTotal = cardStatsDisplay.ComputeTributeBloodRampTo(selectedCards, atk, defForBless);
+        CardData tbCard = TributeBloodRules.FindFirstTributeBloodCard(selectedCards);
+
+        await cardStatsDisplay.PlayTributeBloodAttackRampAsync(
+            selectedCards,
+            atk,
+            tbCard,
+            tbSheetAtk,
+            hpPaid,
             fromTotal,
             toTotal,
             0.2f,

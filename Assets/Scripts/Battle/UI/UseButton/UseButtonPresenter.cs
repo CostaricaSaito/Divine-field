@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -148,12 +148,13 @@ public class UseButtonPresenter : MonoBehaviour
         if (bm == null) return;
         bool defenseUi = bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player;
         bool interventionDefense = bm.CurrentState == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive();
+        bool postDeathDefense = bm.IsPostDeathDefenseWaitActive();
         bool reflectionChainWait = bm.IsReflectionChainDefensePending();
         bool parryRerunWait = bm.IsParryRerunDefensePending();
         bool dualBladeSecondDefense = bm.CurrentState == GameState.CombatResolvePhase
             && bm.IsPlayerDualBladeSecondDefenseWaitActive()
             && bm.DefenderPublic == PlayerType.Player;
-        if (!defenseUi && !interventionDefense && !reflectionChainWait && !dualBladeSecondDefense
+        if (!defenseUi && !interventionDefense && !postDeathDefense && !reflectionChainWait && !dualBladeSecondDefense
             && !parryRerunWait)
             return;
 
@@ -175,6 +176,8 @@ public class UseButtonPresenter : MonoBehaviour
             incomingAttack = bm.GetAttackCardsForCombatPublic();
         else if (interventionDefense)
             incomingAttack = bm.GetInterventionDefenseAttackSnapshot() ?? bm.GetAttackCardsForCombatPublic();
+        else if (postDeathDefense)
+            incomingAttack = bm.GetIncomingAttackSnapshotForDefenseUi();
         else if (reflectionChainWait)
             incomingAttack = bm.GetReflectionChainAttackSnapshot();
         else if (parryRerunWait)

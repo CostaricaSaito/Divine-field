@@ -38,35 +38,21 @@ public static class HandDestroyService
         if (ct.IsCancellationRequested || noTarget || targetCard == null) return;
 
         Side victimSide = victimIsPlayerHand ? Side.Player : Side.Enemy;
-        Transform panel = victimSide == Side.Player
-            ? ui.GetPlayerCardDisplayPanel()
-            : ui.GetEnemyCardDisplayPanel();
-        var prefab = ui.GetCardSheetPrefab();
-        if (panel == null || prefab == null)
-        {
-            RemoveFromHand(bm, victimHand, targetCard, victimIsPlayerHand);
-            return;
-        }
 
-        if (!panel.gameObject.activeSelf)
-            panel.gameObject.SetActive(true);
+        ui.ShowCardSheetVisualOnly(targetCard, victimSide);
+        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
 
-        var sheet = Object.Instantiate(prefab, panel);
-        sheet.name = $"HandDestroy_{targetCard.cardName}";
-        var display = sheet.GetComponent<CardSheetDisplay>();
-        display?.Setup(targetCard);
-
-        var rect = sheet.GetComponent<RectTransform>();
-        if (rect != null)
-            rect.anchoredPosition = Vector2.zero;
+        GameObject sheetRoot = null;
+        if (ui.TryGetCardSheetDisplayForCardData(targetCard, out var sheetDisplay) && sheetDisplay != null)
+            sheetRoot = sheetDisplay.gameObject;
 
         await Task.Delay(PreDissolveHoldMs, ct);
         if (ct.IsCancellationRequested) return;
 
-        await CardDissolvePlayer.PlayAsync(sheet, ct);
-        if (sheet != null)
-            Object.Destroy(sheet);
+        if (sheetRoot != null)
+            await CardDissolvePlayer.PlayAsync(sheetRoot, ct);
 
+        ui.DestroyCardSheetsForCardDataOnPanel(targetCard, victimSide);
         RemoveFromHand(bm, victimHand, targetCard, victimIsPlayerHand);
     }
 

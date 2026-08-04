@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -38,6 +39,7 @@ public class BattleBgmController : MonoBehaviour
     private float _targetVolume = 0.27f;
     private bool? _lastDisadvantageWant;
     private Coroutine _fadeCoroutine;
+    private CancellationTokenSource _fadeOutCts;
 
     private Sprite _baselineBackgroundSprite;
     private Sprite _disadvantageBackgroundSprite;
@@ -325,30 +327,50 @@ public class BattleBgmController : MonoBehaviour
     /// <summary>ゲーム終了時：現在のバトル BGM の音量を下げゼロにして停止する（リザルト用に呼ぶ）。</summary>
     public void FadeOutBattleBgmAndStop(float durationSeconds)
     {
-        if (_source == null) return;
-        if (_fadeCoroutine != null)
-            StopCoroutine(_fadeCoroutine);
-        _fadeCoroutine = StartCoroutine(CoFadeOutOnlyAndStop(durationSeconds));
+        _ = FadeOutBattleBgmAndStopAsync(durationSeconds);
     }
 
-    private IEnumerator CoFadeOutOnlyAndStop(float durationSeconds)
+    /// <summary>ゲーム終了時 BGM フェードアウト（async/await）。</summary>
+    public async Task FadeOutBattleBgmAndStopAsync(float durationSeconds)
     {
-        float v0 = _source != null ? _source.volume : 0f;
+        if (_source == null) return;
+
+        if (_fadeCoroutine != null)
+        {
+            StopCoroutine(_fadeCoroutine);
+            _fadeCoroutine = null;
+        }
+
+        _fadeOutCts?.Cancel();
+        _fadeOutCts?.Dispose();
+        _fadeOutCts = new CancellationTokenSource();
+        var ct = _fadeOutCts.Token;
+
+        float v0 = _source.volume;
         float d = Mathf.Max(0.05f, durationSeconds);
         float t = 0f;
-        while (t < d)
+
+        try
         {
-            t += Time.unscaledDeltaTime;
+            while (t < d)
+            {
+                ct.ThrowIfCancellationRequested();
+                t += Time.unscaledDeltaTime;
+                if (_source != null)
+                    _source.volume = Mathf.Lerp(v0, 0f, t / d);
+                await Task.Yield();
+            }
+
             if (_source != null)
-                _source.volume = Mathf.Lerp(v0, 0f, t / d);
-            yield return null;
+            {
+                _source.Stop();
+                _source.volume = v0;
+            }
         }
-        if (_source != null)
+        catch (OperationCanceledException)
         {
-            _source.Stop();
-            _source.volume = v0; // 次入場用にインスペクタ想定の音量に戻す
+            // superseded by another fade
         }
-        _fadeCoroutine = null;
     }
 
     private IEnumerator LoadSpriteToField(string address, System.Action<Sprite> assign)

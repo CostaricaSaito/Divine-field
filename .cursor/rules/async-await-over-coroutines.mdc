@@ -1,0 +1,46 @@
+﻿---
+description: Prefer async/await over Unity Coroutines for new and refactored code
+alwaysApply: true
+---
+
+# Async/Await over Coroutines
+
+Coroutine はレガシーな書き方とみなす。**新規実装・リファクタ時は可能な限り Coroutine を使わず、`async`/`await` で書く。**
+
+## 方針
+
+- 待機・時間経過: `await Task.Delay(...)` / `await DamagePopup.WaitAfterPopupLifetimeAsync(...)` 等
+- シーケンス演出: `async Task` メソッドに分解し、呼び出し側は `await`
+- 既存 Coroutine 触るとき: 差分が許容できる範囲なら `async`/`await` へ置き換える
+
+## 例
+
+```csharp
+// BAD — StartCoroutine + IEnumerator
+StartCoroutine(CoFadeOutOnlyAndStop(2f));
+private IEnumerator CoFadeOutOnlyAndStop(float durationSeconds) { ... yield return null; }
+
+// GOOD — fire-and-forget or awaitable async
+_ = FadeOutBattleBgmAndStopAsync(2f, cancellationToken);
+public async Task FadeOutBattleBgmAndStopAsync(float durationSeconds, CancellationToken ct = default)
+{
+    while (t < durationSeconds)
+    {
+        ct.ThrowIfCancellationRequested();
+        t += Time.unscaledDeltaTime;
+        ...
+        await Task.Yield();
+    }
+}
+```
+
+## Unity 固有
+
+- MonoBehaviour ライフサイクルに縛られる処理だけ Coroutine 残留可（例: どうしても `yield return new WaitForEndOfFrame()` が必要な描画1フレーム待ち）。それ以外は `async Task` を優先。
+- `CancellationToken`（`_phaseCts.Token` 等）を渡し、フェーズ中断と整合させる。
+- 新規 `.cs` は UTF-8 BOM（`.cursor/rules/csharp-utf8-bom.mdc`）。
+
+## 触らないとき
+
+- ユーザーが Coroutine 維持を明示した場合
+- 大規模一括変換の依頼がない限り、無関係なファイルの Coroutine だけを広げて書き換えない

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 /// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
@@ -18,9 +18,11 @@ public static class CardRules
 
         if (c.isSpecialEffect) return true;
 
+        if (c.cardType == CardType.Special)
+            return c.specialCardEffect != null && c.postDeathCardEffect == null;
+
         return c.cardType == CardType.Attack
-            || c.cardType == CardType.Recovery
-            || c.cardType == CardType.Special;
+            || c.cardType == CardType.Recovery;
     }
 
     /// <summary>防御フェーズで使用できるか。</summary>
@@ -42,7 +44,8 @@ public static class CardRules
         if (c.cureAllStatusEffects
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
             return true;
-        if (c.cardType == CardType.Special && c.specialCardEffect != null) return true;
+        if (c.cardType == CardType.Special && c.specialCardEffect != null && c.postDeathCardEffect == null)
+            return true;
         return c.canApplyStatusEffect
             && c.statusEffectToApply != StatusEffectType.None
             && c.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve;
@@ -74,6 +77,7 @@ public static class CardRules
     public static bool IncomingRequiresFullOnlyReactiveDefense(IReadOnlyList<CardData> incomingAttack)
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (DeadlyChainRules.IsActivePostDeathIncoming(incomingAttack)) return false;
         if (IncomingContainsSpecialCard(incomingAttack)) return true;
         return IncomingIsSingleImmediateActionAttack(incomingAttack);
     }

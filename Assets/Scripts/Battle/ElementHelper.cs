@@ -78,6 +78,9 @@ public static class ElementHelper
         if (MagicalExplosionRules.ContainsMagicalExplosion(cards) && cards.Count >= 2)
             return ElementType.None;
 
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards) && cards.Count >= 2)
+            return ElementType.None;
+
         // 属性付きカードと無属性カードを混在させた場合は無属性（例：ファイアボール＋クロスボウ）
         if (cards.Count >= 2)
         {

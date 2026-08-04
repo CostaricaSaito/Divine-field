@@ -226,6 +226,29 @@ public class BattleUIManager : MonoBehaviour
         }
     }
 
+    /// <summary>プレイヤーの複数枚防御を順次表示（0.5秒/枚）。PostDeath 道連れ等、戦闘解決を伴わない掲出用。</summary>
+    public async Task ShowPlayerDefenseCardsPresentationSequenceAsync(IReadOnlyList<CardData> cards)
+    {
+        if (cardController == null || cards == null || cards.Count == 0) return;
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var partial = new List<CardData>(i + 1);
+            for (int j = 0; j <= i; j++)
+            {
+                if (cards[j] != null) partial.Add(cards[j]);
+            }
+            if (partial.Count == 0) continue;
+
+            cardController.HidePlayerCardDetails();
+            cardController.ShowCardSheetsVisualOnlyBatch(partial, Side.Player);
+            BattleManager.I?.SetStatsDisplaySequenceCards(partial, "防御", Side.Player);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            if (i < cards.Count - 1)
+                await Task.Delay(500);
+        }
+    }
+
     //==== パブリックAPI：手札管理（BattleCardUIController へ委譲） =====
     public void SetHandInteractivity(List<CardData> hand, bool interactable)
         => cardController?.SetHandInteractivity(hand, interactable);

@@ -460,6 +460,8 @@ public class BattleProcessor : MonoBehaviour
         if (attackCards == null || attackCards.Count == 0 || attacker == null) return 0;
         if (MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
             return CalculateTotalAttackPower(attackCards, attacker, defender);
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(attackCards))
+            return CalculateTotalAttackPower(attackCards, attacker, defender);
         if (HammadnessRules.ContainsHammadness(attackCards))
             return CalculateTotalAttackPower(attackCards, attacker, defender);
 
@@ -558,6 +560,10 @@ public class BattleProcessor : MonoBehaviour
             Debug.LogWarning("[BattleProcessor] 攻撃力計算: 無効なパラメータ");
             return 0;
         }
+
+        var postDeathCtx = PostDeathCombatContext.Active;
+        if (postDeathCtx != null && postDeathCtx.MatchesIncoming(attackCards))
+            return postDeathCtx.FixedAttackPower;
         
         Debug.Log($"[BattleProcessor] ===== 攻撃力計算開始 =====");
         Debug.Log($"[BattleProcessor] 攻撃者: {attacker.DisplayName}");
@@ -568,6 +574,16 @@ public class BattleProcessor : MonoBehaviour
         {
             totalAttackPower = MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attacker);
             Debug.Log($"[BattleProcessor] マジカルエクスプロージョン込みのカード合計（加護前）: {totalAttackPower}");
+        }
+        else if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(attackCards))
+        {
+            totalAttackPower = MillionDollarBazookaRules.SumCardAttackPowerForMillionDollarBazookaCombo(attackCards, attacker);
+            Debug.Log($"[BattleProcessor] 100万ドルバズーカ込みのカード合計（加護前）: {totalAttackPower}");
+        }
+        else if (TributeBloodRules.ContainsTributeBlood(attackCards))
+        {
+            totalAttackPower = TributeBloodRules.SumCardAttackPowerForTributeBloodCombo(attackCards, attacker);
+            Debug.Log($"[BattleProcessor] トリビュートブラッド込みのカード合計（加護前）: {totalAttackPower}");
         }
         else if (HammadnessRules.ContainsHammadness(attackCards))
         {
@@ -1073,5 +1089,144 @@ public class BattleProcessor : MonoBehaviour
         UpdateStatusDisplay();
         await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs);
         Debug.Log("[BattleProcessor] 大魔法バリア解決完了");
+    }
+
+    /// <summary>
+    /// 道連れの鎖：固定攻撃力・補正無視・闇第2段・命中は通常。死亡再チェックは PostDeath キュー側が担当。
+    /// </summary>
+    public async Task ResolvePostDeathDeadlyChainCombatAsync(
+        List<CardData> attackCards,
+        CardData defenseCard,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        List<CardData> defenderHand,
+        DeadlyChainPostDeathEffectSO effect,
+        CancellationToken cancellationToken = default)
+    {
+        var defenseCards = defenseCard != null ? new List<CardData> { defenseCard } : new List<CardData>();
+        await ResolvePostDeathDeadlyChainCombatAsync(
+            attackCards, defenseCards, attacker, defender, defenderHand, effect, cancellationToken);
+    }
+
+    public async Task ResolvePostDeathDeadlyChainCombatAsync(
+        List<CardData> attackCards,
+        List<CardData> defenseCards,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        List<CardData> defenderHand,
+        DeadlyChainPostDeathEffectSO effect,
+        CancellationToken cancellationToken = default)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null || effect == null)
+            return;
+
+        if (defender.IsCastingArchMagic)
+            defenseCards = null;
+
+        int attackPower = effect.fixedAttackPower;
+        ElementType attackElement = effect.attackElement;
+        int defensePower = defenseCards != null && defenseCards.Count > 0
+            ? CalculateTotalDefensePower(defenseCards, defender)
+            : 0;
+
+        ElementType defElement = defenseCards != null && defenseCards.Count > 0
+            ? ElementHelper.GetCombinedElement(defenseCards)
+            : ElementType.None;
+        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
+            && !ElementHelper.CanDefendAgainst(attackElement, defElement))
+        {
+            defensePower = 0;
+        }
+
+        bool hit = CheckHit(attackCards, attacker, defender);
+        if (!hit)
+        {
+            SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+            BattleUIManager.I?.ShowMissPopup(defender);
+            return;
+        }
+
+        await ApplyPostDeathCombatDamageSequenceAsync(
+            attackElement, attacker, defender, attackPower, defensePower, cancellationToken);
+    }
+
+    private async Task ApplyPostDeathCombatDamageSequenceAsync(
+        ElementType attackElement,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        int attackPower,
+        int defensePower,
+        CancellationToken cancellationToken)
+    {
+        int firstPhaseDamage = Mathf.Max(0, attackPower - defensePower);
+
+        if (defender.IsCastingArchMagic)
+        {
+            await ApplyPostDeathArchMagicBarrierDamageAsync(defender, firstPhaseDamage, cancellationToken);
+            return;
+        }
+
+        await Task.Delay(DamagePopup.PreDamagePopupBeatMs, cancellationToken);
+
+        float normalPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+        if (firstPhaseDamage > 0)
+        {
+            defender.ApplyRawHpDamage(firstPhaseDamage);
+            normalPopupLifetimeSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDamagePopup(firstPhaseDamage, defender)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
+        }
+        else
+        {
+            normalPopupLifetimeSec = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDamagePopup(0, defender)
+                : DamagePopup.DefaultFadeDurationIfUnknown;
+        }
+
+        if (normalPopupLifetimeSec <= 0f)
+            normalPopupLifetimeSec = DamagePopup.DefaultFadeDurationIfUnknown;
+
+        PlayDamageSE(firstPhaseDamage);
+        UpdateStatusDisplay();
+
+        await DamagePopup.WaitAfterPopupLifetimeAsync(normalPopupLifetimeSec, cancellationToken);
+
+        if (attackElement == ElementType.Dark && firstPhaseDamage > 0 && defender.currentHP > 0)
+        {
+            int darkDamage = defender.currentHP;
+            SoundEffectPlayer.I?.Play("Assets/SE/チーン1.mp3");
+            float darkFade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowDarkFollowupDamagePopup(darkDamage, defender)
+                : 0f;
+            defender.ApplyRawHpDamage(darkDamage);
+            UpdateStatusDisplay();
+            await DamagePopup.WaitAfterPopupLifetimeAsync(darkFade, cancellationToken);
+        }
+
+        await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, cancellationToken);
+    }
+
+    private async Task ApplyPostDeathArchMagicBarrierDamageAsync(
+        PlayerStatus defender,
+        int firstPhaseDamage,
+        CancellationToken cancellationToken)
+    {
+        ElementType attackElement = PostDeathCombatContext.Active?.AttackElement ?? ElementType.None;
+        int barrierBefore = defender.archMagicBarrierRemaining;
+
+        await Task.Delay(DamagePopup.PreDamagePopupBeatMs, cancellationToken);
+
+        if (firstPhaseDamage > 0)
+        {
+            bool broken = defender.ApplyArchMagicBarrierDamage(firstPhaseDamage, attackElement);
+            int barrierAfter = defender.archMagicBarrierRemaining;
+            if (BattleUIManager.I != null)
+                await BattleUIManager.I.ShowBarriarDamagePopupAsync(
+                    barrierBefore, barrierAfter, broken, defender, cancellationToken);
+            BattleUIManager.I?.UpdateArchMagicBarrierForStatus(defender, barrierAfter);
+        }
+
+        UpdateStatusDisplay();
+        await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, cancellationToken);
     }
 }

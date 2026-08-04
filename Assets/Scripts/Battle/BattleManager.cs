@@ -256,6 +256,33 @@ public class BattleManager : MonoBehaviour
         _magicalExplosionMpSnapActive = false;
     }
 
+    /// <summary>100万ドルバズーカ：演出で GP を 0 にしたあとの攻撃力計算用（GP 全消費前の残量）。</summary>
+    private bool _millionDollarBazookaGpSnapActive;
+    private int _millionDollarBazookaGpPoolBeforeDrain;
+
+    public void SetMillionDollarBazookaComboGpPoolSnapshot(int gpRemainingBeforeDrain)
+    {
+        _millionDollarBazookaGpSnapActive = true;
+        _millionDollarBazookaGpPoolBeforeDrain = Mathf.Max(0, gpRemainingBeforeDrain);
+    }
+
+    public bool TryGetMillionDollarBazookaComboGpPoolSnapshot(out int gp)
+    {
+        if (_millionDollarBazookaGpSnapActive)
+        {
+            gp = _millionDollarBazookaGpPoolBeforeDrain;
+            return true;
+        }
+
+        gp = 0;
+        return false;
+    }
+
+    public void ClearMillionDollarBazookaComboGpPoolSnapshot()
+    {
+        _millionDollarBazookaGpSnapActive = false;
+    }
+
     /// <summary>気狂いハンマー：演出で決定したランダム攻撃力（ダメージ計算・表示用）。</summary>
     private bool _hammadnessRollSnapActive;
     private int _hammadnessRolledAttackPower;
@@ -329,6 +356,51 @@ public class BattleManager : MonoBehaviour
     {
         _magicalSwordEnemyAttackPowerBonus = 0;
         _magicalSwordEnemyPreMeRampVisualDone = false;
+    }
+
+    /// <summary>Tribute Blood: HP paid in popup (player turn snapshot).</summary>
+    private bool _tributeBloodHpPaidSnapActive;
+    private int _tributeBloodPlayerHpPaid;
+    private int _tributeBloodEnemyHpPaid;
+
+    public void SetTributeBloodPlayerHpPaidSnapshot(int hpPaid)
+    {
+        _tributeBloodHpPaidSnapActive = true;
+        _tributeBloodPlayerHpPaid = Mathf.Max(0, hpPaid);
+    }
+
+    public void SetTributeBloodEnemyHpPaidSnapshot(int hpPaid)
+    {
+        _tributeBloodHpPaidSnapActive = true;
+        _tributeBloodEnemyHpPaid = Mathf.Max(0, hpPaid);
+    }
+
+    public bool TryGetTributeBloodHpPaidSnapshot(PlayerStatus attacker, out int hpPaid)
+    {
+        hpPaid = 0;
+        if (!_tributeBloodHpPaidSnapActive || attacker == null)
+            return false;
+
+        if (ReferenceEquals(attacker, playerStatus))
+        {
+            hpPaid = _tributeBloodPlayerHpPaid;
+            return true;
+        }
+
+        if (ReferenceEquals(attacker, enemyStatus))
+        {
+            hpPaid = _tributeBloodEnemyHpPaid;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void ClearTributeBloodHpPaidSnapshot()
+    {
+        _tributeBloodHpPaidSnapActive = false;
+        _tributeBloodPlayerHpPaid = 0;
+        _tributeBloodEnemyHpPaid = 0;
     }
 
     /// <summary>敵の双剣デュアリズム：プレイヤー防御1回目解決直後=0、2回目の防御入力待ち中=1。</summary>
@@ -466,14 +538,17 @@ public class BattleManager : MonoBehaviour
             && CardRules.IsUsableInDefensePhase(card);
         bool fromParryRerun = IsParryRerunDefensePending()
             && CardRules.IsUsableInDefensePhase(card);
+        bool fromPostDeath = IsPostDeathDefenseWaitActive()
+            && IsPostDeathPlayerDefender
+            && CardRules.IsUsableInDefensePhase(card);
 
-        if (!fromAttack && !fromDefense && !fromIntervention && !fromDualBladeSecond && !fromReflectionChain && !fromParryRerun)
+        if (!fromAttack && !fromDefense && !fromIntervention && !fromDualBladeSecond && !fromReflectionChain && !fromParryRerun && !fromPostDeath)
         {
             Debug.Log($"[BattleManager] MagicPanel カード選択不可: 現在のState={CurrentState}");
             return;
         }
 
-        if (fromDefense || fromIntervention || fromDualBladeSecond || fromReflectionChain || fromParryRerun)
+        if (fromDefense || fromIntervention || fromDualBladeSecond || fromReflectionChain || fromParryRerun || fromPostDeath)
         {
             var incoming = GetIncomingAttackSnapshotForDefenseUi();
             if (BlockingRules.IsPhysicalBlockingCard(card)
@@ -522,6 +597,12 @@ public class BattleManager : MonoBehaviour
     private bool _suppressEnemyStaleAttackerInTotalByOrb;
     private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
     private List<CardData> _interventionAttackForDefenseUi;
+
+    private TaskCompletionSource<bool> _postDeathDefenseSubmitTcs;
+    private List<CardData> _postDeathAttackForDefenseUi;
+    private bool _postDeathPlayerIsDefender;
+    public bool IsPostDeathSequenceActive { get; private set; }
+    public bool IsPostDeathPlayerDefender => _postDeathPlayerIsDefender;
     private bool isProcessingUseButton;
     public bool IsUseButtonLocked => isProcessingUseButton;
 
@@ -616,6 +697,83 @@ public class BattleManager : MonoBehaviour
         _interventionDefenseSubmitTcs = null;
     }
 
+    /// <summary>PostDeath キュー中、生存プレイヤーの防御入力待ちか。</summary>
+    public bool IsPostDeathDefenseWaitActive()
+    {
+        return _postDeathDefenseSubmitTcs != null && !_postDeathDefenseSubmitTcs.Task.IsCompleted;
+    }
+
+    public void BeginPostDeathPlayerDefenseWait(List<CardData> attackCardsForElement)
+    {
+        _postDeathAttackForDefenseUi = attackCardsForElement;
+        _postDeathPlayerIsDefender = true;
+        _postDeathDefenseSubmitTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        isProcessingUseButton = false;
+        _playerDefenseCombatResolving = false;
+
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HidePlayerCardDetails();
+        BattleUIManager.I?.HideYurusuButton();
+
+        RefreshPlayerDefensePhaseInteractivity();
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.SetUseButtonInteractable(true);
+        TryAutoPassPlayerDefenseIfChantingArchMagic();
+        UpdateTotalATKDEFDisplay();
+    }
+
+    public async Task WaitForPostDeathPlayerDefenseSubmitAsync(CancellationToken ct)
+    {
+        if (_postDeathDefenseSubmitTcs == null) return;
+        var tcs = _postDeathDefenseSubmitTcs;
+        using (ct.Register(() => tcs.TrySetCanceled()))
+            await tcs.Task;
+    }
+
+    public void ClearPostDeathDefenseWait()
+    {
+        _postDeathAttackForDefenseUi = null;
+        _postDeathPlayerIsDefender = false;
+        if (_postDeathDefenseSubmitTcs != null && !_postDeathDefenseSubmitTcs.Task.IsCompleted)
+            _postDeathDefenseSubmitTcs.TrySetCanceled();
+        _postDeathDefenseSubmitTcs = null;
+    }
+
+    private void TrySubmitPostDeathPlayerDefense()
+    {
+        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (selectedDefenseCards == null)
+            selectedDefenseCards = new List<CardData>();
+
+        if (playerStatus != null && playerStatus.HasRestraintEffect() && selectedDefenseCards.Count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetUseButtonInteractable(true);
+            BattleUIManager.I?.SetHandClickable(true);
+            return;
+        }
+
+        if (IsOnlineMatch && selectedDefenseCards.Count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetUseButtonInteractable(true);
+            BattleUIManager.I?.SetHandClickable(true);
+            return;
+        }
+
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+
+        _postDeathDefenseSubmitTcs?.TrySetResult(true);
+        BattleUIManager.I?.SetHandClickable(false);
+        BattleUIManager.I?.SetUseButtonInteractable(false);
+        isProcessingUseButton = false;
+    }
+
     private void TrySubmitInterventionPlayerDefense()
     {
         var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
@@ -658,6 +816,7 @@ public class BattleManager : MonoBehaviour
 
         return (CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
             || IsInterventionDefenseWaitActive()
+            || IsPostDeathDefenseWaitActive()
             || IsPlayerDualBladeSecondDefenseWaitActive()
             || IsReflectionChainDefensePending()
             || IsParryRerunDefensePending();
@@ -691,6 +850,14 @@ public class BattleManager : MonoBehaviour
             return true;
         }
 
+        if (IsPostDeathDefenseWaitActive())
+        {
+            if (IsOnlineMatch)
+                NetworkBattleBridge.SendDefenseSelection(null);
+            _postDeathDefenseSubmitTcs?.TrySetResult(true);
+            return true;
+        }
+
         if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
         {
             if (IsOnlineMatch)
@@ -721,6 +888,7 @@ public class BattleManager : MonoBehaviour
     public void RefreshPlayerDefensePhaseInteractivity()
     {
         bool interventionDefense = CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive();
+        bool postDeathDefense = IsPostDeathDefenseWaitActive() && _postDeathPlayerIsDefender;
         bool dualBladeSecondDefense = CurrentState == GameState.CombatResolvePhase
             && IsPlayerDualBladeSecondDefenseWaitActive();
         bool reflectionChainWait = IsReflectionChainDefensePending();
@@ -728,6 +896,7 @@ public class BattleManager : MonoBehaviour
 
         if (!(CurrentState == GameState.DefensePhase && Defender == PlayerType.Player)
             && !interventionDefense
+            && !postDeathDefense
             && !dualBladeSecondDefense
             && !reflectionChainWait
             && !parryRerunWait)
@@ -741,7 +910,9 @@ public class BattleManager : MonoBehaviour
         }
 
         List<CardData> attackSource;
-        if (interventionDefense && _interventionAttackForDefenseUi != null)
+        if (postDeathDefense && _postDeathAttackForDefenseUi != null)
+            attackSource = _postDeathAttackForDefenseUi;
+        else if (interventionDefense && _interventionAttackForDefenseUi != null)
             attackSource = _interventionAttackForDefenseUi;
         else if (reflectionChainWait)
         {
@@ -1098,6 +1269,12 @@ public class BattleManager : MonoBehaviour
             return new List<CardData>(_interventionAttackForDefenseUi);
         }
 
+        if (IsPostDeathDefenseWaitActive() && _postDeathAttackForDefenseUi != null)
+        {
+            if (_postDeathAttackForDefenseUi.Count == 0) return null;
+            return new List<CardData>(_postDeathAttackForDefenseUi);
+        }
+
         if (CurrentState == GameState.CombatResolvePhase && IsPlayerDualBladeSecondDefenseWaitActive()
             && DefenderPublic == PlayerType.Player)
             return GetAttackCardsForCombat();
@@ -1308,7 +1485,7 @@ public class BattleManager : MonoBehaviour
 
             case GameState.EndPhase:
                 // TurnEnd 中は TOTALATKDEF を出さない。シーケンス／反射オーバーレイの残りで空パネルだけ残るのを防ぐ。
-                cardStatsDisplay?.ClearSequenceCards();
+                cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
                 ClearReflectionAttackTotalDisplay();
                 _ = RunEndPhaseAsync();
                 break;
@@ -1451,7 +1628,7 @@ public class BattleManager : MonoBehaviour
     private void EnterAttackPhase()
     {
         ClearConfusionAttackTargetResolvedForDisplay();
-        cardStatsDisplay?.ClearGodRagePlayerAttackDisplayLock();
+        cardStatsDisplay?.ClearAllAttackSequenceDisplayLocks();
         BattleUIManager.I?.SetHandClickable(true);
 
         // 大魔法詠唱中は通常の攻撃フェーズを差し替え、詠唱演出 → TurnEnd（または発動）を走らせる。
@@ -1723,6 +1900,8 @@ public class BattleManager : MonoBehaviour
             if (_phaseCts.Token.IsCancellationRequested) return;
 
             ClearMagicalExplosionComboMpPoolSnapshot();
+            ClearMillionDollarBazookaComboGpPoolSnapshot();
+            ClearTributeBloodHpPaidSnapshot();
             ClearHammadnessRollSnapshot();
             BattleUIManager.I?.HideAllCardDetails();
 
@@ -1742,7 +1921,7 @@ public class BattleManager : MonoBehaviour
                 }
             }
 
-            cardStatsDisplay?.ClearSequenceCards();
+            cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
             currentAttackCard = null;
             SetSuppressEnemyStaleAttackerInTotalByOrb(false);
             cardStatsDisplay?.UpdateDisplay();
@@ -1959,6 +2138,13 @@ public class BattleManager : MonoBehaviour
         var atkList = GetEnemyAttackCardsForTurn(attack);
         SetEnemyAttackComboForCombat(atkList);
 
+        if (cardStatsDisplay != null && atkList != null && atkList.Count > 0)
+        {
+            PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
+            PlayerAttackTotalDisplayFlow.EnterSequentialCardReveal_SuppressPendingModifierRamps(
+                cardStatsDisplay, atkList, MagicalSwordEnemyAttackPowerBonus);
+        }
+
         if (atkList.Count == 1 && ArchMagicRules.IsArchMagicCard(attack))
         {
             Debug.Log($"[BattleManager] Enemy ArchMagic cast start: {attack.cardName}");
@@ -2004,6 +2190,7 @@ public class BattleManager : MonoBehaviour
                     cardStatsDisplay?.ClearSequenceCards();
                     currentAttackCard = null;
                     ClearMagicalExplosionComboMpPoolSnapshot();
+                    ClearTributeBloodHpPaidSnapshot();
                     ClearHammadnessRollSnapshot();
                     BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
                     cardStatsDisplay?.UpdateDisplay();
@@ -2088,6 +2275,15 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
+        if (cardSequenceManager != null && enemyStatus != null && playerStatus != null
+            && atkList != null && atkList.Count > 0)
+        {
+            cardStatsDisplay?.SetSequenceCards(atkList, "攻撃", Side.Enemy);
+            cardStatsDisplay?.UpdateDisplay();
+            await cardSequenceManager.PlayAttackModifierRampsAsync(
+                atkList, enemyStatus, playerStatus, token);
+        }
+
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
         int finalPct = HitRateRules.ComputeFinalHitPercent(primary, enemyStatus, playerStatus);
         bool rolledHit = HitRateRules.RollHit(finalPct);
@@ -2097,10 +2293,10 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.ShowMissPopup(playerStatus);
             await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown);
             BattleUIManager.I?.HideAllCardDetails();
-            cardStatsDisplay?.ClearSequenceCards();
-            cardStatsDisplay?.ClearMagicalExplosionAttackDisplayLocks();
-            cardStatsDisplay?.ClearHammadnessAttackDisplayLocks();
+            cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
             ClearMagicalExplosionComboMpPoolSnapshot();
+            ClearMillionDollarBazookaComboGpPoolSnapshot();
+            ClearTributeBloodHpPaidSnapshot();
             ClearHammadnessRollSnapshot();
             ClearMagicalSwordEnemyAttackState();
             currentAttackCard = null;
@@ -2116,9 +2312,6 @@ public class BattleManager : MonoBehaviour
                 : DamagePopup.DefaultFadeDurationIfUnknown;
             await DamagePopup.WaitAfterPopupLifetimeAsync(popupSec);
         }
-
-        if (cardSequenceManager != null)
-            await cardSequenceManager.PlayAttackModifierRampsAfterHitAsync(atkList, enemyStatus, playerStatus, token);
 
         SetGameState(GameState.DefensePhase);
     }
@@ -2138,6 +2331,8 @@ public class BattleManager : MonoBehaviour
         if (RemotePlayerAgent.ShouldDeferRemoteAttackBookkeeping(atkList)) return true;
         if (atkList.Count > 1) return true;
         if (MagicalExplosionRules.ContainsMagicalExplosion(atkList)) return true;
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(atkList)) return true;
+        if (TributeBloodRules.ContainsTributeBlood(atkList)) return true;
         if (HammadnessRules.ContainsHammadness(atkList)) return true;
         return false;
     }
@@ -2164,8 +2359,22 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // 連鎖反射：GameState は AttackPhase のままだが、防御カード選択として扱う
+        // 連鎖反射 / PostDeath 道連れ：GameState が AttackPhase のままでも防御カード選択として扱う
         if (IsReflectionChainDefensePending())
+        {
+            if (!CardRules.IsUsableInDefensePhase(card))
+            {
+                Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
+                return;
+            }
+            selectedDefenseCard = card;
+            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+            UpdateTotalATKDEFDisplay();
+            return;
+        }
+
+        if (IsPostDeathDefenseWaitActive() && _postDeathPlayerIsDefender)
         {
             if (!CardRules.IsUsableInDefensePhase(card))
             {
@@ -2255,6 +2464,16 @@ public class BattleManager : MonoBehaviour
     public void OnUseButtonPressed()
     {
         if (isProcessingUseButton || _playerDefenseCombatResolving) return;
+
+        if (IsPostDeathDefenseWaitActive())
+        {
+            isProcessingUseButton = true;
+            BattleUIManager.I?.SetUseButtonInteractable(false);
+            BattleUIManager.I?.SetHandClickable(false);
+            TrySubmitPostDeathPlayerDefense();
+            return;
+        }
+
         isProcessingUseButton = true;
         BattleUIManager.I?.SetUseButtonInteractable(false);
         BattleUIManager.I?.SetHandClickable(false);
@@ -2283,6 +2502,8 @@ public class BattleManager : MonoBehaviour
             case GameState.CombatResolvePhase:
                 if (IsInterventionDefenseWaitActive())
                     TrySubmitInterventionPlayerDefense();
+                else if (IsPostDeathDefenseWaitActive())
+                    TrySubmitPostDeathPlayerDefense();
                 else if (IsPlayerDualBladeSecondDefenseWaitActive() && Defender == PlayerType.Player)
                     HandleDefenseUse();
                 else
@@ -2690,11 +2911,26 @@ public class BattleManager : MonoBehaviour
         // 防御カードの演出フローをCardSequenceManagerに委譲
         if (cardSequenceManager != null)
         {
-            _ = cardSequenceManager.StartCardSequenceAsync(selectedDefenseCards, "防御", Side.Player, _phaseCts.Token);
+            _playerDefenseCombatResolving = true;
+            _ = RunPlayerDefenseCardSequenceAsync(selectedDefenseCards);
         }
         else
         {
             Debug.LogError("[BattleManager] CardSequenceManagerが設定されていません");
+        }
+    }
+
+    private async Task RunPlayerDefenseCardSequenceAsync(List<CardData> selectedDefenseCards)
+    {
+        try
+        {
+            if (cardSequenceManager != null)
+                await cardSequenceManager.StartCardSequenceAsync(
+                    selectedDefenseCards, "防御", Side.Player, _phaseCts.Token);
+        }
+        finally
+        {
+            _playerDefenseCombatResolving = false;
         }
     }
 
@@ -2732,9 +2968,11 @@ public class BattleManager : MonoBehaviour
             await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
             if (token.IsCancellationRequested) return;
             ClearMagicalExplosionComboMpPoolSnapshot();
+            ClearMillionDollarBazookaComboGpPoolSnapshot();
+            ClearTributeBloodHpPaidSnapshot();
             ClearHammadnessRollSnapshot();
             BattleUIManager.I?.HideAllCardDetails();
-            cardStatsDisplay?.ClearSequenceCards();
+            cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
             currentAttackCard = null;
             cardStatsDisplay?.UpdateDisplay();
             SetGameState(GameState.CombatResolvePhase);
@@ -2751,9 +2989,14 @@ public class BattleManager : MonoBehaviour
             return;
 
         ClearMagicalExplosionComboMpPoolSnapshot();
+        ClearMillionDollarBazookaComboGpPoolSnapshot();
+        ClearTributeBloodHpPaidSnapshot();
         ClearHammadnessRollSnapshot();
         // ダメージ処理完了後、全カード表示をクリア
         BattleUIManager.I?.HideAllCardDetails();
+        cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
+        currentAttackCard = null;
+        cardStatsDisplay?.UpdateDisplay();
 
         // 防御カード確定後の処理
         SetGameState(GameState.CombatResolvePhase);
@@ -3391,10 +3634,78 @@ public class BattleManager : MonoBehaviour
         bool defenseUi = CurrentState == GameState.DefensePhase && Defender == PlayerType.Player;
         bool interventionDefense = CurrentState == GameState.CombatResolvePhase
             && IsInterventionDefenseWaitActive() && Defender == PlayerType.Player;
+        bool postDeathDefense = IsPostDeathDefenseWaitActive() && _postDeathPlayerIsDefender;
         bool dualBladeSecondDefense = CurrentState == GameState.CombatResolvePhase
             && IsPlayerDualBladeSecondDefenseWaitActive() && Defender == PlayerType.Player;
-        return defenseUi || interventionDefense || dualBladeSecondDefense
+        return defenseUi || interventionDefense || postDeathDefense || dualBladeSecondDefense
             || IsReflectionChainDefensePending() || IsParryRerunDefensePending();
+    }
+
+    private List<CardData> _postDeathChainAttackDisplay;
+    private Side _postDeathChainAttackDisplaySide = Side.Player;
+
+    public bool IsPostDeathChainAttackDisplayActive =>
+        _postDeathChainAttackDisplay != null && _postDeathChainAttackDisplay.Count > 0;
+
+    public IReadOnlyList<CardData> GetPostDeathChainAttackDisplayCards() => _postDeathChainAttackDisplay;
+
+    public Side GetPostDeathChainAttackDisplaySide() => _postDeathChainAttackDisplaySide;
+
+    public void SetPostDeathChainAttackDisplay(IReadOnlyList<CardData> cards, Side deadSide)
+    {
+        _postDeathChainAttackDisplay = cards != null && cards.Count > 0
+            ? new List<CardData>(cards)
+            : null;
+        _postDeathChainAttackDisplaySide = deadSide;
+        UpdateTotalATKDEFDisplay();
+    }
+
+    public void ClearPostDeathChainAttackDisplay()
+    {
+        _postDeathChainAttackDisplay = null;
+        UpdateTotalATKDEFDisplay();
+    }
+
+    /// <summary>
+    /// 道連れ1回分の開始前：前戦闘のフェーズを解き StandBy へ（gameEnd ガード中は SetGameState を使わない）。
+    /// </summary>
+    public void EnterPostDeathChainNeutralPhase()
+    {
+        CurrentState = GameState.StandByPhase;
+        isProcessingUseButton = false;
+        _playerDefenseCombatResolving = false;
+    }
+
+    /// <summary>
+    /// 死亡者の臨時攻撃 → 生存者の防御フェーズへ。HandleStateChange は呼ばない（DeadlyChainFlow が入力を管理）。
+    /// </summary>
+    public void EnterPostDeathChainCombatPhase(PlayerType deadAttackerSide)
+    {
+        CurrentTurnOwner = deadAttackerSide;
+        CurrentState = GameState.DefensePhase;
+        isProcessingUseButton = false;
+        _playerDefenseCombatResolving = false;
+    }
+
+    /// <summary>
+    /// 道連れの鎖1回分：前の戦闘 TOTAL を消し、新しい攻防表示の土台にする。
+    /// </summary>
+    public void PreparePostDeathChainCombatUi()
+    {
+        ClearPlayerSelfAttackTargetMode();
+        ClearReflectionAttackTotalDisplay();
+        ClearPostDeathChainAttackDisplay();
+        ClearStatsDisplaySequenceCards();
+        SetCurrentAttackCard(null);
+        ClearPlayerAttackComboForCombat();
+        ClearEnemyAttackComboForCombat();
+        isProcessingUseButton = false;
+        _playerDefenseCombatResolving = false;
+        ClearSelectedCards();
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+        BattleUIManager.I?.HideYurusuButton();
+        UpdateTotalATKDEFDisplay();
     }
 
     /// <summary>反射連鎖など <see cref="CardSequenceManager"/> 外のカード表示に、TotalATKDEF を同期させる。</summary>
@@ -3407,7 +3718,7 @@ public class BattleManager : MonoBehaviour
     /// <summary>演出シーケンス終了時など、TotalATKDEF を通常ロジックへ戻す。</summary>
     public void ClearStatsDisplaySequenceCards()
     {
-        cardStatsDisplay?.ClearSequenceCards();
+        cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
         cardStatsDisplay?.UpdateDisplay();
     }
 
@@ -3710,11 +4021,29 @@ public class BattleManager : MonoBehaviour
         if (!pDead && !eDead) return false;
 
         _gameEndTriggered = true;
+        bool gameEndPresentationCompleted = false;
 
         try
         {
             await Task.Delay(200, ct);
-            await RunOjyouAndHideUIAsync(pDead, eDead, ct);
+            bool hasPostDeathEffects = PostDeathEffectProcessor.HasPendingEffects(this);
+            await RunOjyouPopupOnlyAsync(pDead, eDead, startBgmFade: !hasPostDeathEffects, ct);
+
+            IsPostDeathSequenceActive = true;
+            try
+            {
+                await PostDeathEffectProcessor.RunQueueAsync(
+                    this, battleProcessor, handRefill, enemyAI, ct);
+            }
+            finally
+            {
+                IsPostDeathSequenceActive = false;
+            }
+
+            pDead = playerStatus != null && playerStatus.IsDead();
+            eDead = enemyStatus != null && enemyStatus.IsDead();
+            await RunGameEndPresentationAsync(pDead, eDead, startBgmFade: hasPostDeathEffects, ct);
+            gameEndPresentationCompleted = true;
         }
         catch (OperationCanceledException)
         {
@@ -3725,8 +4054,8 @@ public class BattleManager : MonoBehaviour
             Debug.LogException(ex);
         }
 
-        // リザルト画面の演出は別タスクで非同期に走らせる（呼び出し側を長時間ブロックしない）。
-        _ = RunGameResultScreenAsync(pDead, eDead);
+        if (gameEndPresentationCompleted)
+            _ = RunGameResultScreenAsync(pDead, eDead);
         return true;
     }
 
@@ -3736,12 +4065,11 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private const string OjyouBellSeAddress = "Assets/SE/お寺の鐘.mp3";
 
-    private async Task RunOjyouAndHideUIAsync(bool playerDead, bool enemyDead, CancellationToken ct)
+    private async Task RunOjyouPopupOnlyAsync(bool playerDead, bool enemyDead, bool startBgmFade, CancellationToken ct)
     {
         OjyouPopup popupLifetimeRef = null;
-
-        // 往生と同時：鐘＋ BGM フェード（往生表示時間＝フェード秒）
         float lifetime = 2.0f;
+
         if (playerDead)
         {
             if (BattleUIManager.I != null)
@@ -3757,9 +4085,20 @@ public class BattleManager : MonoBehaviour
             lifetime = popupLifetimeRef.SequenceLifetimeSeconds;
 
         SoundEffectPlayer.I?.Play(OjyouBellSeAddress);
-        BattleBgmController.Instance?.FadeOutBattleBgmAndStop(lifetime);
+        if (startBgmFade)
+            _ = BattleBgmController.Instance?.FadeOutBattleBgmAndStopAsync(lifetime);
 
         await Task.Delay(TimeSpan.FromSeconds(lifetime), ct);
+    }
+
+    /// <summary>
+    /// 道連れ等の PostDeath キュー完了後：GAMESET・UI 片付け・BattleEndPhase。
+    /// PostDeath ありのとき BGM フェードはここで非同期開始（GAMESET まで待たない）。
+    /// </summary>
+    private async Task RunGameEndPresentationAsync(bool playerDead, bool enemyDead, bool startBgmFade, CancellationToken ct)
+    {
+        if (startBgmFade)
+            _ = BattleBgmController.Instance?.FadeOutBattleBgmAndStopAsync(2.0f);
 
         if (BattleUIManager.I != null)
         {
@@ -3770,7 +4109,6 @@ public class BattleManager : MonoBehaviour
             catch (OperationCanceledException) { }
         }
 
-        // GAMESET 演出が終わってから 500ms してから GameResult 側のフェード等を行う
         try
         {
             await Task.Delay(500, ct);
@@ -3781,6 +4119,12 @@ public class BattleManager : MonoBehaviour
         cardStatsDisplay?.HideAllForGameEnd();
 
         SetGameState(GameState.BattleEndPhase);
+    }
+
+    private async Task RunOjyouAndHideUIAsync(bool playerDead, bool enemyDead, CancellationToken ct)
+    {
+        await RunOjyouPopupOnlyAsync(playerDead, enemyDead, startBgmFade: true, ct);
+        await RunGameEndPresentationAsync(playerDead, enemyDead, startBgmFade: false, ct);
     }
 
     /// <summary>

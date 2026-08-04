@@ -1015,6 +1015,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 271f60eedd4211347ae0fbf363cfaada, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cardSheetBackground: {fileID: 0}
   artworkSlot: {fileID: 384146554927518651}
   cardNameText: {fileID: 5711428365565820987}
   atkDefText: {fileID: 7923125437215330961}

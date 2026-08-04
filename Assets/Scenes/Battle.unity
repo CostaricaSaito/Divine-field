@@ -9584,7 +9584,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleManager: {fileID: 1851136062}
   overridePlayerInitialSummon: 1
-  debugPlayerInitialSummon: {fileID: 11400000, guid: 786741e3c84658840abd3991c1016881, type: 2}
+  debugPlayerInitialSummon: {fileID: 11400000, guid: 3b53087da1a2ec44d9b70a108f65a2a4, type: 2}
   overrideEnemyInitialSummon: 0
   debugEnemyInitialSummon: {fileID: 11400000, guid: 80539b303220c084ea24a968be87ab81, type: 2}
   openingTurnOwnerMode: 1

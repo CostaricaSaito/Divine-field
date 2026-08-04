@@ -30,6 +30,7 @@ public static class NetworkBattleBridge
         TurnReady = 7,    // client -> host : finished EndPhase presentation, ready for turn sync
         TurnSync = 8,     // host -> client : authoritative turn-boundary state (status, hands, next turn)
         SummonTurnEndEffects = 9, // host -> client : Garuda/Indra turn-end passive effects (5n)
+        TributeBlood = 10, // attacker -> defender : HP paid for Tribute Blood
     }
 
     /// <summary>Host -> client: summon turn-end passive effect batch.</summary>
@@ -67,6 +68,12 @@ public static class NetworkBattleBridge
         public bool Paid;
         public int PowerBonus;
         public int MpCost;
+    }
+
+    /// <summary>Tribute Blood HP payment (sent even when 0).</summary>
+    public struct TributeBloodChoice
+    {
+        public int HpPaid;
     }
 
     /// <summary>Host-authoritative status snapshot (host side / client side, network perspective).</summary>
@@ -119,6 +126,7 @@ public static class NetworkBattleBridge
     static readonly Queue<RemoteAttack> _attackQueue = new();
     static readonly Queue<List<string>> _defenseQueue = new();
     static readonly Queue<MagicalSwordChoice> _magicalSwordQueue = new();
+    static readonly Queue<TributeBloodChoice> _tributeBloodQueue = new();
     static readonly Queue<ResolveStateSync> _resolveStateQueue = new();
     static readonly Queue<int> _turnReadyQueue = new();
     static readonly Queue<TurnBoundarySync> _turnSyncQueue = new();
@@ -127,6 +135,7 @@ public static class NetworkBattleBridge
     static TaskCompletionSource<RemoteAttack> _attackWaiter;
     static TaskCompletionSource<List<string>> _defenseWaiter;
     static TaskCompletionSource<MagicalSwordChoice> _magicalSwordWaiter;
+    static TaskCompletionSource<TributeBloodChoice> _tributeBloodWaiter;
     static TaskCompletionSource<ResolveStateSync> _resolveStateWaiter;
     static TaskCompletionSource<int> _turnReadyWaiter;
     static TaskCompletionSource<TurnBoundarySync> _turnSyncWaiter;
@@ -173,6 +182,7 @@ public static class NetworkBattleBridge
         _attackQueue.Clear();
         _defenseQueue.Clear();
         _magicalSwordQueue.Clear();
+        _tributeBloodQueue.Clear();
         _resolveStateQueue.Clear();
         _turnReadyQueue.Clear();
         _turnSyncQueue.Clear();
@@ -180,6 +190,7 @@ public static class NetworkBattleBridge
         _attackWaiter?.TrySetCanceled();
         _defenseWaiter?.TrySetCanceled();
         _magicalSwordWaiter?.TrySetCanceled();
+        _tributeBloodWaiter?.TrySetCanceled();
         _resolveStateWaiter?.TrySetCanceled();
         _turnReadyWaiter?.TrySetCanceled();
         _turnSyncWaiter?.TrySetCanceled();
@@ -189,6 +200,7 @@ public static class NetworkBattleBridge
         _attackWaiter = null;
         _defenseWaiter = null;
         _magicalSwordWaiter = null;
+        _tributeBloodWaiter = null;
         _resolveStateWaiter = null;
         _turnReadyWaiter = null;
         _turnSyncWaiter = null;
@@ -277,6 +289,15 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent MagicalSword choice (paid={paid}, bonus={powerBonus})");
     }
 
+    public static void SendTributeBloodChoice(int hpPaid)
+    {
+        using var writer = new FastBufferWriter(32, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.TributeBlood);
+        writer.WriteValueSafe(hpPaid);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent TributeBlood choice (hpPaid={hpPaid})");
+    }
+
     /// <summary>Wait for the opponent's main action (empty list = pass).</summary>
     public static Task<RemoteAttack> WaitForRemoteAttackAsync(CancellationToken ct)
         => WaitFromQueue(_attackQueue, ref _attackWaiter, ct);
@@ -288,6 +309,10 @@ public static class NetworkBattleBridge
     /// <summary>Wait for the attacker's Magical Sword MP payment choice.</summary>
     public static Task<MagicalSwordChoice> WaitForMagicalSwordChoiceAsync(CancellationToken ct)
         => WaitFromQueue(_magicalSwordQueue, ref _magicalSwordWaiter, ct);
+
+    /// <summary>Wait for the attacker's Tribute Blood HP payment choice.</summary>
+    public static Task<TributeBloodChoice> WaitForTributeBloodChoiceAsync(CancellationToken ct)
+        => WaitFromQueue(_tributeBloodQueue, ref _tributeBloodWaiter, ct);
 
     // ==================== Host-authoritative state sync ====================
 
@@ -611,6 +636,15 @@ public static class NetworkBattleBridge
                 Debug.Log($"[NetworkBattleBridge] MagicalSword choice received (paid={paid}, bonus={bonus})");
                 Dispatch(_magicalSwordQueue, ref _magicalSwordWaiter,
                     new MagicalSwordChoice { Paid = paid, PowerBonus = bonus, MpCost = mpCost });
+                break;
+            }
+
+            case MsgType.TributeBlood:
+            {
+                reader.ReadValueSafe(out int hpPaid);
+                Debug.Log($"[NetworkBattleBridge] TributeBlood choice received (hpPaid={hpPaid})");
+                Dispatch(_tributeBloodQueue, ref _tributeBloodWaiter,
+                    new TributeBloodChoice { HpPaid = hpPaid });
                 break;
             }
 

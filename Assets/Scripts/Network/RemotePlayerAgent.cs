@@ -80,6 +80,9 @@ public class RemotePlayerAgent : EnemyAI
         if (MagicalSwordRules.ContainsMagicalSword(resolved))
             await MirrorMagicalSwordChoiceAsync(enemyStatus);
 
+        if (TributeBloodRules.ContainsTributeBlood(resolved))
+            await MirrorTributeBloodChoiceAsync();
+
         CardData primaryNormal = null;
         bool deferBookkeeping = ShouldDeferRemoteAttackBookkeeping(resolved);
         if (deferBookkeeping)
@@ -205,6 +208,30 @@ public class RemotePlayerAgent : EnemyAI
         Debug.Log($"[RemotePlayerAgent] Mirrored MagicalSword boost (+{choice.PowerBonus} ATK, -{choice.MpCost} MP)");
     }
 
+    async Task MirrorTributeBloodChoiceAsync()
+    {
+        NetworkBattleBridge.TributeBloodChoice choice;
+        try
+        {
+            var waitTask = NetworkBattleBridge.WaitForTributeBloodChoiceAsync(CancellationToken.None);
+            var finished = await Task.WhenAny(waitTask, Task.Delay(30000));
+            if (finished != waitTask)
+            {
+                Debug.LogError("[RemotePlayerAgent] TributeBlood choice timed out; assuming 0 HP paid");
+                BattleManager.I?.SetTributeBloodEnemyHpPaidSnapshot(0);
+                return;
+            }
+            choice = await waitTask;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        BattleManager.I?.SetTributeBloodEnemyHpPaidSnapshot(Mathf.Max(0, choice.HpPaid));
+        Debug.Log($"[RemotePlayerAgent] Mirrored TributeBlood HP paid ({choice.HpPaid})");
+    }
+
     /// <summary>
     /// Mirror of the opponent's ApplyMagicCardToPoolAsync:
     /// MP cost -> (hand magic: record + flip + pool register) / (pool magic: consume + bonus draw).
@@ -317,6 +344,8 @@ public class RemotePlayerAgent : EnemyAI
         if (resolved.Count > 1) return true;
         if (resolved.Count == 1 && ArchMagicRules.IsArchMagicCard(resolved[0])) return true;
         if (MagicalExplosionRules.ContainsMagicalExplosion(resolved)) return true;
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(resolved)) return true;
+        if (TributeBloodRules.ContainsTributeBlood(resolved)) return true;
         if (HammadnessRules.ContainsHammadness(resolved)) return true;
         if (GodrageRules.IsGodrageDoublingCombo(resolved)) return true;
         return false;

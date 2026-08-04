@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -324,6 +324,8 @@ public class EnemyAI
         {
             if (card == null || card.cardType == CardType.Magic) continue;
             if (MagicalExplosionRules.IsMagicalExplosionCard(card)
+                || MillionDollarBazookaRules.IsMillionDollarBazookaCard(card)
+                || TributeBloodRules.IsTributeBloodCard(card)
                 || HammadnessRules.IsHammadnessCard(card))
                 continue;
 
@@ -353,12 +355,29 @@ public class EnemyAI
             return null;
         }
 
+        if (TributeBloodRules.ContainsTributeBlood(LastAttackSelection) && enemyStatus != null)
+        {
+            int hpPaid = enemyStatus.currentHP / 2;
+            BattleManager.I?.SetTributeBloodEnemyHpPaidSnapshot(hpPaid);
+            Debug.Log($"[EnemyAI] Tribute Blood HP payment: {hpPaid}");
+        }
+
         var attack = GetPrimaryFromAttackCombo(LastAttackSelection);
         bool deferBookkeeping = RemotePlayerAgent.ShouldDeferRemoteAttackBookkeeping(LastAttackSelection);
 
         if (MagicalExplosionRules.IsMagicalExplosionCard(attack))
         {
             Debug.Log("[EnemyAI] マジカルエクスプロージョンは演出完了後に手札から除去します");
+            return attack;
+        }
+        if (MillionDollarBazookaRules.IsMillionDollarBazookaCard(attack))
+        {
+            Debug.Log("[EnemyAI] 100万ドルバズーカは演出完了後に手札から除去します");
+            return attack;
+        }
+        if (TributeBloodRules.IsTributeBloodCard(attack))
+        {
+            Debug.Log("[EnemyAI] トリビュートブラッドは演出完了後に手札から除去します");
             return attack;
         }
         if (HammadnessRules.IsHammadnessCard(attack))

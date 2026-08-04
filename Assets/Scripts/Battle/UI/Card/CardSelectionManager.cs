@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -34,12 +34,14 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I != null
             && (BattleManager.I.CurrentState == GameState.DefensePhase
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || BattleManager.I.IsPostDeathDefenseWaitActive()
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending()
                 || BattleManager.I.IsParryRerunDefensePending())
             && IsDefenseCard(card))
         {
-            PlayerStatus defender = BattleManager.I.DefenderPublic == PlayerType.Player
+            PlayerStatus defender = BattleManager.I.IsPostDeathPlayerDefender
+                || BattleManager.I.DefenderPublic == PlayerType.Player
                 ? BattleManager.I.GetPlayerStatus()
                 : BattleManager.I.GetEnemyStatus();
             if (defender != null && defender.HasRestraintEffect())
@@ -67,6 +69,7 @@ public class CardSelectionManager : MonoBehaviour
             && (BattleManager.I.CurrentState == GameState.DefensePhase
                 || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || BattleManager.I.IsPostDeathDefenseWaitActive()
                 || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
                 || BattleManager.I.IsReflectionChainDefensePending()
                 || BattleManager.I.IsParryRerunDefensePending())
@@ -104,6 +107,8 @@ public class CardSelectionManager : MonoBehaviour
                 && BattleManager.I.CurrentState == GameState.AttackPhase
                 && !BattleManager.I.IsReflectionChainDefensePending()
                 && !BattleManager.I.IsParryRerunDefensePending()
+                && !BattleManager.I.IsPostDeathDefenseWaitActive()
+                && !BattleManager.I.IsPostDeathSequenceActive
                 && BattleManager.I.CurrentTurnOwner == PlayerType.Player
                 && !card.isRecovery
                 && !CardRules.IsUsableInAttackPhase(card))
@@ -129,6 +134,7 @@ public class CardSelectionManager : MonoBehaviour
                     || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase
                         && (BattleManager.I.IsInterventionDefenseWaitActive()
+                            || BattleManager.I.IsPostDeathDefenseWaitActive()
                             || BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
                     || BattleManager.I.IsReflectionChainDefensePending()
                     || BattleManager.I.IsParryRerunDefensePending())
@@ -348,6 +354,7 @@ public class CardSelectionManager : MonoBehaviour
         var state = BattleManager.I.CurrentState;
         if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase
             || (state == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+            || BattleManager.I.IsPostDeathDefenseWaitActive()
             || (state == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
             || (state == GameState.CombatResolvePhase && BattleManager.I.IsReflectionChainDefensePending())
             || (state == GameState.AttackPhase && BattleManager.I.IsReflectionChainDefensePending()))
@@ -451,6 +458,7 @@ public class CardSelectionManager : MonoBehaviour
         return state == GameState.DefensePhase
             || state == GameState.DefenseConfirmPhase
             || (state == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive())
+            || bm.IsPostDeathDefenseWaitActive()
             || (state == GameState.CombatResolvePhase && bm.IsPlayerDualBladeSecondDefenseWaitActive())
             || bm.IsReflectionChainDefensePending()
             || bm.IsParryRerunDefensePending();

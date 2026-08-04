@@ -57,6 +57,17 @@ public class CardStatsDisplay : MonoBehaviour
     /// </summary>
     private bool _suppressMagicalExplosionPredictionDuringSequenceReveal;
 
+    /// <summary>100万ドルバズーカ：ランプ後のリッチ表示ロック。</summary>
+    private bool _millionDollarBazookaPlayerAtkDisplayLocked;
+    private string _millionDollarBazookaPlayerAtkDisplayRichText;
+
+    /// <summary>100万ドルバズーカ：演出直前（GP 加算前相当）。</summary>
+    private bool _millionDollarBazookaPreRampLocked;
+    private int _millionDollarBazookaPreRampAtkDisplayValue;
+
+    /// <summary>攻撃＋100万ドルバズーカの Prefab シーケンス中は TOTAL に GP×倍数の予測を含めない。</summary>
+    private bool _suppressMillionDollarBazookaPredictionDuringSequenceReveal;
+
     /// <summary>気狂いハンマー：演出直前（ランダム加算前相当）。</summary>
     private bool _hammadnessPreRampLocked;
     private int _hammadnessPreRampAtkDisplayValue;
@@ -68,15 +79,26 @@ public class CardStatsDisplay : MonoBehaviour
     /// <summary>攻撃＋気狂いハンマーの Prefab シーケンス中は TOTAL にランダム ATK の予測を含めない。</summary>
     private bool _suppressHammadnessPredictionDuringSequenceReveal;
 
+    /// <summary>Tribute Blood: pre-ramp TOTAL lock.</summary>
+    private bool _tributeBloodPreRampLocked;
+    private int _tributeBloodPreRampAtkDisplayValue;
+
+    /// <summary>Tribute Blood: post-ramp rich display lock.</summary>
+    private bool _tributeBloodPlayerAtkDisplayLocked;
+    private string _tributeBloodPlayerAtkDisplayRichText;
+
+    /// <summary>Attack + Tribute Blood sequence: suppress paid-HP damage prediction on TOTAL until intro.</summary>
+    private bool _suppressTributeBloodPredictionDuringSequenceReveal;
+
     /// <summary>
     /// 魔導書：カード表示中は合算属性を魔導書適用前で表示し、フラッシュ後に強制属性へ切り替える。
     /// </summary>
     private bool _suppressSpellbookElementDuringSequenceReveal;
 
-    private bool _playerAttackDisplaySuppressGodRageDouble;
-    private bool _playerAttackDisplaySuppressMagicalSwordBonus;
-    private bool _magicalSwordSubGodRagePlayerAtkDisplayLocked;
-    private string _magicalSwordSubGodRagePlayerAtkDisplayRichText;
+    private bool _attackDisplaySuppressGodRageDouble;
+    private bool _attackDisplaySuppressMagicalSwordBonus;
+    private bool _magicalSwordRampAtkDisplayLocked;
+    private string _magicalSwordRampAtkDisplayRichText;
 
     /// <summary>
     /// 初期化時にボタンを非表示にする
@@ -159,6 +181,13 @@ public class CardStatsDisplay : MonoBehaviour
             return;
         }
 
+        if (bm != null
+            && (bm.IsPostDeathSequenceActive || PostDeathCombatContext.Active != null))
+        {
+            img.color = Color.white;
+            return;
+        }
+
         bool red = bm != null
             && bm.CurrentState == GameState.AttackPhase
             && bm.CurrentTurnOwner == PlayerType.Player
@@ -215,23 +244,99 @@ public class CardStatsDisplay : MonoBehaviour
         sequenceOwnerSide = ownerSide;
     }
 
-    /// <summary>
-    /// 演出中のカードリストをクリア
-    /// </summary>
+    private TMP_Text GetSequenceOwnerAtkDefText() =>
+        sequenceOwnerSide == Side.Enemy ? atkdefTextEnemy : atkdefText;
+
+    private Image GetSequenceOwnerAtkDefElementImage() =>
+        sequenceOwnerSide == Side.Enemy ? atkdefElementEnemy : atkdefElement;
+
+    /// <summary>攻撃シーケンス中のランプ後リッチ表示・pre-ramp 固定値。</summary>
+    private bool TryGetSequenceAttackLockedDisplayText(out string text)
+    {
+        text = null;
+        if (_magicalExplosionPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_magicalExplosionPlayerAtkDisplayRichText))
+        {
+            text = _magicalExplosionPlayerAtkDisplayRichText;
+            return true;
+        }
+        if (_magicalExplosionPreRampLocked)
+        {
+            text = $"ATK {_magicalExplosionPreRampAtkDisplayValue}";
+            return true;
+        }
+        if (_millionDollarBazookaPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_millionDollarBazookaPlayerAtkDisplayRichText))
+        {
+            text = _millionDollarBazookaPlayerAtkDisplayRichText;
+            return true;
+        }
+        if (_millionDollarBazookaPreRampLocked)
+        {
+            text = $"ATK {_millionDollarBazookaPreRampAtkDisplayValue}";
+            return true;
+        }
+        if (_tributeBloodPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_tributeBloodPlayerAtkDisplayRichText))
+        {
+            text = _tributeBloodPlayerAtkDisplayRichText;
+            return true;
+        }
+        if (_tributeBloodPreRampLocked)
+        {
+            text = $"ATK {_tributeBloodPreRampAtkDisplayValue}";
+            return true;
+        }
+        if (_hammadnessPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_hammadnessPlayerAtkDisplayRichText))
+        {
+            text = _hammadnessPlayerAtkDisplayRichText;
+            return true;
+        }
+        if (_hammadnessPreRampLocked)
+        {
+            text = $"ATK {_hammadnessPreRampAtkDisplayValue}";
+            return true;
+        }
+        if (_godRagePlayerAtkDisplayLocked && !string.IsNullOrEmpty(_godRagePlayerAtkDisplayRichText))
+        {
+            text = _godRagePlayerAtkDisplayRichText;
+            return true;
+        }
+        if (_magicalSwordRampAtkDisplayLocked
+            && !string.IsNullOrEmpty(_magicalSwordRampAtkDisplayRichText))
+        {
+            text = _magicalSwordRampAtkDisplayRichText;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>演出中のカードリストのみクリア（緑字 ATK ロックは維持。DefenseSelect 中の表示用）。</summary>
     public void ClearSequenceCards()
     {
         currentSequenceCards.Clear();
         currentSequenceType = "";
         sequenceOwnerSide = Side.Player;
-        ClearGodRagePlayerAttackDisplayLock();
-        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
-        ClearPlayerPreGodRageStackedDisplaySuppressions();
-        ClearMagicalExplosionAttackDisplayLocks();
-        ClearHammadnessAttackDisplayLocks();
     }
 
-    /// <summary>ゴッドレイジの ATK 表示ロックを解除（次の攻撃・演出用）。</summary>
-    public void ClearGodRagePlayerAttackDisplayLock()
+    /// <summary>攻撃 TOTAL のランプ後リッチ表示ロックをすべて解除（戦闘解決後など）。</summary>
+    public void ClearAllAttackSequenceDisplayLocks()
+    {
+        ClearGodRageAttackDisplayLock();
+        ClearMagicalSwordRampAttackDisplayLock();
+        ClearAttackModifierRevealSuppressions();
+        ClearMagicalExplosionAttackDisplayLocks();
+        ClearMillionDollarBazookaAttackDisplayLocks();
+        ClearHammadnessAttackDisplayLocks();
+        ClearTributeBloodAttackDisplayLocks();
+    }
+
+    /// <summary>シーケンスと攻撃表示ロックを両方クリア（戦闘シーケンス終了時）。</summary>
+    public void ClearSequenceCardsAndAttackDisplayLocks()
+    {
+        ClearSequenceCards();
+        ClearAllAttackSequenceDisplayLocks();
+    }
+
+    /// <summary>ゴッドレイジの ATK 表示ロックを解除。</summary>
+    private void ClearGodRageAttackDisplayLock()
     {
         _godRagePlayerAtkDisplayLocked = false;
         _godRagePlayerAtkDisplayRichText = null;
@@ -291,53 +396,86 @@ public class CardStatsDisplay : MonoBehaviour
         _suppressMagicalExplosionPredictionDuringSequenceReveal = value;
     }
 
+    public void ClearMillionDollarBazookaAttackDisplayLocks()
+    {
+        _millionDollarBazookaPreRampLocked = false;
+        _millionDollarBazookaPreRampAtkDisplayValue = 0;
+        _millionDollarBazookaPlayerAtkDisplayLocked = false;
+        _millionDollarBazookaPlayerAtkDisplayRichText = null;
+        _suppressMillionDollarBazookaPredictionDuringSequenceReveal = false;
+    }
+
+    public void ClearMillionDollarBazookaPlayerAtkDisplayLockOnly()
+    {
+        _millionDollarBazookaPlayerAtkDisplayLocked = false;
+        _millionDollarBazookaPlayerAtkDisplayRichText = null;
+    }
+
+    public void SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(bool value)
+    {
+        _suppressMillionDollarBazookaPredictionDuringSequenceReveal = value;
+    }
+
+    public void SetMillionDollarBazookaPreRampAttackDisplay(int displayedAtkStrength)
+    {
+        _millionDollarBazookaPreRampAtkDisplayValue = displayedAtkStrength;
+        _millionDollarBazookaPreRampLocked = true;
+    }
+
+    /// <summary>Tribute Blood: suppress paid-HP damage on TOTAL during card reveal.</summary>
+    public void SetSuppressTributeBloodPredictionDuringSequenceReveal(bool value)
+    {
+        _suppressTributeBloodPredictionDuringSequenceReveal = value;
+    }
+
+    public void SetTributeBloodPreRampAttackDisplay(int displayedAtkStrength)
+    {
+        _tributeBloodPreRampAtkDisplayValue = displayedAtkStrength;
+        _tributeBloodPreRampLocked = true;
+    }
+
+    public void ClearTributeBloodAttackDisplayLocks()
+    {
+        _tributeBloodPreRampLocked = false;
+        _tributeBloodPreRampAtkDisplayValue = 0;
+        _tributeBloodPlayerAtkDisplayLocked = false;
+        _tributeBloodPlayerAtkDisplayRichText = null;
+        _suppressTributeBloodPredictionDuringSequenceReveal = false;
+    }
+
     /// <summary>魔導書：表示シーケンス中のみ合算を魔導書適用前の属性で出す。</summary>
     public void SetSuppressSpellbookElementDuringSequenceReveal(bool value)
     {
         _suppressSpellbookElementDuringSequenceReveal = value;
     }
 
-    /// <summary>マジカルソード＋ゴッドレイジ：決定直後（ポップアップ後〜カード掲出前）に TOTAL を 2 倍・未払い上乗せ前相当で出す用。</summary>
-    public void SetPlayerMsGodComboInterstitialPreCardReveal(int magicalSwordOptionalMpPaidBonus)
+    /// <summary>カード掲出中：マジカルソード上乗せ／ゴッドレイジ 2 倍を TOTAL から一時除外する。</summary>
+    public void SetAttackModifierRevealPhase(bool suppressMagicalSwordBonus, bool suppressGodRageDouble)
     {
-        _playerAttackDisplaySuppressMagicalSwordBonus = magicalSwordOptionalMpPaidBonus > 0;
-        _playerAttackDisplaySuppressGodRageDouble = false;
+        _attackDisplaySuppressMagicalSwordBonus = suppressMagicalSwordBonus;
+        _attackDisplaySuppressGodRageDouble = suppressGodRageDouble;
     }
 
-    /// <summary>カードを CardDisplay へ掲出中：2 倍なし。払い済み上乗せは表示から除外して基礎合計（例:6）。</summary>
-    public void SetPlayerMsGodComboCardRevealPhase()
+    /// <summary>ランプ前の掲出抑制フラグを解除する。</summary>
+    public void ClearAttackModifierRevealSuppressions()
     {
-        _playerAttackDisplaySuppressGodRageDouble = true;
-        _playerAttackDisplaySuppressMagicalSwordBonus = BattleManager.I != null
-            && BattleManager.I.MagicalSwordAttackPowerBonus > 0;
+        _attackDisplaySuppressGodRageDouble = false;
+        _attackDisplaySuppressMagicalSwordBonus = false;
     }
 
-    /// <summary>マジカルソード上乗せランプ中：2 倍はまだ。上乗せは本計算に加える。</summary>
-    public void SetPlayerMsGodComboForMagicalSwordRamp()
+    /// <summary>マジカルソード上乗せランプ後の緑字 ATK 表示ロックを解除。</summary>
+    private void ClearMagicalSwordRampAttackDisplayLock()
     {
-        _playerAttackDisplaySuppressGodRageDouble = true;
-        _playerAttackDisplaySuppressMagicalSwordBonus = false;
+        _magicalSwordRampAtkDisplayLocked = false;
+        _magicalSwordRampAtkDisplayRichText = null;
     }
 
-    /// <summary>ゴッドレイジランプ前：TOTAL 計算を最終弾に合わせる。</summary>
-    public void ClearPlayerPreGodRageStackedDisplaySuppressions()
-    {
-        _playerAttackDisplaySuppressGodRageDouble = false;
-        _playerAttackDisplaySuppressMagicalSwordBonus = false;
-    }
-
-    public void ClearMagicalSwordSubGodRagePlayerAtkDisplayLock()
-    {
-        _magicalSwordSubGodRagePlayerAtkDisplayLocked = false;
-        _magicalSwordSubGodRagePlayerAtkDisplayRichText = null;
-    }
-
-    public void SetMagicalSwordSubGodRagePlayerAtkDisplayAfterRamp(int finalDisplayedAtk)
+    private void LockMagicalSwordRampAttackDisplay(int finalDisplayedAtk)
     {
         if (finalDisplayedAtk <= 0) return;
-        _magicalSwordSubGodRagePlayerAtkDisplayRichText =
+        _magicalSwordRampAtkDisplayRichText =
             $"<color={GodRageAtkBaseGreenHex}>ATK {finalDisplayedAtk}</color>";
-        _magicalSwordSubGodRagePlayerAtkDisplayLocked = true;
+        _magicalSwordRampAtkDisplayLocked = true;
     }
 
     /// <summary>ME 演出直前：TOTAL を「ME 加算前」の強さで固定表示する。</summary>
@@ -491,6 +629,11 @@ public class CardStatsDisplay : MonoBehaviour
     private void ApplyPlayerTotalAtkDefTextStyle()
     {
         if (atkdefText == null) return;
+        if (IsShowingLockedIncomingAttackDisplay(forEnemyPanel: false))
+        {
+            atkdefText.richText = true;
+            return;
+        }
         var bm = BattleManager.I;
         if (bm != null && bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
         {
@@ -507,7 +650,100 @@ public class CardStatsDisplay : MonoBehaviour
     private void ApplyEnemyTotalAtkDefTextStyle()
     {
         if (atkdefTextEnemy == null) return;
+        if (IsShowingLockedIncomingAttackDisplay(forEnemyPanel: true))
+        {
+            atkdefTextEnemy.richText = true;
+            return;
+        }
         ApplyAttackLabelTextStyle(atkdefTextEnemy, ElementHelper.GetElementColor(GetEnemyCombinedElement()));
+    }
+
+    /// <summary>ランプ後の緑字 ATK を DefenseSelect〜ダメージ解決完了まで維持しているか。</summary>
+    private bool IsShowingLockedIncomingAttackDisplay(bool forEnemyPanel)
+    {
+        var bm = BattleManager.I;
+        if (bm == null || !TryGetSequenceAttackLockedDisplayText(out _))
+            return false;
+        if (forEnemyPanel)
+        {
+            if (!IsPlayerDefendingAgainstEnemyAttack(bm)) return false;
+            return bm.DefenderPublic == PlayerType.Player && bm.CurrentTurnOwner == PlayerType.Enemy;
+        }
+        if (!IsEnemyDefendingAgainstPlayerAttack(bm) && !IsPlayerOutgoingAttackTotalPending(bm))
+            return false;
+        return bm.DefenderPublic == PlayerType.Enemy && bm.CurrentTurnOwner == PlayerType.Player;
+    }
+
+    /// <summary>DefenseSelect〜戦闘解決中（ダメージ処理完了前）の攻撃 TOTAL 表示フェーズ。</summary>
+    private static bool IsAttackTotalHeldThroughCombatPhase(BattleManager bm)
+    {
+        if (bm == null || bm.CurrentState == GameState.EndPhase) return false;
+        if (IsPostDeathChainCombatTotalActive(bm)) return false;
+        if (bm.CurrentState == GameState.DefensePhase || bm.CurrentState == GameState.DefenseConfirmPhase)
+            return true;
+        if (bm.IsPlayerDefenseCombatResolving) return true;
+        return IsPlayerOutgoingAttackTotalPending(bm);
+    }
+
+    private static bool IsPostDeathChainCombatTotalActive(BattleManager bm) =>
+        bm != null && (bm.IsPostDeathSequenceActive || bm.IsPostDeathChainAttackDisplayActive);
+
+    private static bool IsPlayerDefendingAgainstEnemyAttack(BattleManager bm)
+    {
+        if (bm == null) return false;
+        if (!IsAttackTotalHeldThroughCombatPhase(bm)) return false;
+        return bm.DefenderPublic == PlayerType.Player && bm.CurrentTurnOwner == PlayerType.Enemy;
+    }
+
+    private static bool IsEnemyDefendingAgainstPlayerAttack(BattleManager bm)
+    {
+        if (bm == null) return false;
+        if (!IsAttackTotalHeldThroughCombatPhase(bm)) return false;
+        return bm.DefenderPublic == PlayerType.Enemy && bm.CurrentTurnOwner == PlayerType.Player;
+    }
+
+    /// <summary>
+    /// プレイヤー攻撃：相手 DefenseSelect 完了後も <see cref="GetAttackCardsForCombatPublic"/> で TOTAL を維持する。
+    /// （相手防御掲出が <see cref="BattleManager.SetStatsDisplaySequenceCards"/> で攻撃シーケンスを上書きするため）
+    /// </summary>
+    private static bool IsPlayerOutgoingAttackTotalPending(BattleManager bm)
+    {
+        if (bm == null || bm.AttackerPublic != PlayerType.Player) return false;
+        if (bm.CurrentState == GameState.EndPhase || bm.CurrentState == GameState.CombatResolvePhase)
+            return false;
+        var cards = bm.GetAttackCardsForCombatPublic();
+        if (cards == null || cards.Count == 0) return false;
+        if (bm.CurrentState == GameState.DefenseConfirmPhase && bm.DefenderPublic == PlayerType.Enemy)
+            return true;
+        if (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
+        {
+            var sel = BattleUIManager.I?.GetSelectedAttackCards();
+            if (sel != null && sel.Count > 0) return false;
+            return true;
+        }
+        return false;
+    }
+
+    private string ResolvePlayerOutgoingAttackDisplayText()
+    {
+        var bm = BattleManager.I;
+        if (bm == null) return null;
+        var cards = bm.GetAttackCardsForCombatPublic();
+        if (cards == null || cards.Count == 0) return null;
+        if (TryGetSequenceAttackLockedDisplayText(out var locked))
+            return locked;
+        return FormatAttackPowerDisplayLabel(cards, bm.GetPlayerStatus());
+    }
+
+    private string ResolveIncomingAttackDisplayText(PlayerStatus attacker)
+    {
+        var bm = BattleManager.I;
+        if (bm == null || attacker == null) return null;
+        var incoming = GetIncomingAttackSnapshotForDefenseUi(bm);
+        if (incoming == null || incoming.Count == 0) return null;
+        if (TryGetSequenceAttackLockedDisplayText(out var locked))
+            return locked;
+        return FormatAttackPowerDisplayLabel(incoming, attacker);
     }
 
     /// <summary>CardSheet と同じ <see cref="ElementHelper.LoadIcon"/>。無属性またはスプライトが無い場合は Image を非表示にする。</summary>
@@ -652,6 +888,24 @@ public class CardStatsDisplay : MonoBehaviour
         return true;
     }
 
+    private static bool TryGetPostDeathChainAttackForPanel(
+        bool forPlayerPanel,
+        out List<CardData> cards,
+        out PlayerStatus attacker)
+    {
+        cards = null;
+        attacker = null;
+        var bm = BattleManager.I;
+        if (bm == null || !bm.IsPostDeathChainAttackDisplayActive) return false;
+        bool onPlayer = bm.GetPostDeathChainAttackDisplaySide() == Side.Player;
+        if (onPlayer != forPlayerPanel) return false;
+        var src = bm.GetPostDeathChainAttackDisplayCards();
+        if (src == null || src.Count == 0) return false;
+        cards = new List<CardData>(src);
+        attacker = onPlayer ? bm.GetPlayerStatus() : bm.GetEnemyStatus();
+        return attacker != null;
+    }
+
     /// <summary>
     /// プレイヤーの表示を非表示にするかどうかを判定
     /// </summary>
@@ -694,6 +948,11 @@ public class CardStatsDisplay : MonoBehaviour
         if (TryGetReflectionTotalHideForPanel(true, out bool refHide))
             return refHide;
 
+        if (TryGetPostDeathChainAttackForPanel(true, out var pdAtkCards, out var pdAttacker)
+            && GetDisplayedAttackStrength(pdAtkCards, pdAttacker) > 0
+            && !(battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender))
+            return false;
+
         // 攻撃フェーズのうち、プレイヤーが攻撃側のときだけ（敵ターンの AttackPhase では敵用の表示に任せる）
         if (battleManager.CurrentState == GameState.AttackPhase
             && battleManager.CurrentTurnOwner == PlayerType.Player)
@@ -712,9 +971,28 @@ public class CardStatsDisplay : MonoBehaviour
             return true;
         }
 
+        if (IsPlayerOutgoingAttackTotalPending(battleManager))
+        {
+            var outgoing = ResolvePlayerOutgoingAttackDisplayText();
+            if (!string.IsNullOrEmpty(outgoing)) return false;
+        }
+
+        if (IsEnemyDefendingAgainstPlayerAttack(battleManager))
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi(battleManager);
+            if (incoming != null && incoming.Count > 0)
+            {
+                if (TryGetSequenceAttackLockedDisplayText(out _))
+                    return false;
+                if (GetDisplayedAttackStrength(incoming, battleManager.GetPlayerStatus()) > 0)
+                    return false;
+            }
+        }
+
         // 防御フェーズの場合
         if (battleManager.CurrentState == GameState.DefensePhase
-            || battleManager.CurrentState == GameState.DefenseConfirmPhase)
+            || battleManager.CurrentState == GameState.DefenseConfirmPhase
+            || (battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender))
         {
             // 複数選択を優先してチェック
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
@@ -779,8 +1057,25 @@ public class CardStatsDisplay : MonoBehaviour
         if (TryGetReflectionTotalHideForPanel(false, out bool refHideEnemy))
             return refHideEnemy;
 
+        if (TryGetPostDeathChainAttackForPanel(false, out var pdEnemyAtkCards, out var pdEnemyAttacker)
+            && GetDisplayedAttackStrength(pdEnemyAtkCards, pdEnemyAttacker) > 0)
+            return false;
+
+        if (IsPlayerDefendingAgainstEnemyAttack(battleManager))
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi(battleManager);
+            if (incoming != null && incoming.Count > 0)
+            {
+                if (TryGetSequenceAttackLockedDisplayText(out _))
+                    return false;
+                if (GetDisplayedAttackStrength(incoming, battleManager.GetEnemyStatus()) > 0)
+                    return false;
+            }
+        }
+
         // 敵のターン（攻撃側）: currentAttackCard が設定されていれば表示
-        if (battleManager.CurrentTurnOwner == PlayerType.Enemy
+        if (!IsPostDeathChainCombatTotalActive(battleManager)
+            && battleManager.CurrentTurnOwner == PlayerType.Enemy
             && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
             var currentAttackCard = battleManager.GetCurrentAttackCard();
@@ -841,24 +1136,41 @@ public class CardStatsDisplay : MonoBehaviour
                 return FormatReflectionAttackTotalLabel(battleManager, battleManager.GetPlayerStatus());
         }
 
+        if (battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender)
+        {
+            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
+            {
+                if (IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards)) return "";
+                return FormatDefensePowerLabel(selectedDefenseCards);
+            }
+        }
+
+        if (TryGetPostDeathChainAttackForPanel(true, out var pdChainCards, out var pdChainAttacker)
+            && !(battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender))
+            return FormatAttackPowerDisplayLabel(pdChainCards, pdChainAttacker);
+
+        if (IsPlayerOutgoingAttackTotalPending(battleManager))
+        {
+            var outgoingText = ResolvePlayerOutgoingAttackDisplayText();
+            if (!string.IsNullOrEmpty(outgoingText))
+                return outgoingText;
+        }
+
+        if (IsEnemyDefendingAgainstPlayerAttack(battleManager))
+        {
+            var incomingText = ResolveIncomingAttackDisplayText(battleManager.GetPlayerStatus());
+            if (!string.IsNullOrEmpty(incomingText))
+                return incomingText;
+        }
+
         // CardSequenceManager／反射連鎖確定後の Prefab シーケンス（反射用 TOTAL ATK より優先。獄炎宝玉は上で反撃 ATK）
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
         {
             if (currentSequenceType == "攻撃")
             {
-                if (_magicalExplosionPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_magicalExplosionPlayerAtkDisplayRichText))
-                    return _magicalExplosionPlayerAtkDisplayRichText;
-                if (_magicalExplosionPreRampLocked)
-                    return $"ATK {_magicalExplosionPreRampAtkDisplayValue}";
-                if (_hammadnessPlayerAtkDisplayLocked && !string.IsNullOrEmpty(_hammadnessPlayerAtkDisplayRichText))
-                    return _hammadnessPlayerAtkDisplayRichText;
-                if (_hammadnessPreRampLocked)
-                    return $"ATK {_hammadnessPreRampAtkDisplayValue}";
-                if (_godRagePlayerAtkDisplayLocked && !string.IsNullOrEmpty(_godRagePlayerAtkDisplayRichText))
-                    return _godRagePlayerAtkDisplayRichText;
-                if (_magicalSwordSubGodRagePlayerAtkDisplayLocked
-                    && !string.IsNullOrEmpty(_magicalSwordSubGodRagePlayerAtkDisplayRichText))
-                    return _magicalSwordSubGodRagePlayerAtkDisplayRichText;
+                if (TryGetSequenceAttackLockedDisplayText(out var lockedAtk))
+                    return lockedAtk;
                 return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetPlayerStatus());
             }
             else if (currentSequenceType == "防御")
@@ -936,10 +1248,22 @@ public class CardStatsDisplay : MonoBehaviour
                 return FormatReflectionAttackTotalLabel(battleManager, battleManager.GetEnemyStatus());
         }
 
+        if (IsPlayerDefendingAgainstEnemyAttack(battleManager))
+        {
+            var incomingText = ResolveIncomingAttackDisplayText(battleManager.GetEnemyStatus());
+            if (!string.IsNullOrEmpty(incomingText))
+                return incomingText;
+        }
+
+        if (TryGetPostDeathChainAttackForPanel(false, out var pdEnemyChainCards, out var pdEnemyChainAttacker))
+            return FormatAttackPowerDisplayLabel(pdEnemyChainCards, pdEnemyChainAttacker);
+
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
         {
             if (currentSequenceType == "攻撃")
             {
+                if (TryGetSequenceAttackLockedDisplayText(out var lockedAtk))
+                    return lockedAtk;
                 return FormatAttackPowerDisplayLabel(currentSequenceCards, battleManager.GetEnemyStatus());
             }
             else if (currentSequenceType == "防御")
@@ -957,7 +1281,8 @@ public class CardStatsDisplay : MonoBehaviour
         }
 
         // 敵のターン（攻撃側）: ATK を表示（宝玉反撃中は元攻撃カード行を抑止）
-        if (battleManager.CurrentTurnOwner == PlayerType.Enemy
+        if (!IsPostDeathChainCombatTotalActive(battleManager)
+            && battleManager.CurrentTurnOwner == PlayerType.Enemy
             && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
             var currentAttackCard = battleManager.GetCurrentAttackCard();
@@ -1007,6 +1332,12 @@ public class CardStatsDisplay : MonoBehaviour
     {
         var battleManager = BattleManager.I;
 
+        if (TryGetPostDeathChainAttackForPanel(true, out _, out _))
+        {
+            var ctx = PostDeathCombatContext.Active;
+            if (ctx != null) return ctx.AttackElement;
+        }
+
         if (battleManager != null && PlayerShouldShowDefenseTotalDuringReflectionChain(battleManager))
         {
             var defCards = BattleUIManager.I?.GetSelectedDefenseCards();
@@ -1014,8 +1345,18 @@ public class CardStatsDisplay : MonoBehaviour
                 return ElementHelper.GetCombinedElement(defCards);
         }
 
+        if (IsEnemyDefendingAgainstPlayerAttack(battleManager))
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi(battleManager);
+            if (incoming != null && incoming.Count > 0)
+                return ElementHelper.GetCombinedElement(incoming);
+        }
+
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Player)
         {
+            var postDeathCtx = PostDeathCombatContext.Active;
+            if (postDeathCtx != null && postDeathCtx.MatchesIncoming(currentSequenceCards))
+                return postDeathCtx.AttackElement;
             bool applySpellbookElement = !(_suppressSpellbookElementDuringSequenceReveal && currentSequenceType == "攻撃");
             return ElementHelper.GetCombinedElement(currentSequenceCards, applySpellbookElement);
         }
@@ -1053,8 +1394,24 @@ public class CardStatsDisplay : MonoBehaviour
         var battleManager = BattleManager.I;
         if (battleManager == null) return ElementType.None;
 
+        if (TryGetPostDeathChainAttackForPanel(false, out _, out _))
+        {
+            var ctx = PostDeathCombatContext.Active;
+            if (ctx != null) return ctx.AttackElement;
+        }
+
+        if (IsPlayerDefendingAgainstEnemyAttack(battleManager))
+        {
+            var incoming = GetIncomingAttackSnapshotForDefenseUi(battleManager);
+            if (incoming != null && incoming.Count > 0)
+                return ElementHelper.GetCombinedElement(incoming);
+        }
+
         if (currentSequenceCards.Count > 0 && sequenceOwnerSide == Side.Enemy)
         {
+            var postDeathCtx = PostDeathCombatContext.Active;
+            if (postDeathCtx != null && postDeathCtx.MatchesIncoming(currentSequenceCards))
+                return postDeathCtx.AttackElement;
             bool applySpellbookElement = !(_suppressSpellbookElementDuringSequenceReveal && currentSequenceType == "攻撃");
             return ElementHelper.GetCombinedElement(currentSequenceCards, applySpellbookElement);
         }
@@ -1105,23 +1462,44 @@ public class CardStatsDisplay : MonoBehaviour
     private int CalculateTotalAttackPower(List<CardData> attackCards, PlayerStatus attackerForMeRule = null)
     {
         if (attackCards == null || attackCards.Count == 0) return 0;
+        var postDeathCtx = PostDeathCombatContext.Active;
+        if (postDeathCtx != null && postDeathCtx.MatchesIncoming(attackCards))
+            return postDeathCtx.FixedAttackPower;
         if (attackerForMeRule != null && MagicalExplosionRules.ContainsMagicalExplosion(attackCards))
         {
             if (_suppressMagicalExplosionPredictionDuringSequenceReveal)
                 return MagicalExplosionRules.SumAttackPowerExcludingMagicalExplosion(attackCards);
             return MagicalExplosionRules.SumCardAttackPowerForMagicalExplosionCombo(attackCards, attackerForMeRule);
         }
+        if (attackerForMeRule != null && MillionDollarBazookaRules.ContainsMillionDollarBazooka(attackCards))
+        {
+            if (_suppressMillionDollarBazookaPredictionDuringSequenceReveal)
+                return MillionDollarBazookaRules.SumAttackPowerExcludingMillionDollarBazooka(attackCards)
+                    + (_attackDisplaySuppressMagicalSwordBonus
+                        ? 0
+                        : MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule));
+            return MillionDollarBazookaRules.SumCardAttackPowerForMillionDollarBazookaCombo(attackCards, attackerForMeRule);
+        }
+        if (attackerForMeRule != null && TributeBloodRules.ContainsTributeBlood(attackCards))
+        {
+            if (_suppressTributeBloodPredictionDuringSequenceReveal)
+                return TributeBloodRules.SumAttackPowerExcludingTributeBlood(attackCards)
+                    + (_attackDisplaySuppressMagicalSwordBonus
+                        ? 0
+                        : MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule));
+            return TributeBloodRules.SumCardAttackPowerForTributeBloodCombo(attackCards, attackerForMeRule);
+        }
         if (attackerForMeRule != null && HammadnessRules.ContainsHammadness(attackCards))
         {
             if (_suppressHammadnessPredictionDuringSequenceReveal)
                 return HammadnessRules.SumAttackPowerExcludingHammadness(attackCards)
-                    + (_playerAttackDisplaySuppressMagicalSwordBonus
+                    + (_attackDisplaySuppressMagicalSwordBonus
                         ? 0
                         : MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule));
             return HammadnessRules.SumCardAttackPowerForHammadnessCombo(attackCards, attackerForMeRule);
         }
         int plain = CalculateTotalPower(attackCards, true);
-        if (attackerForMeRule != null && !_playerAttackDisplaySuppressMagicalSwordBonus)
+        if (attackerForMeRule != null && !_attackDisplaySuppressMagicalSwordBonus)
             plain += MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule);
         return plain;
     }
@@ -1157,8 +1535,10 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         _magicalExplosionPreRampLocked = false;
+        var rampText = GetSequenceOwnerAtkDefText();
+        var rampElement = GetSequenceOwnerAtkDefElementImage();
 
-        if (atkdefText == null || totalDurationSec <= 0f)
+        if (rampText == null || totalDurationSec <= 0f)
         {
             _magicalExplosionPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
             _magicalExplosionPlayerAtkDisplayLocked = true;
@@ -1186,13 +1566,13 @@ public class CardStatsDisplay : MonoBehaviour
 
         int defPow = meCard != null ? meCard.defensePower : 0;
 
-        atkdefText.richText = false;
+        rampText.richText = false;
         {
             var el = attackCards != null && attackCards.Count > 0
                 ? ElementHelper.GetCombinedElement(attackCards)
                 : ElementType.None;
-            atkdefText.color = ElementHelper.GetElementColor(el);
-            ApplyTotalAtkDefElementImage(atkdefElement, el);
+            rampText.color = ElementHelper.GetElementColor(el);
+            ApplyTotalAtkDefElementImage(rampElement, el);
         }
 
         float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
@@ -1206,7 +1586,7 @@ public class CardStatsDisplay : MonoBehaviour
             if (meSheet != null)
                 meSheet.SetAtkDefenseNumbers(meAtkVal, defPow);
 
-            atkdefText.text = $"ATK {v}";
+            rampText.text = $"ATK {v}";
             if (v < hi && stepSec > 0f)
                 await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
         }
@@ -1216,6 +1596,151 @@ public class CardStatsDisplay : MonoBehaviour
 
         _magicalExplosionPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
         _magicalExplosionPlayerAtkDisplayLocked = true;
+        UpdateDisplay();
+    }
+
+    public int ComputeMillionDollarBazookaRampFrom(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sumEx = MillionDollarBazookaRules.SumAttackPowerExcludingMillionDollarBazooka(cards);
+        sumEx += MagicalSwordRules.GetActivePowerBonus(cards, attacker);
+        return ComputeAttackPowerFromCardSum(sumEx, cards, attacker, defenderForBlessings);
+    }
+
+    public int ComputeMillionDollarBazookaRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sum = MillionDollarBazookaRules.SumCardAttackPowerForMillionDollarBazookaCombo(cards, attacker);
+        return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
+    }
+
+    /// <summary>
+    /// 100万ドルバズーカ演出完了後の TOTAL リッチ表示をロック（ME ランプと同じ見た目）。
+    /// </summary>
+    public void LockMillionDollarBazookaPlayerAttackDisplay(List<CardData> attackCards, PlayerStatus atk)
+    {
+        _millionDollarBazookaPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+        _millionDollarBazookaPlayerAtkDisplayLocked = true;
+    }
+
+    /// <summary>Tribute Blood ramp: card sum only (before paid-HP bonus), with blessings.</summary>
+    public int ComputeTributeBloodRampFrom(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sumEx = TributeBloodRules.SumAttackPowerExcludingTributeBlood(cards);
+        sumEx += MagicalSwordRules.GetActivePowerBonus(cards, attacker);
+        return ComputeAttackPowerFromCardSum(sumEx, cards, attacker, defenderForBlessings);
+    }
+
+    /// <summary>Tribute Blood ramp: final strength after paid-HP bonus, with blessings.</summary>
+    public int ComputeTributeBloodRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings)
+    {
+        if (cards == null || attacker == null) return 0;
+        int sum = TributeBloodRules.SumCardAttackPowerForTributeBloodCombo(cards, attacker);
+        return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
+    }
+
+    /// <summary>
+    /// TOTAL and Tribute Blood CardSheet ATK count up together; HP drops 1 per ATK step (up to hpPaid total).
+    /// </summary>
+    public async Task PlayTributeBloodAttackRampAsync(
+        List<CardData> attackCards,
+        PlayerStatus atk,
+        CardData tbCard,
+        int tbSheetAtkTarget,
+        int hpPaid,
+        int fromTotal,
+        int toTotal,
+        float totalDurationSec,
+        CancellationToken cancellationToken)
+    {
+        _tributeBloodPreRampLocked = false;
+        var rampText = GetSequenceOwnerAtkDefText();
+        var rampElement = GetSequenceOwnerAtkDefElementImage();
+
+        if (rampText == null || totalDurationSec <= 0f)
+        {
+            _tributeBloodPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _tributeBloodPlayerAtkDisplayLocked = true;
+            if (hpPaid > 0 && atk != null)
+            {
+                atk.ApplyRawHpDamage(hpPaid);
+                BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), BattleManager.I?.GetEnemyStatus());
+            }
+            UpdateDisplay();
+            return;
+        }
+
+        if (fromTotal == toTotal)
+        {
+            _tributeBloodPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+            _tributeBloodPlayerAtkDisplayLocked = true;
+            if (hpPaid > 0 && atk != null)
+            {
+                atk.ApplyRawHpDamage(hpPaid);
+                BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), BattleManager.I?.GetEnemyStatus());
+            }
+            UpdateDisplay();
+            return;
+        }
+
+        int lo = Mathf.Min(fromTotal, toTotal);
+        int hi = Mathf.Max(fromTotal, toTotal);
+        int span = hi - lo;
+        float stepSec = span > 0 ? totalDurationSec / span : 0f;
+
+        CardSheetDisplay tbSheet = null;
+        if (tbCard != null && BattleUIManager.I != null
+            && BattleUIManager.I.TryGetCardSheetDisplayForCardData(tbCard, out var sh))
+            tbSheet = sh;
+
+        int defPow = tbCard != null ? tbCard.defensePower : 0;
+        int hpReduced = 0;
+
+        rampText.richText = false;
+        {
+            var el = attackCards != null && attackCards.Count > 0
+                ? ElementHelper.GetCombinedElement(attackCards)
+                : ElementType.None;
+            rampText.color = ElementHelper.GetElementColor(el);
+            ApplyTotalAtkDefElementImage(rampElement, el);
+        }
+
+        float invSpan = span > 0 ? 1f / span : 0f;
+        for (int v = lo; v <= hi; v++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (v > lo && hpReduced < hpPaid && atk != null)
+            {
+                atk.ApplyRawHpDamage(1);
+                hpReduced++;
+                BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), BattleManager.I?.GetEnemyStatus());
+            }
+
+            float t = (v - lo) * invSpan;
+            int tbAtkVal = Mathf.RoundToInt(Mathf.Lerp(0f, tbSheetAtkTarget, t));
+            if (v == hi)
+                tbAtkVal = tbSheetAtkTarget;
+            if (tbSheet != null)
+                tbSheet.SetAtkDefenseNumbers(tbAtkVal, defPow);
+
+            rampText.text = $"ATK {v}";
+            if (v < hi && stepSec > 0f)
+                await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
+        }
+
+        if (hpReduced < hpPaid && atk != null)
+        {
+            atk.ApplyRawHpDamage(hpPaid - hpReduced);
+            BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), BattleManager.I?.GetEnemyStatus());
+        }
+
+        if (tbSheet != null && tbSheetAtkTarget >= 0)
+            tbSheet.SetAtkDefenseNumbers(tbSheetAtkTarget, defPow);
+
+        _tributeBloodPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
+        _tributeBloodPlayerAtkDisplayLocked = true;
         UpdateDisplay();
     }
 
@@ -1249,8 +1774,10 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         _hammadnessPreRampLocked = false;
+        var rampText = GetSequenceOwnerAtkDefText();
+        var rampElement = GetSequenceOwnerAtkDefElementImage();
 
-        if (atkdefText == null || totalDurationSec <= 0f)
+        if (rampText == null || totalDurationSec <= 0f)
         {
             _hammadnessPlayerAtkDisplayRichText = FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
             _hammadnessPlayerAtkDisplayLocked = true;
@@ -1278,13 +1805,13 @@ public class CardStatsDisplay : MonoBehaviour
 
         int defPow = hammadnessCard != null ? hammadnessCard.defensePower : 0;
 
-        atkdefText.richText = false;
+        rampText.richText = false;
         {
             var el = attackCards != null && attackCards.Count > 0
                 ? ElementHelper.GetCombinedElement(attackCards)
                 : ElementType.None;
-            atkdefText.color = ElementHelper.GetElementColor(el);
-            ApplyTotalAtkDefElementImage(atkdefElement, el);
+            rampText.color = ElementHelper.GetElementColor(el);
+            ApplyTotalAtkDefElementImage(rampElement, el);
         }
 
         float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
@@ -1298,7 +1825,7 @@ public class CardStatsDisplay : MonoBehaviour
             if (hammadnessSheet != null)
                 hammadnessSheet.SetAtkDefenseNumbers(sheetAtkVal, defPow);
 
-            atkdefText.text = $"ATK {v}";
+            rampText.text = $"ATK {v}";
             if (v < hi && stepSec > 0f)
                 await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
         }
@@ -1340,7 +1867,9 @@ public class CardStatsDisplay : MonoBehaviour
         if (bm.IsPlayerSelfAttackTargetMode
             && bm.CurrentState == GameState.AttackPhase
             && bm.CurrentTurnOwner == PlayerType.Player
-            && attacker == p)
+            && attacker == p
+            && PostDeathCombatContext.Active == null
+            && !bm.IsPostDeathSequenceActive)
             return p;
         return attacker == p ? e : (attacker == e ? p : null);
     }
@@ -1366,14 +1895,19 @@ public class CardStatsDisplay : MonoBehaviour
         int rawCombo = CalculateTotalAttackPower(cards, attacker);
         if (rawCombo <= 0)
         {
-            if (HammadnessRules.ContainsHammadness(cards))
+            if (HammadnessRules.ContainsHammadness(cards) || TributeBloodRules.ContainsTributeBlood(cards)
+                || MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards))
                 return "ATK 0";
             return "";
         }
 
         bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble
-            && !_playerAttackDisplaySuppressGodRageDouble;
+            && !_attackDisplaySuppressGodRageDouble;
         if (_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            applyGodDouble = false;
+        if (_suppressMillionDollarBazookaPredictionDuringSequenceReveal && MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards))
+            applyGodDouble = false;
+        if (_suppressTributeBloodPredictionDuringSequenceReveal && TributeBloodRules.ContainsTributeBlood(cards))
             applyGodDouble = false;
         if (_suppressHammadnessPredictionDuringSequenceReveal && HammadnessRules.ContainsHammadness(cards))
             applyGodDouble = false;
@@ -1464,11 +1998,16 @@ public class CardStatsDisplay : MonoBehaviour
         PlayerStatus defenderForBlessings)
     {
         if (cards == null || cards.Count == 0) return 0;
+        var postDeathCtx = PostDeathCombatContext.Active;
+        if (postDeathCtx != null && postDeathCtx.MatchesIncoming(cards))
+            return postDeathCtx.FixedAttackPower;
         int sum = CalculateTotalAttackPower(cards, attacker);
         bool godDouble = GodrageRules.IsGodrageDoublingCombo(cards)
             && !(_suppressMagicalExplosionPredictionDuringSequenceReveal && MagicalExplosionRules.ContainsMagicalExplosion(cards))
+            && !(_suppressMillionDollarBazookaPredictionDuringSequenceReveal && MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards))
+            && !(_suppressTributeBloodPredictionDuringSequenceReveal && TributeBloodRules.ContainsTributeBlood(cards))
             && !(_suppressHammadnessPredictionDuringSequenceReveal && HammadnessRules.ContainsHammadness(cards))
-            && !_playerAttackDisplaySuppressGodRageDouble;
+            && !_attackDisplaySuppressGodRageDouble;
         if (godDouble)
             sum *= 2;
         return ComputeAttackPowerFromCardSum(sum, cards, attacker, defenderForBlessings);
@@ -1521,13 +2060,19 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearMillionDollarBazookaPlayerAtkDisplayLockOnly();
         ClearHammadnessPlayerAtkDisplayLockOnly();
-        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
-        ClearPlayerPreGodRageStackedDisplaySuppressions();
+        _tributeBloodPlayerAtkDisplayLocked = false;
+        _tributeBloodPlayerAtkDisplayRichText = null;
+        _millionDollarBazookaPlayerAtkDisplayLocked = false;
+        _millionDollarBazookaPlayerAtkDisplayRichText = null;
+        ClearMagicalSwordRampAttackDisplayLock();
+        ClearAttackModifierRevealSuppressions();
 
-        if (atkdefText == null || totalDurationSec <= 0f)
+        var rampText = GetSequenceOwnerAtkDefText();
+        if (rampText == null || totalDurationSec <= 0f)
         {
-            ClearGodRagePlayerAttackDisplayLock();
+            ClearGodRageAttackDisplayLock();
             UpdateDisplay();
             return;
         }
@@ -1545,14 +2090,14 @@ public class CardStatsDisplay : MonoBehaviour
         int span = hi - lo;
         float stepSec = span > 0 ? totalDurationSec / span : 0f;
 
-        atkdefText.richText = false;
-        atkdefText.color = new Color(0.2f, 0.85f, 0.35f);
+        rampText.richText = false;
+        rampText.color = new Color(0.2f, 0.85f, 0.35f);
         SoundEffectPlayer.I?.Play("Assets/SE/ロボット合体2.mp3");
 
         for (int v = lo; v <= hi; v++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            atkdefText.text = $"ATK {v}";
+            rampText.text = $"ATK {v}";
             if (v < hi && stepSec > 0f)
                 await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
         }
@@ -1570,16 +2115,30 @@ public class CardStatsDisplay : MonoBehaviour
     {
         if (attackCards == null || atk == null || def == null) return 0;
         var bm = BattleManager.I;
-        int save = 0;
-        if (bm != null) save = bm.MagicalSwordAttackPowerBonus;
-        if (bm != null) bm.SetMagicalSwordAttackPowerBonus(0);
+        int savePlayer = 0;
+        int saveEnemy = 0;
+        bool atkIsPlayer = bm != null && ReferenceEquals(atk, bm.GetPlayerStatus());
+        bool atkIsEnemy = bm != null && ReferenceEquals(atk, bm.GetEnemyStatus());
+        if (bm != null && atkIsPlayer)
+        {
+            savePlayer = bm.MagicalSwordAttackPowerBonus;
+            bm.SetMagicalSwordAttackPowerBonus(0);
+        }
+        else if (bm != null && atkIsEnemy)
+        {
+            saveEnemy = bm.MagicalSwordEnemyAttackPowerBonus;
+            bm.SetMagicalSwordEnemyAttackPowerBonus(0);
+        }
         try
         {
             return GetDisplayedAttackStrengthWithDefender(attackCards, atk, def);
         }
         finally
         {
-            if (bm != null) bm.SetMagicalSwordAttackPowerBonus(save);
+            if (bm != null && atkIsPlayer)
+                bm.SetMagicalSwordAttackPowerBonus(savePlayer);
+            if (bm != null && atkIsEnemy)
+                bm.SetMagicalSwordEnemyAttackPowerBonus(saveEnemy);
         }
     }
 
@@ -1601,13 +2160,18 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         ClearMagicalExplosionPlayerAtkDisplayLockOnly();
+        ClearMillionDollarBazookaPlayerAtkDisplayLockOnly();
         ClearHammadnessPlayerAtkDisplayLockOnly();
-        ClearGodRagePlayerAttackDisplayLock();
-        ClearMagicalSwordSubGodRagePlayerAtkDisplayLock();
+        ClearGodRageAttackDisplayLock();
+        ClearMagicalSwordRampAttackDisplayLock();
         if (GodrageRules.IsGodrageDoublingCombo(attackCards)
             && MagicalSwordRules.ContainsMagicalSword(attackCards))
-            SetPlayerMsGodComboForMagicalSwordRamp();
-        if (msCard == null || boost <= 0 || totalDurationSec <= 0f || atkdefText == null)
+        {
+            _attackDisplaySuppressGodRageDouble = true;
+            _attackDisplaySuppressMagicalSwordBonus = false;
+        }
+        var rampText = GetSequenceOwnerAtkDefText();
+        if (msCard == null || boost <= 0 || totalDurationSec <= 0f || rampText == null)
         {
             UpdateDisplay();
             return;
@@ -1630,8 +2194,8 @@ public class CardStatsDisplay : MonoBehaviour
             && BattleUIManager.I.TryGetCardSheetDisplayForCardData(msCard, out var sh))
             msSh = sh;
         int defPow = msCard.defensePower;
-        atkdefText.richText = false;
-        atkdefText.color = new Color(0.2f, 0.86f, 0.32f, 1f);
+        rampText.richText = false;
+        rampText.color = new Color(0.2f, 0.86f, 0.32f, 1f);
         SoundEffectPlayer.I?.Play("Assets/SE/ロボット合体2.mp3");
         float invSpan = (hi - lo) > 0 ? 1f / (hi - lo) : 0f;
         for (int v = lo; v <= hi; v++)
@@ -1642,18 +2206,15 @@ public class CardStatsDisplay : MonoBehaviour
             if (v == hi) sAtk = toSheet;
             if (msSh != null)
                 msSh.SetAtkDefenseNumbers(sAtk, defPow);
-            atkdefText.text = $"ATK {v}";
+            rampText.text = $"ATK {v}";
             if (v < hi && stepSec > 0f)
                 await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
         }
         if (msSh != null)
             msSh.SetAtkDefenseNumbers(toSheet, defPow);
-        if (GodrageRules.IsGodrageDoublingCombo(attackCards)
-            && MagicalSwordRules.ContainsMagicalSword(attackCards))
-        {
-            int t = ComputeMagicalSwordDisplayRampTo(attackCards, atk, def);
-            SetMagicalSwordSubGodRagePlayerAtkDisplayAfterRamp(t);
-        }
+        int finalMsDisplay = ComputeMagicalSwordDisplayRampTo(attackCards, atk, def);
+        if (finalMsDisplay > 0)
+            LockMagicalSwordRampAttackDisplay(finalMsDisplay);
         UpdateDisplay();
     }
 
