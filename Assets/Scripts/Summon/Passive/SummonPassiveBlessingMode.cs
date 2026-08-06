@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// <see cref="SummonData"/> の加護の決め方。SerializeReference の代わりにインスペクター互換の enum で指定する。
 /// </summary>
 public enum SummonPassiveBlessingMode
@@ -17,4 +17,6 @@ public enum SummonPassiveBlessingMode
     Diabolos = 5,
     /// <summary>インドラ（5n ターン終了で相手手札破壊）</summary>
     Indra = 6,
+    /// <summary>シヴァ（直接攻撃で5%凍結。数値加護は別・戦闘解決フック）</summary>
+    Shiva = 7,
 }

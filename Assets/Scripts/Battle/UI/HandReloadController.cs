@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -167,6 +167,8 @@ public class HandReloadController : MonoBehaviour
         if (BattleManager.I.CurrentBattleStep != BattleStep.MainActionSelect) return false;
         if (BattleManager.I.CurrentTurnOwner != PlayerType.Player) return false;
         if (BattleManager.I.GetPlayerStatus() != null && BattleManager.I.GetPlayerStatus().IsCastingArchMagic)
+            return false;
+        if (BattleManager.I.GetPlayerStatus()?.HasFreezeEffect() == true)
             return false;
         if (BattleManager.I.IsUseButtonLocked) return false;
         if (BattleManager.I.IsGameEndTriggered) return false;
