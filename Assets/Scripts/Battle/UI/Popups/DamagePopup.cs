@@ -241,6 +241,14 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>
+    /// Message popup with explicit fill and outline colors.
+    /// </summary>
+    public void Setup(string message, Color fillColor, Color outlineColor)
+    {
+        ShowMessageLayout(message, fillColor, outlineColor, statusAilmentAutoSize: false);
+    }
+
+    /// <summary>
     /// 戦闘ダメージ表示：ダメージありは数字＋「ダメージ」、0 のときは1行（無傷）など。
     /// </summary>
     /// <param name="amount">与ダメ。0 以下は else 側の見た目。</param>

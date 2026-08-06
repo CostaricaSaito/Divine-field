@@ -20,6 +20,20 @@ public class HandRefillService : MonoBehaviour
     // 敵の使用済みカードを記録（プレイヤーと同様に置き換えのため）
     private readonly List<CardData> _enemyUsedCardsThisTurn = new();
 
+    /// <summary>同一ターン内に NPC が既に使用した手札か（cardUI が無い敵手札向け）。</summary>
+    public bool IsEnemyCardUsedThisTurn(CardData card)
+    {
+        if (card == null) return false;
+        int id = card.GetInstanceID();
+        for (int i = 0; i < _enemyUsedCardsThisTurn.Count; i++)
+        {
+            var c = _enemyUsedCardsThisTurn[i];
+            if (c != null && c.GetInstanceID() == id)
+                return true;
+        }
+        return false;
+    }
+
     // ---- 設定（インスペクターから、または手動） ----
     public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, CardDealer dealer)
     {

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// 段階型・排他型の状態異常を <see cref="PlayerStatus"/> に付与する（単純な重複チェックはここに含めない）。
@@ -24,8 +24,8 @@ public static class ProgressiveStatusApplicator
 
         config ??= StatusProgressionConfig.GetRuntimeFallback();
 
-        if (requested == StatusEffectType.Seal)
-            return ApplySeal(target, config);
+        if (requested == StatusEffectType.Freeze)
+            return ApplyFreezeReplace(target, config.defaultDebugFreezeDurationTurns);
 
         if (DiseaseLineEffect.IsDiseaseFamily(requested))
             return ApplyDiseaseFamily(target, requested, config);
@@ -55,12 +55,28 @@ public static class ProgressiveStatusApplicator
         return true;
     }
 
-    private static ProgressiveApplyResult ApplySeal(PlayerStatus target, StatusProgressionConfig config)
+    /// <summary>Applies or extends freeze. Shiva passive uses stackExisting=true.</summary>
+    public static ProgressiveApplyResult ApplyFreeze(PlayerStatus target, int durationTurns, bool stackExisting)
     {
-        target.activeEffects.RemoveAll(e => e != null && e.EffectType == StatusEffectType.Seal);
-        var seal = new SealEffect(config.defaultSealDurationTurns);
-        target.activeEffects.Add(seal);
-        Debug.Log($"{target.DisplayName} に封印（{config.defaultSealDurationTurns}ターン）を付与しました");
+        if (target == null) return ProgressiveApplyResult.NoChange;
+
+        int dur = Mathf.Max(1, durationTurns);
+        var existing = target.GetFreezeEffect();
+        if (existing != null && stackExisting)
+        {
+            existing.AddTurns(dur);
+            Debug.Log($"{target.DisplayName} freeze extended (+{dur}, total {existing.TurnsRemaining} turn(s))");
+            return ProgressiveApplyResult.Applied;
+        }
+
+        return ApplyFreezeReplace(target, dur);
+    }
+
+    private static ProgressiveApplyResult ApplyFreezeReplace(PlayerStatus target, int durationTurns)
+    {
+        target.activeEffects.RemoveAll(e => e != null && e.EffectType == StatusEffectType.Freeze);
+        target.activeEffects.Add(new FreezeEffect(Mathf.Max(1, durationTurns)));
+        Debug.Log($"{target.DisplayName} freeze applied ({durationTurns} turn(s))");
         return ProgressiveApplyResult.Applied;
     }
 

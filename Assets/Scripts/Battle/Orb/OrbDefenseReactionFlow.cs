@@ -187,17 +187,10 @@ public static class OrbDefenseReactionFlow
             }
 
             bool showEnemyYurusu = pick == null && BattleUIManager.I != null;
-            if (showEnemyYurusu)
-                BattleUIManager.I.ShowYurusuDisplay();
-            try
+            using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
             {
                 await battleProcessor.ResolveOrbCounterCombatAsync(
                     attackSnap, firstPhaseDamageB, pick, counterAtt, target, bm.cpuHand, false);
-            }
-            finally
-            {
-                if (showEnemyYurusu)
-                    BattleUIManager.I?.HideYurusuButton();
             }
 
             bm.ClearStatsDisplaySequenceCards();
