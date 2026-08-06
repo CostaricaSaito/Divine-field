@@ -246,14 +246,18 @@ public static class PhysicalReflectionFlow
                     await Task.Delay(500, cancellationToken);
                 }
 
-                await battleProcessor.ResolveReflectedCombatAsync(
-                    incomingAttackCards,
-                    incomingPower,
-                    pick,
-                    player,
-                    enemy,
-                    battleManager.cpuHand,
-                    skipHitCheck: true);
+                bool showEnemyYurusu = pick == null && BattleUIManager.I != null;
+                using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
+                {
+                    await battleProcessor.ResolveReflectedCombatAsync(
+                        incomingAttackCards,
+                        incomingPower,
+                        pick,
+                        player,
+                        enemy,
+                        battleManager.cpuHand,
+                        skipHitCheck: true);
+                }
 
                 if (pick != null)
                 {

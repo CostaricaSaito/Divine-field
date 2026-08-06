@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
 
 
@@ -261,6 +261,22 @@ public class PlayerStatus
         return false;
     }
 
+    /// <summary>凍結が付与されているか（AttackSelect スキップ判定）。</summary>
+    public bool HasFreezeEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Freeze) return true;
+        return false;
+    }
+
+    /// <summary>凍結効果の実体。なければ null。</summary>
+    public FreezeEffect GetFreezeEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e is FreezeEffect freeze) return freeze;
+        return null;
+    }
+
     /// <summary>呪縛が付与されているか（加護パッシブ無効・ガルーダ5n等のスキップ判定）。</summary>
     public bool HasCurseBindEffect()
     {
@@ -326,7 +342,7 @@ public class PlayerStatus
     }
 
     /// <summary>
-    /// 段階型・排他型（病・眼精／群発・封印）と単純付与（衰弱など）を統合した付与API。
+    /// 段階型・排他型（病・眼精／群発・凍結）と単純付与（衰弱など）を統合した付与API。
     /// </summary>
     /// <param name="suppressGrantPopupAndSound">true のとき付与ポップアップと SE を出さない（デバッグ付与など）。</param>
     /// <returns>
@@ -336,18 +352,28 @@ public class PlayerStatus
     public (ProgressiveApplyResult result, float grantPopupFadeSeconds) TryApplyStatusEffect(
         StatusEffectType type,
         StatusProgressionConfig config,
-        bool suppressGrantPopupAndSound = false)
+        bool suppressGrantPopupAndSound = false,
+        int freezeDurationFromCard = 0)
     {
         if (type == StatusEffectType.None)
             return (ProgressiveApplyResult.NoChange, 0f);
 
         if (type == StatusEffectType.RandomOneAilment)
-            return TryApplyRandomOneAilmentFromCatalog(config, suppressGrantPopupAndSound);
+            return TryApplyRandomOneAilmentFromCatalog(config, suppressGrantPopupAndSound, freezeDurationFromCard);
 
         config ??= StatusProgressionConfig.GetRuntimeFallback();
 
-        if (type == StatusEffectType.Seal
-            || DiseaseLineEffect.IsDiseaseFamily(type)
+        if (type == StatusEffectType.Freeze)
+        {
+            int dur = freezeDurationFromCard > 0
+                ? freezeDurationFromCard
+                : config.defaultDebugFreezeDurationTurns;
+            var freezeResult = ProgressiveStatusApplicator.ApplyFreeze(this, dur, stackExisting: false);
+            if (suppressGrantPopupAndSound) return (freezeResult, 0f);
+            return NotifyApplyFeedbackAndReturn(type, freezeResult);
+        }
+
+        if (DiseaseLineEffect.IsDiseaseFamily(type)
             || type == StatusEffectType.EyeStrain
             || type == StatusEffectType.ClusterHeadache)
         {
@@ -367,21 +393,22 @@ public class PlayerStatus
 
     /// <summary>
     /// <see cref="StatusEffectType.RandomOneAilment"/>：15種から等確率で抽選し <see cref="TryApplyStatusEffect"/> へ委譲。
-    /// 病系の進行は <see cref="ProgressiveStatusApplicator"/> に任せる。封印は既存時は無傷。
+    /// 病系の進行は <see cref="ProgressiveStatusApplicator"/> に任せる。凍結は既存時は無傷。
     /// </summary>
     private (ProgressiveApplyResult result, float grantPopupFadeSeconds) TryApplyRandomOneAilmentFromCatalog(
         StatusProgressionConfig config,
-        bool suppressGrantPopupAndSound)
+        bool suppressGrantPopupAndSound,
+        int freezeDurationFromCard = 0)
     {
         config ??= StatusProgressionConfig.GetRuntimeFallback();
         StatusEffectType pick = StatusEffectCatalog.PickRandomAilmentUniform();
         if (pick == StatusEffectType.None)
             return (ProgressiveApplyResult.NoChange, 0f);
 
-        if (pick == StatusEffectType.Seal && HasActiveEffectType(StatusEffectType.Seal))
+        if (pick == StatusEffectType.Freeze && HasActiveEffectType(StatusEffectType.Freeze))
             return (ProgressiveApplyResult.NoChange, 0f);
 
-        return TryApplyStatusEffect(pick, config, suppressGrantPopupAndSound);
+        return TryApplyStatusEffect(pick, config, suppressGrantPopupAndSound, freezeDurationFromCard);
     }
 
     private bool HasActiveEffectType(StatusEffectType t)

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public static class StatusEffectFactory
 {
@@ -17,8 +17,8 @@ public static class StatusEffectFactory
             case StatusEffectType.ParadiseSickness:
                 return new DiseaseLineEffect(type);
 
-            case StatusEffectType.Seal:
-                return new SealEffect(config.defaultSealDurationTurns);
+            case StatusEffectType.Freeze:
+                return new FreezeEffect(config.defaultDebugFreezeDurationTurns);
 
             case StatusEffectType.EyeStrain:
                 return new EyeStrainEffect();

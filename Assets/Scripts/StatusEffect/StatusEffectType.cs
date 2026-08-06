@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// 状態異常の種類（全15種 + None + カード用特殊値）。
@@ -31,8 +31,8 @@ public enum StatusEffectType
     Smoke = 8,
     /// <summary>9 不運</summary>
     Misfortune = 9,
-    /// <summary>10 封印</summary>
-    Seal = 10,
+    /// <summary>10 凍結</summary>
+    Freeze = 10,
     /// <summary>11 濃霧</summary>
     Fog = 11,
 

@@ -44,8 +44,10 @@ public class UseButtonPresenter : MonoBehaviour
     private float _defaultUseButtonLabelOutlineWidth;
     private Color _defaultUseButtonLabelOutlineColor = Color.black;
     private Material _useButtonLabelDefaultFontShared;
-    /// <summary>打ち払い黄スタイル用に Instantiate したラベル材質。<see cref="TMP_Text.fontMaterial"/> の getter は shared が null だと例外になるため、解放は参照で行う。</summary>
+    /// <summary>打ち払い黄スタイル用に Instantiate したラベル材質。</summary>
     private Material _parryUseButtonLabelFontInstance;
+    /// <summary>反射虹色スタイル用に Instantiate したラベル材質。</summary>
+    private Material _reflectionUseButtonLabelFontInstance;
 
     private void Awake()
     {
@@ -78,6 +80,11 @@ public class UseButtonPresenter : MonoBehaviour
             Destroy(_parryUseButtonLabelFontInstance);
             _parryUseButtonLabelFontInstance = null;
         }
+        if (_reflectionUseButtonLabelFontInstance != null)
+        {
+            Destroy(_reflectionUseButtonLabelFontInstance);
+            _reflectionUseButtonLabelFontInstance = null;
+        }
     }
 
     /// <summary>他の UI 要素でフォントを流用したいとき用。</summary>
@@ -102,16 +109,16 @@ public class UseButtonPresenter : MonoBehaviour
         RestoreUseButtonFromReflectionRainbowIfNeeded();
         RestoreUseButtonFromBlockingSilverIfNeeded();
         RestoreUseButtonFromParryYellowIfNeeded();
-        if (text != "詠唱開始")
+        if (text != "詠唱開始" && text != "詠唱中")
             RestoreUseButtonFromArchMagicCastIfNeeded();
 
         if (useButtonLabelTMP != null) useButtonLabelTMP.text = text;
         if (useButtonLabelUGUI != null) useButtonLabelUGUI.text = text;
 
         // 大魔法：ピンク字・白縁・紫→水色グラデーション背景
-        if (text == "詠唱開始")
+        if (text == "詠唱開始" || text == "詠唱中")
         {
-            ApplyArchMagicCastUseButtonStyle();
+            ApplyArchMagicCastUseButtonStyle(text);
             return;
         }
 
@@ -139,24 +146,29 @@ public class UseButtonPresenter : MonoBehaviour
             yurusuDisplay.SetActive(false);
     }
 
-    /// <summary>
-    /// 防御フェーズのボタンラベルを更新
-    /// </summary>
-    public void UpdateDefenseButtonLabel()
+    /// <summary>コンテキストに応じて UseButton / yurusuDisplay を一括更新する唯一の入口。</summary>
+    public void Refresh()
     {
+        if (useButton == null) return;
         var bm = BattleManager.I;
         if (bm == null) return;
-        bool defenseUi = bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player;
-        bool interventionDefense = bm.CurrentState == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive();
-        bool postDeathDefense = bm.IsPostDeathDefenseWaitActive();
-        bool reflectionChainWait = bm.IsReflectionChainDefensePending();
-        bool parryRerunWait = bm.IsParryRerunDefensePending();
-        bool dualBladeSecondDefense = bm.CurrentState == GameState.CombatResolvePhase
-            && bm.IsPlayerDualBladeSecondDefenseWaitActive()
-            && bm.DefenderPublic == PlayerType.Player;
-        if (!defenseUi && !interventionDefense && !postDeathDefense && !reflectionChainWait && !dualBladeSecondDefense
-            && !parryRerunWait)
-            return;
+
+        if (bm.IsPlayerDefenseInputActive())
+            ApplyPlayerDefenseUseButton();
+        else if (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
+            ApplyPlayerAttackUseButton();
+    }
+
+    /// <summary>互換エイリアス。<see cref="Refresh"/> を呼ぶ。</summary>
+    public void UpdateDefenseButtonLabel() => Refresh();
+
+    /// <summary>互換エイリアス。<see cref="Refresh"/> を呼ぶ。</summary>
+    public void RefreshUseButtonForMpAndSelection() => Refresh();
+
+    private void ApplyPlayerDefenseUseButton()
+    {
+        var bm = BattleManager.I;
+        if (bm == null || !bm.IsPlayerDefenseInputActive()) return;
 
         if (bm.IsUseButtonLocked || bm.IsPlayerDefenseCombatResolving)
         {
@@ -164,26 +176,13 @@ public class UseButtonPresenter : MonoBehaviour
             return;
         }
 
-        if (BattleUIManager.I != null)
-            BattleUIManager.I.HideYurusuButton();
+        HideYurusuDisplay();
 
         var selectedDefenseCards = BattleUIManager.I != null
             ? BattleUIManager.I.GetSelectedDefenseCards()
             : new List<CardData>();
 
-        List<CardData> incomingAttack = null;
-        if (defenseUi)
-            incomingAttack = bm.GetAttackCardsForCombatPublic();
-        else if (interventionDefense)
-            incomingAttack = bm.GetInterventionDefenseAttackSnapshot() ?? bm.GetAttackCardsForCombatPublic();
-        else if (postDeathDefense)
-            incomingAttack = bm.GetIncomingAttackSnapshotForDefenseUi();
-        else if (reflectionChainWait)
-            incomingAttack = bm.GetReflectionChainAttackSnapshot();
-        else if (parryRerunWait)
-            incomingAttack = bm.GetAttackCardsForCombatPublic();
-        else if (dualBladeSecondDefense)
-            incomingAttack = bm.GetAttackCardsForCombatPublic();
+        List<CardData> incomingAttack = bm.GetIncomingAttackSnapshotForDefenseUi();
 
         bool showBounce = incomingAttack != null && incomingAttack.Count > 0
             && selectedDefenseCards.Count == 1
@@ -237,32 +236,36 @@ public class UseButtonPresenter : MonoBehaviour
         SetUseButtonInteractable(true);
     }
 
-    /// <summary>
-    /// 攻撃選択中：魔法の合算MP（眼精疲労の倍率・群発の使用不可）に応じて使用ボタンを更新。
-    /// </summary>
-    public void RefreshUseButtonForMpAndSelection()
+    /// <summary>自プレイヤー攻撃フェーズの UseButton（祈り / 使用 / 詠唱開始 / MP不足等）。</summary>
+    private void ApplyPlayerAttackUseButton()
     {
-        if (useButton == null || BattleManager.I == null) return;
-
         var bm = BattleManager.I;
+        if (bm == null) return;
         if (bm.CurrentState != GameState.AttackPhase || bm.CurrentTurnOwner != PlayerType.Player)
             return;
-
         if (bm.IsUseButtonLocked)
             return;
 
         var ps = bm.GetPlayerStatus();
         if (ps == null) return;
 
+        var hand = bm.playerHand;
+        if (hand != null && CardRules.GetAttackChoices(hand).Count == 0)
+        {
+            SetUseButtonLabel("祈り");
+            SetUseButtonInteractable(true);
+            return;
+        }
+
         var selected = BattleUIManager.I != null
             ? BattleUIManager.I.GetSelectedCards()
             : null;
         if (selected == null || selected.Count == 0)
         {
-            // 大魔法詠唱中：演出で選択がクリアされても「詠唱開始」表示を維持（「使用」に戻さない）
+            // 大魔法詠唱中：演出で選択がクリアされても「詠唱中」表示を維持（「使用」に戻さない）
             if (ps.IsCastingArchMagic)
             {
-                SetUseButtonLabel("詠唱開始");
+                SetUseButtonLabel("詠唱中");
                 SetUseButtonInteractable(false);
                 return;
             }
@@ -339,8 +342,25 @@ public class UseButtonPresenter : MonoBehaviour
 
         if (useButtonLabelTMP != null)
         {
+            EnsureUseButtonDefaultFontSharedCached();
+            ReflectionReleaseLabelFontInstanceIfNeeded();
+
             useButtonLabelTMP.text = "弾き返す";
             useButtonLabelTMP.color = Color.white;
+            const float ow = 0.28f;
+            if (_useButtonLabelDefaultFontShared != null)
+            {
+                var mat = Instantiate(_useButtonLabelDefaultFontShared);
+                useButtonLabelTMP.fontSharedMaterial = _useButtonLabelDefaultFontShared;
+                useButtonLabelTMP.fontMaterial = mat;
+                _reflectionUseButtonLabelFontInstance = mat;
+                if (mat.HasProperty(ShaderUtilities.ID_OutlineColor))
+                    mat.SetColor(ShaderUtilities.ID_OutlineColor, Color.red);
+                if (mat.HasProperty(ShaderUtilities.ID_OutlineWidth))
+                    mat.SetFloat(ShaderUtilities.ID_OutlineWidth, ow);
+            }
+            useButtonLabelTMP.outlineWidth = ow;
+            useButtonLabelTMP.outlineColor = Color.red;
         }
 
         if (useButtonLabelUGUI != null)
@@ -517,6 +537,16 @@ public class UseButtonPresenter : MonoBehaviour
         _rainbowUseButtonSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
     }
 
+    private void ReflectionReleaseLabelFontInstanceIfNeeded()
+    {
+        if (_reflectionUseButtonLabelFontInstance == null) return;
+        var inst = _reflectionUseButtonLabelFontInstance;
+        _reflectionUseButtonLabelFontInstance = null;
+        Destroy(inst);
+        if (useButtonLabelTMP != null && _useButtonLabelDefaultFontShared != null)
+            useButtonLabelTMP.fontSharedMaterial = _useButtonLabelDefaultFontShared;
+    }
+
     private void RestoreUseButtonFromReflectionRainbowIfNeeded()
     {
         if (!_useButtonHasRainbowGeneratedSprite) return;
@@ -526,6 +556,16 @@ public class UseButtonPresenter : MonoBehaviour
         {
             img.sprite = _cachedUseButtonSprite;
             img.color = Color.white;
+        }
+
+        if (useButtonLabelTMP != null)
+        {
+            ReflectionReleaseLabelFontInstanceIfNeeded();
+            if (_useButtonLabelDefaultFontShared != null)
+                useButtonLabelTMP.fontSharedMaterial = _useButtonLabelDefaultFontShared;
+
+            useButtonLabelTMP.outlineWidth = _defaultUseButtonLabelOutlineWidth;
+            useButtonLabelTMP.outlineColor = _defaultUseButtonLabelOutlineColor;
         }
 
         if (_rainbowUseButtonTexture != null)
@@ -543,8 +583,8 @@ public class UseButtonPresenter : MonoBehaviour
         _useButtonHasRainbowGeneratedSprite = false;
     }
 
-    /// <summary>大魔法「詠唱開始」時：ラベル #C400A8・白縁、ボタン背景は左 #9b55fc → 右 #09f9e4 のグラデーション。</summary>
-    private void ApplyArchMagicCastUseButtonStyle()
+    /// <summary>大魔法「詠唱開始／詠唱中」：ラベル #C400A8・白縁、ボタン背景は左 #9b55fc → 右 #09f9e4 のグラデーション。</summary>
+    private void ApplyArchMagicCastUseButtonStyle(string label)
     {
         if (useButton == null) return;
 
@@ -563,7 +603,7 @@ public class UseButtonPresenter : MonoBehaviour
         var pink = new Color(0xC4 / 255f, 0x00 / 255f, 0xA8 / 255f, 1f);
         if (useButtonLabelTMP != null)
         {
-            useButtonLabelTMP.text = "詠唱開始";
+            useButtonLabelTMP.text = label;
             useButtonLabelTMP.color = pink;
             useButtonLabelTMP.outlineColor = Color.white;
             useButtonLabelTMP.outlineWidth = 0.22f;
@@ -571,7 +611,7 @@ public class UseButtonPresenter : MonoBehaviour
 
         if (useButtonLabelUGUI != null)
         {
-            useButtonLabelUGUI.text = "詠唱開始";
+            useButtonLabelUGUI.text = label;
             useButtonLabelUGUI.color = pink;
         }
     }

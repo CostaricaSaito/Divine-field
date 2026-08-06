@@ -248,14 +248,16 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     public bool usableInAttackPhase = false;
     public bool usableInDefensePhase = false;
 
-    [Header("行動分類（従来・要整理）")]
-    [Tooltip("CardRules 互換。isPrimary/Additional は attackPhaseUseRule へ吸収中。")]
-    public bool isPrimaryDefense = false;
-    public bool isCounterAttack = false;
-    [Tooltip("回復草等。回復魔法は cardType=Magic 側。")]
-    public bool isRecovery = false;
-    [Tooltip("精霊ぬいぐるみ等。")]
-    public bool isSpecialEffect = false;
+    [SerializeField, HideInInspector, FormerlySerializedAs("isPrimaryDefense")]
+    private bool _legacyIsPrimaryDefense;
+    [SerializeField, HideInInspector, FormerlySerializedAs("isCounterAttack")]
+    private bool _legacyIsCounterAttack;
+    [SerializeField, HideInInspector, FormerlySerializedAs("isRecovery")]
+    private bool _legacyIsRecovery;
+    [SerializeField, HideInInspector, FormerlySerializedAs("isSpecialEffect")]
+    private bool _legacyIsSpecialEffect;
+    [SerializeField, HideInInspector]
+    private bool _legacyActionClassImported;
 
     [Header("特殊効果")]
     public bool canApplyStatusEffect = false;
@@ -263,12 +265,22 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Tooltip("WithDamageThrough / OnCardEffectResolve 等。")]
     public int statusEffectChance = 0;
     public StatusEffectType statusEffectToApply = StatusEffectType.None;
+    [Min(1)]
+    [Tooltip("statusEffectToApply=Freeze または RandomOneAilment で凍結が選ばれたときの持続ターン。")]
+    public int freezeDuration = 2;
     [Tooltip("① ダメージ通過 / ② 解決時のみ 等。")]
     public StatusEffectApplyTiming statusEffectApplyTiming = StatusEffectApplyTiming.WithDamageThrough;
 
     [Header("演出")]
-    [Tooltip("手札裏: レアSE・虹。")]
-    public bool isRare = false;
+    [Tooltip("手札抽選レア度。SuperRare 以上で裏面虹・レアSE。")]
+    public CardRarity rarity = CardRarity.Common;
+
+    [Header("手札抽選")]
+    [Tooltip("-1 = CardDrawTable のレア度デフォルト重み。0 以上 = 個別重み（0 は抽選除外）。")]
+    public int customDrawWeight = CardDrawWeightPool.UseRarityDefaultWeight;
+
+    [SerializeField, HideInInspector, FormerlySerializedAs("isRare")]
+    private bool _legacyIsRare;
 
     [Header("攻撃 Phase Use Rule（手札併用）")]
     [Tooltip("攻撃フェーズの組合せ。大魔法/顕現は Standalone 推奨。")]
@@ -402,6 +414,44 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
 
         if (cardType == CardType.ArchMagic || cardType == CardType.Ultimate)
             attackPhaseUseRule = AttackPhaseUseRule.Standalone;
+
+        if (!_legacyActionClassImported)
+        {
+            if (_legacyIsPrimaryDefense)
+            {
+                if (!usableInDefensePhase) usableInDefensePhase = true;
+                if (defensePhaseUseRule == DefensePhaseUseRule.None)
+                    defensePhaseUseRule = DefensePhaseUseRule.Primary;
+            }
+
+            if (_legacyIsCounterAttack)
+            {
+                usableInAttackPhase = true;
+                usableInDefensePhase = true;
+                if (defensePhaseUseRule == DefensePhaseUseRule.None)
+                    defensePhaseUseRule = DefensePhaseUseRule.Standalone;
+            }
+
+            if (_legacyIsRecovery)
+            {
+                if (cardType == CardType.Attack)
+                    cardType = CardType.Recovery;
+                if (!usableInAttackPhase)
+                    usableInAttackPhase = true;
+            }
+
+            if (_legacyIsSpecialEffect)
+            {
+                if (cardType == CardType.Attack)
+                    cardType = CardType.Special;
+            }
+
+            _legacyIsPrimaryDefense = false;
+            _legacyIsCounterAttack = false;
+            _legacyIsRecovery = false;
+            _legacyIsSpecialEffect = false;
+            _legacyActionClassImported = true;
+        }
     }
 
 #if UNITY_EDITOR
@@ -409,6 +459,9 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     {
         if (cardType == CardType.ArchMagic || cardType == CardType.Ultimate)
             attackPhaseUseRule = AttackPhaseUseRule.Standalone;
+
+        if (_legacyIsRare && rarity == CardRarity.Common)
+            rarity = CardRarity.SuperRare;
     }
 #endif
 }
@@ -422,9 +475,9 @@ public static class CardDealAudio
 
     public static void Play(CardData card, bool isPlayerHandDeal)
     {
-        string path = (card != null && card.isRare) ? RarePath : NormalPath;
+        string path = (card != null && card.HasPremiumHandPresentation()) ? RarePath : NormalPath;
         SoundEffectPlayer.I?.Play(path);
-        if (!isPlayerHandDeal || card == null || !card.isRare) return;
+        if (!isPlayerHandDeal || card == null || !card.HasPremiumHandPresentation()) return;
         if (BattleManager.I == null) return;
         if (!DisadvantageRules.IsDisadvantaged(BattleManager.I.GetPlayerStatus())) return;
         BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
