@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -181,7 +181,7 @@ public class BattleProcessor : MonoBehaviour
                 : target;
             if (recipient != null)
                 await TryApplyStatusOnCardEffectResolveAsync(
-                    card.statusEffectToApply, card.statusEffectChance, recipient, CancellationToken.None, card.freezeDuration);
+                    card.statusEffectToApply, card.statusEffectChance, recipient, CancellationToken.None);
         }
 
         ProcessSpecialEffects(card, user, target);
@@ -200,8 +200,7 @@ public class BattleProcessor : MonoBehaviour
         StatusEffectType effectType,
         int chance0To100,
         PlayerStatus recipient,
-        CancellationToken ct,
-        int freezeDurationFromCard = 0)
+        CancellationToken ct)
     {
         if (recipient == null || effectType == StatusEffectType.None) return;
 
@@ -209,8 +208,7 @@ public class BattleProcessor : MonoBehaviour
         if (roll >= chance0To100) return;
 
         var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
-        var (applyResult, grantFade) = recipient.TryApplyStatusEffect(
-            effectType, cfg, freezeDurationFromCard: freezeDurationFromCard);
+        var (applyResult, grantFade) = recipient.TryApplyStatusEffect(effectType, cfg);
         if (applyResult == ProgressiveApplyResult.ForcedParadiseEcstasy)
         {
             if (grantFade > 0f)
@@ -438,8 +436,7 @@ public class BattleProcessor : MonoBehaviour
             defensePower,
             defenseList,
             skipDefenseOrbReactions: true,
-            applyDynamiteRecoil: false,
-            countsAsDirectAttack: false);
+            applyDynamiteRecoil: false);
     }
 
     /// <summary>宝玉反撃力（TOTAL 表示用と戦闘解決のどちらでも同式）。</summary>
@@ -518,8 +515,7 @@ public class BattleProcessor : MonoBehaviour
             PlayerStatus recipient = defender;
             if (recipient == null) continue;
 
-            var (applyResult, grantFade) = recipient.TryApplyStatusEffect(
-                card.statusEffectToApply, cfg, freezeDurationFromCard: card.freezeDuration);
+            var (applyResult, grantFade) = recipient.TryApplyStatusEffect(card.statusEffectToApply, cfg);
             if (applyResult == ProgressiveApplyResult.ForcedParadiseEcstasy)
             {
                 if (grantFade > 0f)
@@ -933,8 +929,7 @@ public class BattleProcessor : MonoBehaviour
         int defensePower,
         IReadOnlyList<CardData> defenseCardsForStatusRule = null,
         bool skipDefenseOrbReactions = false,
-        bool applyDynamiteRecoil = true,
-        bool countsAsDirectAttack = true)
+        bool applyDynamiteRecoil = true)
     {
         if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
         {
@@ -1018,10 +1013,6 @@ public class BattleProcessor : MonoBehaviour
             await Task.Delay(DamagePopup.PreStatusEffectAfterDamagePopupDelayMs);
 
         await TryApplyAttackCardStatusEffectsAsync(attackCards, attacker, defender, firstPhaseDamage, defenseCardsForStatusRule);
-
-        await ShivaDirectAttackFreezeFlow.TryApplyFreezeAfterDirectAttackAsync(
-            attacker, defender, firstPhaseDamage, countsAsDirectAttack);
-        UpdateStatusDisplay();
 
         if (!skipDefenseOrbReactions
             && firstPhaseDamage > 0

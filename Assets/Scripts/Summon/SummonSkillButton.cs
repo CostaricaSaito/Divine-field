@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -44,7 +44,6 @@ public class SummonSkillButton : MonoBehaviour
             && _self.summonData.manifestationCard != null
             && turnOk
             && !_self.IsCastingArchMagic
-            && !_self.HasFreezeEffect()
             && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
             && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
             && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)

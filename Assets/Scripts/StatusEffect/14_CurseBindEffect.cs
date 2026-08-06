@@ -1,9 +1,8 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 呪縛（公式14番）：付与中は加護スキル（パッシブ）が無効。数値補正は <see cref="SummonPassiveBlessingApplier"/>、
 /// ターン起因の加護は召喚ライフサイクル（例: <see cref="SummonGarudaLifecycle"/>）側で判定する。
-/// 直接攻撃付与系（例: <see cref="ShivaDirectAttackFreezeFlow"/>）も攻撃者の呪縛で無効。
 /// ファイル名: <c>14_CurseBindEffect.cs</c>（<see cref="StatusEffectType.CurseBind"/>）。
 /// </summary>
 public sealed class CurseBindEffect : IStatusEffect

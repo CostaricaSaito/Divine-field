@@ -68,22 +68,6 @@ public class EnemyAI
         }
 
         var selectedCard = cpuHand[Random.Range(0, cpuHand.Count)];
-        if (!IsEnemyHandCardAvailable(selectedCard))
-        {
-            foreach (var c in cpuHand)
-            {
-                if (IsEnemyHandCardAvailable(c))
-                {
-                    selectedCard = c;
-                    break;
-                }
-            }
-        }
-        if (selectedCard == null || !IsEnemyHandCardAvailable(selectedCard))
-        {
-            Debug.LogWarning("[EnemyAI] 相手の手札に未使用カードがありません");
-            return null;
-        }
         Debug.Log($"[EnemyAI] 売却対象カード選択: {selectedCard.cardName} (価値: {selectedCard.cardValue})");
         return selectedCard;
     }
@@ -92,15 +76,13 @@ public class EnemyAI
     /// 攻撃カードの選び方：通常攻撃を優先、なければ使えるものから選択
     /// 魔法カードはMP消費可能な場合のみ候補
     /// </summary>
-    public CardData SelectAttackCard(List<CardData> enemyHand, PlayerStatus enemyStatus, HandRefillService handRefill = null)
+    public CardData SelectAttackCard(List<CardData> enemyHand, PlayerStatus enemyStatus)
     {
-        handRefill ??= BattleManager.I?.HandRefill;
         // 大魔法（ArchMagic）は敵 AI の自動選択対象から除外する（現状は全て）。
         // 将来 AI を拡張した場合のために明示的にスキップする。
         // 第1優先: 通常攻撃カード（PrimaryAttack or Attack型）
         foreach (var c in enemyHand)
         {
-            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
             if (c.cardType == CardType.Magic) continue;
             if (ArchMagicRules.IsArchMagicCard(c)) continue;
             if (CardRules.IsUsableInAttackPhase(c)
@@ -111,7 +93,6 @@ public class EnemyAI
         // 第2優先: その他の通常カード
         foreach (var c in enemyHand)
         {
-            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
             if (c.cardType == CardType.Magic) continue;
             if (ArchMagicRules.IsArchMagicCard(c)) continue;
             if (CardRules.IsUsableInAttackPhase(c))
@@ -121,7 +102,6 @@ public class EnemyAI
         // 第3優先: 手札の魔法カード（MPが足りる＋プールに空き or 同種。パネル登録済みは手札攻撃に使わない）
         foreach (var c in enemyHand)
         {
-            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
             if (c.cardType != CardType.Magic) continue;
             if (!CardRules.IsUsableInAttackPhase(c)) continue;
             if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
@@ -154,21 +134,12 @@ public class EnemyAI
 
     /// <summary>
     /// 敵手札でまだ選べるカードか（使用済み＝裏向きは除外）。
-    /// 敵手札は cardUI を持たないため <see cref="HandRefillService.IsEnemyCardUsedThisTurn"/> も参照する。
     /// </summary>
-    public static bool IsEnemyHandCardAvailable(CardData c, HandRefillService handRefill = null)
+    public static bool IsEnemyHandCardSelectable(CardData c)
     {
         if (c == null) return false;
         if (c.cardUI != null && c.cardUI.IsFaceDown()) return false;
-        handRefill ??= BattleManager.I?.HandRefill;
-        if (handRefill != null && handRefill.IsEnemyCardUsedThisTurn(c)) return false;
-        return true;
-    }
-
-    /// <summary>防御フェーズで敵 AI が選べる手札カードか。</summary>
-    public static bool IsEnemyHandCardSelectable(CardData c, HandRefillService handRefill = null)
-    {
-        return IsEnemyHandCardAvailable(c, handRefill) && CardRules.IsUsableInDefensePhase(c);
+        return CardRules.IsUsableInDefensePhase(c);
     }
 
     /// <summary>
@@ -208,7 +179,7 @@ public class EnemyAI
 
         foreach (var c in choices)
         {
-            if (c != null && CardRules.IsPrimaryDefenseCard(c))
+            if (c != null && (c.isPrimaryDefense || c.cardType == CardType.Defense))
                 return c;
         }
 
@@ -281,15 +252,14 @@ public class EnemyAI
     /// <summary>
     /// プレイヤーと同じコンボルールで攻撃カード群を選ぶ。
     /// </summary>
-    public virtual List<CardData> SelectAttackCombo(List<CardData> enemyHand, PlayerStatus enemyStatus, HandRefillService handRefill = null)
+    public virtual List<CardData> SelectAttackCombo(List<CardData> enemyHand, PlayerStatus enemyStatus)
     {
-        handRefill ??= BattleManager.I?.HandRefill;
         var handCandidates = CardRules.GetAttackChoices(enemyHand, PlayerType.Enemy);
-        handCandidates.RemoveAll(c => c == null || ArchMagicRules.IsArchMagicCard(c) || !IsEnemyHandCardAvailable(c, handRefill));
+        handCandidates.RemoveAll(c => c == null || ArchMagicRules.IsArchMagicCard(c));
 
         var poolCandidates = GetPoolAttackCandidates(enemyStatus);
 
-        var primary = SelectAttackCard(enemyHand, enemyStatus, handRefill);
+        var primary = SelectAttackCard(enemyHand, enemyStatus);
         if (primary == null && poolCandidates.Count > 0)
             primary = poolCandidates[0];
 
@@ -378,7 +348,7 @@ public class EnemyAI
 
         await Task.Delay(500);
 
-        LastAttackSelection = SelectAttackCombo(cpuHand, enemyStatus, handRefill);
+        LastAttackSelection = SelectAttackCombo(cpuHand, enemyStatus);
         if (LastAttackSelection == null || LastAttackSelection.Count == 0)
         {
             Debug.Log("[EnemyAI] 攻撃カードが見つからないため、ターン終了");

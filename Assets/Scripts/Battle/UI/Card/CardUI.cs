@@ -121,7 +121,7 @@ public class CardUI : MonoBehaviour
         bool show = !isFaceUp
                     && playerHandRareBackPresentation
                     && cardData != null
-                    && cardData.HasPremiumHandPresentation();
+                    && cardData.isRare;
         SetRareBackOverlayActive(show);
     }
 
@@ -320,7 +320,8 @@ public class CardUI : MonoBehaviour
             if (c.cardType == CardType.Recovery) return true;
             if (c.cardType == CardType.Magic || c.cardType == CardType.ArchMagic)
             {
-                return c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects;
+                return c.healsHP || c.healsMP || c.healsGP || c.isRecovery
+                       || c.cureAllStatusEffects;
             }
             return false;
         }
@@ -353,7 +354,7 @@ public class CardUI : MonoBehaviour
             }
             if (c.cardType == CardType.Magic)
             {
-                if (CardRules.HasRecoveryEffect(c)) return false;
+                if (c.isRecovery || c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects) return false;
                 if (c.attackPower > 0 && c.usableInAttackPhase) return false;
                 if (c.reflectionKind == ReflectionKind.None
                     && c.parryKind == ParryKind.None

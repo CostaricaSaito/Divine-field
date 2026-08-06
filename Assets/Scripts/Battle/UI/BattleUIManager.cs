@@ -278,8 +278,11 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// Intro 時点でのカード表示（グレーアウトなし）
     /// </summary>
-    public void SetIntroModeUI(List<CardData> hand)
-        => cardController?.SetIntroModeUI(hand);
+    /// <param name="archMagicChantUseButtonLabel">
+    /// true のとき「詠唱開始」のまま（大魔法詠唱中の攻撃フェーズ差し替え時など。「使用」に戻さない）。
+    /// </param>
+    public void SetIntroModeUI(List<CardData> hand, bool archMagicChantUseButtonLabel = false)
+        => cardController?.SetIntroModeUI(hand, archMagicChantUseButtonLabel);
 
     //==== パブリックAPI：ポップアップ（BattlePopupPresenter へ委譲） =====
     /// <returns>表示したポップアップが Destroy されるまでの秒数（<see cref="DamagePopup.fadeDuration"/>）。生成失敗時は 0。</returns>
@@ -389,15 +392,6 @@ public class BattleUIManager : MonoBehaviour
     public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
         => popupPresenter != null ? popupPresenter.ShowMessagePopupForTarget(target, message, color) : 0f;
 
-    public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color, Color outlineColor)
-        => popupPresenter != null ? popupPresenter.ShowMessagePopupForTarget(target, message, color, outlineColor) : 0f;
-
-    public float ShowStyledMessagePopup(PlayerStatus target, MessagePopupKind kind)
-        => popupPresenter != null ? popupPresenter.ShowStyledMessagePopup(target, kind) : 0f;
-
-    public MessagePopup SpawnMessagePopupForTarget(PlayerStatus target, MessagePopupKind kind)
-        => popupPresenter != null ? popupPresenter.SpawnMessagePopupForTarget(target, kind) : null;
-
     public Task<float> ShowBarriarDamagePopupAsync(
         int valueBefore,
         int valueAfter,
@@ -464,13 +458,7 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 防御フェーズのボタンラベルを更新
     /// </summary>
-    public void RefreshUseButton() => useButtonPresenter?.Refresh();
-
-    /// <summary>互換エイリアス。<see cref="RefreshUseButton"/> を呼ぶ。</summary>
-    public void UpdateDefenseButtonLabel() => RefreshUseButton();
-
-    /// <summary>互換エイリアス。<see cref="RefreshUseButton"/> を呼ぶ。</summary>
-    public void RefreshUseButtonForMpAndSelection() => RefreshUseButton();
+    public void UpdateDefenseButtonLabel() => useButtonPresenter?.UpdateDefenseButtonLabel();
 
     /// <summary>反射の弾き返しと同じ全画面白フラッシュ（ミリ秒）。劣勢時レアドロー等からも利用。</summary>
     public void PlayFullscreenWhiteFlashMs(float durationMs) => effectPresenter?.PlayFullscreenWhiteFlashMs(durationMs);
@@ -492,6 +480,11 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>介入攻撃カードを表示パネル先頭に出す（選択マネージャには載せない）。</summary>
     public void ShowInterventionAttackSheet(CardData card, Side side)
         => cardController?.ShowInterventionAttackSheet(card, side);
+
+    /// <summary>
+    /// 攻撃選択中：魔法の合算MP（眼精疲労の倍率・群発の使用不可）に応じて使用ボタンを更新。
+    /// </summary>
+    public void RefreshUseButtonForMpAndSelection() => useButtonPresenter?.RefreshUseButtonForMpAndSelection();
 
     //==== 経済アクション（EconomicUIHandler へ委譲） =====
 

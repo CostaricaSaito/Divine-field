@@ -187,17 +187,13 @@ public static class ParryFlow
                 await Task.Delay(500, cancellationToken);
             }
 
-            bool showEnemyYurusu = second == null && BattleUIManager.I != null;
-            using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
-            {
-                await battleProcessor.ResolveCombatAsync(
-                    incomingPlayerAttackCards,
-                    second,
-                    player,
-                    enemy,
-                    battleManager.cpuHand,
-                    skipHitCheck: true);
-            }
+            await battleProcessor.ResolveCombatAsync(
+                incomingPlayerAttackCards,
+                second,
+                player,
+                enemy,
+                battleManager.cpuHand,
+                skipHitCheck: true);
 
             if (second != null)
             {

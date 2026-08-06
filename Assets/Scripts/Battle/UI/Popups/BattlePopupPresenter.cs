@@ -21,9 +21,6 @@ public class BattlePopupPresenter : MonoBehaviour
 {
     [Header("ダメージ / 情報 ポップアップ")]
     [SerializeField] private GameObject damagePopupPrefab;
-    [Tooltip("Styled battle messages (freeze, disease intro, parry fail, intervention). Falls back to Resources/Prefab/MessagePopup.")]
-    [SerializeField] private GameObject messagePopupPrefab;
-    [SerializeField] private MessagePopupSettings messagePopupSettings;
     [Tooltip("大魔法バリア被ダメ演出。未設定時は Resources.Load(\"Prefab/BarriarDamage\")")]
     [SerializeField] private GameObject barrierDamagePopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
@@ -189,7 +186,22 @@ public class BattlePopupPresenter : MonoBehaviour
     public float ShowParryReturnToSelfPopup(PlayerStatus target)
     {
         SoundEffectPlayer.I?.Play("Assets/SE/ヒューンと落下.mp3");
-        return ShowStyledMessagePopup(target, MessagePopupKind.ParryFailedReturn);
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] 打ち払い戻りポップアップ生成に失敗");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            damageText.SetupParryYellowBanner("こちらに飛んできた！");
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattlePopupPresenter] DamagePopup が見つかりません（打ち払い戻り）");
+        return 0f;
     }
 
     public float ShowBlockingNullifyPopup(PlayerStatus target)
@@ -404,93 +416,27 @@ public class BattlePopupPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// Styled <see cref="MessagePopup"/> for predefined battle messages (Inspector colors in <see cref="MessagePopupSettings"/>).
-    /// </summary>
-    public float ShowStyledMessagePopup(PlayerStatus target, MessagePopupKind kind)
-    {
-        var popup = SpawnMessagePopupForTarget(target, kind);
-        return popup != null ? popup.FadeDuration : 0f;
-    }
-
-    public MessagePopup SpawnMessagePopupForTarget(PlayerStatus target, MessagePopupKind kind)
-    {
-        if (target == null) return null;
-
-        var entry = ResolveMessagePopupSettings().GetEntryOrDefault(kind);
-        var go = SpawnMessagePopupObjectFor(target);
-        if (go == null) return null;
-
-        var popup = go.GetComponent<MessagePopup>();
-        if (popup == null)
-            popup = go.AddComponent<MessagePopup>();
-
-        popup.Setup(entry);
-        return popup;
-    }
-
-    private MessagePopupSettings ResolveMessagePopupSettings()
-    {
-        if (messagePopupSettings != null) return messagePopupSettings;
-        return MessagePopupSettings.GetRuntimeFallback();
-    }
-
-    private GameObject SpawnMessagePopupObjectFor(PlayerStatus target)
-    {
-        GameObject prefab = messagePopupPrefab != null
-            ? messagePopupPrefab
-            : Resources.Load<GameObject>("Prefab/MessagePopup");
-        if (prefab == null)
-        {
-            Debug.LogWarning("[BattlePopupPresenter] MessagePopup prefab is missing");
-            return null;
-        }
-
-        bool isPlayer = target == BattleManager.I?.GetPlayerStatus();
-        Transform parent = isPlayer
-            ? (BattleUIManager.I != null ? BattleUIManager.I.GetPlayerCardDisplayPanel() : null)
-            : (BattleUIManager.I != null ? BattleUIManager.I.GetEnemyCardDisplayPanel() : null);
-        if (parent == null)
-        {
-            var canvas = BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
-            parent = canvas != null ? canvas.transform : null;
-        }
-        if (parent == null) return null;
-
-        var go = Instantiate(prefab, parent, false);
-        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
-        return go;
-    }
-
-    /// <summary>
-    /// ステータス付近に任意メッセージのポップアップ（DamagePopup 経由。MessagePopup 対象外の汎用文言用）。
+    /// ステータス付近に任意メッセージのポップアップ（病系は改行入りで2行表示等）。
     /// </summary>
     public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color)
-    {
-        return ShowMessagePopupForTarget(target, message, color, Color.white);
-    }
-
-    /// <summary>
-    /// Status-adjacent message popup with explicit outline color.
-    /// </summary>
-    public float ShowMessagePopupForTarget(PlayerStatus target, string message, Color color, Color outlineColor)
     {
         if (target == null || string.IsNullOrEmpty(message)) return 0f;
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
         {
-            Debug.LogWarning("[BattlePopupPresenter] ShowMessagePopupForTarget: popup spawn failed");
+            Debug.LogWarning("[BattlePopupPresenter] ShowMessagePopupForTarget: ポップアップ生成に失敗");
             return 0f;
         }
 
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            damageText.Setup(message, color, outlineColor);
+            damageText.Setup(message, color);
             return damageText.fadeDuration;
         }
 
-        Debug.LogWarning("[BattlePopupPresenter] ShowMessagePopupForTarget: DamagePopup missing");
+        Debug.LogWarning("[BattlePopupPresenter] ShowMessagePopupForTarget: DamagePopup がありません");
         return 0f;
     }
 
@@ -578,7 +524,8 @@ public class BattlePopupPresenter : MonoBehaviour
     {
         if (attackerStatus == null) return;
         SoundEffectPlayer.I?.Play("Assets/SE/介入.mp3");
-        ShowStyledMessagePopup(attackerStatus, MessagePopupKind.InterventionAttack);
+        StatusEffectPresentation.GetPopupColors(StatusEffectType.Intervention, out _, out Color textColor);
+        ShowMessagePopupForTarget(attackerStatus, "未知の力が\n放たれる", textColor);
     }
 
     private GameObject SpawnPopupFor(PlayerStatus target)

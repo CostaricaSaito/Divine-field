@@ -200,7 +200,7 @@ public class CardLayoutManager : MonoBehaviour
     /// </summary>
     private int GetCardDisplayOrder(CardData cardData)
     {
-        if (cardData.cardType == CardType.Defense || CardRules.IsPrimaryDefenseCard(cardData))
+        if (cardData.cardType == CardType.Defense || cardData.isPrimaryDefense)
         {
             return CountExistingDefenseCards();
         }
@@ -230,7 +230,7 @@ public class CardLayoutManager : MonoBehaviour
             if (cardDisplay?.GetCardData() != null)
             {
                 var existingCard = cardDisplay.GetCardData();
-                if (existingCard.cardType == CardType.Defense || CardRules.IsPrimaryDefenseCard(existingCard))
+                if (existingCard.cardType == CardType.Defense || existingCard.isPrimaryDefense)
                 {
                     count++;
                 }

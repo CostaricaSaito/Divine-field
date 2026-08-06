@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 /// <summary>
 /// 攻撃フェーズの手札選択可否（組み合わせ専用カードと単独利用可能カードの区別）。
@@ -108,12 +108,12 @@ public static class AttackComboSelectionRules
     public static bool IsAttackCardForComboSelection(CardData card)
     {
         if (card == null) return false;
-        if (card.cardType == CardType.Magic && !CardRules.IsRecoveryCard(card))
+        if (card.cardType == CardType.Magic && !card.isRecovery)
             return CardRules.IsUsableInAttackPhase(card);
         if (card.cardType == CardType.ArchMagic) return true;
         if (card.cardType == CardType.Special) return true;
         if (card.cardType == CardType.Ultimate) return true;
-        return card.cardType == CardType.Attack || CardRules.IsRecoveryCard(card);
+        return card.cardType == CardType.Attack || card.isRecovery;
     }
 
     public static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
@@ -192,7 +192,7 @@ public static class AttackComboSelectionRules
         if (!CanPickAttackCardNow(card, selection))
             return false;
 
-        if (attackerStatus != null && card.cardType == CardType.Magic && !CardRules.IsRecoveryCard(card))
+        if (attackerStatus != null && card.cardType == CardType.Magic && !card.isRecovery)
         {
             if (attackerStatus.IsMagicUseForbidden()) return false;
             var test = new List<CardData>();
@@ -261,7 +261,7 @@ public static class AttackComboSelectionRules
     {
         return c != null
             && c.cardType == CardType.Magic
-            && !CardRules.IsRecoveryCard(c)
+            && !c.isRecovery
             && c.attackPhaseUseRule == AttackPhaseUseRule.Primary;
     }
 
@@ -277,7 +277,7 @@ public static class AttackComboSelectionRules
         for (int i = 0; i < (selection?.Count ?? 0); i++)
         {
             var c = selection[i];
-            if (c != null && c.cardType == CardType.Magic && !CardRules.IsRecoveryCard(c))
+            if (c != null && c.cardType == CardType.Magic && !c.isRecovery)
                 return true;
         }
         return false;

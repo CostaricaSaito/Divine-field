@@ -162,10 +162,15 @@ public static class InterventionTurnEndProcessor
         await bm.PickAndDisplayEnemyDefenseAfterPlayerHitAsync(atkList);
         var def = bm.GetSelectedDefenseCard();
         bool showYurusu = def == null && BattleUIManager.I != null;
-        using (YurusuDisplayScope.ShowIf(showYurusu))
+        if (showYurusu) BattleUIManager.I.ShowYurusuDisplay();
+        try
         {
             await bm.battleProcessor.ResolveCombatAsync(
                 atkList, def, bm.GetPlayerStatus(), bm.GetEnemyStatus(), bm.cpuHand, skipHitCheck: true);
+        }
+        finally
+        {
+            if (showYurusu) BattleUIManager.I?.HideYurusuButton();
         }
 
         if (def != null)

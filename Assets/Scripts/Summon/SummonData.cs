@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 
 [System.Serializable]
@@ -121,15 +121,6 @@ public class SummonData : ScriptableObject
     {
         if (passiveBlessingMode == SummonPassiveBlessingMode.Indra) return true;
         return name == "Indra" || StableSummonId == "indra";
-    }
-
-    /// <summary>
-    /// Whether Shiva direct-attack freeze passive applies.
-    /// </summary>
-    public bool IsShivaDirectAttackFreeze()
-    {
-        if (passiveBlessingMode == SummonPassiveBlessingMode.Shiva) return true;
-        return name == "Siva" || StableSummonId == "siva";
     }
 
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)

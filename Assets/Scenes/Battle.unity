@@ -7530,7 +7530,7 @@ MonoBehaviour:
   m_text: "\u4F7F\u7528"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
-  m_sharedMaterial: {fileID: 2570324923874611504, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: 50ee729be14ebb94e95439c5b1c3a2b3, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -11399,7 +11399,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   allCards: []
-  drawTable: {fileID: 11400000, guid: 82165e8223894b08ac87b19a34a5aa60, type: 2}
 --- !u!4 &1707344935
 Transform:
   m_ObjectHideFlags: 0
@@ -11850,7 +11849,6 @@ MonoBehaviour:
   battleProcessor: {fileID: 1424129652}
   statusProgressionConfig: {fileID: 11400000, guid: 83a07ae610160724580a19a5879d8264, type: 2}
   diseaseTurnEndSettings: {fileID: 11400000, guid: 7d22aef61a60098428916f4ffe8f5d28, type: 2}
-  shivaDirectAttackFreezeSettings: {fileID: 11400000, guid: c5f9a2b3d4e5678901abcdef12345678, type: 2}
   summonSkillButton: {fileID: 1904038048}
   enemySummonSkillButton: {fileID: 30631432}
   cardPurchaseAnimation: {fileID: 830370672}
@@ -12988,8 +12986,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   damagePopupPrefab: {fileID: 8132803077523845069, guid: 6d20cbc8bdb5a0d4ba65bed74305dcd7, type: 3}
-  messagePopupPrefab: {fileID: 0}
-  messagePopupSettings: {fileID: 0}
   barrierDamagePopupPrefab: {fileID: 0}
   importantPopupPrefab: {fileID: 8132803077523845069, guid: a7bbcd678d95408418208a6356b7d8d9, type: 3}
   ojyouPopupPrefab: {fileID: 8132803077523845069, guid: ebc39f705990c4146abb0e211987d0cf, type: 3}

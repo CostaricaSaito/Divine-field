@@ -31,9 +31,19 @@ public class CardSelectionManager : MonoBehaviour
             return false;
 
         // ===== 防御フェーズ：拘束中は防御カードを2枚目まで選べない =====
-        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card))
+        if (BattleManager.I != null
+            && (BattleManager.I.CurrentState == GameState.DefensePhase
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || BattleManager.I.IsPostDeathDefenseWaitActive()
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
+                || BattleManager.I.IsReflectionChainDefensePending()
+                || BattleManager.I.IsParryRerunDefensePending())
+            && IsDefenseCard(card))
         {
-            PlayerStatus defender = BattleManager.I.GetPlayerStatus();
+            PlayerStatus defender = BattleManager.I.IsPostDeathPlayerDefender
+                || BattleManager.I.DefenderPublic == PlayerType.Player
+                ? BattleManager.I.GetPlayerStatus()
+                : BattleManager.I.GetEnemyStatus();
             if (defender != null && defender.HasRestraintEffect())
             {
                 var already = GetSelectedDefenseCards();
@@ -55,7 +65,15 @@ public class CardSelectionManager : MonoBehaviour
         }
 
         // ===== 防御：物理／魔法反射は攻撃に応じて他カードと併選不可 =====
-        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card))
+        if (BattleManager.I != null
+            && (BattleManager.I.CurrentState == GameState.DefensePhase
+                || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                || BattleManager.I.IsPostDeathDefenseWaitActive()
+                || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
+                || BattleManager.I.IsReflectionChainDefensePending()
+                || BattleManager.I.IsParryRerunDefensePending())
+            && IsDefenseCard(card))
         {
             var incoming = BattleManager.I.GetIncomingAttackSnapshotForDefenseUi();
 
@@ -87,10 +105,12 @@ public class CardSelectionManager : MonoBehaviour
             // 反射連鎖／打ち払い再防御は State が攻撃系のままのため必ず除外
             if (BattleManager.I != null
                 && BattleManager.I.CurrentState == GameState.AttackPhase
-                && !BattleManager.I.IsPlayerDefenseInputActive()
+                && !BattleManager.I.IsReflectionChainDefensePending()
+                && !BattleManager.I.IsParryRerunDefensePending()
+                && !BattleManager.I.IsPostDeathDefenseWaitActive()
                 && !BattleManager.I.IsPostDeathSequenceActive
                 && BattleManager.I.CurrentTurnOwner == PlayerType.Player
-                && !CardRules.IsRecoveryCard(card)
+                && !card.isRecovery
                 && !CardRules.IsUsableInAttackPhase(card))
             {
                 return false;
@@ -110,7 +130,14 @@ public class CardSelectionManager : MonoBehaviour
 
             // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。防御フェーズはここでも単体不足を弾く。
             bool defenseMagicContext = BattleManager.I != null
-                && BattleManager.I.IsPlayerDefenseInputActive()
+                && (BattleManager.I.CurrentState == GameState.DefensePhase
+                    || BattleManager.I.CurrentState == GameState.DefenseConfirmPhase
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase
+                        && (BattleManager.I.IsInterventionDefenseWaitActive()
+                            || BattleManager.I.IsPostDeathDefenseWaitActive()
+                            || BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
+                    || BattleManager.I.IsReflectionChainDefensePending()
+                    || BattleManager.I.IsParryRerunDefensePending())
                 && IsDefenseCard(card);
             if (defenseMagicContext && magicUserStatus != null
                 && !BlockingRules.CanAffordMagicDefenseMp(card, magicUserStatus))
@@ -322,7 +349,15 @@ public class CardSelectionManager : MonoBehaviour
 
     private SelectionRole GetRoleForCurrentPhase(CardData card)
     {
-        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive())
+        if (BattleManager.I == null) return card.attackPhaseRole;
+
+        var state = BattleManager.I.CurrentState;
+        if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+            || BattleManager.I.IsPostDeathDefenseWaitActive()
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
+            || (state == GameState.CombatResolvePhase && BattleManager.I.IsReflectionChainDefensePending())
+            || (state == GameState.AttackPhase && BattleManager.I.IsReflectionChainDefensePending()))
             return card.defensePhaseRole;
 
         return card.attackPhaseRole;
@@ -392,12 +427,12 @@ public class CardSelectionManager : MonoBehaviour
     private bool IsAttackCard(CardData card)
     {
         if (card == null) return false;
-        if (card.cardType == CardType.Magic && !CardRules.IsRecoveryCard(card))
+        if (card.cardType == CardType.Magic && !card.isRecovery)
             return CardRules.IsUsableInAttackPhase(card);
         if (card.cardType == CardType.ArchMagic) return true;
         if (card.cardType == CardType.Special) return true;
         if (card.cardType == CardType.Ultimate) return true;
-        return card.cardType == CardType.Attack || CardRules.IsRecoveryCard(card);
+        return card.cardType == CardType.Attack || card.isRecovery;
     }
 
     private bool IsDefenseCard(CardData card)
@@ -417,6 +452,15 @@ public class CardSelectionManager : MonoBehaviour
 
     private static bool IsDefenseSelectionContext()
     {
-        return BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive();
+        if (BattleManager.I == null) return false;
+        var bm = BattleManager.I;
+        var state = bm.CurrentState;
+        return state == GameState.DefensePhase
+            || state == GameState.DefenseConfirmPhase
+            || (state == GameState.CombatResolvePhase && bm.IsInterventionDefenseWaitActive())
+            || bm.IsPostDeathDefenseWaitActive()
+            || (state == GameState.CombatResolvePhase && bm.IsPlayerDualBladeSecondDefenseWaitActive())
+            || bm.IsReflectionChainDefensePending()
+            || bm.IsParryRerunDefensePending();
     }
 }

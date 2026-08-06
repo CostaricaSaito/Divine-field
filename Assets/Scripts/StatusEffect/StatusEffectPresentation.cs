@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -43,7 +43,7 @@ public static class StatusEffectPresentation
             { StatusEffectType.ClusterHeadache, (new Color(0.32f, 0.15f, 0.15f, 0.93f), new Color(1f, 0.5f, 0.45f)) },
             { StatusEffectType.Smoke, (new Color(0.2f, 0.2f, 0.2f, 0.93f), new Color(0.85f, 0.85f, 0.85f)) },
             { StatusEffectType.Misfortune, (new Color(0.22f, 0.16f, 0.12f, 0.93f), new Color(1f, 0.65f, 0.35f)) },
-            { StatusEffectType.Freeze, (new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.75f, 1f)) },
+            { StatusEffectType.Seal, (new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.75f, 1f)) },
             { StatusEffectType.Fog, (new Color(0.18f, 0.22f, 0.28f, 0.93f), new Color(0.75f, 0.88f, 1f)) },
             { StatusEffectType.Confusion, (new Color(0.32f, 0.2f, 0.38f, 0.93f), new Color(1f, 0.55f, 0.95f)) },
             { StatusEffectType.Intervention, (new Color(0.18f, 0.28f, 0.22f, 0.93f), new Color(0.55f, 1f, 0.75f)) },

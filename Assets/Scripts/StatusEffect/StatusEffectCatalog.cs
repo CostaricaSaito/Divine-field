@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 状態異常（公式ID 1〜15）の一覧。デバッグUIやループ処理用。
@@ -19,7 +19,7 @@ public static class StatusEffectCatalog
         StatusEffectType.ClusterHeadache,
         StatusEffectType.Smoke,
         StatusEffectType.Misfortune,
-        StatusEffectType.Freeze,
+        StatusEffectType.Seal,
         StatusEffectType.Fog,
         StatusEffectType.Confusion,
         StatusEffectType.Intervention,
@@ -31,7 +31,7 @@ public static class StatusEffectCatalog
     public static readonly string[] OfficialDisplayNames =
     {
         "病", "重病", "煉獄病", "楽園病", "衰弱", "眼精疲労", "群発頭痛",
-        "煙幕", "不運", "凍結", "濃霧", "混乱", "介入", "呪縛", "拘束",
+        "煙幕", "不運", "封印", "濃霧", "混乱", "介入", "呪縛", "拘束",
     };
 
     /// <summary>公式ID 1〜15 を列挙値に変換。範囲外は None。</summary>

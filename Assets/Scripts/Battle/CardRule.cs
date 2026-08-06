@@ -3,36 +3,26 @@
 /// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
 {
-    /// <summary>HP/MP/GP 回復または全状態異常解除を持つか。</summary>
-    public static bool HasRecoveryEffect(CardData c)
-    {
-        if (c == null) return false;
-        return c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects;
-    }
-
-    /// <summary>通常防具・防御専用魔法など（反射/打ち払い攻撃カードは含まない）。AI・レイアウト用。</summary>
-    public static bool IsPrimaryDefenseCard(CardData c)
-    {
-        if (c == null) return false;
-        if (c.cardType == CardType.Defense) return true;
-        return c.cardType == CardType.Magic
-            && IsUsableInDefensePhase(c)
-            && !HasRecoveryEffect(c)
-            && !c.usableInAttackPhase;
-    }
-
     /// <summary>攻撃フェーズで使用できるか。</summary>
     public static bool IsUsableInAttackPhase(CardData c)
     {
         if (c == null) return false;
         if (c.cardType == CardType.Ultimate) return false;
         if (c.usableInAttackPhase) return true;
+        if (c.isCounterAttack) return true;
         if (c.cardType == CardType.ArchMagic) return true;
-        if (IsRecoveryCard(c)) return true;
-        if (c.cardType == CardType.Magic) return false;
+        if (c.isRecovery) return true;
+        if (c.cureAllStatusEffects && c.cardType == CardType.Recovery) return true;
+        if (c.cardType == CardType.Magic && !c.isRecovery)
+            return false;
+
+        if (c.isSpecialEffect) return true;
+
         if (c.cardType == CardType.Special)
             return c.specialCardEffect != null && c.postDeathCardEffect == null;
-        return c.cardType == CardType.Attack || c.cardType == CardType.Recovery;
+
+        return c.cardType == CardType.Attack
+            || c.cardType == CardType.Recovery;
     }
 
     /// <summary>防御フェーズで使用できるか。</summary>
@@ -40,6 +30,7 @@ public static class CardRules
     {
         if (c == null) return false;
         if (c.usableInDefensePhase) return true;
+        if (c.isPrimaryDefense || c.isCounterAttack) return true;
         return c.cardType == CardType.Defense;
     }
 
@@ -49,7 +40,7 @@ public static class CardRules
     public static bool IsImmediateAction(CardData c)
     {
         if (c == null) return false;
-        if (IsRecoveryCard(c)) return true;
+        if (c.cardType == CardType.Recovery || c.isRecovery) return true;
         if (c.cureAllStatusEffects
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
             return true;
@@ -119,7 +110,7 @@ public static class CardRules
     public static bool IsRecoveryCard(CardData c)
     {
         if (c == null) return false;
-        return c.cardType == CardType.Recovery || (c.cardType == CardType.Magic && HasRecoveryEffect(c));
+        return c.cardType == CardType.Recovery || c.isRecovery;
     }
 
     /// <summary>
@@ -137,7 +128,7 @@ public static class CardRules
     public static bool IsAttackMagic(CardData c)
     {
         if (c == null || c.cardType != CardType.Magic) return false;
-        return !IsRecoveryCard(c);
+        return !c.isRecovery;
     }
 
     /// <summary>
@@ -146,7 +137,7 @@ public static class CardRules
     public static bool IsRecoveryMagic(CardData c)
     {
         if (c == null || c.cardType != CardType.Magic) return false;
-        return IsRecoveryCard(c);
+        return c.isRecovery;
     }
 
     /// <summary>
@@ -256,7 +247,7 @@ public static class CardRules
     /// </summary>
     public static bool IsStatusOnlyMagicCard(CardData c)
     {
-        if (c == null || c.cardType != CardType.Magic || IsRecoveryCard(c)) return false;
+        if (c == null || c.cardType != CardType.Magic || c.isRecovery) return false;
         if (!c.canApplyStatusEffect || c.statusEffectToApply == StatusEffectType.None) return false;
         if (c.statusEffectApplyTiming != StatusEffectApplyTiming.OnCardEffectResolve) return false;
         return c.attackPower <= 0;

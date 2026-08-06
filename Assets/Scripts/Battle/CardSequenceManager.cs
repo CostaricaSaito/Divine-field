@@ -73,13 +73,6 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
-        if (cardType == "攻撃")
-        {
-            cardStatsDisplay?.BeginAttackSequenceReveal(side);
-            cardStatsDisplay?.SetSequenceCards(new List<CardData>(), cardType, side);
-            cardStatsDisplay?.UpdateDisplay();
-        }
-
         if (cardType == "攻撃" && side == Side.Player)
         {
             battleManager.ClearMagicalSwordPlayerAttackState();
@@ -137,11 +130,20 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
-        if (cardType == "攻撃")
-            cardStatsDisplay?.ConfigureAttackSequenceRevealSuppressions(selectedCards);
+        if (cardType == "攻撃" && side == Side.Player
+            && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+            cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+            cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+            cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(true);
+        if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+            cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
 
         bool spellbookElementRevealPending = cardType == "攻撃"
             && SpellbookRules.NeedsElementRevealSequence(selectedCards);
+        if (spellbookElementRevealPending)
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
         battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
@@ -150,7 +152,7 @@ public class CardSequenceManager : MonoBehaviour
 
         _magicPanelBonusDrawsPendingReveal.Clear();
 
-        // 演出中のカードリストを初期化（BeginAttackSequenceReveal は冒頭で済）
+        // 演出中のカードリストを初期化
         cardStatsDisplay?.SetSequenceCards(new List<CardData>(), cardType, side);
 
         // ①表示ゾーンをクリア
@@ -163,9 +165,6 @@ public class CardSequenceManager : MonoBehaviour
         {
             BattleUIManager.I?.HideAllCardDetails();
         }
-
-        if (cardType == "攻撃")
-            cardStatsDisplay?.UpdateDisplay();
 
         // クリア後のインターバル（まっさらな状態を維持）
         await Task.Delay(300, cancellationToken);
@@ -183,8 +182,16 @@ public class CardSequenceManager : MonoBehaviour
         {
             if (cancellationToken.IsCancellationRequested)
             {
+                if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+                    cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+                if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
                 if (cardType == "攻撃")
-                    cardStatsDisplay?.ClearAttackSequenceRevealSuppressions();
+                    cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
                 if (cardType == "攻撃" && side == Side.Player)
                     PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
                 return;
@@ -208,11 +215,70 @@ public class CardSequenceManager : MonoBehaviour
 
         if (cancellationToken.IsCancellationRequested)
         {
+            if (cardType == "攻撃" && MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+                cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && TributeBloodRules.ContainsTributeBlood(selectedCards))
+                cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+            if (cardType == "攻撃" && HammadnessRules.ContainsHammadness(selectedCards))
+                cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
             if (cardType == "攻撃")
-                cardStatsDisplay?.ClearAttackSequenceRevealSuppressions();
+                cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
             if (cardType == "攻撃" && side == Side.Player)
                 PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
             return;
+        }
+
+        if (cardType == "攻撃" && spellbookElementRevealPending
+            && SpellbookRules.TryGetForcedComboElement(selectedCards, out var spellbookFlashElement))
+        {
+            try
+            {
+                await Task.Delay(500, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+                    cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+                if (HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+                cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+                if (side == Side.Player)
+                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
+                return;
+            }
+
+            const float spellbookColorFlashMs = 50f;
+            Color spellbookFlashColor = ElementHelper.GetElementColor(spellbookFlashElement);
+            SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
+            BattleUIManager.I?.PlayFullscreenColorFlashMs(spellbookFlashColor, spellbookColorFlashMs);
+            try
+            {
+                await Task.Delay((int)spellbookColorFlashMs, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+                    cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(false);
+                if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+                    cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(false);
+                if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+                    cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(false);
+                if (HammadnessRules.ContainsHammadness(selectedCards))
+                    cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
+                cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+                if (side == Side.Player)
+                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
+                return;
+            }
+
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+            cardStatsDisplay?.UpdateDisplay();
         }
 
         if (cardType == "攻撃" && side == Side.Player
@@ -348,47 +414,9 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
 
-        if (cardType == "攻撃" && spellbookElementRevealPending
-            && SpellbookRules.TryGetForcedComboElement(selectedCards, out var spellbookFlashElement))
-        {
-            try
-            {
-                await Task.Delay(500, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                cardStatsDisplay?.ClearAttackSequenceRevealSuppressions();
-                if (side == Side.Player)
-                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
-                return;
-            }
-
-            const float spellbookColorFlashMs = 50f;
-            Color spellbookFlashColor = ElementHelper.GetElementColor(spellbookFlashElement);
-            SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
-            BattleUIManager.I?.PlayFullscreenColorFlashMs(spellbookFlashColor, spellbookColorFlashMs);
-            try
-            {
-                await Task.Delay((int)spellbookColorFlashMs, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                cardStatsDisplay?.ClearAttackSequenceRevealSuppressions();
-                if (side == Side.Player)
-                    PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(cardStatsDisplay);
-                return;
-            }
-
-            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
-            cardStatsDisplay?.UpdateDisplay();
-        }
-
         // ③カードの処理
         if (cardType == "攻撃" && side == Side.Player && selectedCards != null && selectedCards.Count > 0)
-        {
             battleManager.SetPlayerAttackComboForCombat(selectedCards);
-            cardStatsDisplay?.EndAttackSequenceReveal();
-        }
 
         await ProcessCardsAsync(selectedCards, cardType);
 
@@ -677,6 +705,8 @@ public class CardSequenceManager : MonoBehaviour
         CardData selectedDefenseCard = defenseCards.Count > 0 ? defenseCards[0] : null;
         bool showYurusuDuringCombat =
             battleManager.DefenderPublic == PlayerType.Enemy && defenseCards.Count == 0 && BattleUIManager.I != null;
+        if (showYurusuDuringCombat)
+            BattleUIManager.I.ShowYurusuDisplay();
 
         bool enemyPhysicalReflect = selectedDefenseCard != null
             && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(selectedDefenseCard, attackCards);
@@ -687,7 +717,7 @@ public class CardSequenceManager : MonoBehaviour
         bool enemyParry = selectedDefenseCard != null
             && ParryRules.RequiresParryExclusiveLock(selectedDefenseCard, attackCards);
 
-        using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))
+        try
         {
             if (enemyPhysicalReflect || enemyMagicReflect)
             {
@@ -728,6 +758,11 @@ public class CardSequenceManager : MonoBehaviour
                 else
                     await battleProcessor.ResolveCombatAsync(attackCards, selectedDefenseCard, atk, def, defHand, skipHitCheck: true);
             }
+        }
+        finally
+        {
+            if (showYurusuDuringCombat)
+                BattleUIManager.I?.HideYurusuButton();
         }
 
         // オンラインの魔法防御は RemotePlayerAgent 側で記録・プール処理済みのため二重計上しない
@@ -1057,9 +1092,18 @@ public class CardSequenceManager : MonoBehaviour
 
         Debug.Log($"[CardSequenceManager] Enemy attack presentation: {selectedCards.Count} cards");
 
-        cardStatsDisplay?.ConfigureAttackSequenceRevealSuppressions(selectedCards);
+        if (MagicalExplosionRules.ContainsMagicalExplosion(selectedCards))
+            cardStatsDisplay?.SetSuppressMagicalExplosionPredictionDuringSequenceReveal(true);
+        if (MillionDollarBazookaRules.ContainsMillionDollarBazooka(selectedCards))
+            cardStatsDisplay?.SetSuppressMillionDollarBazookaPredictionDuringSequenceReveal(true);
+        if (TributeBloodRules.ContainsTributeBlood(selectedCards))
+            cardStatsDisplay?.SetSuppressTributeBloodPredictionDuringSequenceReveal(true);
+        if (HammadnessRules.ContainsHammadness(selectedCards))
+            cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(true);
 
         bool spellbookElementRevealPending = SpellbookRules.NeedsElementRevealSequence(selectedCards);
+        if (spellbookElementRevealPending)
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(true);
 
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
         battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
@@ -1069,13 +1113,7 @@ public class CardSequenceManager : MonoBehaviour
         cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃", Side.Enemy);
         BattleUIManager.I?.ClearAllSelections();
         BattleUIManager.I?.HideAllCardDetails();
-        cardStatsDisplay?.UpdateDisplay();
         await Task.Delay(300, cancellationToken);
-
-        PlayerAttackTotalDisplayFlow.EnterSequentialCardReveal_SuppressPendingModifierRamps(
-            cardStatsDisplay,
-            selectedCards,
-            battleManager.MagicalSwordEnemyAttackPowerBonus);
 
         for (int i = 0; i < selectedCards.Count; i++)
         {
@@ -1087,6 +1125,19 @@ public class CardSequenceManager : MonoBehaviour
             cardStatsDisplay?.UpdateDisplay();
             SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
             await Task.Delay(500, cancellationToken);
+        }
+
+        if (spellbookElementRevealPending
+            && SpellbookRules.TryGetForcedComboElement(selectedCards, out var spellbookFlashElement))
+        {
+            await Task.Delay(500, cancellationToken);
+            const float spellbookColorFlashMs = 50f;
+            Color spellbookFlashColor = ElementHelper.GetElementColor(spellbookFlashElement);
+            SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
+            BattleUIManager.I?.PlayFullscreenColorFlashMs(spellbookFlashColor, spellbookColorFlashMs);
+            await Task.Delay((int)spellbookColorFlashMs, cancellationToken);
+            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
+            cardStatsDisplay?.UpdateDisplay();
         }
 
         var psPre = battleManager.GetPlayerStatus();
@@ -1133,26 +1184,6 @@ public class CardSequenceManager : MonoBehaviour
         else
             cardStatsDisplay?.SetSuppressHammadnessPredictionDuringSequenceReveal(false);
 
-        if (esPre != null && psPre != null)
-        {
-            cardStatsDisplay?.SetSequenceCards(selectedCards, "攻撃", Side.Enemy);
-            cardStatsDisplay?.UpdateDisplay();
-            await PlayAttackModifierRampsAsync(selectedCards, esPre, psPre, cancellationToken);
-        }
-
-        if (spellbookElementRevealPending
-            && SpellbookRules.TryGetForcedComboElement(selectedCards, out var spellbookFlashElement))
-        {
-            await Task.Delay(500, cancellationToken);
-            const float spellbookColorFlashMs = 50f;
-            Color spellbookFlashColor = ElementHelper.GetElementColor(spellbookFlashElement);
-            SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
-            BattleUIManager.I?.PlayFullscreenColorFlashMs(spellbookFlashColor, spellbookColorFlashMs);
-            await Task.Delay((int)spellbookColorFlashMs, cancellationToken);
-            cardStatsDisplay?.SetSuppressSpellbookElementDuringSequenceReveal(false);
-            cardStatsDisplay?.UpdateDisplay();
-        }
-
         await ProcessEnemyAttackCardsAsync(selectedCards);
 
         CardData primaryNormal = null;
@@ -1171,8 +1202,6 @@ public class CardSequenceManager : MonoBehaviour
             || HammadnessRules.ContainsHammadness(selectedCards))
             battleManager.SetOnlineEnemyAttackCombo(selectedCards);
 
-        battleManager.SetEnemyAttackComboForCombat(selectedCards);
-        cardStatsDisplay?.EndAttackSequenceReveal();
         cardStatsDisplay?.UpdateDisplay();
     }
 

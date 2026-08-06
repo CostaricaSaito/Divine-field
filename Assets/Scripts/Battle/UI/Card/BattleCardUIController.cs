@@ -59,6 +59,11 @@ public class BattleCardUIController : MonoBehaviour
         {
             DisplayCard(card, side);
 
+            if (side == Side.Player && !BattleManager.I.IsUseButtonLocked)
+            {
+                BattleUIManager.I.SetUseButtonInteractable(true);
+            }
+
             BattleManager.I?.ResetPlayerEffectTargetToDefaultForCurrentAttackSelection();
             BattleManager.I?.UpdateTotalATKDEFDisplay();
 
@@ -73,7 +78,10 @@ public class BattleCardUIController : MonoBehaviour
             }
             else if (side == Side.Player
                 && BattleManager.I != null
-                && BattleManager.I.IsPlayerDefenseInputActive())
+                && (BattleManager.I.CurrentState == GameState.DefensePhase
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
+                    || BattleManager.I.IsPostDeathDefenseWaitActive()
+                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())))
                 BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
         }
     }
@@ -318,8 +326,9 @@ public class BattleCardUIController : MonoBehaviour
 
     public void SetPrayModeUI(List<CardData> hand)
     {
+        BattleUIManager.I.SetUseButtonLabel("祈り");
+        BattleUIManager.I.SetUseButtonInteractable(true);
         SetHandInteractivity(hand, false);
-        BattleUIManager.I.RefreshUseButton();
     }
 
     public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
@@ -328,24 +337,34 @@ public class BattleCardUIController : MonoBehaviour
         var filtered = AttackComboSelectionRules.FilterAttackChoicesForCurrentSelection(
             attackableCards, currentAttack);
         UpdateHandInteractivity(hand, filtered);
-        BattleUIManager.I.RefreshUseButton();
+        BattleUIManager.I.SetUseButtonLabel("使用");
     }
 
     public void RefreshDefenseInteractivity(List<CardData> hand, List<CardData> defenseCards)
     {
         UpdateHandInteractivity(hand, defenseCards);
+        BattleUIManager.I.SetUseButtonLabel("許す");
+        BattleUIManager.I.SetUseButtonInteractable(true);
         BattleUIManager.I.SyncRestraintHeavyOverlay();
-        BattleUIManager.I.RefreshUseButton();
     }
 
     /// <summary>
     /// Intro 時点でのカード表示（グレーアウトなし）
     /// </summary>
-    public void SetIntroModeUI(List<CardData> hand)
+    /// <param name="archMagicChantUseButtonLabel">
+    /// true のとき「詠唱開始」のまま（大魔法詠唱中の攻撃フェーズ差し替え時など。「使用」に戻さない）。
+    /// </param>
+    public void SetIntroModeUI(List<CardData> hand, bool archMagicChantUseButtonLabel = false)
     {
         BattleUIManager.I.HideRestraintHeavyOverlays();
+        if (archMagicChantUseButtonLabel)
+        {
+            BattleUIManager.I.SetUseButtonLabel("詠唱開始");
+            BattleUIManager.I.SetUseButtonInteractable(false);
+        }
+        else
+            BattleUIManager.I.SetUseButtonLabel("使用");
         SetHandInteractivity(hand, true);
-        BattleUIManager.I.RefreshUseButton();
     }
 
     //==== カードパネル／プレハブ getter =====

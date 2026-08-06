@@ -1,14 +1,14 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
-/// 状態異常の「付与時」ルール（病系段階・眼精／群発・凍結の既定ターン数など）。
+/// 状態異常の「付与時」ルール（病系段階・眼精／群発・封印の既定ターン数など）。
 /// BattleManager / BattleProcessor にアサインして Inspector で調整する。
 /// </summary>
 [CreateAssetMenu(fileName = "StatusProgressionConfig", menuName = "DivineField/Status/Status Progression Config")]
 public sealed class StatusProgressionConfig : ScriptableObject
 {
-    [Header("凍結（デバッグ付与など CardData 未指定時）")]
-    [Min(1)] public int defaultDebugFreezeDurationTurns = 2;
+    [Header("封印（期限付き）")]
+    [Min(1)] public int defaultSealDurationTurns = 2;
 
     [Header("病系（段階付与）")]
     [Tooltip("楽園病中に病系（病・重病・煉獄・楽園のいずれか）が付与されたとき、強制絶頂（残りHP相当・状態異常の被ダメ軽減なし）を発生させる")]

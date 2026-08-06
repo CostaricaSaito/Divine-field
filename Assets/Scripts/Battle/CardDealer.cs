@@ -43,11 +43,6 @@ public class CardDealer : MonoBehaviour
     //========================
     [SerializeField] private CardData[] allCards; // 全カードの読み込み済み配列
 
-    [SerializeField] private CardDrawTableSO drawTable;
-
-    /// <summary>重み展開済み抽選プール（Ultimate 除外。テンプレート参照を weight 回重复）。</summary>
-    private List<CardData> _weightedDrawPool;
-
     /// <summary>element が闇のテンプレートのみ（ダークプリパレーション抽選用）。</summary>
     private CardData[] _darkCardTemplates;
 
@@ -94,25 +89,6 @@ public class CardDealer : MonoBehaviour
         }
 
         BuildDarkCardTemplatePool();
-        BuildWeightedDrawPool();
-    }
-
-    private void EnsureDrawTable()
-    {
-        if (drawTable != null) return;
-        drawTable = Resources.Load<CardDrawTableSO>("CardDrawTable");
-        if (drawTable == null)
-            Debug.LogWarning("[CardDealer] CardDrawTable not found in Resources/CardDrawTable");
-    }
-
-    private void BuildWeightedDrawPool()
-    {
-        EnsureDrawTable();
-        _weightedDrawPool = CardDrawWeightPool.BuildExpandedTemplatePool(allCards, drawTable);
-        if (_weightedDrawPool.Count == 0)
-            Debug.LogWarning("[CardDealer] Weighted draw pool is empty. Check CardDrawTable and card weights.");
-        else
-            Debug.Log($"[CardDealer] Weighted draw pool entries: {_weightedDrawPool.Count}");
     }
 
     private void BuildDarkCardTemplatePool()
@@ -254,19 +230,24 @@ public class CardDealer : MonoBehaviour
     /// <returns>生成されたカードインスタンス</returns>
     private CardData DrawRandomCardInstance(PlayerType forSide)
     {
-        if (_weightedDrawPool == null || _weightedDrawPool.Count == 0)
-            BuildWeightedDrawPool();
+        if (allCards == null || allCards.Length == 0) return null;
 
-        var template = CardDrawWeightPool.PickTemplate(_weightedDrawPool, forSide);
-        if (template == null)
+        const int maxAttempts = 256;
+        CardData template = null;
+        for (int a = 0; a < maxAttempts; a++)
         {
-            Debug.LogWarning("[CardDealer] No drawable card template in weighted pool");
-            return null;
+            var pick = allCards[BattleRandom.DrawRange(forSide, 0, allCards.Length)];
+            if (pick != null && pick.cardType != CardType.Ultimate)
+            {
+                template = pick;
+                break;
+            }
         }
+        if (template == null) return null;
 
         var instance = ScriptableObject.Instantiate(template);
-        instance.name = template.name;
-        instance.cardUI = null;
+        instance.name = template.name; // デバッグしやすく
+        instance.cardUI = null;          // 重要：後でUIを生成する際の重複を防ぐ
         return instance;
     }
 
@@ -296,7 +277,38 @@ public class CardDealer : MonoBehaviour
     /// </summary>
     public CardData DrawRandomCard(PlayerType forSide)
     {
-        return DrawRandomCardInstance(forSide);
+        if (allCards == null || allCards.Length == 0)
+        {
+            Debug.LogWarning("[CardDealer] allCardsがnullまたは空です");
+            return null;
+        }
+        
+        const int maxAttempts = 256;
+        CardData src = null;
+        for (int a = 0; a < maxAttempts; a++)
+        {
+            var pick = allCards[BattleRandom.DrawRange(forSide, 0, allCards.Length)];
+            if (pick != null && pick.cardType != CardType.Ultimate)
+            {
+                src = pick;
+                break;
+            }
+        }
+        if (src == null)
+        {
+            Debug.LogWarning("[CardDealer] 顕現以外の抽選可能カードがありません");
+            return null;
+        }
+
+        var instance = ScriptableObject.Instantiate(src);
+        if (instance == null)
+        {
+            Debug.LogWarning("[CardDealer] カードインスタンスの生成に失敗しました");
+            return null;
+        }
+        
+        instance.cardUI = null; // UIは後で生成
+        return instance;
     }
 
     /// <summary>
