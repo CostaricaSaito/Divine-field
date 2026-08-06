@@ -95,7 +95,7 @@ public sealed class MessagePopupSettings : ScriptableObject
                 new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.85f, 1f), Color.black),
             Entry(MessagePopupKind.FreezeMelted, "\u6c37\u304c\u6eb6\u3051\u305f\uff01",
                 new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.85f, 1f), Color.black),
-            Entry(MessagePopupKind.DiseaseErodeBody, "\u75c5\u304c\u4f53\u3092\u8680\u3080",
+            Entry(MessagePopupKind.DiseaseErodeBody, "\u75c5\u304c\u4f53\u3092\u8755\u3080",
                 new Color(0f, 0f, 0f, 0.94f), Color.white, Color.black),
             Entry(MessagePopupKind.DiseaseWorsened, "\u4f53\u8abf\u304c\u60aa\u304f\u306a\u3063\u305f",
                 new Color(0f, 0f, 0f, 0.94f), Color.white, Color.black),

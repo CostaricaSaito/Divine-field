@@ -88,7 +88,7 @@ public static class ParryFlow
                 incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-            incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy);
+            incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy, incomingPower);
 
         try
         {
@@ -215,7 +215,7 @@ public static class ParryFlow
                 incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-            incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player);
+            incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player, incomingPower);
 
         try
         {

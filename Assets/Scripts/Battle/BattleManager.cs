@@ -593,6 +593,14 @@ public class BattleManager : MonoBehaviour
     private bool isProcessingUseButton;
     public bool IsUseButtonLocked => isProcessingUseButton;
 
+    /// <summary>CardSequence 例外で中断したとき、UseButton / 手札の入力ロックを戻す。</summary>
+    public void ReleaseCardSequenceInputLocks()
+    {
+        isProcessingUseButton = false;
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshUseButton();
+    }
+
     /// <summary>DefensePhase で「許す／使用」確定後、戦闘解決完了まで true。</summary>
     private bool _playerDefenseCombatResolving;
     public bool IsPlayerDefenseCombatResolving => _playerDefenseCombatResolving;
@@ -2732,11 +2740,30 @@ public class BattleManager : MonoBehaviour
                 cardStatsDisplay.SetSequenceCards(new List<CardData>(), "攻撃", Side.Player);
                 cardStatsDisplay.UpdateDisplay();
             }
-            _ = cardSequenceManager.StartCardSequenceAsync(selectedAttackCards, "攻撃", Side.Player, _phaseCts.Token);
+            _ = RunPlayerAttackCardSequenceSafelyAsync(selectedAttackCards, _phaseCts.Token);
         }
         else
         {
             Debug.LogError("[BattleManager] CardSequenceManagerが設定されていません");
+        }
+    }
+
+    private async Task RunPlayerAttackCardSequenceSafelyAsync(List<CardData> selectedAttackCards, CancellationToken cancellationToken)
+    {
+        if (cardSequenceManager == null) return;
+
+        try
+        {
+            await cardSequenceManager.StartCardSequenceAsync(selectedAttackCards, "攻撃", Side.Player, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[BattleManager] Player attack card sequence cancelled");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            ReleaseCardSequenceInputLocks();
         }
     }
 

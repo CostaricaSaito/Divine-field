@@ -22,6 +22,7 @@ public class UseButtonPresenter : MonoBehaviour
     [SerializeField] private Button useButton;
     [Tooltip("相手が防御0枚で解決中のみ。自プレイヤー防御は使用ボタンラベルのみで表現（このオブジェクトは使わない）")]
     [SerializeField] private GameObject yurusuDisplay;
+    [SerializeField] private TMP_Text yurusuButtonLabelTMP;
     [SerializeField] private TMP_Text useButtonLabelTMP;
     [SerializeField] private Text useButtonLabelUGUI;
     [SerializeField] private Image useButtonImage;
@@ -48,6 +49,14 @@ public class UseButtonPresenter : MonoBehaviour
     private Material _parryUseButtonLabelFontInstance;
     /// <summary>反射虹色スタイル用に Instantiate したラベル材質。</summary>
     private Material _reflectionUseButtonLabelFontInstance;
+    /// <summary>使用／許す／防衛の黒字・白縁用ラベル材質。</summary>
+    private Material _standardActionLabelFontInstance;
+    /// <summary>YurusuButton 黒字・白縁用ラベル材質。</summary>
+    private Material _yurusuLabelFontInstance;
+
+    private const float BlackTextWhiteOutlineWidth = 0.22f;
+    private const float BlackTextWhiteFaceDilate = 0.15f;
+    private bool _yurusuLabelOutlineApplied;
 
     private void Awake()
     {
@@ -60,17 +69,19 @@ public class UseButtonPresenter : MonoBehaviour
         }
 
         if (yurusuDisplay != null)
-            yurusuDisplay.SetActive(false);
-
-        if (useButtonLabelTMP != null)
         {
-            _defaultUseButtonLabelColor = useButtonLabelTMP.color;
-            _defaultUseButtonLabelOutlineWidth = useButtonLabelTMP.outlineWidth;
-            _defaultUseButtonLabelOutlineColor = useButtonLabelTMP.outlineColor;
-            _useButtonLabelDefaultFontShared = useButtonLabelTMP.fontSharedMaterial;
+            yurusuDisplay.SetActive(false);
+            if (yurusuButtonLabelTMP == null)
+                yurusuButtonLabelTMP = yurusuDisplay.GetComponentInChildren<TMP_Text>(true);
         }
+
         if (useButtonImage != null)
             _cachedUseButtonSprite = useButtonImage.sprite;
+    }
+
+    private void Start()
+    {
+        CacheDefaultLabelAppearance();
     }
 
     private void OnDestroy()
@@ -85,6 +96,8 @@ public class UseButtonPresenter : MonoBehaviour
             Destroy(_reflectionUseButtonLabelFontInstance);
             _reflectionUseButtonLabelFontInstance = null;
         }
+        ReleaseLabelFontInstance(ref _standardActionLabelFontInstance);
+        ReleaseLabelFontInstance(ref _yurusuLabelFontInstance);
     }
 
     /// <summary>他の UI 要素でフォントを流用したいとき用。</summary>
@@ -93,6 +106,7 @@ public class UseButtonPresenter : MonoBehaviour
     public void ShowYurusuDisplay()
     {
         if (yurusuDisplay == null) return;
+        EnsureYurusuLabelStyled();
         yurusuDisplay.SetActive(true);
     }
 
@@ -122,13 +136,20 @@ public class UseButtonPresenter : MonoBehaviour
             return;
         }
 
-        if (useButtonLabelTMP != null) useButtonLabelTMP.color = _defaultUseButtonLabelColor;
-        if (useButtonLabelUGUI != null) useButtonLabelUGUI.color = _defaultUseButtonLabelColor;
-
         var mode = text == "許す" ? UseButtonMode.Allow
                  : text == "祈り" ? UseButtonMode.Pray
                  : text == "MPが足りない" || text == "魔法使用不可" ? UseButtonMode.MpShortage
                  : UseButtonMode.Use;
+
+        if (mode == UseButtonMode.Use || mode == UseButtonMode.Allow)
+            ApplyBlackTextWhiteOutlineToUseButtonLabel();
+        else
+        {
+            StandardActionLabelReleaseFontInstanceIfNeeded();
+            if (useButtonLabelTMP != null) useButtonLabelTMP.color = _defaultUseButtonLabelColor;
+            if (useButtonLabelUGUI != null) useButtonLabelUGUI.color = _defaultUseButtonLabelColor;
+        }
+
         ApplyUseButtonMode(mode);
     }
 
@@ -326,6 +347,7 @@ public class UseButtonPresenter : MonoBehaviour
     {
         if (useButton == null) return;
 
+        StandardActionLabelReleaseFontInstanceIfNeeded();
         RestoreUseButtonFromBlockingSilverIfNeeded();
         RestoreUseButtonFromParryYellowIfNeeded();
         RestoreUseButtonFromArchMagicCastIfNeeded();
@@ -390,16 +412,14 @@ public class UseButtonPresenter : MonoBehaviour
         _useButtonHasBlockingSilverStyle = true;
 
         if (useButtonLabelTMP != null)
-        {
             useButtonLabelTMP.text = "防衛";
-            useButtonLabelTMP.color = Color.black;
-        }
-
         if (useButtonLabelUGUI != null)
         {
             useButtonLabelUGUI.text = "防衛";
             useButtonLabelUGUI.color = Color.black;
         }
+
+        ApplyBlackTextWhiteOutlineToUseButtonLabel();
     }
 
     private void RestoreUseButtonFromBlockingSilverIfNeeded()
@@ -421,6 +441,7 @@ public class UseButtonPresenter : MonoBehaviour
     {
         if (useButton == null) return;
 
+        StandardActionLabelReleaseFontInstanceIfNeeded();
         RestoreUseButtonFromReflectionRainbowIfNeeded();
         RestoreUseButtonFromBlockingSilverIfNeeded();
         RestoreUseButtonFromArchMagicCastIfNeeded();
@@ -467,11 +488,40 @@ public class UseButtonPresenter : MonoBehaviour
 
     private void EnsureUseButtonDefaultFontSharedCached()
     {
+        CacheDefaultLabelAppearance();
         if (useButtonLabelTMP == null) return;
         if (_useButtonLabelDefaultFontShared != null) return;
         _useButtonLabelDefaultFontShared = useButtonLabelTMP.fontSharedMaterial;
         if (_useButtonLabelDefaultFontShared == null && useButtonLabelTMP.font != null)
             _useButtonLabelDefaultFontShared = useButtonLabelTMP.font.material;
+    }
+
+    private void CacheDefaultLabelAppearance()
+    {
+        if (useButtonLabelTMP == null) return;
+
+        _defaultUseButtonLabelColor = useButtonLabelTMP.color;
+        if (_useButtonLabelDefaultFontShared == null)
+        {
+            _useButtonLabelDefaultFontShared = useButtonLabelTMP.fontSharedMaterial;
+            if (_useButtonLabelDefaultFontShared == null && useButtonLabelTMP.font != null)
+                _useButtonLabelDefaultFontShared = useButtonLabelTMP.font.material;
+        }
+
+        if (useButtonLabelTMP.font == null || useButtonLabelTMP.fontMaterial == null)
+            return;
+
+        _defaultUseButtonLabelOutlineWidth = useButtonLabelTMP.outlineWidth;
+        _defaultUseButtonLabelOutlineColor = useButtonLabelTMP.outlineColor;
+    }
+
+    private void EnsureYurusuLabelStyled()
+    {
+        if (_yurusuLabelOutlineApplied || yurusuButtonLabelTMP == null)
+            return;
+
+        ApplyBlackTextWhiteOutline(yurusuButtonLabelTMP, null, ref _yurusuLabelFontInstance);
+        _yurusuLabelOutlineApplied = true;
     }
 
     private void ParryReleaseLabelFontInstanceIfNeeded()
@@ -588,6 +638,7 @@ public class UseButtonPresenter : MonoBehaviour
     {
         if (useButton == null) return;
 
+        StandardActionLabelReleaseFontInstanceIfNeeded();
         RestoreUseButtonFromParryYellowIfNeeded();
 
         EnsureArchMagicGradientUseButtonSprite();
@@ -675,5 +726,68 @@ public class UseButtonPresenter : MonoBehaviour
         }
 
         _useButtonHasArchMagicCastStyle = false;
+    }
+
+    private void ApplyBlackTextWhiteOutlineToUseButtonLabel()
+    {
+        ApplyBlackTextWhiteOutline(useButtonLabelTMP, useButtonLabelUGUI, ref _standardActionLabelFontInstance);
+    }
+
+    private void ApplyBlackTextWhiteOutline(TMP_Text tmp, Text ugui, ref Material fontInstance)
+    {
+        if (ugui != null)
+            ugui.color = Color.black;
+        if (tmp == null || tmp.font == null)
+            return;
+
+        tmp.color = Color.black;
+        EnsureUseButtonDefaultFontSharedCached();
+
+        ReleaseLabelFontInstance(ref fontInstance);
+
+        const float ow = BlackTextWhiteOutlineWidth;
+        var sharedMat = ResolveLabelFontShared(tmp);
+        if (sharedMat != null)
+        {
+            var mat = Instantiate(sharedMat);
+            tmp.fontSharedMaterial = sharedMat;
+            tmp.fontMaterial = mat;
+            fontInstance = mat;
+            if (mat.HasProperty(ShaderUtilities.ID_OutlineColor))
+                mat.SetColor(ShaderUtilities.ID_OutlineColor, Color.white);
+            if (mat.HasProperty(ShaderUtilities.ID_OutlineWidth))
+                mat.SetFloat(ShaderUtilities.ID_OutlineWidth, ow);
+            if (mat.HasProperty(ShaderUtilities.ID_FaceDilate))
+                mat.SetFloat(ShaderUtilities.ID_FaceDilate, BlackTextWhiteFaceDilate);
+        }
+
+        if (tmp.fontMaterial != null)
+        {
+            tmp.outlineWidth = ow;
+            tmp.outlineColor = Color.white;
+        }
+    }
+
+    private Material ResolveLabelFontShared(TMP_Text tmp)
+    {
+        if (tmp == null) return _useButtonLabelDefaultFontShared;
+        if (tmp.fontSharedMaterial != null) return tmp.fontSharedMaterial;
+        if (tmp.font != null && tmp.font.material != null) return tmp.font.material;
+        return _useButtonLabelDefaultFontShared;
+    }
+
+    private static void ReleaseLabelFontInstance(ref Material instance)
+    {
+        if (instance == null) return;
+        var inst = instance;
+        instance = null;
+        Destroy(inst);
+    }
+
+    private void StandardActionLabelReleaseFontInstanceIfNeeded()
+    {
+        ReleaseLabelFontInstance(ref _standardActionLabelFontInstance);
+        if (useButtonLabelTMP != null && _useButtonLabelDefaultFontShared != null)
+            useButtonLabelTMP.fontSharedMaterial = _useButtonLabelDefaultFontShared;
     }
 }

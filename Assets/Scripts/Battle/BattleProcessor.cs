@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -730,7 +730,7 @@ public class BattleProcessor : MonoBehaviour
                 float fade = BattleUIManager.I != null
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "HP", target)
                     : 0f;
-                SoundEffectPlayer.I?.Play("Assets/SE/power09(DFHP回復).wav");
+                SoundEffectPlayer.I?.Play(DamagePopupSfx.HealHp);
                 UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
@@ -749,7 +749,7 @@ public class BattleProcessor : MonoBehaviour
                 float fade = BattleUIManager.I != null
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "MP", target)
                     : 0f;
-                SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す25.mp3");
+                SoundEffectPlayer.I?.Play(DamagePopupSfx.HealMp);
                 UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
@@ -768,7 +768,7 @@ public class BattleProcessor : MonoBehaviour
                 float fade = BattleUIManager.I != null
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "GP", target)
                     : 0f;
-                SoundEffectPlayer.I?.Play("Assets/SE/レジスターで精算.mp3");
+                SoundEffectPlayer.I?.Play(DamagePopupSfx.HealGp);
                 UpdateStatusDisplay(snapHpmgp: true);
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }

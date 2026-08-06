@@ -73,7 +73,7 @@ public static class PhysicalReflectionFlow
                 incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-            incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy);
+            incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy, incomingPower);
 
         try
         {
@@ -141,7 +141,7 @@ public static class PhysicalReflectionFlow
                 incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-            incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player);
+            incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player, incomingPower);
 
         try
         {
@@ -228,7 +228,7 @@ public static class PhysicalReflectionFlow
                             incomingAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
                     SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                     battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-                        incomingAttackCards, totalAtkOnPlayerSide: false, reflectionBlessingAttacker, reflectionBlessingDefender);
+                        incomingAttackCards, totalAtkOnPlayerSide: false, reflectionBlessingAttacker, reflectionBlessingDefender, incomingPower);
 
                     handRefill?.RecordEnemyUse(pick);
                     battleProcessor.UseCard(pick, battleManager.cpuHand);
@@ -311,7 +311,7 @@ public static class PhysicalReflectionFlow
                         incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                 battleManager.SetReflectionAttackTotalDisplayAfterSlide(
-                    incomingAttackCards, totalAtkOnPlayerSide: true, reflectionBlessingAttacker, reflectionBlessingDefender);
+                    incomingAttackCards, totalAtkOnPlayerSide: true, reflectionBlessingAttacker, reflectionBlessingDefender, incomingPower);
 
                 defenderSide = PlayerType.Enemy;
                 continue;

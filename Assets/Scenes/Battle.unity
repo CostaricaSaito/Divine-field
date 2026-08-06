@@ -6099,8 +6099,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4281479730
-  m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+    rgba: 4278190080
+  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -6762,8 +6762,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4281479730
-  m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+    rgba: 4278190080
+  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -7536,8 +7536,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4281479730
-  m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+    rgba: 4278190080
+  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -7554,8 +7554,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 48
-  m_fontSizeBase: 48
+  m_fontSize: 60
+  m_fontSizeBase: 60
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -12990,6 +12990,8 @@ MonoBehaviour:
   damagePopupPrefab: {fileID: 8132803077523845069, guid: 6d20cbc8bdb5a0d4ba65bed74305dcd7, type: 3}
   messagePopupPrefab: {fileID: 0}
   messagePopupSettings: {fileID: 0}
+  damagePopupSettings: {fileID: 0}
+  statusEffectPopupSettings: {fileID: 0}
   barrierDamagePopupPrefab: {fileID: 0}
   importantPopupPrefab: {fileID: 8132803077523845069, guid: a7bbcd678d95408418208a6356b7d8d9, type: 3}
   ojyouPopupPrefab: {fileID: 8132803077523845069, guid: ebc39f705990c4146abb0e211987d0cf, type: 3}
@@ -13074,6 +13076,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   useButton: {fileID: 351164123}
   yurusuDisplay: {fileID: 999601000}
+  yurusuButtonLabelTMP: {fileID: 0}
   useButtonLabelTMP: {fileID: 697010974}
   useButtonLabelUGUI: {fileID: 0}
   useButtonImage: {fileID: 0}

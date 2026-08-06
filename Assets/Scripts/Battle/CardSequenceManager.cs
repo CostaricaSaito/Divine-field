@@ -143,10 +143,15 @@ public class CardSequenceManager : MonoBehaviour
         bool spellbookElementRevealPending = cardType == "攻撃"
             && SpellbookRules.NeedsElementRevealSequence(selectedCards);
 
-        battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
-        battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
-        battleManager.ClearHammadnessRollSnapshot();
-        battleManager.ClearConfusionAttackTargetResolvedForDisplay();
+        // 防御シーケンスでは消さない。相手攻撃の ME / 気狂いハンマー等スナップショットは
+        // 反射・パリィ・通常防御のダメージ計算まで必要。
+        if (cardType == "攻撃")
+        {
+            battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
+            battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
+            battleManager.ClearHammadnessRollSnapshot();
+            battleManager.ClearConfusionAttackTargetResolvedForDisplay();
+        }
 
         _magicPanelBonusDrawsPendingReveal.Clear();
 

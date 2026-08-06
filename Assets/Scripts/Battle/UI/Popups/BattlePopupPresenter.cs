@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,6 +24,10 @@ public class BattlePopupPresenter : MonoBehaviour
     [Tooltip("Styled battle messages (freeze, disease intro, parry fail, intervention). Falls back to Resources/Prefab/MessagePopup.")]
     [SerializeField] private GameObject messagePopupPrefab;
     [SerializeField] private MessagePopupSettings messagePopupSettings;
+    [Tooltip("DamagePopup の配色・背景スプライト。未設定時は Resources/DamagePopupSettings。")]
+    [SerializeField] private DamagePopupSettings damagePopupSettings;
+    [Tooltip("状態異常付与ポップの配色・背景。未設定時は Resources/StatusEffectPopupSettings。")]
+    [SerializeField] private StatusEffectPopupSettings statusEffectPopupSettings;
     [Tooltip("大魔法バリア被ダメ演出。未設定時は Resources.Load(\"Prefab/BarriarDamage\")")]
     [SerializeField] private GameObject barrierDamagePopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
@@ -125,8 +129,8 @@ public class BattlePopupPresenter : MonoBehaviour
                 string name = StatusEffectPresentation.GetDisplayName(effectType);
                 if (string.IsNullOrEmpty(name))
                     name = effectType.ToString();
-                StatusEffectPresentation.GetPopupColors(effectType, out Color bg, out Color fg);
-                damageText.SetupStatusAilmentGrant(name, bg, fg);
+                var style = ResolveStatusEffectPopupSettings().GetEntryOrDefault(effectType);
+                damageText.SetupStatusAilmentGrant(name, style);
                 lastFade = damageText.fadeDuration;
             }
 
@@ -262,12 +266,12 @@ public class BattlePopupPresenter : MonoBehaviour
             return 0f;
         }
 
-        StatusEffectPresentation.GetPopupColors(type, out Color bg, out Color fg);
+        var style = ResolveStatusEffectPopupSettings().GetEntryOrDefault(type);
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
             SoundEffectPlayer.I?.Play(StatusEffectApplyFeedback.GrantSoundAddress);
-            damageText.SetupStatusAilmentGrant(name, bg, fg);
+            damageText.SetupStatusAilmentGrant(name, style);
             Debug.Log($"[BattlePopupPresenter] 状態異常ポップアップ: {name}");
 
             // 濃霧：付与ポップアップの表示完了＋規定インターバル後まで、濃霧画面演出を遅延
@@ -306,10 +310,7 @@ public class BattlePopupPresenter : MonoBehaviour
         }
 
         SoundEffectPlayer.I?.Play("Assets/SE/リロード.mp3");
-        Color bg = new Color(140f / 255f, 96f / 255f, 138f / 255f, 1f);
-        Color fg = Color.white;
-        Color ol = new Color(212f / 255f, 62f / 255f, 212f / 255f, 1f);
-        damageText.SetupHandReload("リロード", bg, fg, ol);
+        damageText.SetupHandReload("リロード");
         return damageText.fadeDuration;
     }
 
@@ -331,16 +332,13 @@ public class BattlePopupPresenter : MonoBehaviour
         }
 
         SoundEffectPlayer.I?.Play("Assets/SE/リロード.mp3");
-        Color bg = new Color(140f / 255f, 96f / 255f, 138f / 255f, 1f);
-        Color fg = Color.white;
-        Color ol = new Color(212f / 255f, 62f / 255f, 212f / 255f, 1f);
-        damageText.SetupHandReload("引き直し", bg, fg, ol);
+        damageText.SetupFromKind(DamagePopupKind.HandDiscardRestart, "引き直し");
         return damageText.fadeDuration;
     }
 
     public float ShowHealPopup(int amount, string statType, PlayerStatus target)
     {
-        Debug.Log($"[BattlePopupPresenter] 回復ポップアップ表示: {statType}{amount}回復 対象 {target?.DisplayName ?? "null"}");
+        Debug.Log($"[BattlePopupPresenter] 回復ポップアップ表示: {statType}{amount} 対象 {target?.DisplayName ?? "null"}");
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
@@ -352,15 +350,44 @@ public class BattlePopupPresenter : MonoBehaviour
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            string displayText = $"{statType}{amount}回復";
-            Color displayColor = Color.green;
-            damageText.Setup(displayText, displayColor);
-            Debug.Log($"[BattlePopupPresenter] 回復ポップアップ設定完了: {statType}{amount}回復");
+            damageText.BindSettings(ResolveDamagePopupSettings());
+            if (TryResolveHealKind(statType, out DamagePopupKind healKind))
+            {
+                var style = ResolveDamagePopupSettings().GetEntryOrDefault(healKind);
+                string displayText = $"{statType}{amount}";
+                damageText.Setup(displayText, style.textColor, style.outlineColor);
+            }
+            else
+            {
+                var healStyle = ResolveDamagePopupSettings().GetEntryOrDefault(DamagePopupKind.Heal);
+                damageText.Setup(statType, healStyle.textColor, healStyle.outlineColor);
+            }
+
+            Debug.Log($"[BattlePopupPresenter] 回復ポップアップ設定完了");
             return damageText.fadeDuration;
         }
 
         Debug.LogWarning("[BattlePopupPresenter] DamagePopup コンポーネントが見つかりません");
         return 0f;
+    }
+
+    private static bool TryResolveHealKind(string statType, out DamagePopupKind kind)
+    {
+        switch (statType)
+        {
+            case "HP":
+                kind = DamagePopupKind.Heal;
+                return true;
+            case "MP":
+                kind = DamagePopupKind.HealMp;
+                return true;
+            case "GP":
+                kind = DamagePopupKind.HealGp;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
     }
 
     public void ShowMissPopup(PlayerStatus target)
@@ -377,7 +404,8 @@ public class BattlePopupPresenter : MonoBehaviour
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            damageText.Setup("ミス", Color.yellow);
+            damageText.BindSettings(ResolveDamagePopupSettings());
+            damageText.SetupFromKind(DamagePopupKind.Miss);
             Debug.Log("[BattlePopupPresenter] ミスポップアップ設定完了");
         }
         else
@@ -396,7 +424,8 @@ public class BattlePopupPresenter : MonoBehaviour
         var damageText = popup.GetComponent<DamagePopup>();
         if (damageText != null)
         {
-            damageText.Setup("的中", new Color(1f, 0.92f, 0.35f));
+            damageText.BindSettings(ResolveDamagePopupSettings());
+            damageText.SetupFromKind(DamagePopupKind.CombatHitConfirmed);
             return damageText.fadeDuration;
         }
 
@@ -432,6 +461,18 @@ public class BattlePopupPresenter : MonoBehaviour
     {
         if (messagePopupSettings != null) return messagePopupSettings;
         return MessagePopupSettings.GetRuntimeFallback();
+    }
+
+    private DamagePopupSettings ResolveDamagePopupSettings()
+    {
+        if (damagePopupSettings != null) return damagePopupSettings;
+        return DamagePopupSettings.GetRuntimeFallback();
+    }
+
+    private StatusEffectPopupSettings ResolveStatusEffectPopupSettings()
+    {
+        if (statusEffectPopupSettings != null) return statusEffectPopupSettings;
+        return StatusEffectPopupSettings.GetRuntimeFallback();
     }
 
     private GameObject SpawnMessagePopupObjectFor(PlayerStatus target)
@@ -512,7 +553,11 @@ public class BattlePopupPresenter : MonoBehaviour
         ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
 
         var popup = go.GetComponent<DamagePopup>();
-        if (popup != null) popup.Setup(message, color);
+        if (popup != null)
+        {
+            popup.BindSettings(ResolveDamagePopupSettings());
+            popup.Setup(message, color);
+        }
         return popup;
     }
 
@@ -605,6 +650,8 @@ public class BattlePopupPresenter : MonoBehaviour
 
         var go = Instantiate(damagePopupPrefab, parent, false);
         ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
+        var damagePopup = go.GetComponent<DamagePopup>();
+        damagePopup?.BindSettings(ResolveDamagePopupSettings());
         Debug.Log($"[BattlePopupPresenter] ポップアップを {(isPlayer ? "CardDisplayPanel" : "EnemyCardDisplayPanel")} 中央に配置");
         return go;
     }
