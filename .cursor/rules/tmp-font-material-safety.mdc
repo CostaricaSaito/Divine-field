@@ -1,0 +1,48 @@
+﻿---
+description: TMP 共有フォント（DFSoge9）とマテリアル操作の安全ルール — 全文字■化の再発防止
+alwaysApply: true
+---
+
+# TMP フォント・マテリアル安全（DFSoge9 SDF）
+
+プロジェクトの UI ほぼ全体が **`Assets/TextMesh Pro/Fonts/DFSoge9 SDF.asset`** を共有する。  
+この Font Asset またはその **共有マテリアル** を誤って書き換えると、**ゲーム内の文字がすべて ■** になる。
+
+## 過去インシデント（再発禁止）
+
+- 縁取り実装で `tmp.fontSharedMaterial` を `Instantiate` の参照源にした
+- `Awake` で非アクティブ TMP に `outlineWidth` 等を適用した
+- 結果: 共有マテリアル汚染 + `DFSoge9 SDF.asset` 実体が **約134MB → 約8MB** に破損
+
+## マテリアル操作のルール
+
+1. **`Instantiate` の元は必ず `tmp.font.material`（Font Asset 本体）**  
+   `tmp.fontSharedMaterial` は instance 化後に汚染されるため **参照源に使わない**。
+2. **共有マテリアルに直接 `SetColor` / `SetFloat` しない** — 必ず `Instantiate` したコピーのみ変更し `tmp.fontMaterial` に割り当てる。
+3. **`tmp.fontSharedMaterial` への代入**は Font Asset の `font.material` を指す **キャッシュ済み共有参照** の復元用途に限定する。
+4. **適用タイミング**: `Awake` では参照キャッシュのみ。縁取り・色変更は **`Start` 以降** または **表示直前**（非アクティブ TMP では実行しない）。
+5. 生成した instance は `Destroy` し、復元時に `fontSharedMaterial` をデフォルト共有に戻す（`UseButtonPresenter` 参照）。
+
+```csharp
+// BAD — fontSharedMaterial は汚染源になりうる
+var mat = Instantiate(tmp.fontSharedMaterial);
+
+// GOOD — Font Asset 本体からのみ複製
+var sharedMat = tmp.font.material;
+var mat = Instantiate(sharedMat);
+tmp.fontSharedMaterial = sharedMat;
+tmp.fontMaterial = mat;
+```
+
+## 破損の兆候と復旧
+
+| 兆候 | 対応 |
+|------|------|
+| 全 UI が ■ | `DFSoge9 SDF.asset` のサイズ確認（正常 ≈134MB、破損 ≈8MB） |
+| git で `.asset` が変更されている | `git checkout -- "Assets/TextMesh Pro/Fonts/DFSoge9 SDF.asset"` で復元 |
+| 復元後 | Unity 再起動 → 必要なら Font Asset **Reimport** |
+
+## 新規 TMP スタイル変更時
+
+- 縁取り・Face Dilate 等は **その Text 専用の material instance** のみ触る
+- 他ファイル（例: `DamagePopup`）でも同パターンを守る — `font.material` 起点の `Instantiate` を徹底する

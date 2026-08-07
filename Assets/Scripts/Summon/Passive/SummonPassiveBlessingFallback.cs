@@ -21,6 +21,8 @@ public static class SummonPassiveBlessingFallback
                 return null;
             case SummonPassiveBlessingMode.Shiva:
                 return null;
+            case SummonPassiveBlessingMode.Arcadias:
+                return null;
             case SummonPassiveBlessingMode.AutoByAssetName:
             default:
                 return ResolveByAssetName(assetBaseName);
@@ -43,6 +45,8 @@ public static class SummonPassiveBlessingFallback
             case "Indra":
                 return null;
             case "Siva":
+                return null;
+            case "Arcadias":
                 return null;
             default:
                 return null;

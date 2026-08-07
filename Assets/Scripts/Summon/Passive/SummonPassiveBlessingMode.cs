@@ -19,4 +19,6 @@ public enum SummonPassiveBlessingMode
     Indra = 6,
     /// <summary>シヴァ（直接攻撃で5%凍結。数値加護は別・戦闘解決フック）</summary>
     Shiva = 7,
+    /// <summary>アルカディアス（攻撃フェーズ Primary 等を必中。命中率は <see cref="HitRateRules"/>）</summary>
+    Arcadias = 8,
 }

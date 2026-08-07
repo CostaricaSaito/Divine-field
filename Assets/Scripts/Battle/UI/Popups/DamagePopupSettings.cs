@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 [Serializable]
@@ -31,6 +31,35 @@ public struct DamagePopupStyleEntry
 public sealed class DamagePopupSettings : ScriptableObject
 {
     [SerializeField] private DamagePopupStyleEntry[] entries;
+
+    [Header("Motion / Timing")]
+    [SerializeField] private PopupMotionTiming motion = PopupMotionTiming.DamageDefaults;
+
+    [Tooltip("Fallback when Show* returns 0 (spawn failed).")]
+    [SerializeField] [Min(0.01f)] private float defaultFadeDurationIfUnknown = 1f;
+
+    [Header("Sequence Delays (ms)")]
+    [Tooltip("After damage popup, before WithDamageThrough status effects.")]
+    [SerializeField] private int preStatusEffectAfterDamagePopupDelayMs = 500;
+    [Tooltip("After last popup in combat resolve, before TurnEnd-style transition.")]
+    [SerializeField] private int postLastPresentationBeforeCombatResolveMs = 400;
+    [Tooltip("Before immediate card effect resolution.")]
+    [SerializeField] private int preImmediateEffectDelayMs = 250;
+    [Tooltip("Beat before numeric damage popup appears.")]
+    [SerializeField] private int preDamagePopupBeatMs = 500;
+
+    public PopupMotionTiming MotionOrDefault => motion.WithDefaults(PopupMotionTiming.DamageDefaults);
+
+    public float FloatSpeed => MotionOrDefault.floatSpeed;
+    public float FadeDuration => MotionOrDefault.fadeDuration;
+    public int PostPopupIntervalMs => MotionOrDefault.postPopupIntervalMs;
+    public float DefaultFadeDurationIfUnknown => defaultFadeDurationIfUnknown > 0.001f
+        ? defaultFadeDurationIfUnknown
+        : 1f;
+    public int PreStatusEffectAfterDamagePopupDelayMs => preStatusEffectAfterDamagePopupDelayMs;
+    public int PostLastPresentationBeforeCombatResolveMs => postLastPresentationBeforeCombatResolveMs;
+    public int PreImmediateEffectDelayMs => preImmediateEffectDelayMs;
+    public int PreDamagePopupBeatMs => preDamagePopupBeatMs;
 
     public bool TryGetEntry(DamagePopupKind kind, out DamagePopupStyleEntry entry)
     {
@@ -198,6 +227,7 @@ public sealed class DamagePopupSettings : ScriptableObject
         _runtimeFallback = CreateInstance<DamagePopupSettings>();
         _runtimeFallback.name = "DamagePopupSettings (Runtime Fallback)";
         _runtimeFallback.entries = DefaultEntries();
+        _runtimeFallback.motion = PopupMotionTiming.DamageDefaults;
         return _runtimeFallback;
     }
 }

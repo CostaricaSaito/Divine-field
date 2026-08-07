@@ -31,7 +31,22 @@ public static class NetworkBattleBridge
         TurnSync = 8,     // host -> client : authoritative turn-boundary state (status, hands, next turn)
         SummonTurnEndEffects = 9, // host -> client : Garuda/Indra turn-end passive effects (5n)
         TributeBlood = 10, // attacker -> defender : HP paid for Tribute Blood
+        DebugInjectCard = 11,        // host -> client : dev-only synchronized hand inject
+        DebugInjectCardRequest = 12, // client -> host : dev-only inject request (host applies + forwards)
     }
+
+    public enum RemoteEconomicKind : byte
+    {
+        None = 0,
+        Buy = 1,
+        Sell = 2,
+        Exchange = 3,
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>Development only: both peers apply the same inject (cardName, host-player hand?).</summary>
+    public static event Action<string, bool> OnlineDebugInjectReceived;
+#endif
 
     /// <summary>Host -> client: summon turn-end passive effect batch.</summary>
     public struct SummonTurnEndEffectsSync
@@ -60,6 +75,12 @@ public static class NetworkBattleBridge
         public List<string> CardNames;
         /// <summary>TOTAL tap toggle: attack aimed at self / recovery aimed at the opponent.</summary>
         public bool TargetSelf;
+        public RemoteEconomicKind EconomicKind;
+        /// <summary>Buy: card taken from defender hand. Sell: card sold from attacker hand.</summary>
+        public string EconomicCardName;
+        public int ExchangeAfterHp;
+        public int ExchangeAfterMp;
+        public int ExchangeAfterGp;
     }
 
     /// <summary>Magical Sword optional MP payment choice (sent even when declined).</summary>
@@ -90,6 +111,10 @@ public static class NetworkBattleBridge
         public int TurnTag;
         public SideStatus Host;
         public SideStatus Client;
+        /// <summary>Host-side player consumed near-death card name (empty if none).</summary>
+        public string HostNearDeathCardName;
+        /// <summary>Client-side player consumed near-death card name (empty if none).</summary>
+        public string ClientNearDeathCardName;
     }
 
     /// <summary>Host -> client: authoritative turn-boundary state.</summary>
@@ -265,8 +290,69 @@ public static class NetworkBattleBridge
         writer.WriteValueSafe((byte)MsgType.Attack);
         WriteCardNames(writer, cards, out int count);
         writer.WriteValueSafe(targetSelf);
+        WriteEconomicPayload(writer, RemoteEconomicKind.None, "", 0, 0, 0);
         Send(writer);
         Debug.Log($"[NetworkBattleBridge] Sent Attack ({count} cards, targetSelf={targetSelf})");
+    }
+
+    public static void SendEconomicBuy(string targetCardName)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.Attack);
+        writer.WriteValueSafe(1);
+        writer.WriteValueSafe(EconomicActionNames.Buy);
+        writer.WriteValueSafe(false);
+        WriteEconomicPayload(writer, RemoteEconomicKind.Buy, targetCardName, 0, 0, 0);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent Economic Buy (target={targetCardName})");
+    }
+
+    public static void SendEconomicSell(string soldCardName)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.Attack);
+        writer.WriteValueSafe(1);
+        writer.WriteValueSafe(EconomicActionNames.Sell);
+        writer.WriteValueSafe(false);
+        WriteEconomicPayload(writer, RemoteEconomicKind.Sell, soldCardName, 0, 0, 0);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent Economic Sell (card={soldCardName})");
+    }
+
+    public static void SendEconomicExchange(int afterHp, int afterMp, int afterGp)
+    {
+        using var writer = new FastBufferWriter(128, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.Attack);
+        writer.WriteValueSafe(0);
+        writer.WriteValueSafe(false);
+        WriteEconomicPayload(writer, RemoteEconomicKind.Exchange, "", afterHp, afterMp, afterGp);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent Economic Exchange (HP={afterHp}, MP={afterMp}, GP={afterGp})");
+    }
+
+    static void WriteEconomicPayload(
+        FastBufferWriter writer,
+        RemoteEconomicKind kind,
+        string cardName,
+        int afterHp,
+        int afterMp,
+        int afterGp)
+    {
+        writer.WriteValueSafe((byte)kind);
+        writer.WriteValueSafe(cardName ?? "");
+        writer.WriteValueSafe(afterHp);
+        writer.WriteValueSafe(afterMp);
+        writer.WriteValueSafe(afterGp);
+    }
+
+    static void ReadEconomicPayload(FastBufferReader reader, ref RemoteAttack attack)
+    {
+        reader.ReadValueSafe(out byte kindRaw);
+        attack.EconomicKind = (RemoteEconomicKind)kindRaw;
+        reader.ReadValueSafe(out attack.EconomicCardName);
+        reader.ReadValueSafe(out attack.ExchangeAfterHp);
+        reader.ReadValueSafe(out attack.ExchangeAfterMp);
+        reader.ReadValueSafe(out attack.ExchangeAfterGp);
     }
 
     public static void SendDefenseSelection(IReadOnlyList<CardData> cards)
@@ -298,6 +384,30 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent TributeBlood choice (hpPaid={hpPaid})");
     }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>Host only: notify client to apply the same debug hand inject.</summary>
+    public static void SendDebugInjectCard(string cardName, bool targetIsHostPlayer)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.DebugInjectCard);
+        writer.WriteValueSafe(cardName ?? "");
+        writer.WriteValueSafe(targetIsHostPlayer);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent DebugInjectCard ({cardName}, hostPlayer={targetIsHostPlayer})");
+    }
+
+    /// <summary>Client -> host: ask host to inject symmetrically and forward to client.</summary>
+    public static void SendDebugInjectCardRequest(string cardName, bool targetIsHostPlayer)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.DebugInjectCardRequest);
+        writer.WriteValueSafe(cardName ?? "");
+        writer.WriteValueSafe(targetIsHostPlayer);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent DebugInjectCardRequest ({cardName}, hostPlayer={targetIsHostPlayer})");
+    }
+#endif
+
     /// <summary>Wait for the opponent's main action (empty list = pass).</summary>
     public static Task<RemoteAttack> WaitForRemoteAttackAsync(CancellationToken ct)
         => WaitFromQueue(_attackQueue, ref _attackWaiter, ct);
@@ -318,11 +428,13 @@ public static class NetworkBattleBridge
 
     public static void SendResolveState(ResolveStateSync sync)
     {
-        using var writer = new FastBufferWriter(128, Allocator.Temp);
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
         writer.WriteValueSafe((byte)MsgType.ResolveState);
         writer.WriteValueSafe(sync.TurnTag);
         WriteSideStatus(writer, sync.Host);
         WriteSideStatus(writer, sync.Client);
+        writer.WriteValueSafe(sync.HostNearDeathCardName ?? "");
+        writer.WriteValueSafe(sync.ClientNearDeathCardName ?? "");
         Send(writer);
         Debug.Log($"[NetworkBattleBridge] Sent ResolveState (tag={sync.TurnTag})");
     }
@@ -614,9 +726,11 @@ public static class NetworkBattleBridge
             {
                 var names = ReadStringList(reader);
                 reader.ReadValueSafe(out bool targetSelf);
-                Debug.Log($"[NetworkBattleBridge] Attack received ({names.Count} cards, targetSelf={targetSelf})");
-                Dispatch(_attackQueue, ref _attackWaiter,
-                    new RemoteAttack { CardNames = names, TargetSelf = targetSelf });
+                var attack = new RemoteAttack { CardNames = names, TargetSelf = targetSelf };
+                ReadEconomicPayload(reader, ref attack);
+                Debug.Log(
+                    $"[NetworkBattleBridge] Attack received ({names.Count} cards, targetSelf={targetSelf}, economic={attack.EconomicKind})");
+                Dispatch(_attackQueue, ref _attackWaiter, attack);
                 break;
             }
 
@@ -654,6 +768,8 @@ public static class NetworkBattleBridge
                 reader.ReadValueSafe(out sync.TurnTag);
                 sync.Host = ReadSideStatus(reader);
                 sync.Client = ReadSideStatus(reader);
+                reader.ReadValueSafe(out sync.HostNearDeathCardName);
+                reader.ReadValueSafe(out sync.ClientNearDeathCardName);
                 Debug.Log($"[NetworkBattleBridge] ResolveState received (tag={sync.TurnTag})");
                 Dispatch(_resolveStateQueue, ref _resolveStateWaiter, sync);
                 break;
@@ -694,6 +810,34 @@ public static class NetworkBattleBridge
                 Dispatch(_summonTurnEndEffectsQueue, ref _summonTurnEndEffectsWaiter, sync);
                 break;
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            case MsgType.DebugInjectCard:
+            {
+                reader.ReadValueSafe(out string cardName);
+                reader.ReadValueSafe(out bool targetIsHostPlayer);
+                Debug.Log($"[NetworkBattleBridge] DebugInjectCard received ({cardName}, hostPlayer={targetIsHostPlayer})");
+                OnlineDebugInjectReceived?.Invoke(cardName, targetIsHostPlayer);
+                break;
+            }
+
+            case MsgType.DebugInjectCardRequest:
+            {
+                var nm = NetworkManager.Singleton;
+                if (nm == null || !nm.IsHost)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] DebugInjectCardRequest ignored (not host)");
+                    break;
+                }
+
+                reader.ReadValueSafe(out string cardName);
+                reader.ReadValueSafe(out bool targetIsHostPlayer);
+                Debug.Log($"[NetworkBattleBridge] DebugInjectCardRequest received ({cardName}, hostPlayer={targetIsHostPlayer})");
+                OnlineDebugInjectReceived?.Invoke(cardName, targetIsHostPlayer);
+                SendDebugInjectCard(cardName, targetIsHostPlayer);
+                break;
+            }
+#endif
 
             default:
                 Debug.LogWarning($"[NetworkBattleBridge] Unknown message type {rawType}");

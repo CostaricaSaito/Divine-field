@@ -1,4 +1,4 @@
-// BattleDebugTools.cs
+﻿// BattleDebugTools.cs
 using System;
 using System.Threading;
 using UnityEngine;
@@ -91,11 +91,11 @@ public class BattleDebugTools : MonoBehaviour
     [SerializeField] private BattleDebugPanelLayout cardCheatPanelLayout = new BattleDebugPanelLayout
     {
         placement = BattleDebugPanelPlacement.Center,
-        width = 720f,
-        height = 640f,
+        width = 780f,
+        height = 1000f,
         positionX = 0f,
         positionY = 0f,
-        fontSize = 16,
+        fontSize = 22,
     };
 
     [Header("敵手札リアルタイム（Editor / Development・再生中）")]
@@ -122,6 +122,11 @@ public class BattleDebugTools : MonoBehaviour
     private GUIStyle _gameStateDebugLabelStyle;
     private GUIStyle _ailmentLineStyle;
     private GUIStyle _cardCheatLineStyle;
+    private GUIStyle _cardCheatHeaderStyle;
+    private GUIStyle _cardCheatButtonStyle;
+    private GUIStyle _cardCheatRowLabelStyle;
+    private GUIStyle _cardCheatTextFieldStyle;
+    private GUIStyle _cardCheatWindowStyle;
     private GUIStyle _enemyHandLineStyle;
     private int _ailmentStyleFontCached = -1;
     private int _cardCheatStyleFontCached = -1;
@@ -132,6 +137,8 @@ public class BattleDebugTools : MonoBehaviour
     private const int WindowIdCardCheat = 21003;
     private const int WindowIdEnemyHand = 21004;
     private const float WindowDragTitleHeight = 22f;
+    private static float CardCheatWindowDragTitleHeight(int fontSize)
+        => Mathf.Max(28f, fontSize + 12f);
 
     private Rect _gameStateWindowRect;
     private Rect _ailmentWindowRect;
@@ -266,11 +273,21 @@ public class BattleDebugTools : MonoBehaviour
 
         if (showCardCheatPanel)
         {
+            EnsureCardCheatGuiStyles();
+            float cheatW = Mathf.Max(50f, cardCheatPanelLayout.width);
+            float cheatH = Mathf.Max(50f, cardCheatPanelLayout.height);
+            _cardCheatWindowRect.width = cheatW;
+            _cardCheatWindowRect.height = cheatH;
             _cardCheatWindowRect = GUILayout.Window(
                 WindowIdCardCheat,
                 _cardCheatWindowRect,
                 DrawCardCheatDebugWindow,
-                "手札チート");
+                battleManager != null && battleManager.IsOnlineMatch
+                    ? "手札チート（オンライン）"
+                    : "手札チート（CPU）",
+                _cardCheatWindowStyle);
+            _cardCheatWindowRect.width = cheatW;
+            _cardCheatWindowRect.height = cheatH;
         }
 
         if (showEnemyHandDebugPanel)
@@ -424,31 +441,65 @@ public class BattleDebugTools : MonoBehaviour
 
     private void DrawCardCheatDebugWindow(int windowId)
     {
-        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 8, 48);
-        if (_cardCheatLineStyle == null || _cardCheatStyleFontCached != fs)
+        EnsureCardCheatGuiStyles();
+        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 12, 48);
+        float rowH = Mathf.Max(40f, fs * 1.85f);
+        float btnW = Mathf.Max(80f, fs * 3.2f);
+        float dragTitleH = CardCheatWindowDragTitleHeight(fs + 6);
+
+        GUILayout.Label("手札チート（プレイヤー）", _cardCheatHeaderStyle);
+        if (battleManager.IsOnlineMatch)
         {
-            _cardCheatLineStyle = new GUIStyle(GUI.skin.label) { fontSize = fs, wordWrap = false };
-            _cardCheatLineStyle.normal.textColor = Color.white;
-            _cardCheatStyleFontCached = fs;
+            GUILayout.Label("オンライン：両端末へ同期注入（Desync 防止）", _cardCheatLineStyle);
+            string role = OnlineMatchContext.IsHost ? "ホスト" : "クライアント";
+            GUILayout.Label($"あなたの役割: {role}", _cardCheatLineStyle);
+        }
+        else
+        {
+            GUILayout.Label("CPU 対戦：ローカル手札に直接追加", _cardCheatLineStyle);
         }
 
-        GUILayout.Label("手札チート（プレイヤー）", _cardCheatLineStyle);
         GUILayout.Label($"枚数 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}", _cardCheatLineStyle);
 
-        _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", GUILayout.ExpandWidth(true));
+        _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", _cardCheatTextFieldStyle, GUILayout.ExpandWidth(true));
         GUILayout.Label("フィルタ（カード名・asset名の部分一致）", _cardCheatLineStyle);
 
         var catalog = GetCheatCardCatalog();
         if (catalog == null || catalog.Length == 0)
         {
             GUILayout.Label("Resources/Cards に CardData がありません", _cardCheatLineStyle);
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
             return;
         }
 
-        float scrollH = Mathf.Max(80f, _cardCheatWindowRect.height - 110f);
-        _cardCheatScroll = GUILayout.BeginScrollView(_cardCheatScroll, GUILayout.Height(scrollH));
+        float scrollH = GetCardCheatScrollViewHeight(battleManager.IsOnlineMatch, fs);
+        Rect scrollRect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(scrollH), GUILayout.ExpandWidth(true));
         string f = (_cardCheatFilter ?? "").Trim();
+
+        int rowCount = 0;
+        for (int i = 0; i < catalog.Length; i++)
+        {
+            CardData c = catalog[i];
+            if (c == null) continue;
+            if (f.Length > 0)
+            {
+                string disp = NameForCheatDisplay(c);
+                string asset = c.name ?? "";
+                if (disp.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0
+                    && asset.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+            }
+            rowCount++;
+        }
+
+        float contentW = Mathf.Max(1f, scrollRect.width - 18f);
+        float contentH = Mathf.Max(scrollRect.height, rowCount * rowH);
+        Rect viewRect = new Rect(0f, 0f, contentW, contentH);
+        HandleCardCheatScrollWheel(ref _cardCheatScroll, scrollRect, contentH, scrollRect.height);
+
+        _cardCheatScroll = GUI.BeginScrollView(scrollRect, _cardCheatScroll, viewRect, false, true);
+
+        float y = 0f;
         for (int i = 0; i < catalog.Length; i++)
         {
             CardData c = catalog[i];
@@ -462,16 +513,105 @@ public class BattleDebugTools : MonoBehaviour
                     continue;
             }
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(NameForCheatDisplay(c), _cardCheatLineStyle, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button("追加", GUILayout.Width(Mathf.Max(48f, fs * 2.5f))))
+            float labelW = contentW - btnW - 6f;
+            if (battleManager.IsOnlineMatch)
+                labelW = contentW - (btnW * 2f) - 10f;
+
+            GUI.Label(new Rect(0f, y, labelW, rowH), NameForCheatDisplay(c), _cardCheatRowLabelStyle);
+            if (battleManager.IsOnlineMatch)
+            {
+                if (GUI.Button(new Rect(labelW + 4f, y, btnW, rowH), "自分", _cardCheatButtonStyle))
+                    TryAddCheatCardToPlayerHand(c);
+                if (GUI.Button(new Rect(labelW + btnW + 8f, y, btnW, rowH), "相手", _cardCheatButtonStyle))
+                    TryAddCheatCardToOpponentHandOnline(c);
+            }
+            else if (GUI.Button(new Rect(labelW + 4f, y, btnW, rowH), "追加", _cardCheatButtonStyle))
+            {
                 TryAddCheatCardToPlayerHand(c);
-            GUILayout.EndHorizontal();
+            }
+
+            y += rowH;
         }
 
-        GUILayout.EndScrollView();
+        GUI.EndScrollView();
 
-        GUI.DragWindow(new Rect(0f, 0f, 10000f, WindowDragTitleHeight));
+        GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
+    }
+
+    private float GetCardCheatScrollViewHeight(bool online, int fontSize)
+    {
+        float titleBar = CardCheatWindowDragTitleHeight(fontSize + 6);
+        float header = online ? 230f : 200f;
+        return Mathf.Max(120f, cardCheatPanelLayout.height - titleBar - header);
+    }
+
+    private static void HandleCardCheatScrollWheel(ref Vector2 scrollPos, Rect guiRect, float contentHeight, float visibleHeight)
+    {
+        Event e = Event.current;
+        if (e.type != EventType.ScrollWheel)
+            return;
+
+        Rect hitRect = GUIUtility.GUIToScreenRect(guiRect);
+        if (!hitRect.Contains(e.mousePosition) && !guiRect.Contains(e.mousePosition))
+            return;
+
+        scrollPos.y += e.delta.y * 24f;
+        float maxScroll = Mathf.Max(0f, contentHeight - visibleHeight);
+        scrollPos.y = Mathf.Clamp(scrollPos.y, 0f, maxScroll);
+        e.Use();
+    }
+
+    void EnsureCardCheatGuiStyles()
+    {
+        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 12, 48);
+        if (_cardCheatLineStyle != null && _cardCheatStyleFontCached == fs)
+            return;
+
+        _cardCheatButtonStyle = new GUIStyle(GUI.skin.button)
+        {
+            fontSize = fs,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+        };
+
+        _cardCheatRowLabelStyle = new GUIStyle(_cardCheatButtonStyle)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            padding = new RectOffset(4, 4, 0, 0),
+        };
+        _cardCheatRowLabelStyle.normal.background = null;
+        _cardCheatRowLabelStyle.hover.background = null;
+        _cardCheatRowLabelStyle.active.background = null;
+        _cardCheatRowLabelStyle.focused.background = null;
+        _cardCheatRowLabelStyle.onNormal.background = null;
+
+        _cardCheatLineStyle = new GUIStyle(_cardCheatRowLabelStyle)
+        {
+            wordWrap = false,
+        };
+        _cardCheatLineStyle.normal.textColor = Color.white;
+
+        _cardCheatHeaderStyle = new GUIStyle(_cardCheatLineStyle)
+        {
+            fontSize = fs + 4,
+            fontStyle = FontStyle.Bold,
+        };
+
+        _cardCheatTextFieldStyle = new GUIStyle(GUI.skin.textField)
+        {
+            font = _cardCheatButtonStyle.font,
+            fontSize = fs,
+        };
+
+        _cardCheatWindowStyle = new GUIStyle(GUI.skin.window)
+        {
+            font = _cardCheatButtonStyle.font,
+            fontSize = fs + 6,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+        };
+
+        _cardCheatStyleFontCached = fs;
     }
 
     private void DrawEnemyHandDebugWindow(int windowId)
@@ -717,12 +857,38 @@ public class BattleDebugTools : MonoBehaviour
         Debug.Log("[BattleDebugTools] 手札チートのカード一覧キャッシュをクリアしました。");
     }
 
+    private static string ResolveCheatCardNetworkId(CardData template)
+    {
+        if (template == null) return "";
+        return string.IsNullOrEmpty(template.cardName) ? template.name : template.cardName;
+    }
+
     private void TryAddCheatCardToPlayerHand(CardData template)
     {
         if (!EnsurePlaying()) return;
         if (template == null)
         {
             Debug.LogWarning("[BattleDebugTools] テンプレートが null です");
+            return;
+        }
+
+        if (battleManager.IsOnlineMatch)
+        {
+            string id = ResolveCheatCardNetworkId(template);
+            bool targetIsHostPlayer = OnlineMatchContext.IsHost;
+            if (OnlineMatchContext.IsHost)
+            {
+                if (!battleManager.HostBroadcastOnlineDebugCardInject(id, targetIsHostPlayer))
+                    Debug.LogWarning("[BattleDebugTools] オンライン注入に失敗しました");
+            }
+            else if (!battleManager.RequestOnlineDebugCardInject(id, targetIsHostPlayer))
+            {
+                Debug.LogWarning("[BattleDebugTools] オンライン注入リクエストに失敗しました");
+            }
+            else
+            {
+                Debug.Log($"[BattleDebugTools] ホストへ注入リクエスト: {NameForCheatDisplay(template)}");
+            }
             return;
         }
 
@@ -757,6 +923,33 @@ public class BattleDebugTools : MonoBehaviour
         battleManager.RefreshPlayerDefensePhaseInteractivity();
 
         Debug.Log($"[BattleDebugTools] 手札に追加: {NameForCheatDisplay(instance)}");
+    }
+
+    private void TryAddCheatCardToOpponentHandOnline(CardData template)
+    {
+        if (!EnsurePlaying()) return;
+        if (template == null) return;
+        if (!battleManager.IsOnlineMatch)
+        {
+            Debug.LogWarning("[BattleDebugTools] 相手手札注入はオンライン対戦専用です");
+            return;
+        }
+
+        string id = ResolveCheatCardNetworkId(template);
+        bool targetIsHostPlayer = !OnlineMatchContext.IsHost;
+        if (OnlineMatchContext.IsHost)
+        {
+            if (!battleManager.HostBroadcastOnlineDebugCardInject(id, targetIsHostPlayer))
+                Debug.LogWarning("[BattleDebugTools] オンライン注入（相手）に失敗しました");
+        }
+        else if (!battleManager.RequestOnlineDebugCardInject(id, targetIsHostPlayer))
+        {
+            Debug.LogWarning("[BattleDebugTools] オンライン注入リクエスト（相手）に失敗しました");
+        }
+        else
+        {
+            Debug.Log($"[BattleDebugTools] ホストへ相手手札注入リクエスト: {NameForCheatDisplay(template)}");
+        }
     }
 
     [ContextMenu("デバッグ：Inspector の cheatCardTemplate を手札に追加")]

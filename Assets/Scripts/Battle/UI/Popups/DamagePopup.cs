@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Text;
 using System.Threading;
@@ -44,33 +44,54 @@ public class DamagePopup : MonoBehaviour
     // fadeDuration … 何秒かけて透明になるか。大きいほど長く残る。Destroy もこの秒後。
     public float fadeDuration = 0.5f;
 
-    /// <summary>UI 生成に失敗したときなど、闇フォロー前の待ちに使う既定秒数（<see cref="fadeDuration"/> のデフォルトと一致）。</summary>
-    public const float DefaultFadeDurationIfUnknown = 1f;
+    public void BindSettings(DamagePopupSettings settings)
+    {
+        _boundSettings = settings;
+        ApplyMotionFromSettings(settings);
+    }
+
+    private void ApplyMotionFromSettings(DamagePopupSettings settings)
+    {
+        if (settings == null) return;
+        var motion = settings.MotionOrDefault;
+        floatSpeed = motion.floatSpeed;
+        fadeDuration = motion.fadeDuration;
+    }
+
+    private static DamagePopupSettings ActiveTimingSettings =>
+        DamagePopupSettings.GetRuntimeFallback();
+
+    /// <summary>UI 生成に失敗したときなど、闇フォロー前の待ちに使う既定秒数。</summary>
+    public static float DefaultFadeDurationIfUnknown =>
+        ActiveTimingSettings.DefaultFadeDurationIfUnknown;
 
     /// <summary>
-    /// ポップアップが画面上に残る時間（<see cref="fadeDuration"/>）のあと、次の処理までの標準インターバル（ms）。
-    /// 待機は「表示開始と同時」ではなく、<see cref="WaitAfterPopupLifetimeAsync"/> で <b>寿命終了後</b>に挟む。
+    /// ポップアップが画面上に残る時間（fadeDuration）のあと、次の処理までの標準インターバル（ms）。
     /// </summary>
-    public const int PostPopupIntervalMs = 250;
+    public static int PostPopupIntervalMs =>
+        ActiveTimingSettings.PostPopupIntervalMs;
 
     /// <summary>
-    /// ダメージポップ表示完了後、<see cref="StatusEffectApplyTiming.WithDamageThrough"/> の付与処理に入るまでの待ち（旧 1000ms の半分）。
+    /// ダメージポップ表示完了後、WithDamageThrough 状態異常付与までの待ち（ms）。
     /// </summary>
-    public const int PreStatusEffectAfterDamagePopupDelayMs = 500;
+    public static int PreStatusEffectAfterDamagePopupDelayMs =>
+        ActiveTimingSettings.PreStatusEffectAfterDamagePopupDelayMs;
 
     /// <summary>
-    /// ダメージ／回復／状態異常付与など、最後に出したフローティングポップの
-    /// 「寿命＋<see cref="PostPopupIntervalMs"/>」まで待った<strong>あと</strong>、CombatResolve（TurnEnd 系）へ進む直前の共通インターバル。
+    /// 最後のフローティングポップの寿命待ち後、CombatResolve へ進む直前の共通インターバル（ms）。
     /// </summary>
-    public const int PostLastPresentationBeforeCombatResolveMs = 400;
+    public static int PostLastPresentationBeforeCombatResolveMs =>
+        ActiveTimingSettings.PostLastPresentationBeforeCombatResolveMs;
 
-    /// <summary>即時効果解決の直前など、回復ポップアップより前に置く短い間（カード詳細の読み取り用）。</summary>
-    public const int PreImmediateEffectDelayMs = 250;
+    /// <summary>即時効果解決の直前など、回復ポップより前の短い間（ms）。</summary>
+    public static int PreImmediateEffectDelayMs =>
+        ActiveTimingSettings.PreImmediateEffectDelayMs;
 
-    /// <summary>戦闘ダメージ数値ポップアップの直前の短い間（命中演出の間）。</summary>
-    public const int PreDamagePopupBeatMs = 500;
+    /// <summary>戦闘ダメージ数値ポップの直前の短い間（ms）。</summary>
+    public static int PreDamagePopupBeatMs =>
+        ActiveTimingSettings.PreDamagePopupBeatMs;
 
-    /// <summary>ShowDamagePopup / ShowHealPopup 等が返す秒数を正規化（0 以下は <see cref="DefaultFadeDurationIfUnknown"/>）。</summary>
+    /// <summary>ShowDamagePopup / ShowHealPopup 等が返す秒数を正規化。</summary>
     public static float NormalizedFadeSeconds(float fadeSecondsReturnedFromShow)
     {
         return fadeSecondsReturnedFromShow > 0f ? fadeSecondsReturnedFromShow : DefaultFadeDurationIfUnknown;
@@ -106,8 +127,6 @@ public class DamagePopup : MonoBehaviour
     private PopupRunMode _runMode = PopupRunMode.Normal;
     private float _diseasePhase1Duration;
     private TaskCompletionSource<bool> _diseasePhase1Tcs;
-
-    public void BindSettings(DamagePopupSettings settings) => _boundSettings = settings;
 
     private DamagePopupSettings ResolveSettings() =>
         _boundSettings ?? settingsOverride ?? DamagePopupSettings.GetRuntimeFallback();

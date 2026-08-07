@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,11 +16,12 @@ public static class PhysicalReflectionFlow
     private static bool IsContinuingReflectionChain(CardData pick, IReadOnlyList<CardData> incomingAttackCards)
     {
         if (pick == null || incomingAttackCards == null || incomingAttackCards.Count == 0) return false;
-        if (ReflectionRules.IsPhysicalReflectionCard(pick) && ReflectionRules.CanReflectPhysical(incomingAttackCards))
-            return true;
-        if (ReflectionRules.IsMagicReflectionCard(pick) && ReflectionRules.CanReflectMagic(incomingAttackCards))
-            return true;
-        return false;
+        return ReflectionRules.CanReflectIncoming(pick, incomingAttackCards);
+    }
+
+    private static bool IsImmediateIncoming(IReadOnlyList<CardData> incomingAttackCards)
+    {
+        return ReflectionRules.ShouldUseImmediateEffectReflectionFlow(incomingAttackCards);
     }
 
     /// <summary>
@@ -58,7 +59,11 @@ public static class PhysicalReflectionFlow
         int incomingPower = battleProcessor.ComputeReflectionIncomingAttackPower(
             incomingAttackCards, enemy, player);
 
-        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingAttackCards);
+        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingAttackCards)
+            || GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttackCards)
+            || (playerReflectionDefenseCard != null
+                && ReflectionRules.IsFullReflectionCard(playerReflectionDefenseCard)
+                && CardRules.IsMagicClassifiedAttackCombo(incomingAttackCards));
         float bounceSec = BattleUIManager.I != null
             ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
@@ -126,7 +131,11 @@ public static class PhysicalReflectionFlow
         int incomingPower = battleProcessor.ComputeReflectionIncomingAttackPower(
             incomingPlayerAttackCards, player, enemy);
 
-        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingPlayerAttackCards);
+        bool sessionMagic = ReflectionRules.CanReflectMagic(incomingPlayerAttackCards)
+            || GrandMagicRules.ContainsGrandMagicStyleAttack(incomingPlayerAttackCards)
+            || (enemyReflectionDefenseCard != null
+                && ReflectionRules.IsFullReflectionCard(enemyReflectionDefenseCard)
+                && CardRules.IsMagicClassifiedAttackCombo(incomingPlayerAttackCards));
         float bounceSec = BattleUIManager.I != null
             ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
             : DamagePopup.DefaultFadeDurationIfUnknown;
@@ -210,10 +219,27 @@ public static class PhysicalReflectionFlow
 
                 if (pick != null && IsContinuingReflectionChain(pick, incomingAttackCards))
                 {
-                    // 敵側パネルのみ削除（攻撃シートは反対側。同一 CardData で DestroyCardSheetForCardData すると攻撃も消える）
                     BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
                     BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                     await Task.Delay(500, cancellationToken);
+
+                    handRefill?.RecordEnemyUse(pick);
+                    battleProcessor.UseCard(pick, battleManager.cpuHand);
+                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
+
+                    if (IsImmediateIncoming(incomingAttackCards))
+                    {
+                        await ImmediateEffectReflectionFlow.RunChainBounceAsync(
+                            battleManager,
+                            battleProcessor,
+                            incomingAttackCards,
+                            player,
+                            slideTowardPlayer: false,
+                            enemy,
+                            cancellationToken);
+                        defenderSide = PlayerType.Player;
+                        continue;
+                    }
 
                     float sec = BattleUIManager.I != null
                         ? BattleUIManager.I.ShowReflectionBouncePopup(enemy, sessionMagic)
@@ -230,11 +256,15 @@ public static class PhysicalReflectionFlow
                     battleManager.SetReflectionAttackTotalDisplayAfterSlide(
                         incomingAttackCards, totalAtkOnPlayerSide: false, reflectionBlessingAttacker, reflectionBlessingDefender, incomingPower);
 
-                    handRefill?.RecordEnemyUse(pick);
-                    battleProcessor.UseCard(pick, battleManager.cpuHand);
-
                     defenderSide = PlayerType.Player;
                     continue;
+                }
+
+                if (pick == null && IsImmediateIncoming(incomingAttackCards))
+                {
+                    await ResolveImmediateIncomingOnDefenderAsync(
+                        battleProcessor, incomingAttackCards, enemy, player, cancellationToken);
+                    return;
                 }
 
                 if (pick != null)
@@ -273,6 +303,13 @@ public static class PhysicalReflectionFlow
 
             if (picks == null || picks.Count == 0)
             {
+                if (IsImmediateIncoming(incomingAttackCards))
+                {
+                    await ResolveImmediateIncomingOnDefenderAsync(
+                        battleProcessor, incomingAttackCards, player, enemy, cancellationToken);
+                    return;
+                }
+
                 await battleProcessor.ResolveReflectedCombatAsync(
                     incomingAttackCards,
                     incomingPower,
@@ -291,12 +328,28 @@ public static class PhysicalReflectionFlow
                 if (slotIndex >= 0) handRefill?.RecordPlayerUseSlot(slotIndex);
                 battleProcessor.UseCard(card, battleManager.playerHand);
 
-                // 攻撃と同一 CardData のときは全削除しない（攻撃シートが消える）。同パネル重複はバウンス直後に「最後の1枚」だけ消す。
                 if (!IncomingAttackContainsCardReference(incomingAttackCards, card))
                     BattleUIManager.I?.DestroyCardSheetForCardData(card);
 
                 BattleUIManager.I?.ShowCardDetail(card, Side.Player);
                 await Task.Delay(500, cancellationToken);
+
+                if (!IncomingAttackContainsCardReference(incomingAttackCards, card))
+                    BattleUIManager.I?.DestroyMostRecentCardSheetOnPanelForCardData(card, Side.Player);
+
+                if (IsImmediateIncoming(incomingAttackCards))
+                {
+                    await ImmediateEffectReflectionFlow.RunChainBounceAsync(
+                        battleManager,
+                        battleProcessor,
+                        incomingAttackCards,
+                        enemy,
+                        slideTowardPlayer: true,
+                        player,
+                        cancellationToken);
+                    defenderSide = PlayerType.Enemy;
+                    continue;
+                }
 
                 float sec2 = BattleUIManager.I != null
                     ? BattleUIManager.I.ShowReflectionBouncePopup(player, sessionMagic)
@@ -374,6 +427,32 @@ public static class PhysicalReflectionFlow
                 skipHitCheck: true);
             battleManager.ClearStatsDisplaySequenceCards();
             return;
+        }
+    }
+
+    private static async Task ResolveImmediateIncomingOnDefenderAsync(
+        BattleProcessor battleProcessor,
+        List<CardData> incomingAttackCards,
+        PlayerStatus defender,
+        PlayerStatus attacker,
+        CancellationToken cancellationToken)
+    {
+        if (battleProcessor == null || incomingAttackCards == null || incomingAttackCards.Count == 0 || defender == null)
+            return;
+
+        if (incomingAttackCards.Count == 1 && incomingAttackCards[0] != null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await battleProcessor.ResolveImmediateEffectAsync(incomingAttackCards[0], attacker, defender);
+            return;
+        }
+
+        for (int i = 0; i < incomingAttackCards.Count; i++)
+        {
+            var c = incomingAttackCards[i];
+            if (c == null) continue;
+            cancellationToken.ThrowIfCancellationRequested();
+            await battleProcessor.ResolveImmediateEffectAsync(c, attacker, defender);
         }
     }
 }

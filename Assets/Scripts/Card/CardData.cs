@@ -305,6 +305,14 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Tooltip("HP0 後の PostDeathEffectQueue で解決する効果（攻撃／防御フェーズでは使用不可）。")]
     public PostDeathCardEffectSO postDeathCardEffect;
 
+    [Header("Near-Death カード")]
+    [Tooltip("HP0 検出後「往生」の直前に解決する効果（不死鳥の尾羽根等）。")]
+    public NearDeathCardEffectSO nearDeathCardEffect;
+
+    [Header("手札パッシブ")]
+    [Tooltip("いかなるフェーズでも手動選択・使用不可（道連れ・不死鳥等）。")]
+    public bool passiveHandOnly;
+
     [Header("宝玉系（防御・任意）")]
     [Tooltip("第1段の実ダメ通過時に臨時効果。DEF0 だけのカード識別には使わない。")]
     public OrbCardRuleSO orbReactionRule;

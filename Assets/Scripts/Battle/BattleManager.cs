@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -141,6 +141,10 @@ public class BattleManager : MonoBehaviour
     private BuyFeature buyFeature = new BuyFeature();
     private SellFeature sellFeature = new SellFeature();
     [SerializeField] private ExchangeFeature exchangeFeature;
+
+    internal BuyFeature BuyFeatureInternal => buyFeature;
+    internal SellFeature SellFeatureInternal => sellFeature;
+    internal ExchangeFeature ExchangeFeatureInternal => exchangeFeature;
 
     // バトルデータ
     private PlayerStatus playerStatus, enemyStatus;
@@ -405,6 +409,119 @@ public class BattleManager : MonoBehaviour
         _tributeBloodPlayerHpPaid = 0;
         _tributeBloodEnemyHpPaid = 0;
     }
+
+    /// <summary>Online ResolveState: near-death card names consumed this combat (host network perspective).</summary>
+    private string _onlineSyncHostNearDeathCardName;
+    private string _onlineSyncClientNearDeathCardName;
+
+    /// <summary>Records near-death card consumption for the next host ResolveState sync.</summary>
+    public void RecordNearDeathConsumptionForOnlineSync(PlayerType ownerSide, string cardName)
+    {
+        if (!IsOnlineMatch || string.IsNullOrEmpty(cardName)) return;
+
+        if (OnlineMatchContext.IsHost)
+        {
+            if (ownerSide == PlayerType.Player)
+                _onlineSyncHostNearDeathCardName = cardName;
+            else
+                _onlineSyncClientNearDeathCardName = cardName;
+        }
+        else
+        {
+            if (ownerSide == PlayerType.Player)
+                _onlineSyncClientNearDeathCardName = cardName;
+            else
+                _onlineSyncHostNearDeathCardName = cardName;
+        }
+    }
+
+    private void ClearOnlineNearDeathSyncSnapshot()
+    {
+        _onlineSyncHostNearDeathCardName = null;
+        _onlineSyncClientNearDeathCardName = null;
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    void HandleOnlineDebugInjectReceived(string cardName, bool targetIsHostPlayer)
+    {
+        TryApplyOnlineDebugCardInject(cardName, targetIsHostPlayer);
+    }
+
+    /// <summary>
+    /// オンラインデバッグ：両クライアントで同じ手札へカードを注入する。
+    /// targetIsHostPlayer=true → ホスト側プレイヤーの手札（ホスト: playerHand / クライアント: cpuHand）。
+    /// </summary>
+    public bool TryApplyOnlineDebugCardInject(string cardName, bool targetIsHostPlayer)
+    {
+        if (!IsOnlineMatch || cardDealer == null || string.IsNullOrEmpty(cardName))
+            return false;
+
+        List<CardData> hand;
+        bool withUi;
+        if (targetIsHostPlayer)
+        {
+            hand = OnlineMatchContext.IsHost ? playerHand : cpuHand;
+            withUi = OnlineMatchContext.IsHost;
+        }
+        else
+        {
+            hand = OnlineMatchContext.IsHost ? cpuHand : playerHand;
+            withUi = !OnlineMatchContext.IsHost;
+        }
+
+        if (hand == null || hand.Count >= MaxHandCards)
+        {
+            Debug.LogWarning("[BattleManager] Online debug inject: hand full or null");
+            return false;
+        }
+
+        var template = cardDealer.FindTemplateByDisplayOrAssetName(cardName);
+        if (template == null)
+        {
+            Debug.LogWarning($"[BattleManager] Online debug inject: template not found ({cardName})");
+            return false;
+        }
+
+        var instance = cardDealer.InstantiateCardFromTemplate(template);
+        if (instance == null) return false;
+
+        hand.Add(instance);
+        if (withUi)
+        {
+            cardDealer.CreateCardUIForHand(instance);
+            instance.cardUI?.Reveal();
+            UpdateTotalATKDEFDisplay();
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+            RefreshPlayerDefensePhaseInteractivity();
+        }
+
+        Debug.Log($"[BattleManager] Online debug inject: {cardName} -> {(targetIsHostPlayer ? "host player" : "client player")} (localUi={withUi})");
+        return true;
+    }
+
+    /// <summary>ホスト：注入してクライアントへ転送（Development のみ）。</summary>
+    public bool HostBroadcastOnlineDebugCardInject(string cardName, bool targetIsHostPlayer)
+    {
+        if (!IsOnlineMatch || !OnlineMatchContext.IsHost || string.IsNullOrEmpty(cardName))
+            return false;
+        if (!TryApplyOnlineDebugCardInject(cardName, targetIsHostPlayer))
+            return false;
+        NetworkBattleBridge.SendDebugInjectCard(cardName, targetIsHostPlayer);
+        return true;
+    }
+
+    /// <summary>クライアント：ホストへ注入を依頼（Development のみ）。</summary>
+    public bool RequestOnlineDebugCardInject(string cardName, bool targetIsHostPlayer)
+    {
+        if (!IsOnlineMatch || string.IsNullOrEmpty(cardName))
+            return false;
+        if (OnlineMatchContext.IsHost)
+            return HostBroadcastOnlineDebugCardInject(cardName, targetIsHostPlayer);
+        NetworkBattleBridge.SendDebugInjectCardRequest(cardName, targetIsHostPlayer);
+        return true;
+    }
+#endif
 
     /// <summary>敵の双剣デュアリズム：プレイヤー防御1回目解決直後=0、2回目の防御入力待ち中=1。</summary>
     private int _playerDefenseVsEnemyDualBladeStreakIndex;
@@ -909,6 +1026,15 @@ public class BattleManager : MonoBehaviour
         }
 
         List<CardData> attackSource = GetIncomingAttackSnapshotForDefenseUi();
+        if (attackSource != null && attackSource.Count == 1 && attackSource[0] != null
+            && EconomicActionNames.IsEconomicAttack(attackSource[0].cardName))
+        {
+            BattleUIManager.I?.SetHandGrayedOut(playerHand, grayedOut: true);
+            BattleUIManager.I?.RefreshUseButton();
+            RefreshPlayerHandStatusTextForDefenseSnapshot();
+            return;
+        }
+
         if (attackSource == null || attackSource.Count == 0)
         {
             BattleUIManager.I?.RefreshUseButton();
@@ -929,54 +1055,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackSource);
-        var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSource);
-        if (ReflectionRules.CanReflectPhysical(attackSource))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, attackSource) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
-        }
-
-        if (ReflectionRules.CanReflectMagic(attackSource))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && ReflectionRules.CanUseMagicReflectionAgainstAttack(c, attackSource) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsMagicReflectionCard(c));
-        }
-
-        if (BlockingRules.CanBlockPhysical(attackSource))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && BlockingRules.IsPhysicalBlockingCard(c) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
-        }
-
-        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, attackSource));
-        foreach (var c in playerHand)
-        {
-            if (c != null && ParryRules.CanParryIncoming(c, attackSource) && !defenseChoices.Contains(c))
-                defenseChoices.Add(c);
-        }
-
+        var defenseChoices = CardRules.GetDefenseChoicesForIncoming(playerHand, attackSource);
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
@@ -1170,54 +1249,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackSnapshot);
-        var defenseChoices = CardRules.GetDefenseChoicesAgainstAttack(playerHand, attackElement, attackSnapshot);
-        if (ReflectionRules.CanReflectPhysical(attackSnapshot))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, attackSnapshot) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsPhysicalReflectionCard(c));
-        }
-
-        if (ReflectionRules.CanReflectMagic(attackSnapshot))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && ReflectionRules.CanUseMagicReflectionAgainstAttack(c, attackSnapshot) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && ReflectionRules.IsMagicReflectionCard(c));
-        }
-
-        if (BlockingRules.CanBlockPhysical(attackSnapshot))
-        {
-            foreach (var c in playerHand)
-            {
-                if (c != null && BlockingRules.IsPhysicalBlockingCard(c) && !defenseChoices.Contains(c))
-                    defenseChoices.Add(c);
-            }
-        }
-        else
-        {
-            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
-        }
-
-        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, attackSnapshot));
-        foreach (var c in playerHand)
-        {
-            if (c != null && ParryRules.CanParryIncoming(c, attackSnapshot) && !defenseChoices.Contains(c))
-                defenseChoices.Add(c);
-        }
-
+        var defenseChoices = CardRules.GetDefenseChoicesForIncoming(playerHand, attackSnapshot);
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
@@ -1288,6 +1320,9 @@ public class BattleManager : MonoBehaviour
             BattleRandom.InitOnline(OnlineMatchContext.RandomSeed, OnlineMatchContext.IsHost);
             enemyAI = new RemotePlayerAgent();
             Debug.Log($"[BattleManager] Online mode (host={OnlineMatchContext.IsHost}, opponent={OnlineMatchContext.RemotePlayerName})");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            NetworkBattleBridge.OnlineDebugInjectReceived += HandleOnlineDebugInjectReceived;
+#endif
         }
 
         // ステータス初期化
@@ -1368,7 +1403,8 @@ public class BattleManager : MonoBehaviour
         if (exchangeFeature != null)
         {
             GameObject exchangePopupPrefab = BattleUIManager.I?.GetExchangePopupPrefab();
-            exchangeFeature.Initialize(this, playerStatus, exchangePopupPrefab, popupCanvas);
+            GameObject exchangeConfirmPopupPrefab = BattleUIManager.I?.GetExchangeConfirmPopupPrefab();
+            exchangeFeature.Initialize(this, playerStatus, exchangePopupPrefab, exchangeConfirmPopupPrefab, popupCanvas);
             Debug.Log($"[BattleManager] exchangeFeature初期化完了");
         }
         else
@@ -1713,7 +1749,7 @@ public class BattleManager : MonoBehaviour
     {
         // 売却確定後はダミー攻撃カードが載っている。DefenseConfirm に到達しなかった場合も SellFeature のフラグを戻す。
         bool sellFlowFromPendingConfirm = currentAttackCard != null
-            && currentAttackCard.cardName == "経済アクション（売却）";
+            && currentAttackCard.cardName == EconomicActionNames.Sell;
         bool reachedDefenseConfirm = false;
 
         try
@@ -1756,7 +1792,7 @@ public class BattleManager : MonoBehaviour
 
     private async Task RunDefenseConfirmAsync()
     {
-        bool sellFlow = currentAttackCard != null && currentAttackCard.cardName == "経済アクション（売却）";
+        bool sellFlow = currentAttackCard != null && currentAttackCard.cardName == EconomicActionNames.Sell;
 
         try
         {
@@ -1768,24 +1804,28 @@ public class BattleManager : MonoBehaviour
             }
 
             // 経済アクションの場合は特別処理（DefenseConfirm からのみ呼ばれる想定。CurrentState 条件は外し、取りこぼしを防ぐ）
-            if (currentAttackCard.cardName == "経済アクション")
+            if (currentAttackCard.cardName == EconomicActionNames.Buy)
             {
                 Debug.Log("[BattleManager] 経済アクション（購入）の防御フェーズ処理");
                 await buyFeature.ProcessEconomicActionAsync();
                 currentAttackCard = null;
                 selectedDefenseCard = null;
                 UpdateTotalATKDEFDisplay();
+                if (await TryHandleDeathIfAnyAsync(_phaseCts != null ? _phaseCts.Token : default))
+                    return;
                 SetGameState(GameState.CombatResolvePhase);
                 return;
             }
 
-            if (currentAttackCard.cardName == "経済アクション（売却）")
+            if (currentAttackCard.cardName == EconomicActionNames.Sell)
             {
                 Debug.Log("[BattleManager] 経済アクション（売却）の防御フェーズ処理");
                 await sellFeature.ProcessEconomicActionAsync();
                 currentAttackCard = null;
                 selectedDefenseCard = null;
                 UpdateTotalATKDEFDisplay();
+                if (await TryHandleDeathIfAnyAsync(_phaseCts != null ? _phaseCts.Token : default))
+                    return;
                 SetGameState(GameState.CombatResolvePhase);
                 return;
             }
@@ -1814,9 +1854,12 @@ public class BattleManager : MonoBehaviour
             CardData enemyDefenseCard = defenseCardsForCombat.Count > 0 ? defenseCardsForCombat[0] : null;
 
             bool enemyPhysicalReflect = enemyDefenseCard != null
-                && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(enemyDefenseCard, attackCards);
-            bool enemyMagicReflect = enemyDefenseCard != null
-                && ReflectionRules.CanUseMagicReflectionAgainstAttack(enemyDefenseCard, attackCards);
+                && ReflectionRules.CanReflectIncoming(enemyDefenseCard, attackCards)
+                && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
+            bool enemyMagicReflect = enemyPhysicalReflect;
+            bool enemyImmediateReflect = enemyDefenseCard != null
+                && ReflectionRules.CanReflectIncoming(enemyDefenseCard, attackCards)
+                && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
             bool enemyPhysicalBlock = enemyDefenseCard != null
                 && BlockingRules.CanUsePhysicalBlockingAgainstAttack(enemyDefenseCard, attackCards);
             bool enemyParry = enemyDefenseCard != null
@@ -1826,11 +1869,48 @@ public class BattleManager : MonoBehaviour
                 Defender == PlayerType.Enemy && defenseCardsForCombat.Count == 0 && BattleUIManager.I != null;
             using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))
             {
-                if (attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+                if (attackCards != null && attackCards.Count > 0
                     && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards))
                 {
-                    await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, _phaseCts.Token);
-                    await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                    if (enemyImmediateReflect)
+                    {
+                        await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, _phaseCts.Token);
+                        await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
+                            this,
+                            battleProcessor,
+                            handRefill,
+                            attackCards,
+                            enemyDefenseCard,
+                            atk,
+                            _phaseCts.Token);
+                    }
+                    else if (enemyPhysicalReflect || enemyMagicReflect)
+                    {
+                        await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
+                            this,
+                            battleProcessor,
+                            handRefill,
+                            enemyAI,
+                            attackCards,
+                            enemyDefenseCard,
+                            _phaseCts.Token);
+                    }
+                    else if (attackCards.Count == 1 && attackCards[0] != null)
+                    {
+                        await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, _phaseCts.Token);
+                        await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                    }
+                }
+                else if (enemyImmediateReflect)
+                {
+                    await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
+                        this,
+                        battleProcessor,
+                        handRefill,
+                        attackCards,
+                        enemyDefenseCard,
+                        atk,
+                        _phaseCts.Token);
                 }
                 else if (enemyPhysicalReflect || enemyMagicReflect)
                 {
@@ -1879,6 +1959,7 @@ public class BattleManager : MonoBehaviour
             }
 
             if (_phaseCts.Token.IsCancellationRequested) return;
+            if (await TryHandleDeathIfAnyAsync(_phaseCts.Token)) return;
 
             ClearMagicalExplosionComboMpPoolSnapshot();
             ClearMillionDollarBazookaComboGpPoolSnapshot();
@@ -1886,10 +1967,9 @@ public class BattleManager : MonoBehaviour
             ClearHammadnessRollSnapshot();
             BattleUIManager.I?.HideAllCardDetails();
 
-            bool skipPostCombatEnemyDefenseUse = enemyPhysicalReflect || enemyMagicReflect || enemyParry
+            bool skipPostCombatEnemyDefenseUse = enemyPhysicalReflect || enemyMagicReflect || enemyImmediateReflect || enemyParry
                 || enemyPhysicalBlock
-                || (attackCards != null && attackCards.Count == 1 && attackCards[0] != null
-                    && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards));
+                || (attackCards != null && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards));
             if (defenseCardsForCombat.Count > 0 && !skipPostCombatEnemyDefenseUse)
             {
                 foreach (var defenseCardToUse in defenseCardsForCombat)
@@ -2168,6 +2248,12 @@ public class BattleManager : MonoBehaviour
 
         currentAttackCard = attack;
         _playerDefenseVsEnemyDualBladeStreakIndex = 0;
+
+        if (EconomicActionNames.IsEconomicAttack(attack.cardName))
+        {
+            SetGameState(GameState.DefensePhase);
+            return;
+        }
 
         var token = _phaseCts != null ? _phaseCts.Token : default;
         var atkList = GetEnemyAttackCardsForTurn(attack);
@@ -2854,9 +2940,17 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // オンライン：確定した防御選択を相手へ送信
-        if (IsOnlineMatch)
-            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
+        if (Defender == PlayerType.Player && selectedDefenseCards.Count > 0
+            && currentAttackCard != null
+            && EconomicActionNames.IsEconomicAttack(currentAttackCard.cardName))
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                "経済アクションは「許す」のみ有効です", new Color(0.95f, 0.55f, 0.15f));
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetHandClickable(true);
+            BattleUIManager.I?.RefreshUseButton();
+            return;
+        }
 
         if (Defender == PlayerType.Player && selectedDefenseCards.Count > 0)
         {
@@ -2880,6 +2974,10 @@ public class BattleManager : MonoBehaviour
                 }
             }
         }
+
+        // オンライン：検証通過後に確定した防御選択を相手へ送信
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
 
         // 防御カードの演出フローをCardSequenceManagerに委譲
         if (cardSequenceManager != null)
@@ -2924,6 +3022,14 @@ public class BattleManager : MonoBehaviour
 
         try
         {
+        if (currentAttackCard != null && EconomicActionNames.IsEconomicAttack(currentAttackCard.cardName))
+        {
+            BattleUIManager.I?.ClearAllSelections();
+            UpdateTotalATKDEFDisplay();
+            SetGameState(GameState.DefenseConfirmPhase);
+            return;
+        }
+
         // 選択状態をクリア
         BattleUIManager.I?.ClearAllSelections();
         UpdateTotalATKDEFDisplay();
@@ -2957,6 +3063,7 @@ public class BattleManager : MonoBehaviour
         await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHit);
 
         if (token.IsCancellationRequested) return;
+        if (await TryHandleDeathIfAnyAsync(token)) return;
 
         if (await TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(token))
             return;
@@ -3290,7 +3397,10 @@ public class BattleManager : MonoBehaviour
                     TurnTag = OnlineTurnTag,
                     Host = CaptureSideStatus(playerStatus),
                     Client = CaptureSideStatus(enemyStatus),
+                    HostNearDeathCardName = _onlineSyncHostNearDeathCardName ?? "",
+                    ClientNearDeathCardName = _onlineSyncClientNearDeathCardName ?? "",
                 });
+                ClearOnlineNearDeathSyncSnapshot();
                 return;
             }
 
@@ -3314,6 +3424,17 @@ public class BattleManager : MonoBehaviour
             ApplyAuthoritativeSideStatus(playerStatus, sync.Client, "自分");
             ApplyAuthoritativeSideStatus(enemyStatus, sync.Host, "相手");
             BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
+
+            if (!string.IsNullOrEmpty(sync.HostNearDeathCardName))
+            {
+                NearDeathEffectProcessor.ApplySyncedCardConsumption(
+                    this, battleProcessor, handRefill, PlayerType.Enemy, sync.HostNearDeathCardName);
+            }
+            if (!string.IsNullOrEmpty(sync.ClientNearDeathCardName))
+            {
+                NearDeathEffectProcessor.ApplySyncedCardConsumption(
+                    this, battleProcessor, handRefill, PlayerType.Player, sync.ClientNearDeathCardName);
+            }
 
             // 権威補正で HP0 になった場合の終了処理
             await TryHandleDeathIfAnyAsync(ct);
@@ -3888,7 +4009,7 @@ public class BattleManager : MonoBehaviour
     private async Task ProcessEconomicActionDrawAsync()
     {
         // 経済アクションが実行されたかどうかをチェック（ダミー攻撃カードで判定）
-        if (currentAttackCard != null && currentAttackCard.cardName == "経済アクション")
+        if (currentAttackCard != null && currentAttackCard.cardName == EconomicActionNames.Buy)
         {
             // 0.5秒インターバル
             await Task.Delay(500);
@@ -3976,6 +4097,16 @@ public class BattleManager : MonoBehaviour
         bool pDead = playerStatus != null && playerStatus.IsDead();
         bool eDead = enemyStatus != null && enemyStatus.IsDead();
         if (!pDead && !eDead) return false;
+
+        if (NearDeathEffectProcessor.HasPendingRevival(this))
+        {
+            await NearDeathEffectProcessor.TryReviveDeadPlayersAsync(
+                this, battleProcessor, handRefill, ct);
+
+            pDead = playerStatus != null && playerStatus.IsDead();
+            eDead = enemyStatus != null && enemyStatus.IsDead();
+            if (!pDead && !eDead) return false;
+        }
 
         _gameEndTriggered = true;
         bool gameEndPresentationCompleted = false;
@@ -4128,6 +4259,9 @@ public class BattleManager : MonoBehaviour
 
     private void OnDestroy()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        NetworkBattleBridge.OnlineDebugInjectReceived -= HandleOnlineDebugInjectReceived;
+#endif
         _phaseCts?.Cancel();
         _phaseCts?.Dispose();
     }

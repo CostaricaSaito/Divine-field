@@ -13,6 +13,7 @@ public sealed class CurseBindEffect : IStatusEffect
     public void ApplyEffect(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} に「呪縛」が付与されました");
+        HitRateRules.RefreshHandHitRateDisplayIfPlayer(target);
     }
 
     public void OnTurnStart(PlayerStatus target) { }
@@ -20,6 +21,7 @@ public sealed class CurseBindEffect : IStatusEffect
     public void OnRemove(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} の「呪縛」が解除されました");
+        HitRateRules.RefreshHandHitRateDisplayIfPlayer(target);
     }
 
     public int ModifyDamage(int originalDamage) => originalDamage;

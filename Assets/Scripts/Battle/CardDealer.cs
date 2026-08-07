@@ -313,6 +313,19 @@ public class CardDealer : MonoBehaviour
         return null;
     }
 
+    /// <summary>表示名（cardName）または asset 名でテンプレートを検索（オンライン・デバッグ注入用）。</summary>
+    public CardData FindTemplateByDisplayOrAssetName(string displayOrAssetName)
+    {
+        if (string.IsNullOrEmpty(displayOrAssetName) || allCards == null) return null;
+        foreach (var c in allCards)
+        {
+            if (c == null) continue;
+            if (c.cardName == displayOrAssetName || c.name == displayOrAssetName)
+                return c;
+        }
+        return null;
+    }
+
     /// <summary>
     /// テンプレート（ScriptableObject アセット）からランタイム用の複製を生成。手札追加・デバッグ用。
     /// </summary>

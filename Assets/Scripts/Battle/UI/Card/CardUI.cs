@@ -106,7 +106,9 @@ public class CardUI : MonoBehaviour
 
         if (c != null && HitRateRules.HasCustomHitRate(c))
         {
-            cardHitRateText.text = HitRateRules.FormatHitRateLabel(c.hitRate);
+            var owner = BattleManager.I?.GetPlayerStatus();
+            int displayed = HitRateRules.GetDisplayedHitRatePercent(c, owner);
+            cardHitRateText.text = HitRateRules.FormatHitRateLabel(displayed);
             cardHitRateText.gameObject.SetActive(true);
         }
         else
@@ -347,9 +349,19 @@ public class CardUI : MonoBehaviour
             if (c == null) return false;
             if (c.cardType != CardType.Defense
                 && c.cardType != CardType.Attack
-                && c.cardType != CardType.Magic)
+                && c.cardType != CardType.Magic
+                && c.cardType != CardType.Special)
             {
                 return false;
+            }
+            if (c.cardType == CardType.Special)
+            {
+                if (c.reflectionKind == ReflectionKind.None
+                    && c.parryKind == ParryKind.None
+                    && c.blockingKind == BlockingKind.None)
+                {
+                    return false;
+                }
             }
             if (c.cardType == CardType.Magic)
             {
@@ -366,8 +378,7 @@ public class CardUI : MonoBehaviour
 
             if (c.reflectionKind != ReflectionKind.None)
             {
-                if (ReflectionRules.CanUsePhysicalReflectionAgainstAttack(c, incoming)
-                    || ReflectionRules.CanUseMagicReflectionAgainstAttack(c, incoming))
+                if (ReflectionRules.CanReflectIncoming(c, incoming))
                 {
                     label = "REFLECT";
                     return true;

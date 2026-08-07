@@ -9607,11 +9607,11 @@ MonoBehaviour:
   showCardCheatPanel: 1
   cardCheatPanelLayout:
     placement: 1
-    width: 720
-    height: 300
+    width: 780
+    height: 1000
     positionX: 0
     positionY: 0
-    fontSize: 30
+    fontSize: 24
   showEnemyHandDebugPanel: 0
   enemyHandPanelLayout:
     placement: 0
@@ -13104,6 +13104,7 @@ MonoBehaviour:
   confirmPopupPrefab: {fileID: 4859073390059423885, guid: ca9b7b26d0464b74a93f893680c4287b, type: 3}
   sellConfirmPopupPrefab: {fileID: 4859073390059423885, guid: ff01efb77bab9e0419796594ce1e75b6, type: 3}
   exchangePopupPrefab: {fileID: 4859073390059423885, guid: 35cdf38aa3c489540807f9921899407c, type: 3}
+  exchangeConfirmPopupPrefab: {fileID: 4859073390059423885, guid: a0670d19a33074b4da82f5186b422e54, type: 3}
   popupCanvas: {fileID: 871309408}
 --- !u!1 &2074869781
 GameObject:

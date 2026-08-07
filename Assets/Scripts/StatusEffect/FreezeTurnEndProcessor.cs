@@ -27,6 +27,6 @@ public static class FreezeTurnEndProcessor
 
         float fadeSec = ui.ShowStyledMessagePopup(turnOwner, MessagePopupKind.FreezeMelted);
         if (fadeSec > 0f)
-            await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
+            await MessagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
     }
 }

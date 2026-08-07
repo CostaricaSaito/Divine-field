@@ -1,7 +1,6 @@
-﻿using System;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using TMPro;
 
 /// <summary>
 /// 「両替」機能を管理するクラス
@@ -9,15 +8,18 @@ using TMPro;
 /// 【役割】
 /// - 両替ポップアップの表示・制御
 /// - HP を対価として MP/GP を変換する処理
-/// - 確定後の演出（操作前・操作後のフワッとポップアップ）
+/// - 確定後の演出（ExchangeConfirmPopUP）
 /// - クールダウン設定とターン終了への移行
 /// </summary>
 public class ExchangeFeature : MonoBehaviour
 {
+    private const string ExchangeConfirmPopupResourcePath = "Prefab/ExchangeConfirmPopUP";
+
     // ===== 参照 =====
     private BattleManager battleManager;
     private PlayerStatus playerStatus;
     private GameObject exchangePopupPrefab;
+    private GameObject exchangeConfirmPopupPrefab;
     private Canvas popupCanvas;
 
     // ===== 状態 =====
@@ -27,32 +29,22 @@ public class ExchangeFeature : MonoBehaviour
 
     // ===== 初期化 =====
 
-    /// <summary>
-    /// 初期化処理
-    /// </summary>
     public void Initialize(
         BattleManager battleManager,
         PlayerStatus playerStatus,
         GameObject exchangePopupPrefab,
+        GameObject exchangeConfirmPopupPrefab,
         Canvas popupCanvas)
     {
         this.battleManager = battleManager;
         this.playerStatus = playerStatus;
         this.exchangePopupPrefab = exchangePopupPrefab;
+        this.exchangeConfirmPopupPrefab = exchangeConfirmPopupPrefab;
         this.popupCanvas = popupCanvas;
     }
 
     // ===== メインフロー =====
 
-    /// <summary>
-    /// 「両替」アクションを実行する
-    ///
-    /// 【処理フロー】
-    /// 1. ポップアップを開く
-    /// 2. 確定 or キャンセルを待機
-    /// 3. 確定なら演出 → ステータス反映 → クールダウン設定 → TurnEnd
-    /// 4. キャンセルなら何もせず終了
-    /// </summary>
     public async Task ExecuteExchangeActionAsync()
     {
         if (battleManager == null || battleManager.CurrentState != GameState.AttackPhase)
@@ -67,7 +59,6 @@ public class ExchangeFeature : MonoBehaviour
             return;
         }
 
-        // ポップアップ表示中に再度押された場合はキャンセル
         if (isExchangeProcessActive)
         {
             CancelIfActive();
@@ -84,7 +75,6 @@ public class ExchangeFeature : MonoBehaviour
         battleManager?.ClearPlayerSelfAttackTargetMode();
         Debug.Log("[ExchangeFeature] 両替アクション開始");
 
-        // ポップアップを開く
         currentPopupUI = OpenExchangePopup();
         if (currentPopupUI == null)
         {
@@ -92,20 +82,16 @@ public class ExchangeFeature : MonoBehaviour
             return;
         }
 
-        // 操作前のステータスを記録
         int beforeHP = playerStatus.currentHP;
         int beforeMP = playerStatus.currentMP;
         int beforeGP = playerStatus.currentGP;
 
-        // 確定 or キャンセルを待機
         bool confirmed = await currentPopupUI.WaitForDecisionAsync();
 
-        // 操作後のステータスを取得
         int afterHP = currentPopupUI.GetResultHP();
         int afterMP = currentPopupUI.GetResultMP();
         int afterGP = currentPopupUI.GetResultGP();
 
-        // ポップアップを閉じる
         ClosePopup();
         currentPopupUI = null;
 
@@ -117,55 +103,49 @@ public class ExchangeFeature : MonoBehaviour
             return;
         }
 
-        // 変化がない場合はスキップ
         if (beforeHP == afterHP && beforeMP == afterMP && beforeGP == afterGP)
         {
             Debug.Log("[ExchangeFeature] 両替：変化なし、ターン終了へ");
+            if (battleManager.IsOnlineMatch)
+                NetworkBattleBridge.SendEconomicExchange(afterHP, afterMP, afterGP);
             isExchangeProcessActive = false;
             FinishExchangeAction();
             return;
         }
 
-        // 演出：操作前の数値をフワッと表示
-        float fadeBefore = ShowExchangeResultPopup(beforeHP, beforeMP, beforeGP, isBefore: true);
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeBefore);
-
-        // 演出：操作後の数値をフワッと表示
-        float fadeAfter = ShowExchangeResultPopup(afterHP, afterMP, afterGP, isBefore: false);
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeAfter);
-
-        // 実際のステータスに反映
-        playerStatus.currentHP = Mathf.Max(afterHP, 0);
-        playerStatus.currentMP = Mathf.Clamp(afterMP, 0, playerStatus.maxMP);
-        playerStatus.currentGP = Mathf.Clamp(afterGP, 0, playerStatus.maxGP);
+        await PlayExchangeConfirmPresentationAsync(
+            beforeHP, beforeMP, beforeGP,
+            afterHP, afterMP, afterGP,
+            CancellationToken.None);
 
         Debug.Log($"[ExchangeFeature] 両替確定: HP {beforeHP}→{playerStatus.currentHP}, MP {beforeMP}→{playerStatus.currentMP}, GP {beforeGP}→{playerStatus.currentGP}");
 
-        // UI 更新
+        if (battleManager.IsOnlineMatch)
+            NetworkBattleBridge.SendEconomicExchange(afterHP, afterMP, afterGP);
+
         BattleUIManager.I?.UpdateStatus(playerStatus, BattleManager.I?.GetEnemyStatus());
 
         isExchangeProcessActive = false;
 
-        // HP が 0 以下なら敗北処理（BattleProcessor に委譲）
         if (playerStatus.currentHP <= 0)
         {
             Debug.Log("[ExchangeFeature] 両替により HP が 0 になりました。敗北処理へ");
-            battleManager.SetGameState(GameState.BattleEndPhase);
+            if (battleManager != null)
+            {
+                bool ended = await battleManager.TryHandleDeathIfAnyAsync();
+                if (ended) return;
+            }
             return;
         }
 
-        // クールダウン設定 → ターン終了
         FinishExchangeAction();
     }
 
     // ===== ポップアップ制御 =====
 
-    /// <summary>
-    /// 両替ポップアップを生成して初期化する
-    /// </summary>
     private ExchangePopupUI OpenExchangePopup()
     {
-        Transform parent = (popupCanvas != null) ? popupCanvas.transform : transform;
+        Transform parent = popupCanvas != null ? popupCanvas.transform : transform;
         currentPopupInstance = Instantiate(exchangePopupPrefab, parent);
 
         var popupUI = currentPopupInstance.GetComponent<ExchangePopupUI>();
@@ -182,9 +162,6 @@ public class ExchangeFeature : MonoBehaviour
         return popupUI;
     }
 
-    /// <summary>
-    /// 両替ポップアップを破棄する
-    /// </summary>
     private void ClosePopup()
     {
         if (currentPopupInstance != null)
@@ -194,9 +171,6 @@ public class ExchangeFeature : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// ポップアップ表示中であればキャンセルして閉じる
-    /// </summary>
     public void CancelIfActive()
     {
         if (!isExchangeProcessActive || currentPopupUI == null) return;
@@ -206,28 +180,88 @@ public class ExchangeFeature : MonoBehaviour
 
     // ===== 演出 =====
 
-    /// <summary>
-    /// 操作前・操作後の HP/MP/GP をフワッとポップアップ表示する。
-    /// </summary>
-    /// <returns><see cref="BattleUIManager.ShowHealPopup"/> のフェード秒（失敗時は 0）。</returns>
-    private float ShowExchangeResultPopup(int hp, int mp, int gp, bool isBefore)
+    private async Task PlayExchangeConfirmPresentationAsync(
+        int beforeHp, int beforeMp, int beforeGp,
+        int afterHp, int afterMp, int afterGp,
+        CancellationToken cancellationToken)
     {
-        string label = isBefore ? "変更前" : "変更後";
-        string text = $"{label}  HP:{hp}  MP:{mp}  GP:{gp}";
+        GameObject prefab = ResolveExchangeConfirmPopupPrefab();
+        if (prefab == null)
+        {
+            Debug.LogWarning("[ExchangeFeature] ExchangeConfirmPopUP prefab is missing");
+            return;
+        }
 
-        float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowHealPopup(0, text, playerStatus)
-            : 0f;
+        Transform parent = ResolveConfirmPopupParent();
+        if (parent == null)
+        {
+            Debug.LogWarning("[ExchangeFeature] CardDisplayPanel parent is missing for confirm popup");
+            return;
+        }
 
-        Debug.Log($"[ExchangeFeature] 演出ポップアップ: {text}");
-        return fade;
+        var go = Instantiate(prefab, parent, false);
+        ApplyPanelCenterLayout(go.transform as RectTransform);
+
+        var confirmUI = go.GetComponent<ExchangeConfirmPopupUI>();
+        if (confirmUI == null)
+        {
+            Debug.LogWarning("[ExchangeFeature] ExchangeConfirmPopupUI is missing on confirm prefab");
+            Destroy(go);
+            return;
+        }
+
+        try
+        {
+            await confirmUI.PlayConfirmSequenceAsync(
+                beforeHp, beforeMp, beforeGp,
+                afterHp, afterMp, afterGp,
+                cancellationToken);
+
+            playerStatus.currentHP = Mathf.Max(afterHp, 0);
+            playerStatus.currentMP = Mathf.Clamp(afterMp, 0, playerStatus.maxMP);
+            playerStatus.currentGP = Mathf.Clamp(afterGp, 0, playerStatus.maxGP);
+        }
+        finally
+        {
+            if (go != null)
+                Destroy(go);
+        }
+    }
+
+    private GameObject ResolveExchangeConfirmPopupPrefab()
+    {
+        if (exchangeConfirmPopupPrefab != null)
+            return exchangeConfirmPopupPrefab;
+        return Resources.Load<GameObject>(ExchangeConfirmPopupResourcePath);
+    }
+
+    private Transform ResolveConfirmPopupParent()
+    {
+        if (BattleUIManager.I != null)
+        {
+            var panel = BattleUIManager.I.GetPlayerCardDisplayPanel();
+            if (panel != null) return panel;
+        }
+
+        if (popupCanvas != null)
+            return popupCanvas.transform;
+
+        return transform;
+    }
+
+    private static void ApplyPanelCenterLayout(RectTransform rt)
+    {
+        if (rt == null) return;
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.localScale = Vector3.one;
+        rt.SetAsLastSibling();
     }
 
     // ===== ターン終了 =====
 
-    /// <summary>
-    /// クールダウンを設定してターン終了へ移行する
-    /// </summary>
     private void FinishExchangeAction()
     {
         EconomicAction.I?.SetExchangeCooldown();
@@ -236,10 +270,15 @@ public class ExchangeFeature : MonoBehaviour
         battleManager.SetGameState(GameState.CombatResolvePhase);
     }
 
-    // ===== 状態確認 =====
-
-    /// <summary>
-    /// 両替処理が進行中かどうかを返す
-    /// </summary>
     public bool IsExchangeProcessActive() => isExchangeProcessActive;
+
+    /// <summary>オンライン：相手の両替結果を enemyStatus（相手ミラー）へ適用。</summary>
+    public void MirrorRemoteExchange(PlayerStatus remoteAttackerStatus, int afterHp, int afterMp, int afterGp)
+    {
+        if (remoteAttackerStatus == null) return;
+        remoteAttackerStatus.currentHP = Mathf.Max(afterHp, 0);
+        remoteAttackerStatus.currentMP = Mathf.Clamp(afterMp, 0, remoteAttackerStatus.maxMP);
+        remoteAttackerStatus.currentGP = Mathf.Clamp(afterGp, 0, remoteAttackerStatus.maxGP);
+        BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), remoteAttackerStatus);
+    }
 }

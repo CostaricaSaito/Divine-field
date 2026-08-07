@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -289,6 +289,7 @@ public class BattleProcessor : MonoBehaviour
                 Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
                 SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
                 BattleUIManager.I?.ShowMissPopup(defender);
+                await TryHandleCombatDeathIfAnyAsync(attacker, defender);
                 return;
             }
         }
@@ -373,6 +374,7 @@ public class BattleProcessor : MonoBehaviour
             {
                 SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
                 BattleUIManager.I?.ShowMissPopup(defender);
+                await TryHandleCombatDeathIfAnyAsync(attacker, defender);
                 return;
             }
         }
@@ -422,6 +424,7 @@ public class BattleProcessor : MonoBehaviour
             {
                 SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
                 BattleUIManager.I?.ShowMissPopup(counterTarget);
+                await TryHandleCombatDeathIfAnyAsync(counterAttacker, counterTarget);
                 return;
             }
         }
@@ -913,12 +916,32 @@ public class BattleProcessor : MonoBehaviour
                 Debug.Log($"[BattleProcessor] 攻撃が外れました: {attackCardNames}");
                 SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
                 BattleUIManager.I?.ShowMissPopup(defender);
+                await TryHandleCombatDeathIfAnyAsync(attacker, defender);
                 return;
             }
         }
 
         await ApplyCombatDamageSequenceAfterHitAsync(
             attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseCards);
+    }
+
+    /// <summary>
+    /// After combat (or miss when attacker HP is already 0 from Tribute Blood etc.), run shared death handling.
+    /// Returns true when battle end sequence started (caller should stop turn flow).
+    /// </summary>
+    private static async Task<bool> TryHandleCombatDeathIfAnyAsync(
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        CancellationToken cancellationToken = default)
+    {
+        if (attacker == null && defender == null) return false;
+        bool anyDead = (attacker != null && attacker.currentHP <= 0)
+            || (defender != null && defender.currentHP <= 0);
+        if (!anyDead) return false;
+
+        Debug.Log("[BattleProcessor] HP0 detected after combat — starting death handling");
+        if (BattleManager.I == null) return false;
+        return await BattleManager.I.TryHandleDeathIfAnyAsync(cancellationToken);
     }
 
     /// <summary>
@@ -960,6 +983,7 @@ public class BattleProcessor : MonoBehaviour
         {
             await ApplyArchMagicBarrierDamageSequenceAsync(
                 attackElement, defender, firstPhaseDamage);
+            await TryHandleCombatDeathIfAnyAsync(attacker, defender);
             return;
         }
 
@@ -1041,15 +1065,8 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
-        if (IsDead(attacker) || IsDead(defender))
-        {
-            Debug.Log($"[BattleProcessor] 戦闘終了: どちらかが死亡");
-            if (BattleManager.I != null)
-            {
-                bool handled = await BattleManager.I.TryHandleDeathIfAnyAsync();
-                if (handled) return;
-            }
-        }
+        if (await TryHandleCombatDeathIfAnyAsync(attacker, defender))
+            return;
 
         await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs);
         Debug.Log($"[BattleProcessor] 戦闘解決完了");

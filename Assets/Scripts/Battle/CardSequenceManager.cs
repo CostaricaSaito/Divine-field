@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -474,25 +474,63 @@ public class CardSequenceManager : MonoBehaviour
         {
             bool finished = await ResolvePlayerAttackCombatAsync(attackCards, atk, def, defHand, cancellationToken);
             battleManager.ClearPlayerSelfAttackTargetMode();
-            if (!finished)
+            if (!finished || battleManager.IsGameEndTriggered)
                 return;
         }
         else
         {
             if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)
-                && attackCards != null && attackCards.Count == 1 && attackCards[0] != null)
+                && attackCards != null && attackCards.Count > 0)
             {
-                await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                bool playerReflect = selectedCards.Count == 1
+                    && battleManager.DefenderPublic == PlayerType.Player
+                    && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards);
+
+                if (playerReflect)
+                {
+                    if (ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards))
+                    {
+                        await ImmediateEffectReflectionFlow.RunPlayerInitiatedAsync(
+                            battleManager,
+                            battleProcessor,
+                            handRefill,
+                            attackCards,
+                            selectedCards[0],
+                            atk,
+                            def,
+                            cancellationToken,
+                            reflectionCardAlreadyConsumed: true);
+                    }
+                    else
+                    {
+                        await PhysicalReflectionFlow.RunPlayerInitiatedAsync(
+                            battleManager,
+                            battleProcessor,
+                            handRefill,
+                            battleManager.GetEnemyAI(),
+                            attackCards,
+                            selectedCards[0],
+                            cancellationToken);
+                    }
+                }
+                else if (attackCards.Count == 1 && attackCards[0] != null)
+                {
+                    await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                }
+
                 await RunAfterCombatSharedCleanupAsync(cancellationToken);
                 return;
             }
 
             bool playerPhysicalReflect = selectedCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(selectedCards[0], attackCards);
-            bool playerMagicReflect = selectedCards.Count == 1
+                && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards)
+                && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
+            bool playerMagicReflect = playerPhysicalReflect;
+            bool playerImmediateReflect = selectedCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ReflectionRules.CanUseMagicReflectionAgainstAttack(selectedCards[0], attackCards);
+                && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards)
+                && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
             bool playerPhysicalBlock = selectedCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
                 && BlockingRules.CanUsePhysicalBlockingAgainstAttack(selectedCards[0], attackCards);
@@ -513,6 +551,19 @@ public class CardSequenceManager : MonoBehaviour
                     cancellationToken);
                 if (skipSharedTail)
                     return;
+            }
+            else if (playerImmediateReflect)
+            {
+                await ImmediateEffectReflectionFlow.RunPlayerInitiatedAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    attackCards,
+                    selectedCards[0],
+                    atk,
+                    def,
+                    cancellationToken,
+                    reflectionCardAlreadyConsumed: true);
             }
             else if (playerPhysicalReflect || playerMagicReflect)
             {
@@ -550,6 +601,7 @@ public class CardSequenceManager : MonoBehaviour
     public async Task RunAfterCombatSharedCleanupAsync(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested) return;
+        if (battleManager.IsGameEndTriggered) return;
 
         if (await battleManager.TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(cancellationToken))
             return;
@@ -636,6 +688,8 @@ public class CardSequenceManager : MonoBehaviour
             SoundEffectPlayer.I?.Play("Assets/SE/ニュッ1.mp3");
             BattleUIManager.I?.ShowMissPopup(def);
             await DamagePopup.WaitAfterPopupLifetimeAsync(DamagePopup.DefaultFadeDurationIfUnknown, cancellationToken);
+            if (await battleManager.TryHandleDeathIfAnyAsync(cancellationToken))
+                return false;
             await RevealMagicPanelBonusDrawsAsync(cancellationToken);
             BattleUIManager.I?.HideAllCardDetails();
             cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
@@ -684,9 +738,12 @@ public class CardSequenceManager : MonoBehaviour
             battleManager.DefenderPublic == PlayerType.Enemy && defenseCards.Count == 0 && BattleUIManager.I != null;
 
         bool enemyPhysicalReflect = selectedDefenseCard != null
-            && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(selectedDefenseCard, attackCards);
-        bool enemyMagicReflect = selectedDefenseCard != null
-            && ReflectionRules.CanUseMagicReflectionAgainstAttack(selectedDefenseCard, attackCards);
+            && ReflectionRules.CanReflectIncoming(selectedDefenseCard, attackCards)
+            && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
+        bool enemyMagicReflect = enemyPhysicalReflect;
+        bool enemyImmediateReflect = selectedDefenseCard != null
+            && ReflectionRules.CanReflectIncoming(selectedDefenseCard, attackCards)
+            && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
         bool enemyPhysicalBlock = selectedDefenseCard != null
             && BlockingRules.CanUsePhysicalBlockingAgainstAttack(selectedDefenseCard, attackCards);
         bool enemyParry = selectedDefenseCard != null
@@ -694,7 +751,18 @@ public class CardSequenceManager : MonoBehaviour
 
         using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))
         {
-            if (enemyPhysicalReflect || enemyMagicReflect)
+            if (enemyImmediateReflect)
+            {
+                await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    attackCards,
+                    selectedDefenseCard,
+                    atk,
+                    cancellationToken);
+            }
+            else if (enemyPhysicalReflect || enemyMagicReflect)
             {
                 await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
                     battleManager,
@@ -726,6 +794,12 @@ public class CardSequenceManager : MonoBehaviour
                     selectedDefenseCard,
                     cancellationToken);
             }
+            else if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)
+                && attackCards.Count == 1 && attackCards[0] != null)
+            {
+                await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, cancellationToken);
+                await battleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+            }
             else
             {
                 if (defenseCards.Count > 1)
@@ -736,8 +810,10 @@ public class CardSequenceManager : MonoBehaviour
         }
 
         // オンラインの魔法防御は RemotePlayerAgent 側で記録・プール処理済みのため二重計上しない
-        if (defenseCards.Count > 0
-            && !enemyPhysicalReflect && !enemyMagicReflect && !enemyPhysicalBlock && !enemyParry)
+        bool skipPostCombatEnemyDefenseUse = enemyPhysicalReflect || enemyMagicReflect || enemyImmediateReflect
+            || enemyPhysicalBlock || enemyParry
+            || (attackCards != null && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards));
+        if (defenseCards.Count > 0 && !skipPostCombatEnemyDefenseUse)
         {
             foreach (var defCard in defenseCards)
             {
@@ -757,6 +833,9 @@ public class CardSequenceManager : MonoBehaviour
             return await ResolvePlayerAttackCombatAsync(
                 attackCards, atk, def, defHand, cancellationToken, 1);
         }
+
+        if (await battleManager.TryHandleDeathIfAnyAsync(cancellationToken))
+            return false;
 
         return true;
     }
@@ -1863,7 +1942,7 @@ public class CardSequenceManager : MonoBehaviour
             bool finished = await ResolvePlayerAttackCombatAsync(
                 attackCards, summoner, opponent, battleManager.cpuHand, CancellationToken.None);
             battleManager.ClearPlayerSelfAttackTargetMode();
-            if (!finished) return;
+            if (!finished || battleManager.IsGameEndTriggered) return;
             await RunAfterCombatSharedCleanupAsync(CancellationToken.None);
         }
         else

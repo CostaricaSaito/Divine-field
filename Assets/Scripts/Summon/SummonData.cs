@@ -132,6 +132,15 @@ public class SummonData : ScriptableObject
         return name == "Siva" || StableSummonId == "siva";
     }
 
+    /// <summary>
+    /// Whether Arcadias always-hit passive applies (attack phase primary, counters, reflect/parry).
+    /// </summary>
+    public bool IsArcadiasAlwaysHit()
+    {
+        if (passiveBlessingMode == SummonPassiveBlessingMode.Arcadias) return true;
+        return name == "Arcadias" || StableSummonId == "arcadias";
+    }
+
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)
     {
         if (text == null || style == null) return;

@@ -391,13 +391,7 @@ public class CardSelectionManager : MonoBehaviour
 
     private bool IsAttackCard(CardData card)
     {
-        if (card == null) return false;
-        if (card.cardType == CardType.Magic && !CardRules.IsRecoveryCard(card))
-            return CardRules.IsUsableInAttackPhase(card);
-        if (card.cardType == CardType.ArchMagic) return true;
-        if (card.cardType == CardType.Special) return true;
-        if (card.cardType == CardType.Ultimate) return true;
-        return card.cardType == CardType.Attack || CardRules.IsRecoveryCard(card);
+        return CardRules.IsAttackCard(card);
     }
 
     private bool IsDefenseCard(CardData card)

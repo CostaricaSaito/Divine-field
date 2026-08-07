@@ -32,6 +32,8 @@ public class EconomicUIHandler : MonoBehaviour
     [SerializeField] private GameObject sellConfirmPopupPrefab;
     [Tooltip("ExchangePopup 用")]
     [SerializeField] private GameObject exchangePopupPrefab;
+    [Tooltip("ExchangeConfirmPopUP 用（両替確定後の演出）")]
+    [SerializeField] private GameObject exchangeConfirmPopupPrefab;
     [SerializeField] private Canvas popupCanvas;
 
     private bool isBuyPopupOpen = false;
@@ -43,15 +45,6 @@ public class EconomicUIHandler : MonoBehaviour
     public void UpdateButtons()
     {
         if (EconomicAction.I == null) return;
-
-        // オンライン対戦（PoC）：経済アクションは未対応のため常に無効
-        if (BattleManager.I != null && BattleManager.I.IsOnlineMatch)
-        {
-            if (buyButton != null) { buyButton.interactable = false; buyButton.image.color = Color.gray; }
-            if (sellButton != null) { sellButton.interactable = false; sellButton.image.color = Color.gray; }
-            if (exchangeButton != null) { exchangeButton.interactable = false; exchangeButton.image.color = Color.gray; }
-            return;
-        }
 
         // ゲーム終了処理中は経済アクションを再アクティブ化しない
         if (BattleManager.I != null && BattleManager.I.IsGameEndTriggered)
@@ -111,7 +104,6 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>買うボタンが押されたときの処理</summary>
     public void OnBuyButtonPressed()
     {
-        if (BattleManager.I != null && BattleManager.I.IsOnlineMatch) return;
         if (EconomicAction.I == null || !EconomicAction.I.CanBuy())
         {
             Debug.LogWarning("[EconomicUIHandler] 買うアクションは使用できません");
@@ -145,7 +137,6 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>売るボタンが押されたときの処理</summary>
     public void OnSellButtonPressed()
     {
-        if (BattleManager.I != null && BattleManager.I.IsOnlineMatch) return;
         if (EconomicAction.I == null || !EconomicAction.I.CanSell())
         {
             Debug.LogWarning("[EconomicUIHandler] 売るアクションは使用できません");
@@ -163,7 +154,6 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>交換ボタンが押されたときの処理</summary>
     public void OnExchangeButtonPressed()
     {
-        if (BattleManager.I != null && BattleManager.I.IsOnlineMatch) return;
         if (EconomicAction.I == null || !EconomicAction.I.CanExchange())
         {
             Debug.LogWarning("[EconomicUIHandler] 交換アクションは使用できません");
@@ -252,6 +242,9 @@ public class EconomicUIHandler : MonoBehaviour
 
     /// <summary>ExchangePopup の Prefab を取得（BattleManager から使用）</summary>
     public GameObject GetExchangePopupPrefab() => exchangePopupPrefab;
+
+    /// <summary>ExchangeConfirmPopUP の Prefab を取得（ExchangeFeature から使用）</summary>
+    public GameObject GetExchangeConfirmPopupPrefab() => exchangeConfirmPopupPrefab;
 
     /// <summary>ポップアップ用の Canvas を取得。未設定時は BattleUIManager の uiCanvas を返す。</summary>
     public Canvas GetResolvedPopupCanvas()

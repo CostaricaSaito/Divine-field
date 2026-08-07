@@ -55,6 +55,6 @@ public static class ShivaDirectAttackFreezeFlow
 
         float fadeSec = ui.ShowStyledMessagePopup(defender, MessagePopupKind.ShivaFreezeApplied);
         if (fadeSec > 0f)
-            await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
+            await MessagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
     }
 }

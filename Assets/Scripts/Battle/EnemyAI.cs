@@ -447,15 +447,31 @@ public class EnemyAI
             return null;
         }
 
+        CardData defenseCard = null;
         if (incomingForReflection != null
             && CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingForReflection))
         {
-            Debug.Log("[EnemyAI] 即時回復／即時効果系：許す");
+            if (cpuHand != null)
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsFullReflectionCard(c)
+                        && ReflectionRules.CanReflectIncoming(c, incomingForReflection))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 完全反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
+                }
+            }
+
+            if (defenseCard == null)
+                Debug.Log("[EnemyAI] 即時回復／即時効果系：許す");
             await Task.Delay(500);
-            return null;
+            return defenseCard;
         }
 
-        CardData defenseCard = null;
         if (incomingForReflection != null && incomingForReflection.Count > 0 && cpuHand != null)
         {
             if (ReflectionRules.CanReflectPhysical(incomingForReflection))
@@ -463,6 +479,13 @@ public class EnemyAI
                 foreach (var c in cpuHand)
                 {
                     if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsFullReflectionCard(c)
+                        && ReflectionRules.CanReflectIncoming(c, incomingForReflection))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 完全反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
                     if (ReflectionRules.IsPhysicalReflectionCard(c))
                     {
                         defenseCard = c;
@@ -476,10 +499,31 @@ public class EnemyAI
                 foreach (var c in cpuHand)
                 {
                     if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsFullReflectionCard(c)
+                        && ReflectionRules.CanReflectIncoming(c, incomingForReflection))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 完全反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
                     if (ReflectionRules.IsMagicReflectionCard(c))
                     {
                         defenseCard = c;
                         Debug.Log($"[EnemyAI] 魔法反射を優先: {defenseCard.cardName}");
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (ReflectionRules.IsFullReflectionCard(c)
+                        && ReflectionRules.CanReflectIncoming(c, incomingForReflection))
+                    {
+                        defenseCard = c;
+                        Debug.Log($"[EnemyAI] 完全反射を優先: {defenseCard.cardName}");
                         break;
                     }
                 }

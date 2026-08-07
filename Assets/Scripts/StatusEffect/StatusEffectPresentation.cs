@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// 状態異常ポップアップ用の表示名・配色。配色は <see cref="StatusEffectPopupSettings"/>（Unity Inspector）。

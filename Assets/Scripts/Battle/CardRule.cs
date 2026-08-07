@@ -3,6 +3,18 @@
 /// <summary>カード種別・フェーズ可否の共通ルール。</summary>
 public static class CardRules
 {
+    /// <summary>
+    /// 手札に保持するだけのパッシブカード（道連れ・不死鳥等）。いかなるフェーズでも手動使用不可。
+    /// </summary>
+    public static bool IsPassiveHandOnly(CardData c)
+    {
+        if (c == null) return false;
+        if (c.passiveHandOnly) return true;
+        if (c.postDeathCardEffect != null) return true;
+        if (c.nearDeathCardEffect != null) return true;
+        return false;
+    }
+
     /// <summary>HP/MP/GP 回復または全状態異常解除を持つか。</summary>
     public static bool HasRecoveryEffect(CardData c)
     {
@@ -25,6 +37,7 @@ public static class CardRules
     public static bool IsUsableInAttackPhase(CardData c)
     {
         if (c == null) return false;
+        if (IsPassiveHandOnly(c)) return false;
         if (c.cardType == CardType.Ultimate) return false;
         if (c.usableInAttackPhase) return true;
         if (c.cardType == CardType.ArchMagic) return true;
@@ -39,7 +52,10 @@ public static class CardRules
     public static bool IsUsableInDefensePhase(CardData c)
     {
         if (c == null) return false;
+        if (IsPassiveHandOnly(c)) return false;
         if (c.usableInDefensePhase) return true;
+        if (ReflectionRules.IsReflectionCard(c) && c.defensePhaseUseRule != DefensePhaseUseRule.None)
+            return true;
         return c.cardType == CardType.Defense;
     }
 
@@ -49,6 +65,7 @@ public static class CardRules
     public static bool IsImmediateAction(CardData c)
     {
         if (c == null) return false;
+        if (IsPassiveHandOnly(c)) return false;
         if (IsRecoveryCard(c)) return true;
         if (c.cureAllStatusEffects
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
@@ -93,12 +110,67 @@ public static class CardRules
 
     /// <summary>
     /// 即時系 incoming に対し選択可能な防御：FULL 反射・FULL 打ち払いのみ（無効化の FULL は未使用）。
-    /// FULL 跳ね返し未実装の間は空リスト（「許す」のみ）とする。
     /// </summary>
     public static List<CardData> GetFullOnlyReactiveDefenseChoices(List<CardData> hand, IReadOnlyList<CardData> incoming)
     {
-        // TODO: FULL 反射の跳ね返し実装後、hand から IsFullReflection / IsFullParry で CanUse*(incoming) を満たすカードだけ返す。
-        return new List<CardData>();
+        var result = new List<CardData>();
+        if (hand == null || incoming == null || incoming.Count == 0) return result;
+
+        foreach (var c in hand)
+        {
+            if (c == null || !IsUsableInDefensePhase(c)) continue;
+            if (ReflectionRules.CanReflectIncoming(c, incoming) && !result.Contains(c))
+                result.Add(c);
+            else if (ParryRules.CanParryIncoming(c, incoming) && !result.Contains(c))
+                result.Add(c);
+        }
+
+        return result;
+    }
+
+    /// <summary>incoming 攻撃に対する防御手札候補（反射・打ち払い・無効・通常防御）。</summary>
+    public static List<CardData> GetDefenseChoicesForIncoming(List<CardData> hand, IReadOnlyList<CardData> incomingAttack)
+    {
+        if (hand == null) return new List<CardData>();
+        if (incomingAttack == null || incomingAttack.Count == 0)
+            return GetDefenseChoices(hand);
+
+        if (IncomingRequiresFullOnlyReactiveDefense(incomingAttack))
+            return GetFullOnlyReactiveDefenseChoices(hand, incomingAttack);
+
+        ElementType attackElement = ElementHelper.GetCombinedElement(incomingAttack);
+        var defenseChoices = GetDefenseChoicesAgainstAttack(hand, attackElement, incomingAttack);
+
+        foreach (var c in hand)
+        {
+            if (c != null && ReflectionRules.CanReflectIncoming(c, incomingAttack) && !defenseChoices.Contains(c))
+                defenseChoices.Add(c);
+        }
+
+        defenseChoices.RemoveAll(c =>
+            c != null && ReflectionRules.IsReflectionCard(c) && !ReflectionRules.CanReflectIncoming(c, incomingAttack));
+
+        if (BlockingRules.CanBlockPhysical(incomingAttack))
+        {
+            foreach (var c in hand)
+            {
+                if (c != null && BlockingRules.IsPhysicalBlockingCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
+        }
+        else
+        {
+            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+        }
+
+        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, incomingAttack));
+        foreach (var c in hand)
+        {
+            if (c != null && ParryRules.CanParryIncoming(c, incomingAttack) && !defenseChoices.Contains(c))
+                defenseChoices.Add(c);
+        }
+
+        return defenseChoices;
     }
 
     // 攻撃カードかどうか

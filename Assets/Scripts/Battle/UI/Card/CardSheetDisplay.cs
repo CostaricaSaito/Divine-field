@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using TMPro;
@@ -29,6 +29,7 @@ public class CardSheetDisplay : MonoBehaviour
     [SerializeField] private Color mpCostClusterTextColor = Color.white;
 
     private CardData currentCardData;
+    private PlayerStatus _ownerForDisplay;
     private Image _orbTintOverlay;
 
     private void Awake()
@@ -44,6 +45,7 @@ public class CardSheetDisplay : MonoBehaviour
     public void Setup(CardData cardData, PlayerStatus ownerForMpDisplay = null)
     {
         currentCardData = cardData;
+        _ownerForDisplay = ownerForMpDisplay;
         if (cardSheetBackground != null && cardData != null && cardData.cardDisplayFrameSprite != null)
             cardSheetBackground.sprite = cardData.cardDisplayFrameSprite;
 
@@ -52,13 +54,16 @@ public class CardSheetDisplay : MonoBehaviour
         bool atkLineLikeAttack = cardData.cardType == CardType.Attack || cardData.cardType == CardType.Ultimate;
         if (atkDefText)
         {
+            bool showHitRate = HitRateRules.ShouldDisplayHitRateLabel(cardData);
+            int hitRate = HitRateRules.GetDisplayedHitRatePercent(cardData, _ownerForDisplay);
             atkDefText.text = HammadnessRules.IsHammadnessCard(cardData)
                 ? HammadnessRules.AtkQuestionMarkLabel
                 : FormatAtkDefLine(
                     cardData.attackPower,
                     cardData.defensePower,
                     atkLineLikeAttack,
-                    cardData.hitRate);
+                    hitRate,
+                    showHitRate);
         }
         if (descText) descText.text = cardData.description;
         SetupElementDisplay(cardData);
@@ -73,16 +78,24 @@ public class CardSheetDisplay : MonoBehaviour
         if (atkDefText == null) return;
         bool attackCard = currentCardData != null
             && (currentCardData.cardType == CardType.Attack || currentCardData.cardType == CardType.Ultimate);
-        int hitRate = currentCardData != null ? currentCardData.hitRate : HitRateRules.DefaultHitRatePercent;
-        atkDefText.text = FormatAtkDefLine(attack, defense, attackCard, hitRate);
+        bool showHitRate = HitRateRules.ShouldDisplayHitRateLabel(currentCardData);
+        int hitRate = currentCardData != null
+            ? HitRateRules.GetDisplayedHitRatePercent(currentCardData, _ownerForDisplay)
+            : HitRateRules.DefaultHitRatePercent;
+        atkDefText.text = FormatAtkDefLine(attack, defense, attackCard, hitRate, showHitRate);
     }
 
     /// <summary>
     /// 非 <see cref="CardType.Attack"/>: ATK0→DEFのみ、DEF0→ATKのみ、両方0→空欄。
     /// Attack: 基礎ATK0でも行を確保（マジカルエクスプロージョン等の数値差し替え用）。ATK0かつDEF1+のAttackは想定外だが、出た場合は ATK 0 も併記。
-    /// 命中率が 100% 以外のとき末尾に「 / 50%」形式で付与。
+    /// 命中率が 100% 以外のとき末尾に「 / 50%」形式で付与（表示対象はカード素の命中率設定）。
     /// </summary>
-    private static string FormatAtkDefLine(int attack, int defense, bool isAttackTypeCard, int hitRate = HitRateRules.DefaultHitRatePercent)
+    private static string FormatAtkDefLine(
+        int attack,
+        int defense,
+        bool isAttackTypeCard,
+        int hitRate = HitRateRules.DefaultHitRatePercent,
+        bool showHitRateLabel = false)
     {
         string line;
         if (isAttackTypeCard)
@@ -113,7 +126,7 @@ public class CardSheetDisplay : MonoBehaviour
             line = $"ATK {attack} / DEF {defense}";
         }
 
-        if (!HitRateRules.HasCustomHitRate(hitRate))
+        if (!showHitRateLabel)
             return line;
 
         string hitLabel = HitRateRules.FormatHitRateLabel(hitRate);

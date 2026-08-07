@@ -12,4 +12,5 @@ public enum MessagePopupKind
     ParadiseHeavenState = 6,
     ParryFailedReturn = 7,
     InterventionAttack = 8,
+    PhoenixBlessing = 9,
 }

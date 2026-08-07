@@ -56,11 +56,58 @@ public class RemotePlayerAgent : EnemyAI
 
         await Task.Delay(400);
 
+        if (remoteAttack.EconomicKind == NetworkBattleBridge.RemoteEconomicKind.Exchange)
+        {
+            Debug.Log("[RemotePlayerAgent] Remote exchange action");
+            var bm = BattleManager.I;
+            if (bm != null && bm.ExchangeFeatureInternal != null)
+            {
+                bm.ExchangeFeatureInternal.MirrorRemoteExchange(
+                    bm.GetEnemyStatus(),
+                    remoteAttack.ExchangeAfterHp,
+                    remoteAttack.ExchangeAfterMp,
+                    remoteAttack.ExchangeAfterGp);
+            }
+            return null;
+        }
+
         var names = remoteAttack.CardNames;
         if (names == null || names.Count == 0)
         {
             Debug.Log("[RemotePlayerAgent] Remote passed the turn");
             return null;
+        }
+
+        if (remoteAttack.EconomicKind == NetworkBattleBridge.RemoteEconomicKind.Buy)
+        {
+            var bm = BattleManager.I;
+            var target = EconomicActionNames.FindFirstByName(bm?.playerHand, remoteAttack.EconomicCardName);
+            if (target == null || bm?.BuyFeatureInternal == null || !bm.BuyFeatureInternal.SetupMirroredBuy(target))
+            {
+                Debug.LogError("[RemotePlayerAgent] Could not mirror remote economic buy");
+                return null;
+            }
+
+            var dummy = EconomicActionNames.CreateBuyDummy();
+            LastAttackSelection = new List<CardData> { dummy };
+            Debug.Log($"[RemotePlayerAgent] Remote economic buy: {remoteAttack.EconomicCardName}");
+            return dummy;
+        }
+
+        if (remoteAttack.EconomicKind == NetworkBattleBridge.RemoteEconomicKind.Sell)
+        {
+            var bm = BattleManager.I;
+            var sold = EconomicActionNames.FindFirstByName(cpuHand, remoteAttack.EconomicCardName);
+            if (sold == null || bm?.SellFeatureInternal == null || !bm.SellFeatureInternal.SetupMirroredSell(sold))
+            {
+                Debug.LogError("[RemotePlayerAgent] Could not mirror remote economic sell");
+                return null;
+            }
+
+            var dummy = EconomicActionNames.CreateSellDummy();
+            LastAttackSelection = new List<CardData> { dummy };
+            Debug.Log($"[RemotePlayerAgent] Remote economic sell: {remoteAttack.EconomicCardName}");
+            return dummy;
         }
 
         var resolved = ResolveCards(names, cpuHand, out var poolSourced);
@@ -151,6 +198,20 @@ public class RemotePlayerAgent : EnemyAI
         }
 
         LastDefenseSelection = resolved;
+
+        if (incomingForReflection != null && incomingForReflection.Count > 0)
+        {
+            foreach (var card in resolved)
+            {
+                if (card == null || !ReflectionRules.IsReflectionCard(card)) continue;
+                if (!ReflectionRules.CanReflectIncoming(card, incomingForReflection))
+                {
+                    Debug.LogWarning(
+                        $"[RemotePlayerAgent] Remote reflection defense '{card.cardName}' "
+                        + "does not match incoming attack on this machine. Possible desync.");
+                }
+            }
+        }
 
         // Magic defense cards go through the magic pool on the opponent machine
         // (except during intervention resolution, where they are used plainly).

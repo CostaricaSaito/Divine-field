@@ -206,7 +206,7 @@ public static class DiseaseTurnEndProcessor
         {
             float diseaseMsgFade = ui.ShowStyledMessagePopup(attacker, MessagePopupKind.DiseaseErodeBody);
             SoundEffectPlayer.I?.Play("Assets/SE/メニューを開く2.mp3");
-            await DamagePopup.WaitAfterPopupLifetimeAsync(diseaseMsgFade, ct);
+            await MessagePopup.WaitAfterPopupLifetimeAsync(diseaseMsgFade, ct);
         }
 
         ApplyHpLossIgnoringCardModifiers(attacker, damage);
@@ -250,7 +250,7 @@ public static class DiseaseTurnEndProcessor
             await RunDiseaseNaturalProgressIntroAsync(attacker, ui, MessagePopupKind.DiseasePoisonFlipped, ct);
 
         float heavenMsgFade = ui.ShowStyledMessagePopup(attacker, MessagePopupKind.ParadiseHeavenState);
-        await DamagePopup.WaitAfterPopupLifetimeAsync(heavenMsgFade, ct);
+        await MessagePopup.WaitAfterPopupLifetimeAsync(heavenMsgFade, ct);
 
         int oldHp = attacker.currentHP;
         attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + s.paradiseHealAmount);

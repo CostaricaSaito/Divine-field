@@ -78,34 +78,41 @@ public class SellFeature
 
     public async Task ProcessEconomicActionAsync()
     {
-        // OnConfirm 直後〜本処理まで isProcessingConfirm が true のまま残ると
-        // IsSellProcessActive が永久に true になり経済UI・キャンセルが壊れるため、必ず finally で戻す。
         try
         {
             if (targetSellCard == null) return;
 
-            // isProcessingConfirm は OnConfirmSell で既に true（防御フェーズ待ち中もキャンセルで壊さないため）
             BattleManager.I?.UpdateTotalATKDEFDisplay();
 
-            // 売却アニメーション実行
+            bool sellerIsPlayer = battleManager.AttackerPublic == PlayerType.Player;
+            var seller = sellerIsPlayer ? playerStatus : enemyStatus;
+            var buyer = sellerIsPlayer ? enemyStatus : playerStatus;
+            var sellerHand = sellerIsPlayer ? playerHand : cpuHand;
+            var buyerHand = sellerIsPlayer ? cpuHand : playerHand;
+
             if (cardSellAnimation != null && BattleUIManager.I != null)
             {
                 int sellAmount = targetSellCard.cardValue;
                 GameObject cardSheetPrefab = BattleUIManager.I.GetCardSheetPrefab();
-                
+                var fromPanel = sellerIsPlayer
+                    ? BattleUIManager.I.GetPlayerCardDisplayPanel()
+                    : BattleUIManager.I.GetEnemyCardDisplayPanel();
+                var toPanel = sellerIsPlayer
+                    ? BattleUIManager.I.GetEnemyCardDisplayPanel()
+                    : BattleUIManager.I.GetPlayerCardDisplayPanel();
+
                 await cardSellAnimation.PlaySellAnimation(
                     targetSellCard,
                     sellAmount,
-                    BattleUIManager.I.GetPlayerCardDisplayPanel(),
-                    BattleUIManager.I.GetEnemyCardDisplayPanel(),
-                    cardSheetPrefab
-                );
+                    fromPanel,
+                    toPanel,
+                    cardSheetPrefab);
             }
 
-            ProcessGPTheft();
-            await ProcessCardTransferAsync();
+            ProcessGPTheft(seller, buyer);
+            await ProcessCardTransferAsync(sellerHand, buyerHand);
             UpdateHandUI();
-            
+
             BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
             targetSellCard = null;
         }
@@ -122,73 +129,78 @@ public class SellFeature
         isProcessingConfirm = false;
     }
 
-    private void ProcessGPTheft()
+    private void ProcessGPTheft(PlayerStatus seller, PlayerStatus buyer)
     {
-        if (targetSellCard == null) return;
+        if (targetSellCard == null || seller == null || buyer == null) return;
 
         int remainingTheft = targetSellCard.cardValue;
 
-        // GPから奪取
-        if (remainingTheft > 0 && enemyStatus.currentGP > 0)
+        if (remainingTheft > 0 && buyer.currentGP > 0)
         {
-            int gpTheft = Mathf.Min(remainingTheft, enemyStatus.currentGP);
-            enemyStatus.currentGP -= gpTheft;
-            playerStatus.currentGP += gpTheft;
+            int gpTheft = Mathf.Min(remainingTheft, buyer.currentGP);
+            buyer.currentGP -= gpTheft;
+            seller.currentGP += gpTheft;
             remainingTheft -= gpTheft;
         }
 
-        // MPから奪取
-        if (remainingTheft > 0 && enemyStatus.currentMP > 0)
+        if (remainingTheft > 0 && buyer.currentMP > 0)
         {
-            int mpTheft = Mathf.Min(remainingTheft, enemyStatus.currentMP);
-            enemyStatus.currentMP -= mpTheft;
-            playerStatus.currentMP += mpTheft;
+            int mpTheft = Mathf.Min(remainingTheft, buyer.currentMP);
+            buyer.currentMP -= mpTheft;
+            seller.currentMP += mpTheft;
             remainingTheft -= mpTheft;
         }
 
-        // HPから奪取
-        if (remainingTheft > 0 && enemyStatus.currentHP > 0)
+        if (remainingTheft > 0 && buyer.currentHP > 0)
         {
-            int hpTheft = Mathf.Min(remainingTheft, enemyStatus.currentHP);
-            enemyStatus.currentHP -= hpTheft;
-            playerStatus.currentHP += hpTheft;
+            int hpTheft = Mathf.Min(remainingTheft, buyer.currentHP);
+            buyer.currentHP -= hpTheft;
+            seller.currentHP += hpTheft;
         }
     }
 
-    private async Task ProcessCardTransferAsync()
+    private async Task ProcessCardTransferAsync(List<CardData> sellerHand, List<CardData> buyerHand)
     {
         if (targetSellCard == null) return;
 
-        // カードUIを削除
         if (targetSellCard.cardUI != null)
         {
             var cardUIObject = targetSellCard.cardUI.gameObject;
             targetSellCard.cardUI = null;
-            
+
             if (cardUIObject.transform.parent != null)
-            {
                 cardUIObject.transform.SetParent(null);
-            }
             Object.Destroy(cardUIObject);
             await Task.Delay(10);
         }
 
-        // プレイヤー手札から削除
-        if (playerHand != null && playerHand.Contains(targetSellCard))
-        {
-            playerHand.Remove(targetSellCard);
-        }
+        if (sellerHand != null && sellerHand.Contains(targetSellCard))
+            sellerHand.Remove(targetSellCard);
 
-        // 敵手札に追加
-        if (cpuHand != null)
+        if (buyerHand != null)
         {
-            cpuHand.Add(targetSellCard);
+            buyerHand.Add(targetSellCard);
             cardDealer?.CreateCardUIForHand(targetSellCard);
         }
 
-        // 手札パネルのクリーンアップ（データとUIの同期）
         CleanupHandPanel();
         await Task.CompletedTask;
+    }
+
+    /// <summary>オンライン：相手の売却をミラー（攻撃者手札のカードを指定）。</summary>
+    public bool SetupMirroredSell(CardData soldCardInAttackerHand)
+    {
+        if (soldCardInAttackerHand == null)
+        {
+            Debug.LogWarning("[SellFeature] Mirrored sell card is null");
+            return false;
+        }
+
+        targetSellCard = soldCardInAttackerHand;
+        isProcessingConfirm = true;
+        isSellModeActive = false;
+        battleManager.SetCurrentAttackCard(EconomicActionNames.CreateSellDummy());
+        return true;
     }
 
     private void CleanupHandPanel()
@@ -308,11 +320,12 @@ public class SellFeature
         isSellModeActive = false;
         BattleManager.I?.UpdateTotalATKDEFDisplay();
 
-        // 経済アクション用のダミー攻撃カードを設定
-        var dummyCard = ScriptableObject.CreateInstance<CardData>();
-        dummyCard.cardName = "経済アクション（売却）";
-        dummyCard.cardType = CardType.Attack;
+        var dummyCard = EconomicActionNames.CreateSellDummy();
         battleManager.SetCurrentAttackCard(dummyCard);
+
+        if (battleManager.IsOnlineMatch)
+            NetworkBattleBridge.SendEconomicSell(targetSellCard.cardName);
+
         battleManager.SetGameState(GameState.DefensePhase);
     }
 

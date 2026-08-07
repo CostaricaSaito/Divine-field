@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -453,6 +453,7 @@ public class BattlePopupPresenter : MonoBehaviour
         if (popup == null)
             popup = go.AddComponent<MessagePopup>();
 
+        popup.BindSettings(ResolveMessagePopupSettings());
         popup.Setup(entry);
         return popup;
     }

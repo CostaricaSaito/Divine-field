@@ -31,6 +31,6 @@ public static class FreezeAttackSelectFlow
 
         float fadeSec = ui.ShowStyledMessagePopup(frozenOwner, MessagePopupKind.FreezeCannotMove);
         if (fadeSec > 0f)
-            await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
+            await MessagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
     }
 }

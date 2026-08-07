@@ -534,6 +534,9 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public GameObject GetExchangePopupPrefab() => economicHandler != null ? economicHandler.GetExchangePopupPrefab() : null;
 
+    public GameObject GetExchangeConfirmPopupPrefab()
+        => economicHandler != null ? economicHandler.GetExchangeConfirmPopupPrefab() : null;
+
     /// <summary>
     /// カードシートの Prefab を取得
     /// </summary>

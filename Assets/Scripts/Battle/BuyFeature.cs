@@ -73,7 +73,7 @@ public class BuyFeature
             return false;
         }
 
-        targetBuyCard = cpuHand[Random.Range(0, cpuHand.Count)];
+        targetBuyCard = cpuHand[BattleRandom.Range(0, cpuHand.Count)];
         Debug.Log($"[BuyFeature] 購入対象カード: {targetBuyCard.cardName} (価値: {targetBuyCard.cardValue})");
 
         isBuyModeActive = true;
@@ -87,9 +87,7 @@ public class BuyFeature
         BattleUIManager.I?.ShowCardDetail(targetBuyCard, Side.Enemy);
 
         // 経済アクション用のダミー攻撃カードを設定
-        var dummyCard = new CardData();
-        dummyCard.cardName = "経済アクション";
-        dummyCard.cardType = CardType.Attack;
+        var dummyCard = EconomicActionNames.CreateBuyDummy();
         battleManager.SetCurrentAttackCard(dummyCard);
 
         // クールダウンを設定
@@ -97,9 +95,28 @@ public class BuyFeature
         // クールダウン設定後にUIを即座に更新
         BattleUIManager.I?.UpdateEconomicActionButtons();
 
+        if (battleManager.IsOnlineMatch)
+            NetworkBattleBridge.SendEconomicBuy(targetBuyCard.cardName);
+
         // 防御フェーズに移行（跳ね返し対応）
         battleManager.SetGameState(GameState.DefensePhase);
 
+        return true;
+    }
+
+    /// <summary>オンライン：相手の購入をローカルにミラー（防御側の手札カードを指定）。</summary>
+    public bool SetupMirroredBuy(CardData targetInDefenderHand)
+    {
+        if (targetInDefenderHand == null)
+        {
+            Debug.LogWarning("[BuyFeature] Mirrored buy target is null");
+            return false;
+        }
+
+        targetBuyCard = targetInDefenderHand;
+        isBuyModeActive = true;
+        BattleUIManager.I?.ShowCardDetail(targetInDefenderHand, Side.Player);
+        battleManager.SetCurrentAttackCard(EconomicActionNames.CreateBuyDummy());
         return true;
     }
 
@@ -120,27 +137,30 @@ public class BuyFeature
 
         try
         {
+            bool buyerIsPlayer = battleManager.AttackerPublic == PlayerType.Player;
+            var buyer = buyerIsPlayer ? playerStatus : enemyStatus;
+            var seller = buyerIsPlayer ? enemyStatus : playerStatus;
+            var buyerHand = buyerIsPlayer ? playerHand : cpuHand;
+            var sellerHand = buyerIsPlayer ? cpuHand : playerHand;
+
             int cost = targetBuyCard.cardValue;
             Debug.Log($"[BuyFeature] 経済アクション処理開始 - コスト: {cost}GP");
 
-            // 支払い処理
-            ProcessPayment(cost);
+            ProcessPayment(cost, buyer, seller);
 
-            // 購入アニメーション実行
             if (cardPurchaseAnimation != null && BattleUIManager.I != null)
             {
-                await cardPurchaseAnimation.PlayPurchaseAnimation(
-                    targetBuyCard,
-                    cost,
-                    BattleUIManager.I.GetEnemyCardDisplayPanel(),
-                    BattleUIManager.I.GetPlayerCardDisplayPanel()
-                );
+                var fromPanel = buyerIsPlayer
+                    ? BattleUIManager.I.GetEnemyCardDisplayPanel()
+                    : BattleUIManager.I.GetPlayerCardDisplayPanel();
+                var toPanel = buyerIsPlayer
+                    ? BattleUIManager.I.GetPlayerCardDisplayPanel()
+                    : BattleUIManager.I.GetEnemyCardDisplayPanel();
+                await cardPurchaseAnimation.PlayPurchaseAnimation(targetBuyCard, cost, fromPanel, toPanel);
             }
 
-            // カード取得処理（裏向きのまま手札に追加）
-            ProcessCardAcquisition();
+            ProcessCardAcquisition(buyerHand, sellerHand, buyerIsPlayer);
 
-            // ステータス更新
             BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
 
             Debug.Log("[BuyFeature] 購入処理完了");
@@ -155,62 +175,54 @@ public class BuyFeature
     /// <summary>
     /// 支払い処理（GP → MP → HPの順）
     /// </summary>
-    private void ProcessPayment(int cost)
+    private void ProcessPayment(int cost, PlayerStatus buyer, PlayerStatus seller)
     {
+        if (buyer == null || seller == null) return;
+
         int remainingCost = cost;
         Debug.Log($"[BuyFeature] 支払い開始 - 必要額: {remainingCost}");
 
-        // GPから支払い
-        if (remainingCost > 0 && playerStatus.currentGP > 0)
+        if (remainingCost > 0 && buyer.currentGP > 0)
         {
-            int gpPayment = Mathf.Min(remainingCost, playerStatus.currentGP);
-            playerStatus.currentGP -= gpPayment;
+            int gpPayment = Mathf.Min(remainingCost, buyer.currentGP);
+            buyer.currentGP -= gpPayment;
             remainingCost -= gpPayment;
-            Debug.Log($"[BuyFeature] GP支払い: {gpPayment} (残りGP: {playerStatus.currentGP}, 残り必要額: {remainingCost})");
         }
 
-        // MPから支払い
-        if (remainingCost > 0 && playerStatus.currentMP > 0)
+        if (remainingCost > 0 && buyer.currentMP > 0)
         {
-            int mpPayment = Mathf.Min(remainingCost, playerStatus.currentMP);
-            playerStatus.currentMP -= mpPayment;
+            int mpPayment = Mathf.Min(remainingCost, buyer.currentMP);
+            buyer.currentMP -= mpPayment;
             remainingCost -= mpPayment;
-            Debug.Log($"[BuyFeature] MP支払い: {mpPayment} (残りMP: {playerStatus.currentMP}, 残り必要額: {remainingCost})");
         }
 
-        // HPから支払い（HPは0未満にならない）
-        if (remainingCost > 0 && playerStatus.currentHP > 0)
+        if (remainingCost > 0 && buyer.currentHP > 0)
         {
-            int hpPayment = Mathf.Min(remainingCost, playerStatus.currentHP);
-            playerStatus.currentHP -= hpPayment;
+            int hpPayment = Mathf.Min(remainingCost, buyer.currentHP);
+            buyer.currentHP -= hpPayment;
             remainingCost -= hpPayment;
-            Debug.Log($"[BuyFeature] HP支払い: {hpPayment} (残りHP: {playerStatus.currentHP}, 残り必要額: {remainingCost})");
         }
 
-        // 相手にGPを支払う
-        enemyStatus.currentGP += cost;
-        Debug.Log($"[BuyFeature] 相手にGP支払い: {cost} (相手のGP: {enemyStatus.currentGP})");
-
-        // 購入・売却ではGP回復のポップアップは表示しない
+        seller.currentGP += cost;
+        Debug.Log($"[BuyFeature] 相手にGP支払い: {cost} (相手のGP: {seller.currentGP})");
     }
 
     /// <summary>
     /// カード取得処理（裏向きのまま手札に追加して表向きにする）
     /// </summary>
-    private void ProcessCardAcquisition()
+    private void ProcessCardAcquisition(List<CardData> buyerHand, List<CardData> sellerHand, bool buyerIsPlayer)
     {
         if (targetBuyCard == null) return;
 
-        // 相手手札上の当該インスタンスを除き、同内容の新規 CardData をプレイヤー手札に追加（譲渡参照を残さない）
         var released = targetBuyCard;
-        if (cpuHand != null && cpuHand.Contains(released))
+        if (sellerHand != null && sellerHand.Contains(released))
         {
             if (released.cardUI != null)
             {
                 Object.Destroy(released.cardUI.gameObject);
                 released.cardUI = null;
             }
-            cpuHand.Remove(released);
+            sellerHand.Remove(released);
             Debug.Log($"[BuyFeature] 相手の手札から削除: {released.cardName}");
         }
 
@@ -227,10 +239,10 @@ public class BuyFeature
             return;
         }
 
-        if (playerHand != null)
+        if (buyerHand != null)
         {
-            playerHand.Add(acquired);
-            Debug.Log($"[BuyFeature] 自分の手札に追加（新規インスタンス）: {acquired.cardName}");
+            buyerHand.Add(acquired);
+            Debug.Log($"[BuyFeature] 購入者の手札に追加: {acquired.cardName}");
         }
 
         if (released is ScriptableObject soReleased)

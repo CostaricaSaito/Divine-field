@@ -99,13 +99,40 @@ public static class DeadlyChainFlow
             CardData primaryDef = defenseCards != null && defenseCards.Count > 0 ? defenseCards[0] : null;
 
             bool physicalReflect = primaryDef != null
-                && ReflectionRules.CanUsePhysicalReflectionAgainstAttack(primaryDef, attackCards);
-            bool magicReflect = primaryDef != null
-                && ReflectionRules.CanUseMagicReflectionAgainstAttack(primaryDef, attackCards);
+                && ReflectionRules.CanReflectIncoming(primaryDef, attackCards)
+                && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
+            bool magicReflect = physicalReflect;
+            bool immediateReflect = primaryDef != null
+                && ReflectionRules.CanReflectIncoming(primaryDef, attackCards)
+                && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
             bool physicalBlock = primaryDef != null
                 && BlockingRules.CanUsePhysicalBlockingAgainstAttack(primaryDef, attackCards);
             bool parry = primaryDef != null
                 && ParryRules.RequiresParryExclusiveLock(primaryDef, attackCards);
+
+            if (immediateReflect)
+            {
+                if (attackerIsPlayer)
+                {
+                    await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
+                        battleManager, battleProcessor, handRefill,
+                        attackCards, primaryDef, attacker, cancellationToken);
+                }
+                else
+                {
+                    await ImmediateEffectReflectionFlow.RunPlayerInitiatedAsync(
+                        battleManager, battleProcessor, handRefill,
+                        attackCards, primaryDef, attacker, defender, cancellationToken);
+                }
+                attacker = ReferenceEquals(attacker, battleManager.GetPlayerStatus())
+                    ? battleManager.GetEnemyStatus()
+                    : battleManager.GetPlayerStatus();
+                defender = ReferenceEquals(defender, battleManager.GetPlayerStatus())
+                    ? battleManager.GetEnemyStatus()
+                    : battleManager.GetPlayerStatus();
+                attackerIsPlayer = ReferenceEquals(attacker, battleManager.GetPlayerStatus());
+                continue;
+            }
 
             if (physicalReflect || magicReflect)
             {

@@ -22,6 +22,7 @@ public sealed class MessagePopup : MonoBehaviour
     [SerializeField] private float floatSpeed = 30f;
     [SerializeField] private float fadeDuration = 1f;
 
+    private MessagePopupSettings _boundSettings;
     private CanvasGroup _canvasGroup;
     private float _timer;
     private PopupRunMode _runMode = PopupRunMode.Normal;
@@ -41,6 +42,28 @@ public sealed class MessagePopup : MonoBehaviour
     }
 
     public float FadeDuration => fadeDuration;
+
+    /// <summary>
+    /// Waits for popup fade + post interval using <see cref="MessagePopupSettings"/> timing.
+    /// </summary>
+    public static Task WaitAfterPopupLifetimeAsync(
+        float fadeSecondsReturnedFromShow,
+        CancellationToken cancellationToken = default)
+        => MessagePopupSettings.WaitAfterLifetimeAsync(fadeSecondsReturnedFromShow, cancellationToken);
+
+    public void BindSettings(MessagePopupSettings settings)
+    {
+        _boundSettings = settings;
+        ApplyMotionFromSettings(settings);
+    }
+
+    public void ApplyMotionFromSettings(MessagePopupSettings settings)
+    {
+        if (settings == null) return;
+        var motion = settings.MotionOrDefault;
+        floatSpeed = motion.floatSpeed;
+        fadeDuration = motion.fadeDuration;
+    }
 
     private void Awake()
     {

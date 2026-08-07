@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// Styled variants shown via <see cref="DamagePopup"/> (colors/sprites in <see cref="DamagePopupSettings"/>).
 /// </summary>
 public enum DamagePopupKind

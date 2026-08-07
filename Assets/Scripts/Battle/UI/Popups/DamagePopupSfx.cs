@@ -1,4 +1,4 @@
-﻿/// <summary>ダメージポップアップ同時再生 SE（<see cref="SoundEffectPlayer"/> の Addressables キー）。</summary>
+/// <summary>ダメージポップアップ同時再生 SE（<see cref="SoundEffectPlayer"/> の Addressables キー）。</summary>
 public static class DamagePopupSfx
 {
     /// <summary>通常ヒット音（1〜29 ダメージ、および病系などの同伴 SE）。</summary>

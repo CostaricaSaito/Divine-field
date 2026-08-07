@@ -40,6 +40,28 @@ public sealed class MessagePopupSettings : ScriptableObject
 
     [SerializeField] private MessagePopupStyleEntry[] entries;
 
+    [Header("Motion / Timing")]
+    [SerializeField] private PopupMotionTiming motion = PopupMotionTiming.MessageDefaults;
+
+    public PopupMotionTiming MotionOrDefault => motion.WithDefaults(PopupMotionTiming.MessageDefaults);
+
+    public float FloatSpeed => MotionOrDefault.floatSpeed;
+    public float FadeDuration => MotionOrDefault.fadeDuration;
+    public int PostPopupIntervalMs => MotionOrDefault.postPopupIntervalMs;
+
+    /// <summary>Wait for message popup fade + post interval (uses this asset's timing).</summary>
+    public static async System.Threading.Tasks.Task WaitAfterLifetimeAsync(
+        float fadeSecondsReturnedFromShow,
+        System.Threading.CancellationToken cancellationToken = default)
+    {
+        var timing = GetRuntimeFallback().MotionOrDefault;
+        float fade = fadeSecondsReturnedFromShow > 0.001f
+            ? fadeSecondsReturnedFromShow
+            : timing.fadeDuration;
+        await System.Threading.Tasks.Task.Delay(System.TimeSpan.FromSeconds(fade), cancellationToken);
+        await System.Threading.Tasks.Task.Delay(timing.postPopupIntervalMs, cancellationToken);
+    }
+
     public bool TryGetEntry(MessagePopupKind kind, out MessagePopupStyleEntry entry)
     {
         if (entries != null)
@@ -106,6 +128,8 @@ public sealed class MessagePopupSettings : ScriptableObject
                 new Color(247f / 255f, 211f / 255f, 88f / 255f, 0.96f), Color.white, Color.black),
             Entry(MessagePopupKind.InterventionAttack, "\u672a\u77e5\u306e\u529b\u304c\u653e\u305f\u308c\u308b",
                 new Color(0.18f, 0.28f, 0.22f, 0.93f), new Color(0.55f, 1f, 0.75f), Color.black),
+            Entry(MessagePopupKind.PhoenixBlessing, "\u4e0d\u6b7b\u9ce5\u306e\u52a0\u8b77",
+                new Color(0.85f, 0.35f, 0.08f, 0.94f), new Color(1f, 0.92f, 0.55f), Color.black),
         };
     }
 
@@ -148,6 +172,7 @@ public sealed class MessagePopupSettings : ScriptableObject
         _runtimeFallback = CreateInstance<MessagePopupSettings>();
         _runtimeFallback.name = "MessagePopupSettings (Runtime Fallback)";
         _runtimeFallback.entries = DefaultEntries();
+        _runtimeFallback.motion = PopupMotionTiming.MessageDefaults;
         return _runtimeFallback;
     }
 }
