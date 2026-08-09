@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -680,7 +680,8 @@ public class CardSequenceManager : MonoBehaviour
         int dualBladeStrikeIndex = 0)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, atk, def);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(
+            primary, atk, def, HitRateRules.ShouldApplyAttackerSmokeForCombat(primary));
         bool hit = HitRateRules.RollHit(finalPct);
 
         if (!hit)

@@ -28,6 +28,12 @@ public class MagicPanelPresenter : MonoBehaviour
         magicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries());
     }
 
+    public void RefreshHitRateDisplays()
+    {
+        magicPanelUI?.RefreshHitRateDisplaysOnSlots();
+        enemyMagicPanelUI?.RefreshHitRateDisplaysOnSlots();
+    }
+
     /// <summary>相手側 MagicPool を UI に反映（<see cref="enemyMagicPanelUI"/> がある場合のみ）。</summary>
     public void UpdateEnemyPanel()
     {
@@ -146,24 +152,12 @@ public class MagicPanelPresenter : MonoBehaviour
             (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
             || (bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player)
             || (bm.CurrentState == GameState.DefenseConfirmPhase && bm.DefenderPublic == PlayerType.Player)
-            || (bm.CurrentState == GameState.CombatResolvePhase
-                && bm.IsInterventionDefenseWaitActive()
-                && bm.DefenderPublic == PlayerType.Player)
-            || (bm.CurrentState == GameState.CombatResolvePhase
-                && bm.IsPlayerDualBladeSecondDefenseWaitActive()
-                && bm.DefenderPublic == PlayerType.Player)
-            // 反射連鎖／パリィ再防御は GameState が攻撃フェーズのまま等の場合があり、通常の Defense 条件だけでは無効のままになる
-            || bm.IsReflectionChainDefensePending()
-            || bm.IsParryRerunDefensePending());
+            || bm.IsPlayerDefenseInputActive());
 
         bool defenseMagicPanel = allowMagicPanel && bm != null
             && (bm.CurrentState == GameState.DefensePhase
                 || bm.CurrentState == GameState.DefenseConfirmPhase
-                || (bm.CurrentState == GameState.CombatResolvePhase
-                    && (bm.IsInterventionDefenseWaitActive()
-                        || bm.IsPlayerDualBladeSecondDefenseWaitActive()))
-                || bm.IsReflectionChainDefensePending()
-                || bm.IsParryRerunDefensePending());
+                || bm.IsPlayerDefenseInputActive());
 
         if (defenseMagicPanel)
         {

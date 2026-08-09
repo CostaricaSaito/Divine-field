@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -27,6 +27,9 @@ public class CardUI : MonoBehaviour
     private static readonly Color AtkDefNoneElementOutlineColor = Color.white;
     private static readonly Color AtkDefOutlineColor = Color.black;
 
+    private Color _defaultHitRateHandTextColor = Color.white;
+    private HitRateApplicability.HandContext _hitRateHandContext = HitRateApplicability.HandContext.PlayerHand;
+
     private CardData cardData;
     private Sprite backSprite;
     private bool isFaceUp = false;
@@ -36,14 +39,21 @@ public class CardUI : MonoBehaviour
     private void Awake()
     {
         EnsureHitRateTextRef();
+        if (cardHitRateText != null)
+            _defaultHitRateHandTextColor = cardHitRateText.color;
     }
 
-    public void Setup(CardData data, Sprite back, bool playerHandRareBackPresentation = false)
+    public void Setup(
+        CardData data,
+        Sprite back,
+        bool playerHandRareBackPresentation = false,
+        HitRateApplicability.HandContext hitRateHandContext = HitRateApplicability.HandContext.PlayerHand)
     {
         cardData = data;
         backSprite = back;
         isFaceUp = false;
         this.playerHandRareBackPresentation = playerHandRareBackPresentation;
+        _hitRateHandContext = hitRateHandContext;
 
         ShowBack();
         if (button) button.interactable = false;
@@ -104,16 +114,20 @@ public class CardUI : MonoBehaviour
         EnsureHitRateTextRef();
         if (cardHitRateText == null) return;
 
-        if (c != null && HitRateRules.HasCustomHitRate(c))
+        var owner = BattleManager.I?.GetPlayerStatus();
+        if (c != null && HitRateRules.ShouldDisplayHitRateLabelForHand(c, owner, _hitRateHandContext))
         {
-            var owner = BattleManager.I?.GetPlayerStatus();
-            int displayed = HitRateRules.GetDisplayedHitRatePercent(c, owner);
+            int displayed = HitRateRules.GetDisplayedHitRatePercentForHand(c, owner, _hitRateHandContext);
             cardHitRateText.text = HitRateRules.FormatHitRateLabel(displayed);
+            cardHitRateText.color = HitRateRules.IsHitRateDisplayPenalizedForHand(c, owner, _hitRateHandContext)
+                ? HitRateRules.PenalizedHitRateHandColor
+                : _defaultHitRateHandTextColor;
             cardHitRateText.gameObject.SetActive(true);
         }
         else
         {
             cardHitRateText.text = "";
+            cardHitRateText.color = _defaultHitRateHandTextColor;
             cardHitRateText.gameObject.SetActive(false);
         }
     }

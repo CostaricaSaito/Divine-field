@@ -124,6 +124,13 @@ public class MagicPanelUI : MonoBehaviour
         rect = slots[index].GetFlyTargetRect();
         return rect != null;
     }
+
+    public void RefreshHitRateDisplaysOnSlots()
+    {
+        if (slots == null) return;
+        for (int i = 0; i < slots.Count; i++)
+            slots[i]?.RefreshHitRateDisplay();
+    }
 }
 
 // ====================================================================
@@ -183,7 +190,7 @@ public class MagicCardSlot
         {
             if (!isSameCard)
             {
-                cardUI.Setup(entry.cardData, backSprite);
+                cardUI.Setup(entry.cardData, backSprite, hitRateHandContext: HitRateApplicability.HandContext.MagicPanel);
                 cardUI.Reveal();
 
                 var btn = cardUI.button;
@@ -277,6 +284,11 @@ public class MagicCardSlot
 
     public CardData GetCardData() => currentEntry?.cardData;
     public CardUI GetCardUI() => cardUI;
+
+    public void RefreshHitRateDisplay()
+    {
+        cardUI?.RefreshHandStatusText();
+    }
 
     /// <summary>
     /// 手札→MagicPanel 飛行アニメーションの着地点。

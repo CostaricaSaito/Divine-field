@@ -689,7 +689,8 @@ public class BattleProcessor : MonoBehaviour
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
         if (primary == null) return false;
 
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, attacker, defender);
+        int finalPct = HitRateRules.ComputeFinalHitPercent(
+            primary, attacker, defender, HitRateRules.ShouldApplyAttackerSmokeForCombat(primary));
         bool result = HitRateRules.RollHit(finalPct);
 
         Debug.Log($"[BattleProcessor] 命中判定: Primary={primary.cardName}, 最終{finalPct}%, 結果{(result ? "命中" : "ミス")}");
@@ -900,7 +901,7 @@ public class BattleProcessor : MonoBehaviour
         ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
         ElementType defElement = ElementHelper.GetCombinedElement(defenseCards);
         if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defElement))
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
         {
             Debug.Log($"[BattleProcessor] 属性不一致: 攻撃={attackElement} vs 防御={defElement} → 防御力0");
             defensePower = 0;
@@ -1159,7 +1160,7 @@ public class BattleProcessor : MonoBehaviour
             ? ElementHelper.GetCombinedElement(defenseCards)
             : ElementType.None;
         if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defElement))
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
         {
             defensePower = 0;
         }

@@ -8,6 +8,7 @@ public sealed class SmokeEffect : IStatusEffect
     public void ApplyEffect(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} に「煙幕」が付与されました");
+        HitRateRules.RefreshHitRateDisplaysForOwner(target);
     }
 
     public int ModifyDamage(int originalDamage) => originalDamage;
@@ -19,6 +20,7 @@ public sealed class SmokeEffect : IStatusEffect
     public void OnRemove(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} の「煙幕」が解除されました");
+        HitRateRules.RefreshHitRateDisplaysForOwner(target);
     }
 
     public bool IsExpired() => false;

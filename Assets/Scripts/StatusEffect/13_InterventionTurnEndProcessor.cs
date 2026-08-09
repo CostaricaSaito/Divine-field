@@ -139,7 +139,8 @@ public static class InterventionTurnEndProcessor
     private static async Task RunPlayerInterventionVsEnemyFallbackAsync(BattleManager bm, List<CardData> atkList, CancellationToken ct)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, bm.GetPlayerStatus(), bm.GetEnemyStatus());
+        int finalPct = HitRateRules.ComputeFinalHitPercent(
+            primary, bm.GetPlayerStatus(), bm.GetEnemyStatus(), applyAttackerSmokePenalty: false);
         bool hit = HitRateRules.RollHit(finalPct);
 
         if (!hit)
@@ -175,7 +176,8 @@ public static class InterventionTurnEndProcessor
     private static async Task RunEnemyInterventionVsPlayerAsync(BattleManager bm, List<CardData> atkList, CancellationToken ct)
     {
         var primary = HitRateRules.GetPrimaryForHitRate(atkList);
-        int finalPct = HitRateRules.ComputeFinalHitPercent(primary, bm.GetEnemyStatus(), bm.GetPlayerStatus());
+        int finalPct = HitRateRules.ComputeFinalHitPercent(
+            primary, bm.GetEnemyStatus(), bm.GetPlayerStatus(), applyAttackerSmokePenalty: false);
         bool hit = HitRateRules.RollHit(finalPct);
 
         if (!hit)
@@ -196,16 +198,17 @@ public static class InterventionTurnEndProcessor
         }
 
         bm.BeginInterventionPlayerDefensePhase(atkList);
+        List<CardData> defs;
         try
         {
-            await bm.WaitForInterventionPlayerDefenseSubmitAsync(ct);
+            defs = await bm.WaitForAdHocDefenseSubmitAsync(ct);
         }
         catch (System.OperationCanceledException)
         {
+            bm.ClearInterventionDefenseWait();
             return;
         }
 
-        var defs = BattleUIManager.I?.GetSelectedDefenseCards() ?? new List<CardData>();
         if (defs.Count == 0)
         {
             await bm.battleProcessor.ResolveCombatAsync(

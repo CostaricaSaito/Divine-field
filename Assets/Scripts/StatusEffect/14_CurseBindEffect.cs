@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 呪縛（公式14番）：付与中は加護スキル（パッシブ）が無効。数値補正は <see cref="SummonPassiveBlessingApplier"/>、
@@ -13,7 +13,7 @@ public sealed class CurseBindEffect : IStatusEffect
     public void ApplyEffect(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} に「呪縛」が付与されました");
-        HitRateRules.RefreshHandHitRateDisplayIfPlayer(target);
+        HitRateRules.RefreshHitRateDisplaysForOwner(target);
     }
 
     public void OnTurnStart(PlayerStatus target) { }
@@ -21,7 +21,7 @@ public sealed class CurseBindEffect : IStatusEffect
     public void OnRemove(PlayerStatus target)
     {
         Debug.Log($"{target.DisplayName} の「呪縛」が解除されました");
-        HitRateRules.RefreshHandHitRateDisplayIfPlayer(target);
+        HitRateRules.RefreshHitRateDisplaysForOwner(target);
     }
 
     public int ModifyDamage(int originalDamage) => originalDamage;

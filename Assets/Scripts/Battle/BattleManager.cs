@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -196,7 +196,7 @@ public class BattleManager : MonoBehaviour
     public void ResetPlayerEffectTargetToDefaultForCurrentAttackSelection()
     {
         if (CurrentState != GameState.AttackPhase || CurrentTurnOwner != PlayerType.Player) return;
-        if (IsReflectionChainDefensePending()) return;
+        if (IsAdHocDefenseWaitActive(AdHocDefenseKind.ReflectionChain)) return;
 
         var cards = BattleUIManager.I?.GetSelectedAttackCards();
         if (cards == null || cards.Count == 0)
@@ -679,9 +679,7 @@ public class BattleManager : MonoBehaviour
     }
     private CardData selectedCard;
     private CardData selectedDefenseCard;
-    private TaskCompletionSource<List<CardData>> _reflectionChainDefenseTcs;
-    private List<CardData> _reflectionChainAttackSnapshot;
-    private TaskCompletionSource<List<CardData>> _parryRerunDefenseTcs;
+    private AdHocDefenseSession _adHocDefenseSession;
 
     /// <summary>反射スライド後：TOTAL ATK を攻撃側から反射側へ移した表示用（<see cref="SetReflectionAttackTotalDisplayAfterSlide"/>）。</summary>
     private bool _reflectionAtkTotalActive;
@@ -699,11 +697,6 @@ public class BattleManager : MonoBehaviour
     /// 戦闘行の <see cref="currentAttackCard"/> クリア時に戻す。
     /// </summary>
     private bool _suppressEnemyStaleAttackerInTotalByOrb;
-    private TaskCompletionSource<bool> _interventionDefenseSubmitTcs;
-    private List<CardData> _interventionAttackForDefenseUi;
-
-    private TaskCompletionSource<bool> _postDeathDefenseSubmitTcs;
-    private List<CardData> _postDeathAttackForDefenseUi;
     private bool _postDeathPlayerIsDefender;
     public bool IsPostDeathSequenceActive { get; private set; }
     public bool IsPostDeathPlayerDefender => _postDeathPlayerIsDefender;
@@ -774,47 +767,150 @@ public class BattleManager : MonoBehaviour
     public PlayerStatus GetPlayerStatus() => playerStatus;
     public PlayerStatus GetEnemyStatus() => enemyStatus;
 
-    /// <summary>CombatResolvePhase 中、敵介入のプレイヤー防御入力待ちか。</summary>
-    public bool IsInterventionDefenseWaitActive()
+    // ===== Ad-hoc defense (reflection / parry / intervention / disaster / post-death) =====
+
+    public bool IsAdHocDefenseWaitActive()
     {
-        return _interventionDefenseSubmitTcs != null && !_interventionDefenseSubmitTcs.Task.IsCompleted;
+        return _adHocDefenseSession != null && _adHocDefenseSession.IsPending;
     }
+
+    public bool IsAdHocDefenseWaitActive(AdHocDefenseKind kind)
+    {
+        return IsAdHocDefenseWaitActive() && _adHocDefenseSession.Kind == kind;
+    }
+
+    public bool ShouldKeepOpponentAttackPanelOnSelectionClear()
+    {
+        return IsAdHocDefenseWaitActive()
+            && _adHocDefenseSession.KeepOpponentAttackPanelWhenClearingPlayerSelection;
+    }
+
+    public bool IsInterventionDefenseWaitActive() => IsAdHocDefenseWaitActive(AdHocDefenseKind.Intervention);
+
+    public bool IsDisasterPlayerDefenseWaitActive() => IsAdHocDefenseWaitActive(AdHocDefenseKind.Disaster);
+
+    public bool IsPostDeathDefenseWaitActive() => IsAdHocDefenseWaitActive(AdHocDefenseKind.PostDeath);
+
+    public bool IsReflectionChainDefensePending() => IsAdHocDefenseWaitActive(AdHocDefenseKind.ReflectionChain);
+
+    public bool IsParryRerunDefensePending() => IsAdHocDefenseWaitActive(AdHocDefenseKind.ParryRerun);
+
+    /// <summary>反射連鎖・打ち払い再防御。CardSequence 解決中でも入力ロックを解除する。</summary>
+    public bool IsReactiveAdHocDefenseWaitActive()
+        => IsReflectionChainDefensePending() || IsParryRerunDefensePending();
 
     public void BeginInterventionPlayerDefensePhase(List<CardData> attackCardsForElement)
+        => BeginAdHocPlayerDefense(AdHocDefenseKind.Intervention, attackCardsForElement);
+
+    public void BeginDisasterPlayerDefensePhase(List<CardData> attackCardsForElement)
+        => BeginAdHocPlayerDefense(AdHocDefenseKind.Disaster, attackCardsForElement);
+
+    public void BeginPostDeathPlayerDefenseWait(List<CardData> attackCardsForElement)
     {
-        _interventionAttackForDefenseUi = attackCardsForElement;
-        _interventionDefenseSubmitTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _postDeathPlayerIsDefender = true;
+        BeginAdHocPlayerDefense(AdHocDefenseKind.PostDeath, attackCardsForElement);
+    }
+
+    public async Task<List<CardData>> WaitForAdHocDefenseSubmitAsync(CancellationToken cancellationToken)
+    {
+        if (_adHocDefenseSession?.SubmitTcs == null)
+            return new List<CardData>();
+
+        var session = _adHocDefenseSession;
+        var tcs = session.SubmitTcs;
+        try
+        {
+            using (cancellationToken.Register(() => tcs.TrySetCanceled()))
+                return await tcs.Task;
+        }
+        finally
+        {
+            var kind = session.Kind;
+            ClearAdHocDefense();
+            if (kind == AdHocDefenseKind.ReflectionChain)
+                BattleUIManager.I?.HideYurusuButton();
+            BattleUIManager.I?.SetHandClickable(false);
+        }
+    }
+
+    public Task<List<CardData>> WaitForInterventionPlayerDefenseSubmitAsync(CancellationToken ct)
+        => WaitForAdHocDefenseSubmitAsync(ct);
+
+    public Task<List<CardData>> WaitForDisasterPlayerDefenseSubmitAsync(CancellationToken ct)
+        => WaitForAdHocDefenseSubmitAsync(ct);
+
+    public Task<List<CardData>> WaitForPostDeathPlayerDefenseSubmitAsync(CancellationToken ct)
+        => WaitForAdHocDefenseSubmitAsync(ct);
+
+    public async Task<List<CardData>> WaitForReflectionChainDefenseAsync(
+        List<CardData> attackSnapshot,
+        CancellationToken cancellationToken)
+    {
+        BeginAdHocPlayerDefense(AdHocDefenseKind.ReflectionChain, attackSnapshot);
+        return await WaitForAdHocDefenseSubmitAsync(cancellationToken);
+    }
+
+    public async Task<List<CardData>> WaitForParryRerunDefenseSubmitAsync(CancellationToken cancellationToken)
+    {
+        BeginAdHocPlayerDefense(AdHocDefenseKind.ParryRerun, null);
+        return await WaitForAdHocDefenseSubmitAsync(cancellationToken);
+    }
+
+    public void ClearInterventionDefenseWait() => ClearAdHocDefenseIfKind(AdHocDefenseKind.Intervention);
+
+    public void ClearDisasterPlayerDefenseWait() => ClearAdHocDefenseIfKind(AdHocDefenseKind.Disaster);
+
+    public void ClearPostDeathDefenseWait() => ClearAdHocDefenseIfKind(AdHocDefenseKind.PostDeath);
+
+    public void ClearAdHocDefense()
+    {
+        if (_adHocDefenseSession?.SubmitTcs != null && !_adHocDefenseSession.SubmitTcs.Task.IsCompleted)
+            _adHocDefenseSession.SubmitTcs.TrySetCanceled();
+
+        if (_adHocDefenseSession?.Kind == AdHocDefenseKind.PostDeath)
+            _postDeathPlayerIsDefender = false;
+
+        _adHocDefenseSession = null;
+    }
+
+    private void ClearAdHocDefenseIfKind(AdHocDefenseKind kind)
+    {
+        if (IsAdHocDefenseWaitActive(kind))
+            ClearAdHocDefense();
+    }
+
+    private void BeginAdHocPlayerDefense(AdHocDefenseKind kind, List<CardData> attackSnapshot)
+    {
+        _adHocDefenseSession = AdHocDefenseSession.Create(kind, attackSnapshot);
 
         ResetPlayerDefenseUseButtonLocks();
-
         BattleUIManager.I?.ClearAllSelections();
-        BattleUIManager.I?.HidePlayerCardDetails();
+
+        switch (kind)
+        {
+            case AdHocDefenseKind.ReflectionChain:
+                ClearSelectedCards();
+                ClearStatsDisplaySequenceCards();
+                BattleUIManager.I?.SetHandClickable(true);
+                RefreshReflectionChainInteractivity(attackSnapshot);
+                break;
+            case AdHocDefenseKind.ParryRerun:
+                selectedDefenseCard = null;
+                ClearSelectedCards();
+                BattleUIManager.I?.SetHandClickable(true);
+                SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
+                break;
+            default:
+                BattleUIManager.I?.HidePlayerCardDetails();
+                BattleUIManager.I?.SetHandClickable(true);
+                if (kind == AdHocDefenseKind.Disaster || kind == AdHocDefenseKind.PostDeath)
+                    UpdateTotalATKDEFDisplay();
+                break;
+        }
 
         RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         TryAutoPassPlayerDefenseIfChantingArchMagic();
-    }
-
-    public async Task WaitForInterventionPlayerDefenseSubmitAsync(CancellationToken ct)
-    {
-        if (_interventionDefenseSubmitTcs == null) return;
-        var tcs = _interventionDefenseSubmitTcs;
-        using (ct.Register(() => tcs.TrySetCanceled()))
-            await tcs.Task;
-    }
-
-    public void ClearInterventionDefenseWait()
-    {
-        _interventionAttackForDefenseUi = null;
-        if (_interventionDefenseSubmitTcs != null && !_interventionDefenseSubmitTcs.Task.IsCompleted)
-            _interventionDefenseSubmitTcs.TrySetCanceled();
-        _interventionDefenseSubmitTcs = null;
-    }
-
-    /// <summary>PostDeath キュー中、生存プレイヤーの防御入力待ちか。</summary>
-    public bool IsPostDeathDefenseWaitActive()
-    {
-        return _postDeathDefenseSubmitTcs != null && !_postDeathDefenseSubmitTcs.Task.IsCompleted;
     }
 
     /// <summary>
@@ -822,13 +918,18 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     public bool IsPlayerDefenseInputActive()
     {
-        if (IsReflectionChainDefensePending() || IsParryRerunDefensePending())
+        if (IsAdHocDefenseWaitActive())
+        {
+            var session = _adHocDefenseSession;
+            if (session.Kind == AdHocDefenseKind.PostDeath && !IsPostDeathPlayerDefender)
+                return false;
+            if (session.RequiresCombatResolvePhase && CurrentState != GameState.CombatResolvePhase)
+                return false;
+            if (session.RequiresTurnDefenderIsPlayer && Defender != PlayerType.Player)
+                return false;
             return true;
-        if (IsPostDeathDefenseWaitActive() && IsPostDeathPlayerDefender)
-            return true;
-        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive()
-            && Defender == PlayerType.Player)
-            return true;
+        }
+
         if (CurrentState == GameState.CombatResolvePhase && IsPlayerDualBladeSecondDefenseWaitActive()
             && Defender == PlayerType.Player)
             return true;
@@ -843,107 +944,56 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.HideYurusuButton();
     }
 
-    public void BeginPostDeathPlayerDefenseWait(List<CardData> attackCardsForElement)
+    private bool TryValidateAdHocDefenseSelection(IReadOnlyList<CardData> selectedDefenseCards)
     {
-        _postDeathAttackForDefenseUi = attackCardsForElement;
-        _postDeathPlayerIsDefender = true;
-        _postDeathDefenseSubmitTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int count = selectedDefenseCards?.Count ?? 0;
+        if (playerStatus != null && playerStatus.HasRestraintEffect() && count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
+            return false;
+        }
 
-        ResetPlayerDefenseUseButtonLocks();
+        if (IsOnlineMatch && count > 1)
+        {
+            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
+                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
+            return false;
+        }
 
+        return true;
+    }
+
+    private void TrySubmitAdHocPlayerDefense()
+    {
+        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (selectedDefenseCards == null)
+            selectedDefenseCards = new List<CardData>();
+
+        if (!TryValidateAdHocDefenseSelection(selectedDefenseCards))
+        {
+            isProcessingUseButton = false;
+            BattleUIManager.I?.SetHandClickable(true);
+            BattleUIManager.I?.RefreshUseButton();
+            return;
+        }
+
+        if (IsOnlineMatch)
+            NetworkBattleBridge.SendDefenseSelection(
+                selectedDefenseCards.Count > 0 ? selectedDefenseCards : null);
+
+        var submitted = new List<CardData>(selectedDefenseCards);
+        CompleteAdHocDefenseSubmit(submitted);
         BattleUIManager.I?.ClearAllSelections();
-        BattleUIManager.I?.HidePlayerCardDetails();
-
-        RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.SetHandClickable(true);
-        TryAutoPassPlayerDefenseIfChantingArchMagic();
         UpdateTotalATKDEFDisplay();
-    }
-
-    public async Task WaitForPostDeathPlayerDefenseSubmitAsync(CancellationToken ct)
-    {
-        if (_postDeathDefenseSubmitTcs == null) return;
-        var tcs = _postDeathDefenseSubmitTcs;
-        using (ct.Register(() => tcs.TrySetCanceled()))
-            await tcs.Task;
-    }
-
-    public void ClearPostDeathDefenseWait()
-    {
-        _postDeathAttackForDefenseUi = null;
-        _postDeathPlayerIsDefender = false;
-        if (_postDeathDefenseSubmitTcs != null && !_postDeathDefenseSubmitTcs.Task.IsCompleted)
-            _postDeathDefenseSubmitTcs.TrySetCanceled();
-        _postDeathDefenseSubmitTcs = null;
-    }
-
-    private void TrySubmitPostDeathPlayerDefense()
-    {
-        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
-        if (selectedDefenseCards == null)
-            selectedDefenseCards = new List<CardData>();
-
-        if (playerStatus != null && playerStatus.HasRestraintEffect() && selectedDefenseCards.Count > 1)
-        {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
-            isProcessingUseButton = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            BattleUIManager.I?.RefreshUseButton();
-            return;
-        }
-
-        if (IsOnlineMatch && selectedDefenseCards.Count > 1)
-        {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
-                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
-            isProcessingUseButton = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            BattleUIManager.I?.RefreshUseButton();
-            return;
-        }
-
-        if (IsOnlineMatch)
-            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
-
-        _postDeathDefenseSubmitTcs?.TrySetResult(true);
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
         isProcessingUseButton = false;
     }
 
-    private void TrySubmitInterventionPlayerDefense()
+    private void CompleteAdHocDefenseSubmit(List<CardData> selectedDefenseCards)
     {
-        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
-        if (selectedDefenseCards == null)
-            selectedDefenseCards = new List<CardData>();
-
-        if (playerStatus != null && playerStatus.HasRestraintEffect() && selectedDefenseCards.Count > 1)
-        {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
-            isProcessingUseButton = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            BattleUIManager.I?.RefreshUseButton();
-            return;
-        }
-
-        if (IsOnlineMatch && selectedDefenseCards.Count > 1)
-        {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
-                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
-            isProcessingUseButton = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            BattleUIManager.I?.RefreshUseButton();
-            return;
-        }
-
-        // オンライン：介入防御の確定選択（空＝許す）を相手へ送信
-        if (IsOnlineMatch)
-            NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
-
-        _interventionDefenseSubmitTcs?.TrySetResult(true);
-        BattleUIManager.I?.SetHandClickable(false);
-        BattleUIManager.I?.SetUseButtonInteractable(false);
-        isProcessingUseButton = false;
+        if (!IsAdHocDefenseWaitActive()) return;
+        _adHocDefenseSession.SubmitTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
     }
 
     private bool IsPlayerChantingArchMagicWhileDefending()
@@ -971,36 +1021,11 @@ public class BattleManager : MonoBehaviour
         BattleUIManager.I?.SetUseButtonInteractable(false);
         isProcessingUseButton = false;
 
-        if (IsInterventionDefenseWaitActive())
+        if (IsAdHocDefenseWaitActive())
         {
             if (IsOnlineMatch)
                 NetworkBattleBridge.SendDefenseSelection(null);
-            _interventionDefenseSubmitTcs?.TrySetResult(true);
-            return true;
-        }
-
-        if (IsPostDeathDefenseWaitActive())
-        {
-            if (IsOnlineMatch)
-                NetworkBattleBridge.SendDefenseSelection(null);
-            _postDeathDefenseSubmitTcs?.TrySetResult(true);
-            return true;
-        }
-
-        if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
-        {
-            if (IsOnlineMatch)
-                NetworkBattleBridge.SendDefenseSelection(null);
-            _reflectionChainDefenseTcs.TrySetResult(new List<CardData>());
-            UpdateTotalATKDEFDisplay();
-            return true;
-        }
-
-        if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
-        {
-            if (IsOnlineMatch)
-                NetworkBattleBridge.SendDefenseSelection(null);
-            _parryRerunDefenseTcs.TrySetResult(new List<CardData>());
+            CompleteAdHocDefenseSubmit(new List<CardData>());
             UpdateTotalATKDEFDisplay();
             return true;
         }
@@ -1022,6 +1047,13 @@ public class BattleManager : MonoBehaviour
         if (IsPlayerChantingArchMagicWhileDefending())
         {
             ApplyArchMagicChantingDefenseBlockUi();
+            return;
+        }
+
+        if (IsAdHocDefenseWaitActive(AdHocDefenseKind.ReflectionChain)
+            && _adHocDefenseSession.AttackSnapshot != null)
+        {
+            RefreshReflectionChainInteractivity(_adHocDefenseSession.AttackSnapshot);
             return;
         }
 
@@ -1078,61 +1110,28 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    /// <summary>連鎖反射でプレイヤーが再防御を選ぶまで待つ（許す＝空リスト）。</summary>
-    /// <summary>連鎖反射の防御入力待ち中か（UI「弾き返す」判定用）。</summary>
-    public bool IsReflectionChainDefensePending()
-    {
-        return _reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted;
-    }
-
-    /// <summary>打ち払い後、攻撃が自分側に戻ったあとの再防御入力待ちか。</summary>
-    public bool IsParryRerunDefensePending()
-    {
-        return _parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted;
-    }
-
-    /// <summary>打ち払い「こちらに飛んできた！」後、再び防御を選ぶまで待つ（許す＝空リスト）。</summary>
-    public async Task<List<CardData>> WaitForParryRerunDefenseSubmitAsync(CancellationToken cancellationToken)
-    {
-        _parryRerunDefenseTcs = new TaskCompletionSource<List<CardData>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        ResetPlayerDefenseUseButtonLocks();
-        selectedDefenseCard = null;
-        BattleUIManager.I?.ClearAllSelections();
-        ClearSelectedCards();
-        BattleUIManager.I?.SetHandClickable(true);
-        RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
-        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
-        TryAutoPassPlayerDefenseIfChantingArchMagic();
-
-        try
-        {
-            using (cancellationToken.Register(() =>
-                   {
-                       if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
-                           _parryRerunDefenseTcs.TrySetCanceled();
-                   }))
-            {
-                return await _parryRerunDefenseTcs.Task;
-            }
-        }
-        finally
-        {
-            _parryRerunDefenseTcs = null;
-            BattleUIManager.I?.SetHandClickable(false);
-        }
-    }
-
     /// <summary>連鎖反射時の攻撃カードスナップショット（可否判定用）。</summary>
     public List<CardData> GetReflectionChainAttackSnapshot()
     {
-        return _reflectionChainAttackSnapshot;
+        return IsAdHocDefenseWaitActive(AdHocDefenseKind.ReflectionChain)
+            ? _adHocDefenseSession.AttackSnapshot
+            : null;
     }
 
     /// <summary>介入の防御入力待ち時の攻撃カード（UI 用）。</summary>
     public List<CardData> GetInterventionDefenseAttackSnapshot()
     {
-        return _interventionAttackForDefenseUi;
+        return IsAdHocDefenseWaitActive(AdHocDefenseKind.Intervention)
+            ? _adHocDefenseSession.AttackSnapshot
+            : null;
+    }
+
+    /// <summary>天変地異の防御入力待ち時の攻撃カード（UI 用）。</summary>
+    public List<CardData> GetDisasterDefenseAttackSnapshot()
+    {
+        return IsAdHocDefenseWaitActive(AdHocDefenseKind.Disaster)
+            ? _adHocDefenseSession.AttackSnapshot
+            : null;
     }
 
     /// <summary>防御 UI から現在の攻撃カード一覧を参照（物理反射ボタン表示など）。</summary>
@@ -1152,10 +1151,8 @@ public class BattleManager : MonoBehaviour
 
     private BattleStep ResolveCurrentBattleStep()
     {
-        if (IsReflectionChainDefensePending())
-            return BattleStep.ReflectionChainDefenseSelect;
-        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive())
-            return BattleStep.InterventionDefenseSelect;
+        if (IsAdHocDefenseWaitActive())
+            return _adHocDefenseSession.ToBattleStep();
 
         switch (CurrentState)
         {
@@ -1180,49 +1177,12 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    public async Task<List<CardData>> WaitForReflectionChainDefenseAsync(
-        List<CardData> attackSnapshot,
-        CancellationToken cancellationToken)
-    {
-        _reflectionChainAttackSnapshot = attackSnapshot != null
-            ? new List<CardData>(attackSnapshot)
-            : new List<CardData>();
-        _reflectionChainDefenseTcs = new TaskCompletionSource<List<CardData>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        ResetPlayerDefenseUseButtonLocks();
-        BattleUIManager.I?.SetHandClickable(true);
-        BattleUIManager.I?.ClearAllSelections();
-        ClearSelectedCards();
-        ClearStatsDisplaySequenceCards();
-        RefreshReflectionChainInteractivity(attackSnapshot);
-        RefreshPlayerDefensePhaseInteractivity();
-        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
-        TryAutoPassPlayerDefenseIfChantingArchMagic();
-
-        try
-        {
-            using (cancellationToken.Register(() =>
-                   {
-                       if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
-                           _reflectionChainDefenseTcs.TrySetCanceled();
-                   }))
-            {
-                return await _reflectionChainDefenseTcs.Task;
-            }
-        }
-        finally
-        {
-            _reflectionChainAttackSnapshot = null;
-            _reflectionChainDefenseTcs = null;
-            BattleUIManager.I?.SetHandClickable(false);
-            BattleUIManager.I?.HideYurusuButton();
-        }
-    }
-
     /// <summary>選択変更後に連鎖反射の手札グレーアウトを更新（<see cref="BattleUIManager"/> から呼ぶ）。</summary>
     public void RefreshReflectionChainInteractivityIfPending()
     {
-        if (_reflectionChainAttackSnapshot != null)
-            RefreshReflectionChainInteractivity(_reflectionChainAttackSnapshot);
+        if (IsAdHocDefenseWaitActive(AdHocDefenseKind.ReflectionChain)
+            && _adHocDefenseSession.AttackSnapshot != null)
+            RefreshReflectionChainInteractivity(_adHocDefenseSession.AttackSnapshot);
     }
 
     private void RefreshReflectionChainInteractivity(List<CardData> attackSnapshot)
@@ -1265,31 +1225,17 @@ public class BattleManager : MonoBehaviour
     /// 防御 UI・併用不可判定用の現在の攻撃スナップショット（反射連鎖／介入／通常防御）。</summary>
     public List<CardData> GetIncomingAttackSnapshotForDefenseUi()
     {
-        if (IsReflectionChainDefensePending())
+        if (IsAdHocDefenseWaitActive())
         {
-            if (_reflectionChainAttackSnapshot == null || _reflectionChainAttackSnapshot.Count == 0)
-                return null;
-            return new List<CardData>(_reflectionChainAttackSnapshot);
-        }
-
-        if (CurrentState == GameState.CombatResolvePhase && IsInterventionDefenseWaitActive())
-        {
-            if (_interventionAttackForDefenseUi == null || _interventionAttackForDefenseUi.Count == 0)
-                return null;
-            return new List<CardData>(_interventionAttackForDefenseUi);
-        }
-
-        if (IsPostDeathDefenseWaitActive() && _postDeathAttackForDefenseUi != null)
-        {
-            if (_postDeathAttackForDefenseUi.Count == 0) return null;
-            return new List<CardData>(_postDeathAttackForDefenseUi);
+            if (_adHocDefenseSession.AttackSnapshot != null && _adHocDefenseSession.AttackSnapshot.Count > 0)
+                return new List<CardData>(_adHocDefenseSession.AttackSnapshot);
+            if (_adHocDefenseSession.Kind == AdHocDefenseKind.ParryRerun)
+                return GetAttackCardsForCombat();
+            return null;
         }
 
         if (CurrentState == GameState.CombatResolvePhase && IsPlayerDualBladeSecondDefenseWaitActive()
             && DefenderPublic == PlayerType.Player)
-            return GetAttackCardsForCombat();
-
-        if (IsParryRerunDefensePending())
             return GetAttackCardsForCombat();
 
         if ((CurrentState == GameState.DefensePhase || CurrentState == GameState.DefenseConfirmPhase)
@@ -1330,6 +1276,7 @@ public class BattleManager : MonoBehaviour
         enemyStatus = new PlayerStatus();
         playerStatus.InitializeAsPlayer();
         enemyStatus.InitializeAsEnemy();
+        HitRateRules.ResetHitRateDisplayMonitor();
 
         // 召喚データ（プレイヤー：選択済み、敵：オンラインは相手の選択・CPUはランダム）
         if (SummonSelectionManager.I != null)
@@ -2291,10 +2238,14 @@ public class BattleManager : MonoBehaviour
             cardStatsDisplay?.UpdateDisplay();
 
             PlayerStatus immediateTarget = ResolveCpuImmediateEffectTarget(attack);
-            if (immediateTarget == enemyStatus)
+            bool skipDefenseForImmediate =
+                attack.specialCardEffect is DisasterTriggerEffectSO
+                || immediateTarget == enemyStatus;
+
+            if (skipDefenseForImmediate)
             {
                 await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, token);
-                await battleProcessor.ResolveImmediateEffectAsync(attack, enemyStatus, enemyStatus);
+                await battleProcessor.ResolveImmediateEffectAsync(attack, enemyStatus, immediateTarget);
                 if (cardSequenceManager != null)
                     await cardSequenceManager.RunAfterCombatSharedCleanupAsync(token);
                 else
@@ -2515,7 +2466,9 @@ public class BattleManager : MonoBehaviour
 
     public void OnUseButtonPressed()
     {
-        if (isProcessingUseButton || _playerDefenseCombatResolving) return;
+        if (!IsReactiveAdHocDefenseWaitActive()
+            && (isProcessingUseButton || _playerDefenseCombatResolving))
+            return;
 
         if (IsPlayerDefenseInputActive())
         {
@@ -2523,12 +2476,13 @@ public class BattleManager : MonoBehaviour
             BattleUIManager.I?.SetHandClickable(false);
             BattleUIManager.I?.RefreshUseButton();
 
-            if (IsPostDeathDefenseWaitActive())
-                TrySubmitPostDeathPlayerDefense();
-            else if (IsInterventionDefenseWaitActive())
-                TrySubmitInterventionPlayerDefense();
-            else
-                HandleDefenseUse();
+            if (IsAdHocDefenseWaitActive())
+            {
+                TrySubmitAdHocPlayerDefense();
+                return;
+            }
+
+            HandleDefenseUse();
             return;
         }
 
@@ -2733,9 +2687,16 @@ public class BattleManager : MonoBehaviour
 
         ClearPlayerSelfAttackTargetMode();
 
-        if (immediateEffectTarget == playerStatus)
+        bool skipDefenseForImmediate =
+            card.specialCardEffect is DisasterTriggerEffectSO
+            || immediateEffectTarget == playerStatus;
+
+        if (skipDefenseForImmediate)
         {
-            await ResolveImmediateEffectAsync(card, slotIndex, playerStatus);
+            await ResolveImmediateEffectAsync(
+                card,
+                slotIndex,
+                immediateEffectTarget == playerStatus ? playerStatus : null);
             return;
         }
 
@@ -2855,6 +2816,12 @@ public class BattleManager : MonoBehaviour
 
     private void HandleDefenseUse()
     {
+        if (IsReactiveAdHocDefenseWaitActive())
+        {
+            TrySubmitAdHocPlayerDefense();
+            return;
+        }
+
         if (_playerDefenseCombatResolving)
             return;
 
@@ -2871,63 +2838,9 @@ public class BattleManager : MonoBehaviour
             if (IsOnlineMatch)
                 NetworkBattleBridge.SendDefenseSelection(null);
 
-            if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
-            {
-                _reflectionChainDefenseTcs.TrySetResult(new List<CardData>());
-                BattleUIManager.I?.ClearAllSelections();
-                UpdateTotalATKDEFDisplay();
-                return;
-            }
-
-            if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
-            {
-                _parryRerunDefenseTcs.TrySetResult(new List<CardData>());
-                BattleUIManager.I?.ClearAllSelections();
-                UpdateTotalATKDEFDisplay();
-                return;
-            }
-
             // 防御カードを1枚も使わない場合（「許す」）
             Debug.Log("[BattleManager] 防御カードを使用せずにダメージを受ける（許す）");
             HandleNoDefenseCard();
-            return;
-        }
-
-        if (_reflectionChainDefenseTcs != null && !_reflectionChainDefenseTcs.Task.IsCompleted)
-        {
-            if (playerStatus != null
-                && playerStatus.HasRestraintEffect()
-                && selectedDefenseCards.Count > 1)
-            {
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
-                return;
-            }
-
-            if (IsOnlineMatch)
-                NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
-
-            _reflectionChainDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
-            BattleUIManager.I?.ClearAllSelections();
-            UpdateTotalATKDEFDisplay();
-            return;
-        }
-
-        if (_parryRerunDefenseTcs != null && !_parryRerunDefenseTcs.Task.IsCompleted)
-        {
-            if (playerStatus != null
-                && playerStatus.HasRestraintEffect()
-                && selectedDefenseCards.Count > 1)
-            {
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
-                return;
-            }
-
-            if (IsOnlineMatch)
-                NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
-
-            _parryRerunDefenseTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
-            BattleUIManager.I?.ClearAllSelections();
-            UpdateTotalATKDEFDisplay();
             return;
         }
 

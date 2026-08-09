@@ -39,6 +39,7 @@ public static class CardRules
         if (c == null) return false;
         if (IsPassiveHandOnly(c)) return false;
         if (c.cardType == CardType.Ultimate) return false;
+        if (c.cardType == CardType.Disaster) return false;
         if (c.usableInAttackPhase) return true;
         if (c.cardType == CardType.ArchMagic) return true;
         if (IsRecoveryCard(c)) return true;
@@ -53,6 +54,7 @@ public static class CardRules
     {
         if (c == null) return false;
         if (IsPassiveHandOnly(c)) return false;
+        if (c.cardType == CardType.Disaster) return false;
         if (c.usableInDefensePhase) return true;
         if (ReflectionRules.IsReflectionCard(c) && c.defensePhaseUseRule != DefensePhaseUseRule.None)
             return true;

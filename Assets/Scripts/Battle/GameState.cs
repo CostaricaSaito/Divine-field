@@ -64,6 +64,9 @@ public enum BattleStep
     /// <summary>介入による再防御選択（Phase は <see cref="GameState.CombatResolvePhase"/>）。</summary>
     InterventionDefenseSelect,
 
+    /// <summary>天変地異の臨時防御選択（Phase は <see cref="GameState.AttackPhase"/> のまま等）。</summary>
+    DisasterDefenseSelect,
+
     /// <summary>介入抽選・再戦闘解決など（防御入力待ち以外）。</summary>
     CombatResolveProcessing,
 
@@ -95,6 +98,8 @@ public static class BattleStepPresentation
                 return "反射連鎖: 防御選択";
             case BattleStep.InterventionDefenseSelect:
                 return "介入: 防御選択";
+            case BattleStep.DisasterDefenseSelect:
+                return "天変地異: 防御選択";
             case BattleStep.CombatResolveProcessing:
                 return "介入抽選・再戦闘解決";
             case BattleStep.EndPhaseProcessing:

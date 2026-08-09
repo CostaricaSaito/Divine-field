@@ -19,6 +19,10 @@ public enum CardType
     /// 顕現スキル専用。手札に配られず、顕現フローでのみ使用。
     /// </summary>
     Ultimate = 6,
+    /// <summary>
+    /// 天変地異。通常ドロー不可。トリガー経由でのみ発動。
+    /// </summary>
+    Disaster = 7,
 }
 
 public enum ElementType
@@ -300,6 +304,10 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Header("Special カード")]
     [Tooltip("cardType=Special 時の即時効果。")]
     public SpecialCardEffectSO specialCardEffect;
+
+    [Header("Disaster カード")]
+    [Tooltip("cardType=Disaster 時の天変地異効果（表示用 CardData に紐付け）。")]
+    public DisasterCardEffectSO disasterCardEffect;
 
     [Header("Post-Death カード")]
     [Tooltip("HP0 後の PostDeathEffectQueue で解決する効果（攻撃／防御フェーズでは使用不可）。")]

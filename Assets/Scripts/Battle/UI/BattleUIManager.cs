@@ -140,7 +140,14 @@ public class BattleUIManager : MonoBehaviour
 
         statusUI?.UpdateStatus(player, enemy, playerHandCount, enemyHandCount, snapHpmgpNumbers);
         BattleManager.I?.RefreshSummonSkillButtonInteractables();
+        HitRateRules.MonitorAndRefreshHitRateDisplaysIfNeeded(player, enemy);
     }
+
+    public void RefreshActiveCardSheetHitRateDisplaysForOwner(PlayerStatus owner) =>
+        cardController?.RefreshActiveCardSheetHitRateDisplaysForOwner(owner);
+
+    public void RefreshMagicPanelHitRateDisplays() =>
+        magicPanelPresenter?.RefreshHitRateDisplays();
 
     //==== パブリックAPI：カード詳細表示（BattleCardUIController へ委譲） =====
     public void ShowCardDetail(CardData card, Side side) => cardController?.ShowCardDetail(card, side);
@@ -159,6 +166,10 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>プレイヤー／敵の CardDisplay 直子を即破棄（宝玉の再掲前など。通常は <see cref="HideAllCardDetails"/>）。</summary>
     public void ClearAllCardDisplaysAndSelectionImmediate() =>
         cardController?.ClearAllCardDisplaysAndSelectionImmediate();
+
+    /// <summary>指定側の CardDisplayPanel を即破棄（天変地異の混沌→Disaster 差し替え等）。</summary>
+    public void ClearCardDisplayPanelImmediate(Side side) =>
+        cardController?.ClearCardDisplayPanelImmediate(side);
 
     /// <summary>プレイヤー側のカード表示のみクリア（敵側は残す）</summary>
     public void HidePlayerCardDetails() => cardController?.HidePlayerCardDetails();
@@ -394,6 +405,11 @@ public class BattleUIManager : MonoBehaviour
 
     public float ShowStyledMessagePopup(PlayerStatus target, MessagePopupKind kind)
         => popupPresenter != null ? popupPresenter.ShowStyledMessagePopup(target, kind) : 0f;
+
+    public float ShowDisasterMessagePopup(PlayerStatus target, MessagePopupKind kind, string messageOverride)
+        => popupPresenter != null
+            ? popupPresenter.ShowDisasterMessagePopup(target, kind, messageOverride)
+            : 0f;
 
     public MessagePopup SpawnMessagePopupForTarget(PlayerStatus target, MessagePopupKind kind)
         => popupPresenter != null ? popupPresenter.SpawnMessagePopupForTarget(target, kind) : null;

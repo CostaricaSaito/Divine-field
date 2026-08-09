@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,6 +35,21 @@ public static class PhysicalReflectionFlow
             if (ReferenceEquals(incoming[i], card)) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// 連鎖反射中のプレイヤー防御掲示。submit 後は <see cref="BattleManager.IsPlayerDefenseInputActive"/> が false になり
+    /// <see cref="BattleUIManager.ShowCardDetail"/> の AddCardSelection が失敗しうるため、手札選択を介さない表示にする。
+    /// </summary>
+    private static void ShowPlayerDefenseCardPresentation(CardData card)
+    {
+        BattleUIManager.I?.ShowCardSheetVisualOnly(card, Side.Player);
+    }
+
+    private static void DestroyPlayerDefenseSheetIfSafe(CardData card, IReadOnlyList<CardData> incomingAttackCards)
+    {
+        if (card == null || IncomingAttackContainsCardReference(incomingAttackCards, card)) return;
+        BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(card, Side.Player);
     }
 
     /// <summary>
@@ -219,13 +234,11 @@ public static class PhysicalReflectionFlow
 
                 if (pick != null && IsContinuingReflectionChain(pick, incomingAttackCards))
                 {
-                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
                     BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
                     await Task.Delay(500, cancellationToken);
 
                     handRefill?.RecordEnemyUse(pick);
                     battleProcessor.UseCard(pick, battleManager.cpuHand);
-                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
 
                     if (IsImmediateIncoming(incomingAttackCards))
                     {
@@ -258,6 +271,23 @@ public static class PhysicalReflectionFlow
 
                     defenderSide = PlayerType.Player;
                     continue;
+                }
+
+                if (pick != null && ParryRules.RequiresParryExclusiveLock(pick, incomingAttackCards))
+                {
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
+                    await Task.Delay(500, cancellationToken);
+
+                    await ParryFlow.RunEnemyDefenderParriesPlayerAttackAsync(
+                        battleManager,
+                        battleProcessor,
+                        handRefill,
+                        enemyAI,
+                        incomingAttackCards,
+                        pick,
+                        cancellationToken);
+                    battleManager.ClearStatsDisplaySequenceCards();
+                    return;
                 }
 
                 if (pick == null && IsImmediateIncoming(incomingAttackCards))
@@ -331,11 +361,8 @@ public static class PhysicalReflectionFlow
                 if (!IncomingAttackContainsCardReference(incomingAttackCards, card))
                     BattleUIManager.I?.DestroyCardSheetForCardData(card);
 
-                BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+                ShowPlayerDefenseCardPresentation(card);
                 await Task.Delay(500, cancellationToken);
-
-                if (!IncomingAttackContainsCardReference(incomingAttackCards, card))
-                    BattleUIManager.I?.DestroyMostRecentCardSheetOnPanelForCardData(card, Side.Player);
 
                 if (IsImmediateIncoming(incomingAttackCards))
                 {
@@ -357,7 +384,7 @@ public static class PhysicalReflectionFlow
                 if (sec2 <= 0f) sec2 = DamagePopup.DefaultFadeDurationIfUnknown;
                 await DamagePopup.WaitAfterPopupLifetimeAsync(sec2, cancellationToken);
 
-                BattleUIManager.I?.DestroyMostRecentCardSheetOnPanelForCardData(card, Side.Player);
+                DestroyPlayerDefenseSheetIfSafe(card, incomingAttackCards);
 
                 if (BattleUIManager.I != null)
                     await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
@@ -385,7 +412,7 @@ public static class PhysicalReflectionFlow
                     battleProcessor.UseCard(card, battleManager.playerHand);
                 }
 
-                BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+                ShowPlayerDefenseCardPresentation(card);
                 battleManager.SetStatsDisplaySequenceCards(
                     new List<CardData> { card }, "防御", Side.Player);
                 await Task.Delay(500, cancellationToken);
@@ -394,6 +421,28 @@ public static class PhysicalReflectionFlow
                     battleManager,
                     incomingAttackCards,
                     card,
+                    cancellationToken);
+                battleManager.ClearStatsDisplaySequenceCards();
+                return;
+            }
+
+            if (ParryRules.RequiresParryExclusiveLock(card, incomingAttackCards))
+            {
+                int parrySlot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
+                if (parrySlot >= 0) handRefill?.RecordPlayerUseSlot(parrySlot);
+                battleProcessor.UseCard(card, battleManager.playerHand);
+
+                ShowPlayerDefenseCardPresentation(card);
+                await Task.Delay(500, cancellationToken);
+
+                await ParryFlow.RunPlayerInitiatedAsync(
+                    battleManager,
+                    battleProcessor,
+                    handRefill,
+                    enemyAI,
+                    incomingAttackCards,
+                    card,
+                    battleManager.Sequences,
                     cancellationToken);
                 battleManager.ClearStatsDisplaySequenceCards();
                 return;
@@ -411,7 +460,7 @@ public static class PhysicalReflectionFlow
                 battleProcessor.UseCard(card, battleManager.playerHand);
             }
 
-            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
+            ShowPlayerDefenseCardPresentation(card);
             battleManager.SetStatsDisplaySequenceCards(
                 new List<CardData> { card }, "防御", Side.Player);
             SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);

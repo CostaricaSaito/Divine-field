@@ -135,24 +135,46 @@ public static class ElementHelper
 
     /// <summary>
     /// 合算後の防御属性に対する判定（複数枚防御用）。
-    /// 攻撃が無属性なら制限なし。攻撃が闇なら無属性を含む任意の防御で可。
-    /// その他の属性攻撃は、防御側の合算属性が攻撃属性と一致するときのみ有効。
+    /// 攻撃が無属性なら制限なし。攻撃が闇なら任意の防御で可。
+    /// 光属性防御は任意の属性攻撃に対応。それ以外は合算属性が攻撃属性と一致するときのみ有効。
     /// </summary>
     public static bool CanDefendAgainst(ElementType attackElement, ElementType defenseCombinedElement)
     {
         if (attackElement == ElementType.None) return true;
         if (attackElement == ElementType.Dark) return true;
+        if (defenseCombinedElement == ElementType.Light) return true;
         return defenseCombinedElement == attackElement;
     }
 
     /// <summary>
-    /// 単一防御カード版。無属性防御は属性攻撃（闇以外）では無効。
+    /// 単一防御カード版。無属性防御は属性攻撃（闇以外）では無効。光属性防御は全属性攻撃に対応。
     /// </summary>
     public static bool CanDefendAgainst(ElementType attackElement, CardData defenseCard)
     {
         if (defenseCard == null) return false;
         if (attackElement == ElementType.None) return true;
         if (attackElement == ElementType.Dark) return true;
+        if (defenseCard.element == ElementType.Light) return true;
         return defenseCard.element == attackElement;
+    }
+
+    /// <summary>
+    /// 複数枚防御スタック用。合算属性で成立しない場合でも、光属性防御カードが含まれていれば有効。
+    /// </summary>
+    public static bool CanDefendAgainst(ElementType attackElement, IReadOnlyList<CardData> defenseCards)
+    {
+        if (defenseCards == null || defenseCards.Count == 0)
+            return attackElement == ElementType.None;
+
+        if (CanDefendAgainst(attackElement, GetCombinedElement(defenseCards)))
+            return true;
+
+        foreach (var card in defenseCards)
+        {
+            if (card != null && card.element == ElementType.Light)
+                return true;
+        }
+
+        return false;
     }
 }

@@ -9584,7 +9584,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleManager: {fileID: 1851136062}
   overridePlayerInitialSummon: 1
-  debugPlayerInitialSummon: {fileID: 11400000, guid: 3b53087da1a2ec44d9b70a108f65a2a4, type: 2}
+  debugPlayerInitialSummon: {fileID: 11400000, guid: e0bd98fea15dc654eacaf9ade7690c01, type: 2}
   overrideEnemyInitialSummon: 0
   debugEnemyInitialSummon: {fileID: 11400000, guid: 80539b303220c084ea24a968be87ab81, type: 2}
   openingTurnOwnerMode: 1
@@ -9604,6 +9604,14 @@ MonoBehaviour:
     positionX: 0
     positionY: 0
     fontSize: 18
+  showDisasterDebugPanel: 1
+  disasterPanelLayout:
+    placement: 1
+    width: 780
+    height: 520
+    positionX: 0
+    positionY: 0
+    fontSize: 22
   showCardCheatPanel: 1
   cardCheatPanelLayout:
     placement: 1

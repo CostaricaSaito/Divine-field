@@ -441,6 +441,34 @@ public class BattlePopupPresenter : MonoBehaviour
         return popup != null ? popup.FadeDuration : 0f;
     }
 
+    /// <summary>天変地異用 MessagePopup。スタイルは kind、文言は messageOverride。</summary>
+    public float ShowDisasterMessagePopup(PlayerStatus target, MessagePopupKind kind, string messageOverride)
+    {
+        var popup = SpawnDisasterMessagePopupForTarget(target, kind, messageOverride);
+        return popup != null ? popup.FadeDuration : 0f;
+    }
+
+    public MessagePopup SpawnDisasterMessagePopupForTarget(
+        PlayerStatus target,
+        MessagePopupKind kind,
+        string messageOverride)
+    {
+        if (target == null) return null;
+
+        var entry = ResolveMessagePopupSettings().GetEntryOrDefault(kind);
+        entry.message = messageOverride ?? entry.message;
+        var go = SpawnMessagePopupObjectFor(target);
+        if (go == null) return null;
+
+        var popup = go.GetComponent<MessagePopup>();
+        if (popup == null)
+            popup = go.AddComponent<MessagePopup>();
+
+        popup.BindSettings(ResolveMessagePopupSettings());
+        popup.Setup(entry);
+        return popup;
+    }
+
     public MessagePopup SpawnMessagePopupForTarget(PlayerStatus target, MessagePopupKind kind)
     {
         if (target == null) return null;

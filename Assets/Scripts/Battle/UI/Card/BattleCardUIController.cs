@@ -78,6 +78,17 @@ public class BattleCardUIController : MonoBehaviour
         }
     }
 
+    public void RefreshActiveCardSheetHitRateDisplaysForOwner(PlayerStatus owner)
+    {
+        if (owner == null) return;
+        for (int i = 0; i < activeCardSheets.Count; i++)
+        {
+            var go = activeCardSheets[i];
+            if (go == null) continue;
+            go.GetComponent<CardSheetDisplay>()?.RefreshHitRateDisplayIfOwner(owner);
+        }
+    }
+
     /// <summary>現在表示中の CardSheet から <paramref name="card"/> と同一アセット参照のシートを検索（最後に生成されたもの）。</summary>
     public bool TryGetCardSheetDisplayForCardData(CardData card, out CardSheetDisplay display)
     {
@@ -139,6 +150,41 @@ public class BattleCardUIController : MonoBehaviour
         UpdateHandCardHighlights();
         BattleManager.I?.ClearSelectedCards();
         BattleUIManager.I.HideRestraintHeavyOverlays();
+    }
+
+    /// <summary>指定側の CardDisplayPanel を同一フレーム内で即破棄（天変地異の差し替え等）。</summary>
+    public void ClearCardDisplayPanelImmediate(Side side)
+    {
+        Transform panel = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (panel != null)
+        {
+            for (int c = panel.childCount - 1; c >= 0; c--)
+            {
+                var t = panel.GetChild(c);
+                if (t != null) DestroyImmediate(t.gameObject);
+            }
+        }
+
+        for (int i = activeCardSheets.Count - 1; i >= 0; i--)
+        {
+            var go = activeCardSheets[i];
+            if (go == null)
+            {
+                activeCardSheets.RemoveAt(i);
+                continue;
+            }
+
+            Transform parent = go.transform.parent;
+            if ((side == Side.Player && parent == playerCardDisplayPanel)
+                || (side == Side.Enemy && parent == enemyCardDisplayPanel))
+            {
+                activeCardSheets.RemoveAt(i);
+            }
+        }
+
+        cardSelectionManager.ClearAllSelections();
+        UpdateHandCardHighlights();
+        BattleManager.I?.ClearSelectedCards();
     }
 
     /// <summary>プレイヤー側のカード表示のみクリア（敵側は残す）。</summary>
@@ -560,6 +606,8 @@ public class BattleCardUIController : MonoBehaviour
             if (go == null) continue;
             go.transform.SetParent(targetPanel, false);
             cardLayoutManager.SetupCardPosition(go, targetPanel);
+            go.GetComponent<CardSheetDisplay>()
+                ?.SetHitRateSheetContext(HitRateApplicability.SheetContext.ReflectedAttack);
         }
 
         onComplete?.Invoke();
@@ -583,7 +631,7 @@ public class BattleCardUIController : MonoBehaviour
             PlayerStatus mpOwner = side == Side.Player
                 ? BattleManager.I?.GetPlayerStatus()
                 : BattleManager.I?.GetEnemyStatus();
-            display.Setup(card, mpOwner);
+            display.Setup(card, mpOwner, HitRateApplicability.SheetContext.InterventionAttack);
         }
 
         activeCardSheets.Add(go);
@@ -700,10 +748,7 @@ public class BattleCardUIController : MonoBehaviour
             {
                 if (BattleManager.I.IsReflectionChainDefensePending())
                     BattleManager.I.RefreshReflectionChainInteractivityIfPending();
-                else if (BattleManager.I.CurrentState == GameState.DefensePhase
-                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
-                    || BattleManager.I.IsPostDeathDefenseWaitActive()
-                    || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive()))
+                else if (BattleManager.I.IsPlayerDefenseInputActive())
                     BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
                 else if (BattleManager.I.CurrentState == GameState.AttackPhase
                          && BattleManager.I.CurrentTurnOwner == PlayerType.Player)
@@ -733,12 +778,7 @@ public class BattleCardUIController : MonoBehaviour
                     BattleManager.I.UpdateTotalATKDEFDisplay();
                 }
             }
-            else if (BattleManager.I.CurrentState == GameState.DefensePhase
-                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsInterventionDefenseWaitActive())
-                    || BattleManager.I.IsPostDeathDefenseWaitActive()
-                     || (BattleManager.I.CurrentState == GameState.CombatResolvePhase && BattleManager.I.IsPlayerDualBladeSecondDefenseWaitActive())
-                     || BattleManager.I.IsReflectionChainDefensePending()
-                     || BattleManager.I.IsParryRerunDefensePending())
+            else if (BattleManager.I.IsPlayerDefenseInputActive())
             {
                 BattleManager.I.UpdateTotalATKDEFDisplay();
                 if (BattleManager.I.IsReflectionChainDefensePending())

@@ -27,7 +27,8 @@ public static class CardDrawWeightPool
 
         foreach (var template in allCards)
         {
-            if (template == null || template.cardType == CardType.Ultimate) continue;
+            if (template == null || template.cardType == CardType.Ultimate
+                || template.cardType == CardType.Disaster) continue;
 
             int weight = ResolveDrawWeight(template, table);
             for (int i = 0; i < weight; i++)

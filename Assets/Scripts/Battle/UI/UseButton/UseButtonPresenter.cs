@@ -192,7 +192,8 @@ public class UseButtonPresenter : MonoBehaviour
         var bm = BattleManager.I;
         if (bm == null || !bm.IsPlayerDefenseInputActive()) return;
 
-        if (bm.IsUseButtonLocked || bm.IsPlayerDefenseCombatResolving)
+        if (!bm.IsReactiveAdHocDefenseWaitActive()
+            && (bm.IsUseButtonLocked || bm.IsPlayerDefenseCombatResolving))
         {
             SetUseButtonInteractable(false);
             return;

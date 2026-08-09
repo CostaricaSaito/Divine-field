@@ -73,7 +73,12 @@ public class BuyFeature
             return false;
         }
 
-        targetBuyCard = cpuHand[BattleRandom.Range(0, cpuHand.Count)];
+        targetBuyCard = PickBuyableCardFromEnemyHand();
+        if (targetBuyCard == null)
+        {
+            Debug.LogWarning("[BuyFeature] 相手の手札に購入可能なカードがありません");
+            return false;
+        }
         Debug.Log($"[BuyFeature] 購入対象カード: {targetBuyCard.cardName} (価値: {targetBuyCard.cardValue})");
 
         isBuyModeActive = true;
@@ -291,6 +296,22 @@ public class BuyFeature
     public CardData GetTargetBuyCard()
     {
         return targetBuyCard;
+    }
+
+    private CardData PickBuyableCardFromEnemyHand()
+    {
+        if (cpuHand == null || cpuHand.Count == 0) return null;
+
+        var candidates = new List<CardData>();
+        for (int i = 0; i < cpuHand.Count; i++)
+        {
+            var c = cpuHand[i];
+            if (c == null || c.cardType == CardType.Disaster || c.cardType == CardType.Ultimate) continue;
+            candidates.Add(c);
+        }
+
+        if (candidates.Count == 0) return null;
+        return candidates[BattleRandom.Range(0, candidates.Count)];
     }
 }
 

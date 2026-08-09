@@ -91,6 +91,7 @@ public class CardDealer : MonoBehaviour
             // オンライン対戦の決定的乱数のため、両クライアントで並び順を固定する
             System.Array.Sort(allCards, (a, b) => string.CompareOrdinal(a?.name, b?.name));
             Debug.Log($"[CardDealer] 読み込まれたカード数: {allCards.Length}");
+            DisasterCatalog.RegisterCardTemplates(allCards);
         }
 
         BuildDarkCardTemplatePool();
@@ -122,7 +123,8 @@ public class CardDealer : MonoBehaviour
             _darkCardTemplates = System.Array.Empty<CardData>();
             return;
         }
-        _darkCardTemplates = allCards.Where(c => c != null && c.element == ElementType.Dark && c.cardType != CardType.Ultimate).ToArray();
+        _darkCardTemplates = allCards.Where(c => c != null && c.element == ElementType.Dark
+            && c.cardType != CardType.Ultimate && c.cardType != CardType.Disaster).ToArray();
         if (_darkCardTemplates.Length == 0)
             Debug.LogWarning("[CardDealer] 闇属性の CardData がありません。ダークプリパレーションは通常抽選にフォールバックします。");
         else

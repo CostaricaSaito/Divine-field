@@ -130,8 +130,34 @@ public sealed class MessagePopupSettings : ScriptableObject
                 new Color(0.18f, 0.28f, 0.22f, 0.93f), new Color(0.55f, 1f, 0.75f), Color.black),
             Entry(MessagePopupKind.PhoenixBlessing, "\u4e0d\u6b7b\u9ce5\u306e\u52a0\u8b77",
                 new Color(0.85f, 0.35f, 0.08f, 0.94f), new Color(1f, 0.92f, 0.55f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterEruption, "\u4e16\u754c\u304c\u7126\u571f\u306b\u5305\u307e\u308c\u308b",
+                new Color(0.45f, 0.08f, 0.02f, 0.94f), new Color(1f, 0.72f, 0.2f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterSolarEclipse, "\u6697\u9ed2\u306e\u592a\u967d\u304c\u88c1\u304d\u3092\u4e0b\u3059",
+                new Color(0.08f, 0.06f, 0.14f, 0.94f), new Color(0.75f, 0.55f, 1f), Color.white),
+            DisasterEntry(MessagePopupKind.DisasterLunarEclipse, "\u6697\u95c7\u306e\u6708\u304c\u529b\u3092\u596a\u3046",
+                new Color(0.06f, 0.06f, 0.12f, 0.94f), new Color(0.85f, 0.85f, 0.95f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterKannaduki, "\u529b\u304c\u66b4\u8d70\u3059\u308b\u2026!?",
+                new Color(0.35f, 0.08f, 0.12f, 0.94f), new Color(1f, 0.45f, 0.35f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterBlackMonday, "\u30b9\u30c8\u30c3\u30d7\u5b89\u3060\uff01",
+                new Color(0.05f, 0.18f, 0.08f, 0.94f), new Color(0.55f, 1f, 0.55f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterRealityBending, "\u4e16\u754c\u304c\u66f8\u304d\u63db\u3048\u3089\u308c\u308b",
+                new Color(0.22f, 0.08f, 0.45f, 0.94f), new Color(0.85f, 0.65f, 1f), Color.white),
+            DisasterEntry(MessagePopupKind.DisasterRampageZantetsuken, "\u30aa\u30fc\u30c7\u30a3\u30f3\u306e\u6012\u308a",
+                new Color(0.18f, 0.2f, 0.28f, 0.94f), new Color(0.85f, 0.9f, 1f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterMiracleArk, "\u65b9\u821f\u304c\u5149\u3092\u653e\u3064",
+                new Color(0.12f, 0.28f, 0.55f, 0.94f), new Color(0.95f, 0.98f, 1f), new Color(0.1f, 0.25f, 0.55f)),
+            DisasterEntry(MessagePopupKind.DisasterManaStream, "\u9b54\u529b\u304c\u6e26\u3092\u5dfb\u304f",
+                new Color(0.08f, 0.15f, 0.42f, 0.94f), new Color(0.55f, 0.85f, 1f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterChaosAttractor, "\u30ab\u30aa\u30b9\u3092\u3053\u3048\u3066\u7d42\u672b\u304c\u8fd1\u3065\u304f",
+                new Color(0.18f, 0.05f, 0.22f, 0.94f), new Color(0.95f, 0.55f, 0.95f), Color.black),
+            DisasterEntry(MessagePopupKind.DisasterInfection, "\u7149\u7363\u306e\u98a8\u304c\u5439\u304d\u8352\u308c\u308b",
+                new Color(0.28f, 0.05f, 0.02f, 0.94f), new Color(1f, 0.55f, 0.2f), Color.black),
         };
     }
+
+    private static MessagePopupStyleEntry DisasterEntry(
+        MessagePopupKind kind, string message, Color bg, Color text, Color outline)
+        => Entry(kind, message, bg, text, outline);
 
     private static MessagePopupStyleEntry HeavenEntry()
     {

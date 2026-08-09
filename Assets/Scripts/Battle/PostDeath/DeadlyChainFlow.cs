@@ -248,16 +248,17 @@ public static class DeadlyChainFlow
         if (defenderIsPlayer)
         {
             battleManager.BeginPostDeathPlayerDefenseWait(attackCards);
+            List<CardData> selected;
             try
             {
-                await battleManager.WaitForPostDeathPlayerDefenseSubmitAsync(cancellationToken);
+                selected = await battleManager.WaitForAdHocDefenseSubmitAsync(cancellationToken);
             }
-            finally
+            catch (System.OperationCanceledException)
             {
                 battleManager.ClearPostDeathDefenseWait();
+                return new List<CardData>();
             }
 
-            var selected = BattleUIManager.I?.GetSelectedDefenseCards();
             if (selected != null && selected.Count > 0)
             {
                 await BattleUIManager.I?.ShowPlayerDefenseCardsPresentationSequenceAsync(selected);

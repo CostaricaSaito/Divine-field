@@ -345,8 +345,10 @@ public class CardSelectionManager : MonoBehaviour
     private void ClearAllWithUI()
     {
         ClearAllSelections();
+        if (BattleManager.I != null && BattleManager.I.IsReactiveAdHocDefenseWaitActive())
+            return;
         // TurnEnd 介入中は敵パネルに出した介入攻撃カードを残し、プレイヤー側の表示だけ消す
-        if (BattleManager.I != null && BattleManager.I.IsInterventionDefenseWaitActive())
+        if (BattleManager.I != null && BattleManager.I.ShouldKeepOpponentAttackPanelOnSelectionClear())
             BattleUIManager.I?.HidePlayerCardDetails();
         else
             BattleUIManager.I?.HideAllCardDetails();
@@ -391,6 +393,9 @@ public class CardSelectionManager : MonoBehaviour
 
     private bool IsAttackCard(CardData card)
     {
+        if (card == null) return false;
+        if (IsAttackSelectionContext())
+            return CardRules.IsUsableInAttackPhase(card);
         return CardRules.IsAttackCard(card);
     }
 
@@ -412,5 +417,13 @@ public class CardSelectionManager : MonoBehaviour
     private static bool IsDefenseSelectionContext()
     {
         return BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive();
+    }
+
+    private static bool IsAttackSelectionContext()
+    {
+        var bm = BattleManager.I;
+        if (bm == null) return false;
+        if (bm.IsPlayerDefenseInputActive()) return false;
+        return bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player;
     }
 }
