@@ -51,4 +51,9 @@ public enum StatusEffectType
     /// </summary>
     [InspectorName("RANDOM")]
     RandomOneAilment = 100,
+
+    /// <summary>
+    /// 天変地異「神無月」：物理与ダメ2倍・試合終了まで・解除不可。公式IDではない。
+    /// </summary>
+    Kannaduki = 101,
 }

@@ -1,6 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// 天変地異カードごとのメッセージと効果。Special 系とは別系統。
@@ -10,17 +11,18 @@ public abstract class DisasterCardEffectSO : ScriptableObject
     [SerializeField] private DisasterKind kind;
     [TextArea(1, 2)]
     [SerializeField] private string notificationMessage;
-    [SerializeField] private MessagePopupKind messagePopupKind = MessagePopupKind.DisasterEruption;
+    [FormerlySerializedAs("messagePopupKind")]
+    [SerializeField] private ImportantPopupKind importantPopupKind = ImportantPopupKind.DisasterEruption;
 
     public DisasterKind Kind => kind;
     public string NotificationMessage => notificationMessage ?? string.Empty;
-    public MessagePopupKind MessagePopupKind => messagePopupKind;
+    public ImportantPopupKind ImportantPopupKind => importantPopupKind;
 
-    internal void ConfigureForRuntime(DisasterKind runtimeKind, string message, MessagePopupKind popupKind)
+    internal void ConfigureForRuntime(DisasterKind runtimeKind, string message, ImportantPopupKind popupKind)
     {
         kind = runtimeKind;
         notificationMessage = message;
-        messagePopupKind = popupKind;
+        importantPopupKind = popupKind;
     }
 
     public abstract Task ResolveAsync(DisasterResolveContext context, CancellationToken cancellationToken);

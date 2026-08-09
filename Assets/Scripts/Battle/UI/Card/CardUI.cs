@@ -82,6 +82,15 @@ public class CardUI : MonoBehaviour
         if (button) button.interactable = true;
     }
 
+    /// <summary>表向きの手札を裏向きに戻す（カードデータは維持）。</summary>
+    public void HideToBack()
+    {
+        if (!isFaceUp) return;
+        isFaceUp = false;
+        if (button) button.interactable = false;
+        ShowBack();
+    }
+
     private void ShowBack()
     {
         if (cardImage) cardImage.sprite = backSprite;

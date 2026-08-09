@@ -52,6 +52,27 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Attack confirm: clear zone then show one card (same tempo as <see cref="StartCardSequenceAsync"/> steps 1–2).
+    /// </summary>
+    public async Task PlayAttackConfirmPresentationAsync(CardData card, Side side, CancellationToken ct)
+    {
+        if (card == null) return;
+
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃", side);
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+
+        await Task.Delay(300, ct);
+
+        BattleUIManager.I?.ShowCardDetail(card, side);
+        cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+        await Task.Delay(500, ct);
+    }
+
+    /// <summary>
     /// カード演出シーケンスを開始（攻撃・防御共通）
     /// ①表示ゾーンクリア → ②カード順次表示（0.5秒インターバル） → ③カード処理 → ④戦闘解決
     /// </summary>
@@ -1658,9 +1679,11 @@ public class CardSequenceManager : MonoBehaviour
 
         // 「魔力が吹き荒れる」ポップアップ + 詠唱開始 SE
         SoundEffectPlayer.I?.Play("Assets/SE/大魔法詠唱開始.mp3");
-        ImportantPopup castPopup = BattleUIManager.I?.ShowImportantPopup("魔力が吹き荒れる", new Color(0.75f, 0.45f, 0.95f), side);
-        float castLife = castPopup != null ? castPopup.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
-        await DamagePopup.WaitAfterPopupLifetimeAsync(castLife, cancellationToken);
+        float castLife = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.ArchMagicCast, null, side)
+            : 0f;
+        if (castLife <= 0f) castLife = ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+        await ImportantPopupSettings.WaitAfterLifetimeAsync(castLife, cancellationToken);
 
         // 200ms インターバル
         await Task.Delay(200, cancellationToken);
@@ -1747,9 +1770,11 @@ public class CardSequenceManager : MonoBehaviour
 
         // 1. ポップアップ + SE
         SoundEffectPlayer.I?.Play("Assets/SE/power19.wav");
-        ImportantPopup focusPopup = BattleUIManager.I?.ShowImportantPopup("魔力を集中しろ！", new Color(0.55f, 0.7f, 0.95f), ownerSide);
-        float focusLife = focusPopup != null ? focusPopup.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
-        await DamagePopup.WaitAfterPopupLifetimeAsync(focusLife, cancellationToken);
+        float focusLife = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.ArchMagicFocus, null, ownerSide)
+            : 0f;
+        if (focusLife <= 0f) focusLife = ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+        await ImportantPopupSettings.WaitAfterLifetimeAsync(focusLife, cancellationToken);
 
         // ポップアップ待ち中にキャンセルされていたらここで終了
         if (owner.archMagicCancelPending || !owner.IsCastingArchMagic)
@@ -1791,9 +1816,14 @@ public class CardSequenceManager : MonoBehaviour
             await Task.Delay(350, cancellationToken);
             string releaseName = ArchMagicRules.GetReleaseDisplayName(card);
             SoundEffectPlayer.I?.Play("Assets/SE/教会の鐘1.mp3");
-            ImportantPopup rel = BattleUIManager.I?.ShowImportantPopup($"【{releaseName}】解放", new Color(0.95f, 0.85f, 0.3f), ownerSide);
-            float rlife = rel != null ? rel.SequenceLifetimeSeconds : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
-            await DamagePopup.WaitAfterPopupLifetimeAsync(rlife, cancellationToken);
+            float rlife = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowStyledImportantPopup(
+                    ImportantPopupKind.ArchMagicRelease,
+                    $"\u3010{releaseName}\u3011\u89e3\u653e",
+                    ownerSide)
+                : 0f;
+            if (rlife <= 0f) rlife = ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+            await ImportantPopupSettings.WaitAfterLifetimeAsync(rlife, cancellationToken);
 
             await RunArchMagicActivationAsync(owner, ownerSide, card, cancellationToken);
         }
@@ -1949,6 +1979,62 @@ public class CardSequenceManager : MonoBehaviour
         else
         {
             await battleManager.PresentEnemyManifestationAttackToPlayerDefenseAsync(attackCards, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Bahamut Mega Flare: ImportantPopup → card sheet → attack resolve (100% hit, no smoke).
+    /// </summary>
+    public async Task RunMegaFlareSequenceAsync(
+        PlayerStatus summoner,
+        PlayerStatus opponent,
+        CancellationToken cancellationToken)
+    {
+        if (battleManager == null || summoner == null || opponent == null) return;
+
+        var template = BahamutRules.GetMegaFlareTemplate();
+        if (template == null)
+        {
+            Debug.LogWarning("[CardSequenceManager] MegaFlare template not found");
+            return;
+        }
+
+        Side side = ReferenceEquals(summoner, battleManager.GetPlayerStatus()) ? Side.Player : Side.Enemy;
+
+        float introLife = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.MegaFlare, null, side)
+            : 0f;
+        await ImportantPopupSettings.WaitAfterLifetimeAsync(introLife, cancellationToken);
+
+        var card = battleManager.cardDealer != null
+            ? battleManager.cardDealer.InstantiateCardFromTemplate(template)
+            : null;
+        if (card == null) return;
+
+        // Hand-not-in-deck card: ShowCardDetail → AddCardSelection fails while summon flow is active.
+        BattleUIManager.I?.ShowCardSheetVisualOnly(card, side);
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+        cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+        battleManager.SetCurrentAttackCard(card);
+
+        await Task.Delay(1000, cancellationToken);
+
+        var attackCards = new List<CardData> { card };
+
+        if (side == Side.Player)
+        {
+            bool finished = await ResolvePlayerAttackCombatAsync(
+                attackCards, summoner, opponent, battleManager.cpuHand, cancellationToken);
+            battleManager.ClearPlayerSelfAttackTargetMode();
+            if (!finished || battleManager.IsGameEndTriggered) return;
+            await RunAfterCombatSharedCleanupAsync(cancellationToken);
+        }
+        else
+        {
+            await battleManager.PresentEnemyManifestationAttackToPlayerDefenseAsync(
+                attackCards, cancellationToken);
         }
     }
 

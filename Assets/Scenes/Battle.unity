@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -778,8 +778,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e4727aee8e782741a09ca0b0517c940, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cardSheetPrefab: {fileID: 7123594745494731845, guid: 3dda2a7d0d53dc243a91edda11344065, type: 3}
-  displayRoot: {fileID: 133051671}
 --- !u!1 &145475514
 GameObject:
   m_ObjectHideFlags: 0
@@ -6967,52 +6965,6 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
---- !u!1 &522975681
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 522975683}
-  - component: {fileID: 522975682}
-  m_Layer: 0
-  m_Name: CardDisplayController
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &522975682
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 522975681}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0e4727aee8e782741a09ca0b0517c940, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  cardSheetPrefab: {fileID: 7123594745494731845, guid: 3dda2a7d0d53dc243a91edda11344065, type: 3}
-  displayRoot: {fileID: 133051671}
---- !u!4 &522975683
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 522975681}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -53.77182, y: 54.475708, z: -12.25881}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1200086217}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &540115810
 GameObject:
   m_ObjectHideFlags: 0
@@ -7101,8 +7053,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e4727aee8e782741a09ca0b0517c940, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cardSheetPrefab: {fileID: 7123594745494731845, guid: 3dda2a7d0d53dc243a91edda11344065, type: 3}
-  displayRoot: {fileID: 540115811}
 --- !u!1 &550855548
 GameObject:
   m_ObjectHideFlags: 0
@@ -9163,6 +9113,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1039462367}
   - component: {fileID: 1039462366}
+  - component: {fileID: 1039462368}
   m_Layer: 0
   m_Name: BGM
   m_TagString: Untagged
@@ -9180,9 +9131,9 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: 5b61be781f5befe4cad34dac86effc59, type: 3}
-  m_PlayOnAwake: 1
-  m_Volume: 0.27
+  m_audioClip: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 0.75
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -9275,12 +9226,31 @@ Transform:
   m_GameObject: {fileID: 1039462365}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 987.18915, y: 896.6581, z: -7.2137437}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1039462368
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1039462365}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38ec5a6c9d219674f8a2170fb6b71d0a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playlist: {fileID: 11400000, guid: c3d4e5f6a7b8490192a3b4c5d6e7f809, type: 2}
+  disadvantageClip: {fileID: 8300000, guid: c647f07220d0e5f4191f2edfb847edac, type: 3}
+  fadeOutSeconds: 0.45
+  fadeInSeconds: 0.45
+  battleBackgroundImage: {fileID: 1091485341}
+  disadvantageBackground: {fileID: 0}
+  disadvantageBackgroundAddress: Assets/Images/02_\u80CC\u666F/\u52A3\u52E2.jpg
 --- !u!224 &1044607040 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3849100476740963431, guid: 59ef09457872da84fa3809dade000e32, type: 3}
@@ -9584,8 +9554,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleManager: {fileID: 1851136062}
   overridePlayerInitialSummon: 1
-  debugPlayerInitialSummon: {fileID: 11400000, guid: e0bd98fea15dc654eacaf9ade7690c01, type: 2}
-  overrideEnemyInitialSummon: 0
+  debugPlayerInitialSummon: {fileID: 11400000, guid: 3a5d1102ab4baec478e38391a31798b7, type: 2}
+  overrideEnemyInitialSummon: 1
   debugEnemyInitialSummon: {fileID: 11400000, guid: 80539b303220c084ea24a968be87ab81, type: 2}
   openingTurnOwnerMode: 1
   showGameStateDebugBox: 0
@@ -10113,7 +10083,6 @@ Transform:
   - {fileID: 552740184}
   - {fileID: 1451886922}
   - {fileID: 1467967528}
-  - {fileID: 522975683}
   - {fileID: 1707344935}
   - {fileID: 1096474154}
   - {fileID: 1424129653}
@@ -11849,6 +11818,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e4eeca44b5bc42489f4208047225a89, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  battleBgmController: {fileID: 1039462368}
+  battleDebugTools: {fileID: 1096474153}
   statusUI: {fileID: 3847651}
   cutInController: {fileID: 1107405640}
   handPanel: {fileID: 104848588}
@@ -12997,11 +12968,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   damagePopupPrefab: {fileID: 8132803077523845069, guid: 6d20cbc8bdb5a0d4ba65bed74305dcd7, type: 3}
   messagePopupPrefab: {fileID: 0}
-  messagePopupSettings: {fileID: 0}
-  damagePopupSettings: {fileID: 0}
-  statusEffectPopupSettings: {fileID: 0}
+  messagePopupSettings: {fileID: 11400000, guid: b8d2e4f6a1c34567890abcdef0123456, type: 2}
+  damagePopupSettings: {fileID: 11400000, guid: d4e5f6a7b8c94a0123456789abcdef01, type: 2}
+  statusEffectPopupSettings: {fileID: 11400000, guid: f6a7b8c9d0e14c2345678901abcdef23, type: 2}
   barrierDamagePopupPrefab: {fileID: 0}
   importantPopupPrefab: {fileID: 8132803077523845069, guid: a7bbcd678d95408418208a6356b7d8d9, type: 3}
+  importantPopupSettings: {fileID: 0}
   ojyouPopupPrefab: {fileID: 8132803077523845069, guid: ebc39f705990c4146abb0e211987d0cf, type: 3}
 --- !u!114 &2039896235
 MonoBehaviour:
@@ -13397,7 +13369,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
-  m_PlayOnAwake: 1
+  m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
   Loop: 0

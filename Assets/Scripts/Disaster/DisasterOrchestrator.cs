@@ -37,7 +37,13 @@ public static class DisasterOrchestrator
 
         Side triggerSide = ReferenceEquals(triggerOwner, bm.GetPlayerStatus()) ? Side.Player : Side.Enemy;
         var effect = DisasterCatalog.GetEffect(kind);
-        if (effect == null) return;
+        if (effect == null)
+        {
+            Debug.LogWarning($"[DisasterOrchestrator] No effect for {kind}; aborting.");
+            return;
+        }
+
+        Debug.Log($"[DisasterOrchestrator] RunAsync start: {kind}");
 
         CardData displayCard = DisasterCardFactory.CreateDisplayCard(kind, bm.cardDealer);
         CardData combatTemplate = DisasterCardFactory.CreateCombatTemplate(kind, bm.cardDealer, displayCard);
@@ -47,14 +53,15 @@ public static class DisasterOrchestrator
 
         try
         {
-            ImportantPopup introPopup = BattleUIManager.I?.ShowImportantPopup(
-                DisasterCatalog.ImportantPopupMessage,
-                DisasterCatalog.ImportantPopupColor,
-                triggerSide);
-            float introLife = introPopup != null
-                ? introPopup.SequenceLifetimeSeconds
-                : ImportantPopup.DefaultSequenceLifetimeIfUnknown;
-            await DamagePopup.WaitAfterPopupLifetimeAsync(introLife, cancellationToken);
+            float introLife = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowStyledImportantPopup(
+                    ImportantPopupKind.DisasterIntro,
+                    DisasterCatalog.ImportantPopupMessage,
+                    triggerSide)
+                : 0f;
+            if (introLife <= 0f)
+                introLife = ImportantPopup.DefaultSequenceLifetimeIfUnknown;
+            await ImportantPopupSettings.WaitAfterLifetimeAsync(introLife, cancellationToken);
 
             await Task.Delay(1000, cancellationToken);
             BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
@@ -67,12 +74,12 @@ public static class DisasterOrchestrator
             await Task.Delay(500, cancellationToken);
 
             float msgLife = BattleUIManager.I != null
-                ? BattleUIManager.I.ShowDisasterMessagePopup(
-                    triggerOwner,
-                    effect.MessagePopupKind,
-                    effect.NotificationMessage)
+                ? BattleUIManager.I.ShowDisasterImportantPopup(
+                    effect.ImportantPopupKind,
+                    effect.NotificationMessage,
+                    triggerSide)
                 : 0f;
-            await MessagePopup.WaitAfterPopupLifetimeAsync(msgLife, cancellationToken);
+            await ImportantPopupSettings.WaitAfterLifetimeAsync(msgLife, cancellationToken);
 
             var context = new DisasterResolveContext
             {

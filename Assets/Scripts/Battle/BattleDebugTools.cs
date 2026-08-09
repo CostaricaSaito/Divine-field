@@ -1,5 +1,6 @@
 ﻿// BattleDebugTools.cs
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 
@@ -66,7 +67,7 @@ public class BattleDebugTools : MonoBehaviour
     {
         placement = BattleDebugPanelPlacement.TopRight,
         width = 480f,
-        height = 220f,
+        height = 300f,
         positionX = 8f,
         positionY = 8f,
         fontSize = 22,
@@ -139,7 +140,16 @@ public class BattleDebugTools : MonoBehaviour
     private GUIStyle _debugPanelButtonStyle;
     private GUIStyle _debugPanelRowLabelStyle;
     private GUIStyle _debugPanelTextFieldStyle;
+    private GUIStyle _debugPanelMinimizeButtonStyle;
     private int _debugPanelStyleFontCached = -1;
+
+    private struct DebugPanelWindowState
+    {
+        public bool Minimized;
+        public float ExpandedHeight;
+    }
+
+    private readonly Dictionary<int, DebugPanelWindowState> _debugPanelWindowStates = new();
 
     private const int WindowIdGameState = 21001;
     private const int WindowIdAilment = 21002;
@@ -194,6 +204,26 @@ public class BattleDebugTools : MonoBehaviour
         RefreshStatusUi();
 
         Debug.Log("[BattleDebugTools] デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定しました（合計10・劣勢境界）");
+    }
+
+    [ContextMenu("デバッグ：ターンカウントを49に設定")]
+    public void DebugSetTurnCountTo49()
+    {
+        DebugSetBattleTurnDisplay(49);
+    }
+
+    /// <summary>UI の「ターンN」表示をデバッグで上書きする。</summary>
+    public void DebugSetBattleTurnDisplay(int targetDisplay)
+    {
+        if (!EnsurePlaying()) return;
+
+        var counters = battleManager.SummonTurnCounters;
+        counters.DebugSetCurrentBattleTurnDisplay(targetDisplay);
+        BattleUIManager.I?.RefreshTurnCountDisplay(counters, battleManager.CurrentTurnOwner);
+        battleManager.RefreshSummonSkillButtonInteractables();
+
+        Debug.Log(
+            $"[BattleDebugTools] ターンカウントを {targetDisplay} に設定しました（次ターン終了で {targetDisplay + 1}）");
     }
 
     /// <summary>衰弱のアイコン・効果テスト用。</summary>
@@ -258,6 +288,7 @@ public class BattleDebugTools : MonoBehaviour
         _showCardCheatPanelCacheInitialized = false;
         _showAilmentDebugPanelCacheInitialized = false;
         _showDisasterDebugPanelCacheInitialized = false;
+        _debugPanelWindowStates.Clear();
     }
 
 #if UNITY_EDITOR
@@ -377,14 +408,68 @@ public class BattleDebugTools : MonoBehaviour
         string title,
         Action<int> drawer)
     {
-        EnsureDebugPanelGuiStyles(Mathf.Clamp(layout.fontSize, 12, 48));
+        int fs = Mathf.Clamp(layout.fontSize, 12, 48);
+        EnsureDebugPanelGuiStyles(fs);
         float w = Mathf.Max(50f, layout.width);
-        float h = Mathf.Max(50f, layout.height);
+        float layoutH = Mathf.Max(50f, layout.height);
+        float titleBarH = GetDebugPanelNativeTitleBarHeight(fs);
+
+        if (!_debugPanelWindowStates.TryGetValue(windowId, out var state))
+            state = new DebugPanelWindowState { ExpandedHeight = layoutH };
+
+        if (!state.Minimized && windowRect.height > titleBarH + 8f)
+            state.ExpandedHeight = windowRect.height;
+
+        float btnSize = Mathf.Clamp(titleBarH - 4f, 18f, 30f);
+        float minimizedTotalH = titleBarH + btnSize + 6f;
+        float targetH = state.Minimized
+            ? minimizedTotalH
+            : Mathf.Max(titleBarH + 8f, state.ExpandedHeight);
         windowRect.width = w;
-        windowRect.height = h;
-        windowRect = GUILayout.Window(windowId, windowRect, id => drawer(id), title, _debugPanelWindowStyle);
-        windowRect.width = w;
-        windowRect.height = h;
+        windowRect.height = targetH;
+        _debugPanelWindowStates[windowId] = state;
+
+        windowRect = GUI.Window(windowId, windowRect, id =>
+        {
+            DrawDebugPanelMinimizeButton(w, btnSize, windowId);
+
+            bool isMinimized = _debugPanelWindowStates.TryGetValue(windowId, out var liveState)
+                && liveState.Minimized;
+            if (!isMinimized)
+            {
+                GUILayout.Space(btnSize + 4f);
+                drawer(id);
+            }
+
+            GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(0f, w - btnSize - 10f), isMinimized ? btnSize + 4f : 24f));
+        }, title, _debugPanelWindowStyle);
+
+        if (_debugPanelWindowStates.TryGetValue(windowId, out state))
+        {
+            windowRect.width = w;
+            windowRect.height = state.Minimized ? minimizedTotalH : state.ExpandedHeight;
+            _debugPanelWindowStates[windowId] = state;
+        }
+    }
+
+    private float GetDebugPanelNativeTitleBarHeight(int fontSize)
+    {
+        EnsureDebugPanelGuiStyles(Mathf.Clamp(fontSize, 12, 48));
+        return Mathf.Max(24f, _debugPanelWindowStyle.lineHeight + _debugPanelWindowStyle.padding.vertical + 4f);
+    }
+
+    private void DrawDebugPanelMinimizeButton(float windowWidth, float btnSize, int windowId)
+    {
+        if (!_debugPanelWindowStates.TryGetValue(windowId, out var state))
+            state = new DebugPanelWindowState();
+
+        Rect btnRect = new Rect(windowWidth - btnSize - 6f, 2f, btnSize, btnSize);
+        string label = state.Minimized ? "\u25a1" : "\u2212";
+        if (GUI.Button(btnRect, label, _debugPanelMinimizeButtonStyle))
+        {
+            state.Minimized = !state.Minimized;
+            _debugPanelWindowStates[windowId] = state;
+        }
     }
 
     private static Rect ComputeInitialRect(BattleDebugPanelLayout layout)
@@ -409,11 +494,18 @@ public class BattleDebugTools : MonoBehaviour
         float dragTitleH = DebugPanelDragTitleHeight(fs + 6);
 
         GUILayout.Label("GameState", _debugPanelHeaderStyle);
+        var turnCounters = battleManager.SummonTurnCounters;
+        int turnDisplay = turnCounters != null ? turnCounters.CurrentBattleTurnDisplay : 0;
+        GUILayout.Label($"TurnCount: ターン{turnDisplay}", _debugPanelLineStyle);
         GUILayout.Label($"Turn:  {battleManager.GetBattleTurnDebugLabel()}", _debugPanelLineStyle);
         GUILayout.Label($"Phase: {battleManager.CurrentState}", _debugPanelLineStyle);
         BattleStep step = battleManager.CurrentBattleStep;
         GUILayout.Label($"Step:  {step}", _debugPanelLineStyle);
         GUILayout.Label($"      {BattleStepPresentation.GetDebugLabel(step)}", _debugPanelLineStyle);
+
+        GUILayout.Space(4f);
+        if (GUILayout.Button("ターンカウントを49に設定", _debugPanelButtonStyle))
+            DebugSetTurnCountTo49();
 
         GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
     }
@@ -543,19 +635,21 @@ public class BattleDebugTools : MonoBehaviour
         float btnW = Mathf.Max(80f, fs * 3.2f);
         float dragTitleH = DebugPanelDragTitleHeight(fs + 6);
 
-        GUILayout.Label("手札チート（プレイヤー）", _debugPanelHeaderStyle);
+        GUILayout.Label("手札チート", _debugPanelHeaderStyle);
         if (battleManager.IsOnlineMatch)
         {
             GUILayout.Label("オンライン：両端末へ同期注入（Desync 防止）", _debugPanelLineStyle);
             string role = OnlineMatchContext.IsHost ? "ホスト" : "クライアント";
             GUILayout.Label($"あなたの役割: {role}", _debugPanelLineStyle);
+            GUILayout.Label($"自分 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}", _debugPanelLineStyle);
         }
         else
         {
             GUILayout.Label("CPU 対戦：ローカル手札に直接追加", _debugPanelLineStyle);
+            GUILayout.Label(
+                $"プレイヤー {battleManager.playerHand?.Count ?? 0} / CPU {battleManager.cpuHand?.Count ?? 0} / 上限 {BattleManager.MaxHandCards}",
+                _debugPanelLineStyle);
         }
-
-        GUILayout.Label($"枚数 {battleManager.playerHand?.Count ?? 0} / {BattleManager.MaxHandCards}", _debugPanelLineStyle);
 
         _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", _debugPanelTextFieldStyle, GUILayout.ExpandWidth(true));
         GUILayout.Label("フィルタ（カード名・asset名の部分一致）", _debugPanelLineStyle);
@@ -609,9 +703,7 @@ public class BattleDebugTools : MonoBehaviour
                     continue;
             }
 
-            float labelW = contentW - btnW - 6f;
-            if (battleManager.IsOnlineMatch)
-                labelW = contentW - (btnW * 2f) - 10f;
+            float labelW = contentW - (btnW * 2f) - 10f;
 
             GUI.Label(new Rect(0f, y, labelW, rowH), NameForCheatDisplay(c), _debugPanelRowLabelStyle);
             if (battleManager.IsOnlineMatch)
@@ -621,9 +713,12 @@ public class BattleDebugTools : MonoBehaviour
                 if (GUI.Button(new Rect(labelW + btnW + 8f, y, btnW, rowH), "相手", _debugPanelButtonStyle))
                     TryAddCheatCardToOpponentHandOnline(c);
             }
-            else if (GUI.Button(new Rect(labelW + 4f, y, btnW, rowH), "追加", _debugPanelButtonStyle))
+            else
             {
-                TryAddCheatCardToPlayerHand(c);
+                if (GUI.Button(new Rect(labelW + 4f, y, btnW, rowH), "自分", _debugPanelButtonStyle))
+                    TryAddCheatCardToPlayerHand(c);
+                if (GUI.Button(new Rect(labelW + btnW + 8f, y, btnW, rowH), "CPU", _debugPanelButtonStyle))
+                    TryAddCheatCardToCpuHand(c);
             }
 
             y += rowH;
@@ -641,7 +736,7 @@ public class BattleDebugTools : MonoBehaviour
     }
 
     private float GetCardCheatScrollViewHeight(bool online, int fontSize)
-        => GetDebugPanelScrollViewHeight(cardCheatPanelLayout, fontSize, online ? 230f : 200f);
+        => GetDebugPanelScrollViewHeight(cardCheatPanelLayout, fontSize, online ? 230f : 220f);
 
     private static void HandleDebugPanelScrollWheel(ref Vector2 scrollPos, Rect guiRect, float contentHeight, float visibleHeight)
     {
@@ -706,6 +801,15 @@ public class BattleDebugTools : MonoBehaviour
             fontSize = fontSize + 6,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
+        };
+
+        _debugPanelMinimizeButtonStyle = new GUIStyle(GUI.skin.button)
+        {
+            font = _debugPanelButtonStyle.font,
+            fontSize = Mathf.Max(10, fontSize - 2),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            padding = new RectOffset(0, 0, 0, 0),
         };
 
         _debugPanelStyleFontCached = fontSize;
@@ -804,9 +908,16 @@ public class BattleDebugTools : MonoBehaviour
         return;
 #endif
         if (player != null && overridePlayerInitialSummon && debugPlayerInitialSummon != null)
-            player.summonData = debugPlayerInitialSummon;
+        {
+            player.SetSummonData(debugPlayerInitialSummon);
+            Debug.Log($"[BattleDebugTools] Player initial summon override: {debugPlayerInitialSummon.summonName}");
+        }
+
         if (enemy != null && overrideEnemyInitialSummon && debugEnemyInitialSummon != null)
-            enemy.summonData = debugEnemyInitialSummon;
+        {
+            enemy.SetSummonData(debugEnemyInitialSummon);
+            Debug.Log($"[BattleDebugTools] Enemy initial summon override: {debugEnemyInitialSummon.summonName}");
+        }
     }
 
     /// <summary>
@@ -1052,6 +1163,50 @@ public class BattleDebugTools : MonoBehaviour
         battleManager.RefreshPlayerDefensePhaseInteractivity();
 
         Debug.Log($"[BattleDebugTools] 手札に追加: {NameForCheatDisplay(instance)}");
+    }
+
+    private void TryAddCheatCardToCpuHand(CardData template)
+    {
+        if (!EnsurePlaying()) return;
+        if (template == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] テンプレートが null です");
+            return;
+        }
+
+        if (battleManager.IsOnlineMatch)
+        {
+            Debug.LogWarning("[BattleDebugTools] CPU 手札チートはオフライン対戦専用です");
+            return;
+        }
+
+        if (battleManager.cpuHand == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] cpuHand が null です");
+            return;
+        }
+
+        if (battleManager.cpuHand.Count >= BattleManager.MaxHandCards)
+        {
+            Debug.LogWarning($"[BattleDebugTools] CPU 手札上限（{BattleManager.MaxHandCards}）です");
+            return;
+        }
+
+        if (battleManager.cardDealer == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] CardDealer がありません");
+            return;
+        }
+
+        CardData instance = battleManager.cardDealer.InstantiateCardFromTemplate(template);
+        if (instance == null)
+        {
+            Debug.LogWarning("[BattleDebugTools] カードの Instantiate に失敗しました");
+            return;
+        }
+
+        battleManager.cpuHand.Add(instance);
+        Debug.Log($"[BattleDebugTools] CPU 手札に追加: {NameForCheatDisplay(instance)}");
     }
 
     private void TryAddCheatCardToOpponentHandOnline(CardData template)

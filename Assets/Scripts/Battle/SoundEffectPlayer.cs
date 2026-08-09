@@ -32,8 +32,6 @@ public class SoundEffectPlayer : MonoBehaviour
     private Dictionary<string, AudioClip> clipCache = new();
     private int _playGeneration;
 
-    private static bool bootstrapInitialized;
-
     private void Awake()
     {
         if (I != null && I != this)
@@ -56,24 +54,6 @@ public class SoundEffectPlayer : MonoBehaviour
             loopSeSource.loop = true;
             loopSeSource.spatialBlend = 0f;
         }
-
-        bootstrapInitialized = true;
-    }
-
-    /// <summary>
-    /// どのシーンからでも <see cref="I"/> を用意する（Resources/Prefab/SEPlayer）。
-    /// </summary>
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    private static void AutoCreate()
-    {
-        if (bootstrapInitialized)
-            return;
-
-        var prefab = Resources.Load<GameObject>("Prefab/SEPlayer");
-        if (prefab != null)
-            Instantiate(prefab);
-        else
-            Debug.LogWarning("[SoundEffectPlayer] Resources/Prefab/SEPlayer が見つかりません。");
     }
 
     /// <summary>

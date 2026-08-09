@@ -192,7 +192,7 @@ public class UseButtonPresenter : MonoBehaviour
         var bm = BattleManager.I;
         if (bm == null || !bm.IsPlayerDefenseInputActive()) return;
 
-        if (!bm.IsReactiveAdHocDefenseWaitActive()
+        if (!bm.IsAdHocDefenseWaitActive()
             && (bm.IsUseButtonLocked || bm.IsPlayerDefenseCombatResolving))
         {
             SetUseButtonInteractable(false);
@@ -267,7 +267,11 @@ public class UseButtonPresenter : MonoBehaviour
         if (bm.CurrentState != GameState.AttackPhase || bm.CurrentTurnOwner != PlayerType.Player)
             return;
         if (bm.IsUseButtonLocked)
+        {
+            SetUseButtonLabel("使用");
+            SetUseButtonInteractable(false);
             return;
+        }
 
         var ps = bm.GetPlayerStatus();
         if (ps == null) return;

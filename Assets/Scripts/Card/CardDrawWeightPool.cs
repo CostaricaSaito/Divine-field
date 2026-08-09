@@ -38,6 +38,30 @@ public static class CardDrawWeightPool
         return pool;
     }
 
+    /// <summary>
+    /// SuperRare 以上のみ。Ultimate / Disaster 除外。現実改変の手札差し替え用。
+    /// </summary>
+    public static List<CardData> BuildSuperRarePlusExpandedTemplatePool(
+        CardData[] allCards,
+        CardDrawTableSO table)
+    {
+        var pool = new List<CardData>();
+        if (allCards == null || allCards.Length == 0) return pool;
+
+        foreach (var template in allCards)
+        {
+            if (template == null || template.cardType == CardType.Ultimate
+                || template.cardType == CardType.Disaster) continue;
+            if (template.rarity < CardRarity.SuperRare) continue;
+
+            int weight = ResolveDrawWeight(template, table);
+            for (int i = 0; i < weight; i++)
+                pool.Add(template);
+        }
+
+        return pool;
+    }
+
     public static CardData PickTemplate(List<CardData> expandedPool, PlayerType forSide)
     {
         if (expandedPool == null || expandedPool.Count == 0)

@@ -377,6 +377,7 @@ public class CardStatsDisplay : MonoBehaviour
         CancellationToken cancellationToken)
     {
         _state.UnlockMagicalExplosionPreRamp();
+        _state.UnlockMillionDollarBazookaPreRamp();
         string lockLabel = _power.FormatAttackPowerDisplayLabel(attackCards, atk, null, true);
         var rampText = GetSequenceOwnerAtkDefText();
         var rampElement = GetSequenceOwnerAtkDefElementImage();
@@ -412,8 +413,12 @@ public class CardStatsDisplay : MonoBehaviour
     public int ComputeMillionDollarBazookaRampTo(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings) =>
         _power.ComputeMillionDollarBazookaRampTo(cards, attacker, defenderForBlessings);
 
-    public void LockMillionDollarBazookaPlayerAttackDisplay(List<CardData> attackCards, PlayerStatus atk) =>
-        _state.LockMillionDollarBazookaPlayerAtkDisplay(_power.FormatAttackPowerDisplayLabel(attackCards, atk, null, true));
+    public void LockMillionDollarBazookaPlayerAttackDisplay(List<CardData> attackCards, PlayerStatus atk)
+    {
+        _state.UnlockMillionDollarBazookaPreRamp();
+        _state.LockMillionDollarBazookaPlayerAtkDisplay(
+            _power.FormatAttackPowerDisplayLabel(attackCards, atk, null, true));
+    }
 
     public int ComputeTributeBloodRampFrom(List<CardData> cards, PlayerStatus attacker, PlayerStatus defenderForBlessings) =>
         _power.ComputeTributeBloodRampFrom(cards, attacker, defenderForBlessings);
@@ -546,6 +551,7 @@ public class CardStatsDisplay : MonoBehaviour
         _state.ClearHammadnessPlayerAtkDisplayLockOnly();
         _state.ClearTributeBloodPlayerAtkDisplayLockOnly();
         _state.ClearMillionDollarBazookaPlayerAtkDisplayForGodRageRamp();
+        _state.UnlockMillionDollarBazookaPreRamp();
         _state.ClearMagicalSwordRampAttackDisplayLock();
         _state.ClearAttackModifierRevealSuppressions();
 

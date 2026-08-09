@@ -97,6 +97,19 @@ public static class ProgressiveStatusApplicator
         status.activeEffects.Add(new DiseaseLineEffect(stage));
     }
 
+    /// <summary>
+    /// 天変地異「感染症」専用：病系段階を問わず指定段階へ上書き（通常の進行・楽園病強制絶頂ルールは適用しない）。
+    /// </summary>
+    public static bool ForceSetDiseaseStage(PlayerStatus target, StatusEffectType stage)
+    {
+        if (target == null || !DiseaseLineEffect.IsDiseaseFamily(stage))
+            return false;
+
+        SetDiseaseStage(target, stage);
+        Debug.Log($"[ProgressiveStatusApplicator] {target.DisplayName} disease forced to {stage} (disaster)");
+        return true;
+    }
+
     /// <summary>病系4段階の「強さ」順。列挙値 1〜4 がそのまま順位になる。</summary>
     private static int DiseaseStageRank(StatusEffectType t)
     {

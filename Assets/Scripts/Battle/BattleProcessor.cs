@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Threading;
 using System.Threading.Tasks;
@@ -141,7 +141,11 @@ public class BattleProcessor : MonoBehaviour
     /// <param name="user">使用者</param>
     /// <param name="target">対象</param>
     /// <returns>処理完了まで待機</returns>
-    public async Task ResolveImmediateEffectAsync(CardData card, PlayerStatus user, PlayerStatus target)
+    public async Task ResolveImmediateEffectAsync(
+        CardData card,
+        PlayerStatus user,
+        PlayerStatus target,
+        CancellationToken cancellationToken = default)
     {
         if (card == null || user == null)
         {
@@ -154,10 +158,10 @@ public class BattleProcessor : MonoBehaviour
         if (card.cardType == CardType.Special && card.specialCardEffect != null)
         {
             await card.specialCardEffect.ResolveOnImmediatePlayAsync(
-                card, user, target, this, CancellationToken.None);
+                card, user, target, this, cancellationToken);
             ProcessSpecialEffects(card, user, target);
             UpdateStatusDisplay();
-            await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, CancellationToken.None);
+            await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, cancellationToken);
             Debug.Log($"[BattleProcessor] 即時効果解決完了: {card.cardName}");
             return;
         }
@@ -167,11 +171,11 @@ public class BattleProcessor : MonoBehaviour
         {
             var recoveryRecipient = target ?? user;
             if (recoveryRecipient != null)
-                await ApplyRecoveryAsync(card, recoveryRecipient, CancellationToken.None);
+                await ApplyRecoveryAsync(card, recoveryRecipient, cancellationToken);
         }
 
         if (card.cureAllStatusEffects && target != null)
-            await ApplyAllStatusAilmentsClearAsync(target, CancellationToken.None);
+            await ApplyAllStatusAilmentsClearAsync(target, cancellationToken);
 
         if (card.canApplyStatusEffect && card.statusEffectToApply != StatusEffectType.None
             && card.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve)
@@ -181,14 +185,14 @@ public class BattleProcessor : MonoBehaviour
                 : target;
             if (recipient != null)
                 await TryApplyStatusOnCardEffectResolveAsync(
-                    card.statusEffectToApply, card.statusEffectChance, recipient, CancellationToken.None, card.freezeDuration);
+                    card.statusEffectToApply, card.statusEffectChance, recipient, cancellationToken, card.freezeDuration);
         }
 
         ProcessSpecialEffects(card, user, target);
 
         UpdateStatusDisplay();
 
-        await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, CancellationToken.None);
+        await Task.Delay(DamagePopup.PostLastPresentationBeforeCombatResolveMs, cancellationToken);
 
         Debug.Log($"[BattleProcessor] 即時効果解決完了: {card.cardName}");
     }
@@ -487,6 +491,55 @@ public class BattleProcessor : MonoBehaviour
     {
         if (card == null || target == null || !card.healsHP || hpAmount <= 0) return;
         await ApplyRecoveryAsync(card, target, ct, hpAmount);
+    }
+
+    /// <summary>
+    /// 天変地異（奇跡の船出・マナの奔流等）：発動者の状態異常を除去し、指定量だけ HP/MP を回復する。
+    /// </summary>
+    public async Task ApplyDisasterTriggerOwnerRecoveryAsync(
+        PlayerStatus target,
+        int hpRecover,
+        int mpRecover,
+        CancellationToken ct = default)
+    {
+        if (target == null) return;
+
+        await ApplyAllStatusAilmentsClearAsync(target, ct);
+
+        if (hpRecover > 0)
+            await ApplyFlatStatRecoveryAsync(target, hpRecover, isHp: true, ct);
+
+        if (mpRecover > 0)
+            await ApplyFlatStatRecoveryAsync(target, mpRecover, isHp: false, ct);
+    }
+
+    /// <summary>
+    /// 天変地異「感染症」：双方に煉獄病を100%付与。既存の病系段階は上書きする。
+    /// </summary>
+    public async Task ApplyDisasterInfectionAsync(
+        PlayerStatus player,
+        PlayerStatus enemy,
+        CancellationToken ct = default)
+    {
+        if (player != null)
+            await ForcePurgatorySicknessWithPopupAsync(player, ct);
+        if (enemy != null)
+            await ForcePurgatorySicknessWithPopupAsync(enemy, ct);
+
+        UpdateStatusDisplay();
+    }
+
+    private static async Task ForcePurgatorySicknessWithPopupAsync(PlayerStatus target, CancellationToken ct)
+    {
+        if (target == null) return;
+        if (!ProgressiveStatusApplicator.ForceSetDiseaseStage(target, StatusEffectType.PurgatorySickness))
+            return;
+
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowStatusAilmentGrantPopup(StatusEffectType.PurgatorySickness, target)
+            : 0f;
+        if (fade > 0f)
+            await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
     }
 
     //========================
@@ -789,6 +842,7 @@ public class BattleProcessor : MonoBehaviour
         if (target == null) return;
 
         var snapshot = target.GetActiveAilmentTypesOrdered();
+        snapshot.RemoveAll(StatusEffectRules.IsIndelible);
         foreach (var t in snapshot)
             target.RemoveStatusEffectsOfType(t);
 
@@ -803,6 +857,40 @@ public class BattleProcessor : MonoBehaviour
         SoundEffectPlayer.I?.Play("Assets/SE/回復魔法3.mp3");
         if (BattleUIManager.I != null)
             await BattleUIManager.I.PlayStatusAilmentBulkClearPresentationAsync(snapshot, target, ct);
+    }
+
+    private async Task ApplyFlatStatRecoveryAsync(
+        PlayerStatus target, int amount, bool isHp, CancellationToken ct)
+    {
+        if (target == null || amount <= 0) return;
+
+        if (isHp)
+        {
+            int old = target.currentHP;
+            target.currentHP = Mathf.Min(target.maxHP, target.currentHP + amount);
+            int actual = target.currentHP - old;
+            if (actual <= 0) return;
+
+            float fade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowHealPopup(actual, "HP", target)
+                : 0f;
+            SoundEffectPlayer.I?.Play(DamagePopupSfx.HealHp);
+            UpdateStatusDisplay(snapHpmgp: true);
+            await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
+            return;
+        }
+
+        int oldMp = target.currentMP;
+        target.currentMP = Mathf.Min(target.maxMP, target.currentMP + amount);
+        int actualMp = target.currentMP - oldMp;
+        if (actualMp <= 0) return;
+
+        float fadeMp = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowHealPopup(actualMp, "MP", target)
+            : 0f;
+        SoundEffectPlayer.I?.Play(DamagePopupSfx.HealMp);
+        UpdateStatusDisplay(snapHpmgp: true);
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeMp, ct);
     }
 
     /// <summary>

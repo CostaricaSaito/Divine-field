@@ -8,34 +8,31 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
 
 /// <summary>
-/// 劣勢時に BGM を <see cref="DisadvantageBgmAddress"/> へ、回復時に通常 BGM へフェード切替する。
-/// 任意で <see cref="battleBackgroundImage"/> のスプライトも同じタイミングでフェード切替する。
-/// シーンの BGM オブジェクトに付与するか、<see cref="BattleManager"/> から自動で付与される。
+/// Battle BGM: random track from <see cref="BattleBgmPlaylistSO"/>, disadvantage fade, arch-magic background.
+/// Attach to the scene BGM object (with AudioSource).
 /// </summary>
 [RequireComponent(typeof(AudioSource))]
 public class BattleBgmController : MonoBehaviour
 {
     public static BattleBgmController Instance { get; private set; }
 
-    [Tooltip("Addressables キー（未設定時は定数 DisadvantageBgmAddress）")]
-    [SerializeField] private string disadvantageBgmAddress = "Assets/Music/Extinguish.mp3";
+    [Header("Playlist (required)")]
+    [Tooltip("未設定時は Resources/BattleBgmPlaylist を読み込む")]
+    [SerializeField] private BattleBgmPlaylistSO playlist;
 
-    [Tooltip("シーン開始時のクリップが無い場合のフォールバック")]
-    [SerializeField] private string normalBgmAddress = "Assets/Music/Crystal brilliance.mp3";
-
+    [Header("Disadvantage")]
+    [SerializeField] private AudioClip disadvantageClip;
     [SerializeField] private float fadeOutSeconds = 0.45f;
     [SerializeField] private float fadeInSeconds = 0.45f;
 
-    [Header("劣勢時の背景（任意）")]
-    [Tooltip("未設定時はシーン内の BackGroundImage を検索")]
+    [Header("Disadvantage background (optional)")]
     [SerializeField] private Image battleBackgroundImage;
-
-    [Tooltip("Addressables の Sprite キー（2D/UI スプライトとしてインポート）")]
+    [SerializeField] private Sprite disadvantageBackground;
+    [Tooltip("disadvantageBackground 未設定時のみ Addressables から読み込む")]
     [SerializeField] private string disadvantageBackgroundAddress = "Assets/Images/02_背景/劣勢.jpg";
 
     private AudioSource _source;
     private AudioClip _baselineNormalClip;
-    private AudioClip _disadvantageClip;
     private float _targetVolume = 0.27f;
     private bool? _lastDisadvantageWant;
     private Coroutine _fadeCoroutine;
@@ -45,8 +42,8 @@ public class BattleBgmController : MonoBehaviour
     private Sprite _disadvantageBackgroundSprite;
     private Color _backgroundBaseColor = Color.white;
 
-    public const string DefaultDisadvantageBgmAddress = "Assets/Music/Extinguish.mp3";
-    public const string DefaultNormalBgmAddress = "Assets/Music/Crystal brilliance.mp3";
+    private bool _battleSessionStarted;
+    private CancellationTokenSource _titlePresentationCts;
 
     private void Awake()
     {
@@ -58,22 +55,13 @@ public class BattleBgmController : MonoBehaviour
         Instance = this;
 
         _source = GetComponent<AudioSource>();
-        if (string.IsNullOrEmpty(disadvantageBgmAddress))
-            disadvantageBgmAddress = DefaultDisadvantageBgmAddress;
-        if (string.IsNullOrEmpty(normalBgmAddress))
-            normalBgmAddress = DefaultNormalBgmAddress;
-
         if (_source != null)
         {
-            _baselineNormalClip = _source.clip;
             _targetVolume = _source.volume;
-        }
-
-        if (battleBackgroundImage == null)
-        {
-            var go = GameObject.Find("BackGroundImage");
-            if (go != null)
-                battleBackgroundImage = go.GetComponent<Image>();
+            _source.playOnAwake = false;
+            _source.spatialBlend = 0f;
+            _source.clip = null;
+            _source.Stop();
         }
 
         if (battleBackgroundImage != null)
@@ -81,12 +69,125 @@ public class BattleBgmController : MonoBehaviour
             _baselineBackgroundSprite = battleBackgroundImage.sprite;
             _backgroundBaseColor = battleBackgroundImage.color;
         }
+
+        if (disadvantageBackground != null)
+            _disadvantageBackgroundSprite = disadvantageBackground;
     }
 
     private void OnDestroy()
     {
+        _titlePresentationCts?.Cancel();
+        _titlePresentationCts?.Dispose();
         if (Instance == this)
             Instance = null;
+    }
+
+    /// <summary>Battle bootstrap: pick random BGM from playlist, start playback, show title prefab.</summary>
+    public void StartBattleSession()
+    {
+        if (_battleSessionStarted) return;
+        _battleSessionStarted = true;
+
+        if (_source == null) return;
+
+        var resolvedPlaylist = ResolvePlaylist();
+        var tracks = resolvedPlaylist?.Tracks;
+        if (tracks == null || tracks.Length == 0)
+        {
+            Debug.LogError("[BattleBgmController] BattleBgmPlaylist has no tracks");
+            return;
+        }
+
+        var clip = PickRandomTrackClip(tracks);
+        if (clip == null)
+        {
+            Debug.LogError("[BattleBgmController] BattleBgmPlaylist has no valid AudioClip entries");
+            return;
+        }
+
+        _baselineNormalClip = clip;
+        _source.clip = clip;
+        _source.loop = true;
+        _source.volume = _targetVolume;
+        _source.Play();
+
+        if (resolvedPlaylist.BgmTitlePrefab != null)
+            _ = ShowBgmTitleAsync(resolvedPlaylist.BgmTitlePrefab, BattleBgmPlaylistSO.FormatTrackTitle(clip));
+    }
+
+    private BattleBgmPlaylistSO ResolvePlaylist()
+    {
+        if (playlist != null) return playlist;
+        return Resources.Load<BattleBgmPlaylistSO>("BattleBgmPlaylist");
+    }
+
+    private static AudioClip PickRandomTrackClip(AudioClip[] tracks)
+    {
+        if (tracks == null || tracks.Length == 0) return null;
+
+        int validCount = 0;
+        for (int i = 0; i < tracks.Length; i++)
+        {
+            if (tracks[i] != null) validCount++;
+        }
+
+        if (validCount == 0) return null;
+        if (validCount == 1)
+        {
+            for (int i = 0; i < tracks.Length; i++)
+            {
+                if (tracks[i] != null) return tracks[i];
+            }
+        }
+
+        int pick = PickRandomTrackIndex(validCount);
+        for (int i = 0; i < tracks.Length; i++)
+        {
+            if (tracks[i] == null) continue;
+            if (pick == 0) return tracks[i];
+            pick--;
+        }
+
+        return null;
+    }
+
+    private static int PickRandomTrackIndex(int count)
+    {
+        if (count <= 1) return 0;
+        return BattleRandom.IsDeterministic
+            ? BattleRandom.Range(0, count)
+            : UnityEngine.Random.Range(0, count);
+    }
+
+    private async Task ShowBgmTitleAsync(GameObject prefab, string trackTitle)
+    {
+        _titlePresentationCts?.Cancel();
+        _titlePresentationCts?.Dispose();
+        _titlePresentationCts = new CancellationTokenSource();
+        var ct = _titlePresentationCts.Token;
+
+        Transform parent = BattleUIManager.I != null
+            ? BattleUIManager.I.GetPopupCanvas()?.transform
+            : null;
+        if (parent == null)
+            parent = transform;
+
+        var instance = Instantiate(prefab, parent, false);
+        await Task.Yield();
+
+        var view = instance.GetComponent<BattleBgmTitleView>();
+        if (view == null)
+            view = instance.AddComponent<BattleBgmTitleView>();
+
+        try
+        {
+            await view.PlayAsync(trackTitle, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            if (instance != null)
+                Destroy(instance);
+        }
     }
 
     /// <summary>プレイヤーのリソースに応じて BGM を同期（<see cref="BattleStatusUI.UpdateStatus"/> から呼ぶ）。</summary>
@@ -140,9 +241,17 @@ public class BattleBgmController : MonoBehaviour
 
         if (toDisadvantage)
         {
-            if (_disadvantageClip == null)
-                yield return LoadClipToField(disadvantageBgmAddress, c => _disadvantageClip = c);
-            _source.clip = _disadvantageClip;
+            if (disadvantageClip == null)
+            {
+                Debug.LogWarning("[BattleBgmController] disadvantageClip is not assigned");
+                _source.volume = v0;
+                if (useBg)
+                    ApplyBackgroundFullAlpha();
+                _fadeCoroutine = null;
+                yield break;
+            }
+
+            _source.clip = disadvantageClip;
 
             if (useBg)
             {
@@ -154,21 +263,19 @@ public class BattleBgmController : MonoBehaviour
         else
         {
             if (_baselineNormalClip == null)
-                yield return LoadClipToField(normalBgmAddress, c => _baselineNormalClip = c);
+            {
+                Debug.LogWarning("[BattleBgmController] baseline playlist clip missing; cannot restore normal BGM");
+                _source.volume = v0;
+                if (useBg)
+                    ApplyBackgroundFullAlpha();
+                _fadeCoroutine = null;
+                yield break;
+            }
+
             _source.clip = _baselineNormalClip;
 
             if (useBg)
                 bg.sprite = _baselineBackgroundSprite;
-        }
-
-        if (_source.clip == null)
-        {
-            Debug.LogWarning("[BattleBgmController] 切替先の AudioClip が取得できませんでした");
-            _source.volume = v0;
-            if (useBg)
-                ApplyBackgroundFullAlpha();
-            _fadeCoroutine = null;
-            yield break;
         }
 
         _source.loop = true;
@@ -208,11 +315,10 @@ public class BattleBgmController : MonoBehaviour
         battleBackgroundImage.color = _backgroundBaseColor;
     }
 
-    // ===== 大魔法（ArchMagic）用 背景差し替え =====
+    // ===== ArchMagic background override =====
     private Sprite _archMagicOverrideBaselineSprite;
     private bool _archMagicOverrideActive;
 
-    /// <summary>大魔法詠唱中の背景差し替え。復帰用に現在のスプライトを保存する。</summary>
     public void SetArchMagicBackgroundOverride(Sprite overrideSprite)
     {
         if (battleBackgroundImage == null || overrideSprite == null) return;
@@ -224,7 +330,6 @@ public class BattleBgmController : MonoBehaviour
         battleBackgroundImage.sprite = overrideSprite;
     }
 
-    /// <summary>大魔法背景を解除して元のスプライトへ復帰する。</summary>
     public void ClearArchMagicBackgroundOverride()
     {
         if (!_archMagicOverrideActive) return;
@@ -237,7 +342,6 @@ public class BattleBgmController : MonoBehaviour
         _archMagicOverrideBaselineSprite = null;
     }
 
-    /// <summary>大魔法背景をアルファでフェードしながら <paramref name="durationMs"/> かけて差し替える。</summary>
     public async Task CrossfadeToArchMagicBackgroundAsync(Sprite overrideSprite, int durationMs, CancellationToken ct)
     {
         if (battleBackgroundImage == null || overrideSprite == null) return;
@@ -278,9 +382,6 @@ public class BattleBgmController : MonoBehaviour
         img.color = baseCol;
     }
 
-    /// <summary>
-    /// 大魔法用背景を保存済みのベーススプライトへ <paramref name="durationMs"/> かけてフェード復帰し、オーバーライドを解除する。
-    /// </summary>
     public async Task CrossfadeFromArchMagicBackgroundAsync(int durationMs, CancellationToken ct)
     {
         if (battleBackgroundImage == null || !_archMagicOverrideActive)
@@ -324,13 +425,11 @@ public class BattleBgmController : MonoBehaviour
 
     public bool IsArchMagicBackgroundOverrideActive => _archMagicOverrideActive;
 
-    /// <summary>ゲーム終了時：現在のバトル BGM の音量を下げゼロにして停止する（リザルト用に呼ぶ）。</summary>
     public void FadeOutBattleBgmAndStop(float durationSeconds)
     {
         _ = FadeOutBattleBgmAndStopAsync(durationSeconds);
     }
 
-    /// <summary>ゲーム終了時 BGM フェードアウト（async/await）。</summary>
     public async Task FadeOutBattleBgmAndStopAsync(float durationSeconds)
     {
         if (_source == null) return;
@@ -373,7 +472,7 @@ public class BattleBgmController : MonoBehaviour
         }
     }
 
-    private IEnumerator LoadSpriteToField(string address, System.Action<Sprite> assign)
+    private IEnumerator LoadSpriteToField(string address, Action<Sprite> assign)
     {
         if (string.IsNullOrEmpty(address))
             yield break;
@@ -383,19 +482,6 @@ public class BattleBgmController : MonoBehaviour
         if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
             assign?.Invoke(handle.Result);
         else
-            Debug.LogWarning($"[BattleBgmController] 背景スプライト読み込み失敗: {address}");
-    }
-
-    private IEnumerator LoadClipToField(string address, System.Action<AudioClip> assign)
-    {
-        if (string.IsNullOrEmpty(address))
-            yield break;
-
-        AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(address);
-        yield return handle;
-        if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
-            assign?.Invoke(handle.Result);
-        else
-            Debug.LogWarning($"[BattleBgmController] BGM 読み込み失敗: {address}");
+            Debug.LogWarning($"[BattleBgmController] Failed to load disadvantage background: {address}");
     }
 }

@@ -1,0 +1,125 @@
+﻿---
+description: BattleManager 等の肥大化防止 — Coordinator/Service 分割・行数上限・責務マップ
+globs: Assets/Scripts/Battle/**/*.cs
+alwaysApply: false
+---
+
+# バトルクラス肥大化防止
+
+`BattleManager` / `CardSequenceManager` など Manager 系が再び「全部入り」になるのを防ぐ。**新規・変更は Coordinator/Service 追加がデフォルト。Manager は配線（ファサード）に留める。**
+
+## 行数ルール（硬い目安）
+
+| 行数 | アクション |
+|------|-----------|
+| **800 行超** | 分割候補としてレビュー |
+| **1,200 行超** | 分割を必須 |
+| 新規メソッド **50 行超** | 別クラス or 既存 Coordinator へ抽出を検討 |
+| `partial` 1 ファイル **400 行超** | Coordinator 化を検討（partial で隠さない） |
+
+## 標準パターン：Coordinator / Service + Host
+
+```
+BattleManager（ファサード・MonoBehaviour）
+  ├── BattlePhaseController       … GameState 遷移
+  ├── PlayerInputController       … プレイヤー入力
+  ├── EnemyTurnRunner / EnemyDefenseResolver
+  ├── AdHocDefenseCoordinator     … 反射連鎖・介入・天変地異 ad-hoc
+  ├── CombatSnapshotStore         … 戦闘中スナップショット
+  ├── OnlineBattleSyncService / GameEndOrchestrator
+  └── …（機能ごとに plain C# クラスを追加）
+```
+
+**新機能の置き方**
+
+1. ロジック本体 → **新規 or 既存 Coordinator/Service**（plain C# 優先）
+2. `BattleManager` には **public API の 1 行委譲** + **`I*Host` 実装** のみ
+3. MonoBehaviour にするのは **Unity ライフサイクルが必要なものだけ**（`BattleManager`、UI 系）
+
+**Host インターフェース**
+
+- Coordinator **1 つにつき Host 1 つ**（`IAdHocDefenseHost` 等）
+- Host は **その Coordinator が借りる最小 API のみ**（`BattleManager` 丸ごと渡し禁止）
+- Host メソッドは **15 個以下** を目安。超えたら Coordinator の責務が大きすぎる
+- Host 明示実装が `BattleManager` を圧迫したら `BattleManager.HostBindings.cs` 等へ **partial 分離**
+- Coordinator から **`BattleManager.I` 直参照は禁止** — 必ず Host 経由
+
+## 責務マップ（どこに書くか）
+
+| やりたいこと | 置き場所 |
+|-------------|---------|
+| `GameState` 遷移・ターン締め | `BattlePhaseController` |
+| Use ボタン・手札選択 | `PlayerInputController` |
+| 敵ターン実行 | `EnemyTurnRunner` |
+| 敵防御選択・解決 | `EnemyDefenseResolver` |
+| 反射・介入・ad-hoc 防御待ち | `AdHocDefenseCoordinator` |
+| コンボ ATK/DEF スナップショット | `CombatSnapshotStore` |
+| カード演出（表示→解決） | `CardSequenceManager`（将来は Runner 分割） |
+| TOTALATKDEF 数値・表示ロック | `CardStatsDisplay` |
+| **1 枚のカード固有効果** | `*Feature` / `*Flow` / カード効果クラス（**Manager に switch 追加しない**） |
+| 状態異常の進行 | `*Effect.cs` + `StatusEffectFactory` |
+| オンライン同期 | `OnlineBattleSyncService` |
+| 勝敗・post-death 連鎖 | `GameEndOrchestrator` |
+| 防御フェーズ UI グレーアウト | `PlayerDefenseInteractivityService` |
+| デバッグ UI | `BattleDebugTools`（本番ロジックを混ぜない） |
+
+**判定**: 「フェーズを知るか？」「UI を直接触るか？」「1 枚のカードだけの話か？」で分ける。
+
+## partial class の使い方
+
+**向いている**: 同一型のファイル分割（例: `BattleManager.CombatSnapshots.cs`、Host バインディング集約）
+
+**向いていない**: 別ドメインのロジックの押し込み、行数超過の隠蔽
+
+## 実装前チェックリスト
+
+- [ ] `BattleManager` / `CardSequenceManager` に **50 行以上** 足す変更か？ → 足すなら Coordinator へ
+- [ ] カード固有ロジックを Manager に書いていないか？
+- [ ] UI 更新をロジッククラスに直書きしていないか？ → Presenter / `BattleUIManager` 経由
+- [ ] 新規 Coroutine を増やしていないか？ → `async Task` 優先（`.cursor/rules/async-await-over-coroutines.mdc`）
+- [ ] デバッグコードを本番クラスに混ぜていないか？
+
+## アンチパターン（禁止）
+
+- Singleton Manager に全部寄せる
+- 継承の深掘り（`BattleManager : X : Y`）
+- 「とりあえず static ヘルパー」乱立（状態参照が Manager に逆流）
+- `#region` だけで整理（行数・責務は減らない）
+- カード追加のたび `BattleManager` / `CardSequenceManager` の giant switch を肥大化
+
+## 例
+
+```csharp
+// BAD — BattleManager に防御 UI ロジック直書き
+public void RefreshPlayerDefensePhaseInteractivity() {
+    // 50+ lines of gray-out rules...
+}
+
+// GOOD — Service へ抽出、Manager は委譲のみ
+public void RefreshPlayerDefensePhaseInteractivity()
+    => _defenseInteractivity.RefreshPlayerDefensePhaseInteractivity();
+```
+
+```csharp
+// BAD — 新カード効果を BattleManager に追加
+if (card.cardName == "NewCard") { ... }
+
+// GOOD — カード/フロー単位のクラス
+public sealed class NewCardFlow { public Task RunAsync(ICardSequenceHost host, ...) { ... } }
+```
+
+## 次の分割候補（参考）
+
+`CardSequenceManager`（~1,800 行）が次のホットスポット。分割例:
+
+- `ArchMagicSequenceRunner` … 大魔法詠唱
+- `AttackSequenceRunner` / `DefenseSequenceRunner` … 攻撃・防御シーケンス
+- `CombatResolveSequenceRunner` … ダメージ解決・後処理
+
+`CardSequenceManager` にも **`ICardSequenceHost` + Runner** パターンを適用する。
+
+## AI への指示
+
+- ユーザーが Manager 系に大きな diff を依頼したら、**先に Coordinator 分割案を提示**してから実装する
+- 行数が 800 を超えそうなら **partial ではなくクラス抽出**を優先
+- 既存 public API（`BattleManager.I.*` 等）は **互換維持**。内部移動のみ

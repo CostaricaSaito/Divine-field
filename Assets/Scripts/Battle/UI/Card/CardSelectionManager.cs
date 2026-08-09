@@ -30,6 +30,9 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I != null && BattleManager.I.IsSummonSkillPopupOpen)
             return false;
 
+        if (BattleManager.I != null && BattleManager.I.IsAnySummonSkillFlowRunning)
+            return false;
+
         // ===== 防御フェーズ：拘束中は防御カードを2枚目まで選べない =====
         if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card))
         {

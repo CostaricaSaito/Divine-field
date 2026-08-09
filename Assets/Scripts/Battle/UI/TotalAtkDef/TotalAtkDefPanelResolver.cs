@@ -54,6 +54,9 @@ public class TotalAtkDefPanelResolver
 
         if (battleManager.IsHandReloadPopupOpen) return true;
 
+        if (ShouldShowDisasterStrikeAttackOnPanel(forPlayerPanel: true))
+            return false;
+
         if (ShouldShowDefenderDefenseTotalDuringReflectionOverlay(battleManager, forEnemyPanel: false))
             return false;
 
@@ -165,6 +168,9 @@ public class TotalAtkDefPanelResolver
             return true;
 
         if (battleManager.IsEconomicActionInProgress()) return true;
+
+        if (ShouldShowDisasterStrikeAttackOnPanel(forPlayerPanel: false))
+            return false;
 
         if (IsAttackerPanelEmptyDuringAttackSequenceReveal(false))
             return true;
@@ -288,6 +294,9 @@ public class TotalAtkDefPanelResolver
         if (TryResolvePlayerHeldOutgoingAttackText(battleManager, out var heldOutgoing))
             return heldOutgoing;
 
+        if (DisasterCombatContext.TryGetAttackerStrikeForPanel(true, out var disasterAtkCards, out var disasterAttacker))
+            return _power.FormatAttackPowerDisplayLabel(disasterAtkCards, disasterAttacker);
+
         if (IsPlayerOutgoingAttackTotalPending(battleManager))
         {
             var outgoingText = ResolvePlayerOutgoingAttackDisplayText();
@@ -396,6 +405,9 @@ public class TotalAtkDefPanelResolver
         if (TotalAtkDefCombatPhaseRules.TryGetPostDeathChainAttackForPanel(false, out var pdEnemyChainCards, out var pdEnemyChainAttacker))
             return _power.FormatAttackPowerDisplayLabel(pdEnemyChainCards, pdEnemyChainAttacker);
 
+        if (DisasterCombatContext.TryGetAttackerStrikeForPanel(false, out var disasterEnemyAtkCards, out var disasterEnemyAttacker))
+            return _power.FormatAttackPowerDisplayLabel(disasterEnemyAtkCards, disasterEnemyAttacker);
+
         if (_state.CurrentSequenceCards.Count > 0 && _state.SequenceOwnerSide == Side.Enemy)
         {
             if (_state.CurrentSequenceType == "攻撃")
@@ -469,6 +481,9 @@ public class TotalAtkDefPanelResolver
                 return ElementHelper.GetCombinedElement(incoming);
         }
 
+        if (DisasterCombatContext.TryGetAttackerStrikeForPanel(true, out var disasterElCards, out _))
+            return ElementHelper.GetCombinedElement(disasterElCards);
+
         if (_state.CurrentSequenceCards.Count > 0 && _state.SequenceOwnerSide == Side.Player)
         {
             var postDeathCtx = PostDeathCombatContext.Active;
@@ -527,6 +542,9 @@ public class TotalAtkDefPanelResolver
             if (incoming != null && incoming.Count > 0)
                 return ElementHelper.GetCombinedElement(incoming);
         }
+
+        if (DisasterCombatContext.TryGetAttackerStrikeForPanel(false, out var disasterEnemyElCards, out _))
+            return ElementHelper.GetCombinedElement(disasterEnemyElCards);
 
         if (_state.CurrentSequenceCards.Count > 0 && _state.SequenceOwnerSide == Side.Enemy)
         {
@@ -739,6 +757,13 @@ public class TotalAtkDefPanelResolver
         var c = _state.CurrentSequenceCards[0];
         if (c == null || c.orbReactionRule is not OrbOfHellfireRuleSO) return false;
         return true;
+    }
+
+    private bool ShouldShowDisasterStrikeAttackOnPanel(bool forPlayerPanel)
+    {
+        if (!DisasterCombatContext.TryGetAttackerStrikeForPanel(forPlayerPanel, out var cards, out var attacker))
+            return false;
+        return _power.GetDisplayedAttackStrength(cards, attacker) > 0;
     }
 
     private bool IsAttackerPanelDuringAttackSequenceReveal(bool forPlayerPanel)

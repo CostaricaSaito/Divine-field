@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
@@ -255,7 +255,7 @@ public sealed class MessagePopup : MonoBehaviour
         }
     }
 
-    private static string StripLineBreaks(string message)
+    public static string StripLineBreaks(string message)
     {
         if (string.IsNullOrEmpty(message)) return string.Empty;
         return message.Replace("\r\n", string.Empty).Replace('\n', ' ').Replace('\r', ' ').Trim();

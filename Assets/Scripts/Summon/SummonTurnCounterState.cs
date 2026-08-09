@@ -9,4 +9,12 @@ public sealed class SummonTurnCounterState
 
     /// <summary>バトル UI 用：先攻の初手＝1。TurnEnd 直後に増える前の値は、まだ当該手番の番号。</summary>
     public int CurrentBattleTurnDisplay => PlayerOwnTurnsEnded + EnemyOwnTurnsEnded + 1;
+
+    /// <summary>デバッグ：<see cref="CurrentBattleTurnDisplay"/> を指定値に合わせる。</summary>
+    public void DebugSetCurrentBattleTurnDisplay(int targetDisplay)
+    {
+        int endedTotal = targetDisplay > 0 ? targetDisplay - 1 : 0;
+        PlayerOwnTurnsEnded = endedTotal / 2;
+        EnemyOwnTurnsEnded = endedTotal - PlayerOwnTurnsEnded;
+    }
 }

@@ -47,6 +47,9 @@ public static class StatusEffectFactory
             case StatusEffectType.Confusion:
                 return new ConfusionEffect();
 
+            case StatusEffectType.Kannaduki:
+                return new KannadukiEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

@@ -48,6 +48,9 @@ public class CardDealer : MonoBehaviour
     /// <summary>重み展開済み抽選プール（Ultimate 除外。テンプレート参照を weight 回重复）。</summary>
     private List<CardData> _weightedDrawPool;
 
+    /// <summary>SuperRare 以上の重み展開済み抽選プール（現実改変用）。</summary>
+    private List<CardData> _superRarePlusDrawPool;
+
     /// <summary>element が闇のテンプレートのみ（ダークプリパレーション抽選用）。</summary>
     private CardData[] _darkCardTemplates;
 
@@ -96,6 +99,7 @@ public class CardDealer : MonoBehaviour
 
         BuildDarkCardTemplatePool();
         BuildWeightedDrawPool();
+        BuildSuperRarePlusDrawPool();
     }
 
     private void EnsureDrawTable()
@@ -114,6 +118,16 @@ public class CardDealer : MonoBehaviour
             Debug.LogWarning("[CardDealer] Weighted draw pool is empty. Check CardDrawTable and card weights.");
         else
             Debug.Log($"[CardDealer] Weighted draw pool entries: {_weightedDrawPool.Count}");
+    }
+
+    private void BuildSuperRarePlusDrawPool()
+    {
+        EnsureDrawTable();
+        _superRarePlusDrawPool = CardDrawWeightPool.BuildSuperRarePlusExpandedTemplatePool(allCards, drawTable);
+        if (_superRarePlusDrawPool.Count == 0)
+            Debug.LogWarning("[CardDealer] SuperRare+ draw pool is empty. Check card rarities and weights.");
+        else
+            Debug.Log($"[CardDealer] SuperRare+ draw pool entries: {_superRarePlusDrawPool.Count}");
     }
 
     private void BuildDarkCardTemplatePool()
@@ -299,6 +313,22 @@ public class CardDealer : MonoBehaviour
     public CardData DrawRandomCard(PlayerType forSide)
     {
         return DrawRandomCardInstance(forSide);
+    }
+
+    /// <summary>SuperRare 以上のテンプレートから1枚（現実改変・BattleRandom 同期）。</summary>
+    public CardData DrawSuperRarePlusRandomCard(PlayerType forSide)
+    {
+        if (_superRarePlusDrawPool == null || _superRarePlusDrawPool.Count == 0)
+            BuildSuperRarePlusDrawPool();
+
+        var template = CardDrawWeightPool.PickTemplate(_superRarePlusDrawPool, forSide);
+        if (template == null)
+        {
+            Debug.LogWarning("[CardDealer] No drawable SuperRare+ template in pool");
+            return null;
+        }
+
+        return InstantiateCardFromTemplate(template);
     }
 
     /// <summary>

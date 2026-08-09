@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +32,8 @@ public class BattlePopupPresenter : MonoBehaviour
     [SerializeField] private GameObject barrierDamagePopupPrefab;
     [Tooltip("未設定時は Resources.Load(\"Prefab/ImportantPopup\") を試す")]
     [SerializeField] private GameObject importantPopupPrefab;
+    [Tooltip("ImportantPopup の配色・背景・登場演出。未設定時は Resources/ImportantPopupSettings。")]
+    [SerializeField] private ImportantPopupSettings importantPopupSettings;
     [Tooltip("未設定時は Resources.Load(\"Prefab/OjyouPopup\") を試す")]
     [SerializeField] private GameObject ojyouPopupPrefab;
 
@@ -590,10 +592,49 @@ public class BattlePopupPresenter : MonoBehaviour
         return popup;
     }
 
+    private ImportantPopupSettings ResolveImportantPopupSettings()
+    {
+        if (importantPopupSettings != null) return importantPopupSettings;
+        return ImportantPopupSettings.GetRuntimeFallback();
+    }
+
     /// <summary>
-    /// Canvas の水平中心 × 指定側 CardDisplayPanel の縦位置に重要メッセージを表示。
+    /// Styled <see cref="ImportantPopup"/> (rise + hold + fade). Returns sequence lifetime seconds.
     /// </summary>
-    public ImportantPopup ShowImportantPopup(string message, Color color, Side cardPanelSide)
+    public float ShowStyledImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+    {
+        var popup = SpawnImportantPopup(kind, messageOverride, cardPanelSide);
+        return popup != null ? popup.SequenceLifetimeSeconds : 0f;
+    }
+
+    /// <summary>天変地異個別メッセージ用 ImportantPopup。</summary>
+    public float ShowDisasterImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+        => ShowStyledImportantPopup(kind, messageOverride, cardPanelSide);
+
+    public ImportantPopup SpawnImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+    {
+        var settings = ResolveImportantPopupSettings();
+        var entry = settings.GetEntryOrDefault(kind);
+        if (!string.IsNullOrEmpty(entry.showSoundAddress))
+            SoundEffectPlayer.I?.Play(entry.showSoundAddress);
+
+        return SpawnImportantPopupWithEntry(entry, messageOverride, cardPanelSide, settings);
+    }
+
+    private ImportantPopup SpawnImportantPopupWithEntry(
+        ImportantPopupStyleEntry entry,
+        string messageOverride,
+        Side cardPanelSide,
+        ImportantPopupSettings settings)
     {
         GameObject prefab = importantPopupPrefab != null
             ? importantPopupPrefab
@@ -605,11 +646,33 @@ public class BattlePopupPresenter : MonoBehaviour
         ApplyImportantPopupLayout(go.transform as RectTransform, cardPanelSide);
 
         var popup = go.GetComponent<ImportantPopup>();
-        if (popup != null)
-            popup.Setup(message, color);
-        else
-            Debug.LogWarning("[BattlePopupPresenter] ImportantPopup コンポーネントが見つかりません");
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] ImportantPopup component missing");
+            return null;
+        }
+
+        popup.BindSettings(settings);
+        popup.Setup(entry, messageOverride);
         return popup;
+    }
+
+    /// <summary>
+    /// Canvas の水平中心 × 指定側 CardDisplayPanel の縦位置に重要メッセージを表示。
+    /// </summary>
+    public ImportantPopup ShowImportantPopup(string message, Color color, Side cardPanelSide)
+    {
+        var settings = ResolveImportantPopupSettings();
+        var entry = new ImportantPopupStyleEntry
+        {
+            kind = ImportantPopupKind.RuntimeCustom,
+            message = message,
+            backgroundMode = MessagePopupBackgroundMode.SolidColor,
+            backgroundColor = Color.white,
+            textColor = color,
+            outlineColor = Color.white,
+        };
+        return SpawnImportantPopupWithEntry(entry, message, cardPanelSide, settings);
     }
 
     /// <summary>

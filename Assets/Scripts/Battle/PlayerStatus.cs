@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 
@@ -144,6 +144,11 @@ public class PlayerStatus
 
     public void MarkManifestationSkillUsed() => hasUsedManifestationSkill = true;
 
+    // ===== バハムート・メガフレア（1バトル1回、顕現とは独立） =====
+    public bool hasUsedMegaFlare { get; private set; }
+
+    public void MarkMegaFlareUsed() => hasUsedMegaFlare = true;
+
     /// <summary>
     /// UI 用：現在かかっている状態異常の種類（重複なし・公式ID順）。
     /// </summary>
@@ -163,7 +168,12 @@ public class PlayerStatus
 
     private static int CompareAilmentOrder(StatusEffectType a, StatusEffectType b)
     {
-        return StatusEffectCatalog.ToOfficialId(a).CompareTo(StatusEffectCatalog.ToOfficialId(b));
+        int idA = StatusEffectCatalog.ToOfficialId(a);
+        int idB = StatusEffectCatalog.ToOfficialId(b);
+        if (idA != 0 && idB != 0) return idA.CompareTo(idB);
+        if (idA != 0) return -1;
+        if (idB != 0) return 1;
+        return ((int)a).CompareTo((int)b);
     }
 
 
@@ -195,16 +205,24 @@ public class PlayerStatus
     }
 
     /// <summary>
-    /// 与えるダメージに状態異常を適用（衰弱など）。補正が終わった値を受け手へ渡す。
+    /// 与えるダメージに状態異常を適用（神無月・衰弱など）。受け手へ渡す直前の値に対して適用する。
+    /// 神無月は衰弱より先に適用し、衰弱は常に最後（17→34→17 などの丸めずれを防ぐ）。
     /// </summary>
     public int ApplyOutgoingDamageModifiers(int amount)
     {
         int m = amount;
         foreach (var effect in activeEffects)
         {
-            if (effect == null) continue;
+            if (effect == null || effect.EffectType == StatusEffectType.Weaken) continue;
             m = effect.ModifyOutgoingDamage(m);
         }
+
+        foreach (var effect in activeEffects)
+        {
+            if (effect != null && effect.EffectType == StatusEffectType.Weaken)
+                m = effect.ModifyOutgoingDamage(m);
+        }
+
         return m;
     }
 
@@ -304,7 +322,7 @@ public class PlayerStatus
     /// <summary>指定タイプの状態異常をすべて除去（回復による拘束解除など）。</summary>
     public bool RemoveStatusEffectsOfType(StatusEffectType type)
     {
-        if (type == StatusEffectType.None) return false;
+        if (type == StatusEffectType.None || StatusEffectRules.IsIndelible(type)) return false;
         bool removed = false;
         for (int i = activeEffects.Count - 1; i >= 0; i--)
         {

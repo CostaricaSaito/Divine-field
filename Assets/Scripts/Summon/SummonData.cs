@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 
 [System.Serializable]
@@ -140,6 +140,9 @@ public class SummonData : ScriptableObject
         if (passiveBlessingMode == SummonPassiveBlessingMode.Arcadias) return true;
         return name == "Arcadias" || StableSummonId == "arcadias";
     }
+
+    /// <summary>Whether Bahamut Mega Flare / dual-skill popup rules apply.</summary>
+    public bool IsBahamut() => BahamutRules.IsBahamut(this);
 
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)
     {

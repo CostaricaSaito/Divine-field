@@ -432,6 +432,30 @@ public class BattleUIManager : MonoBehaviour
     public DamagePopup ShowInfoPopupOnCardPanel(string message, Color color)
         => popupPresenter != null ? popupPresenter.ShowInfoPopupOnCardPanel(message, color) : null;
 
+    public float ShowDisasterImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+        => popupPresenter != null
+            ? popupPresenter.ShowDisasterImportantPopup(kind, messageOverride, cardPanelSide)
+            : 0f;
+
+    public float ShowStyledImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+        => popupPresenter != null
+            ? popupPresenter.ShowStyledImportantPopup(kind, messageOverride, cardPanelSide)
+            : 0f;
+
+    public ImportantPopup SpawnImportantPopup(
+        ImportantPopupKind kind,
+        string messageOverride,
+        Side cardPanelSide)
+        => popupPresenter != null
+            ? popupPresenter.SpawnImportantPopup(kind, messageOverride, cardPanelSide)
+            : null;
+
     /// <summary>重要メッセージ用。</summary>
     public ImportantPopup ShowImportantPopup(string message, Color color, Side cardPanelSide)
         => popupPresenter != null ? popupPresenter.ShowImportantPopup(message, color, cardPanelSide) : null;

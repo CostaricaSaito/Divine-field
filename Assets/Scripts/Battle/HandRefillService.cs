@@ -439,6 +439,300 @@ public class HandRefillService : MonoBehaviour
         }
     }
 
+    /// <summary>現実改変：全手札を裏向きにしたあと SuperRare+ で差し替え、開幕同様に一斉表向け。</summary>
+    public async Task RunRealityBendingAsync(
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        CancellationToken ct = default)
+    {
+        if (playerHand == null || enemyHand == null || cardDealer == null) return;
+
+        _playerBackSlotsThisTurn.Clear();
+        _enemyUsedCardsThisTurn.Clear();
+
+        BattleUIManager.I?.SetHandClickable(false);
+
+        const int dealIntervalMs = 150;
+        const int revealPauseMs = 500;
+
+        for (int i = 0; i < playerHand.Count; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            var card = playerHand[i];
+            var ui = card?.cardUI;
+            if (ui == null && handPanel != null && i < handPanel.childCount)
+                ui = handPanel.GetChild(i)?.GetComponent<CardUI>();
+            if (ui != null && !ui.IsFaceDown())
+            {
+                ui.HideToBack();
+                await Task.Delay(dealIntervalMs, ct);
+            }
+        }
+
+        var revealUIs = new List<CardUI>();
+        int handCount = playerHand.Count;
+        for (int i = 0; i < handCount; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+
+            var oldPlayer = playerHand[i];
+            CardUI ui = oldPlayer?.cardUI;
+            if (ui == null && handPanel != null && i < handPanel.childCount)
+                ui = handPanel.GetChild(i)?.GetComponent<CardUI>();
+
+            var newPlayer = cardDealer.DrawSuperRarePlusRandomCard(PlayerType.Player);
+            if (newPlayer != null)
+            {
+                playerHand[i] = newPlayer;
+                newPlayer.cardUI = ui;
+                if (oldPlayer != null) DestroyCardDataInstance(oldPlayer);
+
+                if (ui != null)
+                {
+                    ui.Setup(newPlayer, cardBackSprite, playerHandRareBackPresentation: true);
+                    if (ui.button != null) ui.button.interactable = false;
+                    revealUIs.Add(ui);
+                    CardDealAudio.Play(newPlayer, true);
+                    await Task.Delay(dealIntervalMs, ct);
+                }
+            }
+
+            if (i < enemyHand.Count)
+            {
+                var oldEnemy = enemyHand[i];
+                if (oldEnemy == null) continue;
+                var newEnemy = cardDealer.DrawSuperRarePlusRandomCard(PlayerType.Enemy);
+                if (newEnemy == null) continue;
+                enemyHand[i] = newEnemy;
+                DestroyCardDataInstance(oldEnemy);
+            }
+        }
+
+        for (int i = handCount; i < enemyHand.Count; i++)
+        {
+            var oldEnemy = enemyHand[i];
+            if (oldEnemy == null) continue;
+            var newEnemy = cardDealer.DrawSuperRarePlusRandomCard(PlayerType.Enemy);
+            if (newEnemy == null) continue;
+            enemyHand[i] = newEnemy;
+            DestroyCardDataInstance(oldEnemy);
+        }
+
+        await Task.Delay(revealPauseMs, ct);
+        if (ct.IsCancellationRequested) return;
+
+        foreach (var ui in revealUIs)
+            ui?.Reveal();
+        SoundEffectPlayer.I?.Play("Assets/SE/バトル開始.mp3");
+
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+    }
+
+    /// <summary>
+    /// 原初の混沌：表向きドロー → 一斉裏向き＆UI破棄 → 36枚再配分・一斉生成 → 0.05秒間隔で表向け。
+    /// </summary>
+    public async Task RunChaosAttractorAsync(
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        CancellationToken ct = default)
+    {
+        if (playerHand == null || enemyHand == null || cardDealer == null)
+            return;
+
+        _playerBackSlotsThisTurn.Clear();
+        _enemyUsedCardsThisTurn.Clear();
+
+        BattleUIManager.I?.SetHandClickable(false);
+
+        const int maxHand = BattleManager.MaxHandCards;
+        const int dealIntervalMs = 150;
+        const int revealIntervalMs = 50;
+
+        // ② 最大枚数まで表向きで1枚ずつ追加
+        while (playerHand.Count < maxHand || enemyHand.Count < maxHand)
+        {
+            if (ct.IsCancellationRequested) return;
+
+            if (playerHand.Count < maxHand && enemyHand.Count < maxHand)
+            {
+                if (!await DrawChaosAttractorPlayerCardFaceUpAsync(playerHand, ct))
+                    break;
+                await Task.Delay(dealIntervalMs, ct);
+                if (ct.IsCancellationRequested) return;
+
+                if (!DrawChaosAttractorEnemyCard(enemyHand))
+                    break;
+                RefreshChaosAttractorHandStatus();
+                await Task.Delay(dealIntervalMs, ct);
+            }
+            else if (playerHand.Count < maxHand)
+            {
+                if (!await DrawChaosAttractorPlayerCardFaceUpAsync(playerHand, ct))
+                    break;
+                await Task.Delay(dealIntervalMs, ct);
+            }
+            else
+            {
+                if (!DrawChaosAttractorEnemyCard(enemyHand))
+                    break;
+                RefreshChaosAttractorHandStatus();
+                await Task.Delay(dealIntervalMs, ct);
+            }
+        }
+
+        // ③ プレイヤー手札を一斉に裏向き → 手札UIを破棄
+        for (int i = 0; i < playerHand.Count; i++)
+        {
+            var card = playerHand[i];
+            var ui = card?.cardUI;
+            if (ui == null && handPanel != null && i < handPanel.childCount)
+                ui = handPanel.GetChild(i)?.GetComponent<CardUI>();
+
+            if (ui != null && !ui.IsFaceDown())
+                ui.HideToBack();
+        }
+
+        DestroyChaosAttractorPlayerHandUIs(playerHand);
+        if (ct.IsCancellationRequested) return;
+
+        // ④ 36枚プールをシャッフルして双方に18枚ずつ再配分し、裏向きUIを一斉生成
+        var pool = new List<CardData>(playerHand.Count + enemyHand.Count);
+        for (int i = 0; i < playerHand.Count; i++)
+        {
+            var card = playerHand[i];
+            if (card != null) pool.Add(card);
+        }
+
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            var card = enemyHand[i];
+            if (card != null) pool.Add(card);
+        }
+
+        if (pool.Count < maxHand * 2)
+        {
+            Debug.LogWarning(
+                $"[HandRefillService] ChaosAttractor: expected {maxHand * 2} cards, got {pool.Count}");
+        }
+
+        ShuffleDeterministic(pool);
+
+        playerHand.Clear();
+        enemyHand.Clear();
+        for (int i = 0; i < maxHand && i < pool.Count; i++)
+            playerHand.Add(pool[i]);
+        for (int i = maxHand; i < pool.Count && i < maxHand * 2; i++)
+            enemyHand.Add(pool[i]);
+        for (int i = maxHand * 2; i < pool.Count; i++)
+            DestroyCardDataInstance(pool[i]);
+
+        var revealUIs = new List<CardUI>();
+        for (int i = 0; i < playerHand.Count; i++)
+        {
+            var card = playerHand[i];
+            if (card == null) continue;
+
+            var ui = cardDealer.CreateCardUIForHand(card);
+            if (ui == null) continue;
+
+            if (ui.button != null) ui.button.interactable = false;
+            revealUIs.Add(ui);
+        }
+
+        RefreshChaosAttractorHandStatus();
+
+        await Task.Delay(1000, ct);
+        if (ct.IsCancellationRequested) return;
+
+        // ⑤ 0.05秒間隔で1枚ずつ表向け
+        for (int i = 0; i < revealUIs.Count; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+
+            var ui = revealUIs[i];
+            if (ui == null) continue;
+
+            if (ui.button != null) ui.button.interactable = true;
+            CardDealAudio.Play(ui.GetCardData(), true);
+            ui.Reveal();
+
+            if (i < revealUIs.Count - 1)
+                await Task.Delay(revealIntervalMs, ct);
+        }
+
+        // ⑥ 演出終了
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+    }
+
+    private async Task<bool> DrawChaosAttractorPlayerCardFaceUpAsync(List<CardData> playerHand, CancellationToken ct)
+    {
+        var newCard = DrawRandomCard(PlayerType.Player);
+        if (newCard == null)
+        {
+            Debug.LogWarning("[HandRefillService] ChaosAttractor: player draw failed");
+            return false;
+        }
+
+        playerHand.Add(newCard);
+        var ui = cardDealer.CreateCardUIForHand(newCard);
+        CardDealAudio.Play(newCard, true);
+        ui?.Reveal();
+        RefreshChaosAttractorHandStatus();
+        await Task.Yield();
+        return true;
+    }
+
+    private bool DrawChaosAttractorEnemyCard(List<CardData> enemyHand)
+    {
+        var newCard = DrawRandomCard(PlayerType.Enemy);
+        if (newCard == null)
+        {
+            Debug.LogWarning("[HandRefillService] ChaosAttractor: enemy draw failed");
+            return false;
+        }
+
+        enemyHand.Add(newCard);
+        return true;
+    }
+
+    private void RefreshChaosAttractorHandStatus()
+    {
+        BattleUIManager.I?.UpdateStatus(
+            BattleManager.I?.GetPlayerStatus(),
+            BattleManager.I?.GetEnemyStatus());
+    }
+
+    private void DestroyChaosAttractorPlayerHandUIs(List<CardData> playerHand)
+    {
+        if (playerHand != null)
+        {
+            for (int i = 0; i < playerHand.Count; i++)
+            {
+                if (playerHand[i] != null)
+                    playerHand[i].cardUI = null;
+            }
+        }
+
+        if (handPanel == null) return;
+        for (int i = handPanel.childCount - 1; i >= 0; i--)
+            Destroy(handPanel.GetChild(i).gameObject);
+    }
+
+    private static void ShuffleDeterministic(List<CardData> list)
+    {
+        if (list == null || list.Count <= 1) return;
+
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = BattleRandom.Range(0, i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
     /// <summary>
     /// DiscardRestart: all hand slots except <paramref name="excludeCard"/> (already face-down used slot).
     /// </summary>

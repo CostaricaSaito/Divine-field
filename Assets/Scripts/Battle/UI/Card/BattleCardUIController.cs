@@ -64,6 +64,12 @@ public class BattleCardUIController : MonoBehaviour
 
             if (side == Side.Player
                 && BattleManager.I != null
+                && BattleManager.I.IsPlayerDefenseInputActive())
+            {
+                BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
+            }
+            else if (side == Side.Player
+                && BattleManager.I != null
                 && BattleManager.I.CurrentState == GameState.AttackPhase
                 && BattleManager.I.CurrentTurnOwner == PlayerType.Player
                 && !BattleManager.I.IsReflectionChainDefensePending())
@@ -71,10 +77,6 @@ public class BattleCardUIController : MonoBehaviour
                 var h = BattleManager.I.playerHand;
                 RefreshAttackInteractivity(h, CardRules.GetAttackChoices(h));
             }
-            else if (side == Side.Player
-                && BattleManager.I != null
-                && BattleManager.I.IsPlayerDefenseInputActive())
-                BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
         }
     }
 
@@ -760,8 +762,16 @@ public class BattleCardUIController : MonoBehaviour
         }
         else if (BattleManager.I != null)
         {
-            if (BattleManager.I.CurrentState == GameState.AttackPhase
-                && !BattleManager.I.IsReflectionChainDefensePending())
+            if (BattleManager.I.IsPlayerDefenseInputActive())
+            {
+                BattleManager.I.UpdateTotalATKDEFDisplay();
+                if (BattleManager.I.IsReflectionChainDefensePending())
+                    BattleManager.I.RefreshReflectionChainInteractivityIfPending();
+                else
+                    BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
+            }
+            else if (BattleManager.I.CurrentState == GameState.AttackPhase
+                     && !BattleManager.I.IsReflectionChainDefensePending())
             {
                 if (BattleManager.I.CurrentTurnOwner == PlayerType.Player)
                 {
@@ -778,36 +788,12 @@ public class BattleCardUIController : MonoBehaviour
                     BattleManager.I.UpdateTotalATKDEFDisplay();
                 }
             }
-            else if (BattleManager.I.IsPlayerDefenseInputActive())
-            {
-                BattleManager.I.UpdateTotalATKDEFDisplay();
-                if (BattleManager.I.IsReflectionChainDefensePending())
-                    BattleManager.I.RefreshReflectionChainInteractivityIfPending();
-                else
-                    BattleManager.I.RefreshPlayerDefensePhaseInteractivity();
-            }
         }
     }
 
     private void HandleCardDisplayFallback(CardData card, Side side)
     {
-        if (cardSheetPrefab == null)
-        {
-            Debug.LogWarning("[BattleCardUIController] cardSheetPrefab が設定されていません。CardDisplayController へのフォールバック処理を実行します。");
-        }
-        if ((side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel) == null)
-        {
-            Debug.LogWarning("[BattleCardUIController] CardDisplayPanel が設定されていません。CardDisplayController へのフォールバック処理を実行します。side=" + side);
-        }
-
-        var controller = FindObjectOfType<CardDisplayController>(true);
-        if (controller != null)
-        {
-            controller.ShowCard(card);
-        }
-        else
-        {
-            Debug.LogError("[BattleCardUIController] すべての表示方法が利用できません。cardSheetPrefab / panel が設定されていない、CardDisplayController も見つかりません。");
-        }
+        Debug.LogError(
+            $"[BattleCardUIController] Cannot display card '{card?.cardName}': cardSheetPrefab or display panel is not configured. side={side}");
     }
 }

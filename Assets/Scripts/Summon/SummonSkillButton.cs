@@ -1,13 +1,13 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// BottomStatusPanel の召喚アイコン：窮地時に顕現ポップアップを開く。
+/// BottomStatusPanel summon icon: manifestation popup (or Bahamut dual-skill popup).
 /// </summary>
 public class SummonSkillButton : MonoBehaviour
 {
-    [Tooltip("true: 人間プレイヤー側アイコン。false: 対戦相手側（PvP 想定）")]
+    [Tooltip("true: local player side. false: opponent side (PvP).")]
     [SerializeField] private bool isLocalPlayerSide = true;
 
     private PlayerStatus _self;
@@ -21,7 +21,7 @@ public class SummonSkillButton : MonoBehaviour
             _button.onClick.AddListener(OnClickSummonIcon);
     }
 
-    /// <summary>戦闘開始時に呼ぶ。self = このボタンが属するプレイヤー、opponent = 相手。</summary>
+    /// <summary>Configure at battle start. self = this button's owner, opponent = the other player.</summary>
     public void Configure(PlayerStatus self, PlayerStatus opponent)
     {
         _self = self;
@@ -37,18 +37,35 @@ public class SummonSkillButton : MonoBehaviour
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == (isLocalPlayerSide ? PlayerType.Player : PlayerType.Enemy);
 
-        bool can = _self != null
-            && !_self.hasUsedManifestationSkill
-            && DisadvantageRules.IsDisadvantaged(_self)
-            && _self.summonData != null
-            && _self.summonData.manifestationCard != null
-            && turnOk
-            && !_self.IsCastingArchMagic
-            && !_self.HasFreezeEffect()
-            && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
-            && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
-            && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
-            && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0);
+        bool can;
+        if (_self != null && BahamutRules.IsBahamut(_self.summonData))
+        {
+            can = turnOk
+                && BattleManager.I != null
+                && BattleManager.I.CanActivateBahamutSummonButton(isLocalPlayerSide)
+                && !_self.IsCastingArchMagic
+                && !_self.HasFreezeEffect()
+                && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
+                && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
+                && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
+                && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen);
+        }
+        else
+        {
+            can = _self != null
+                && !_self.hasUsedManifestationSkill
+                && DisadvantageRules.IsDisadvantaged(_self)
+                && _self.summonData != null
+                && _self.summonData.manifestationCard != null
+                && turnOk
+                && !_self.IsCastingArchMagic
+                && !_self.HasFreezeEffect()
+                && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
+                && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
+                && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
+                && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
+                && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0);
+        }
 
         _button.interactable = can;
     }
@@ -60,6 +77,6 @@ public class SummonSkillButton : MonoBehaviour
         BattleManager.I.ClearPlayerSelfAttackTargetMode();
 
         if (!BattleManager.I.TryOpenSummonSkillPopup(_self, _opponent))
-            Debug.Log("[SummonSkillButton] 顕現ポップアップを開けませんでした");
+            Debug.Log("[SummonSkillButton] Could not open summon skill popup");
     }
 }

@@ -12,7 +12,7 @@ public sealed class PlaceholderDisasterEffectSO : DisasterCardEffectSO
         ConfigureForRuntime(
             runtimeKind,
             DisasterCatalog.GetNotificationMessage(runtimeKind),
-            DisasterCatalog.GetDefaultMessagePopupKind(runtimeKind));
+            DisasterCatalog.GetDefaultImportantPopupKind(runtimeKind));
     }
 
     public override Task ResolveAsync(DisasterResolveContext context, CancellationToken cancellationToken)

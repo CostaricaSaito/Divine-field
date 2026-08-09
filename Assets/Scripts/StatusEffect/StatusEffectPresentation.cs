@@ -10,6 +10,8 @@ public static class StatusEffectPresentation
     {
         if (type == StatusEffectType.RandomOneAilment)
             return "RANDOM（全状態異常から1つ）";
+        if (type == StatusEffectType.Kannaduki)
+            return "神無月";
         int id = StatusEffectCatalog.ToOfficialId(type);
         if (id < 1 || id > 15) return string.Empty;
         return StatusEffectCatalog.OfficialDisplayNames[id - 1];

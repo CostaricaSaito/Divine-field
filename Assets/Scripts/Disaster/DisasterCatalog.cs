@@ -137,17 +137,17 @@ public static class DisasterCatalog
 
     public static string GetNotificationMessage(DisasterKind kind)
     {
-        var effect = GetEffect(kind);
-        if (effect != null && !string.IsNullOrEmpty(effect.NotificationMessage))
-            return effect.NotificationMessage;
+        if (TryGetRegisteredEffect(kind, out var registered)
+            && !string.IsNullOrEmpty(registered.NotificationMessage))
+            return registered.NotificationMessage;
         return NotificationMessages.TryGetValue(kind, out var msg) ? msg : GetDescription(kind);
     }
 
-    public static MessagePopupKind GetDefaultMessagePopupKind(DisasterKind kind)
+    public static ImportantPopupKind GetDefaultImportantPopupKind(DisasterKind kind)
     {
-        var effect = GetEffect(kind);
-        if (effect != null) return effect.MessagePopupKind;
-        return (MessagePopupKind)((int)MessagePopupKind.DisasterEruption + (int)kind);
+        if (TryGetRegisteredEffect(kind, out var registered))
+            return registered.ImportantPopupKind;
+        return ResolveStaticImportantPopupKind(kind);
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -191,21 +191,47 @@ public static class DisasterCatalog
 
     public static DisasterCardEffectSO GetEffect(DisasterKind kind)
     {
+        if (TryGetRegisteredEffect(kind, out var registered))
+            return registered;
+
+        return CreateRuntimePlaceholderEffect(kind);
+    }
+
+    /// <summary>
+    /// Card template or Resources/Disaster SO only — never allocates a runtime placeholder.
+    /// </summary>
+    private static bool TryGetRegisteredEffect(DisasterKind kind, out DisasterCardEffectSO effect)
+    {
         EnsureCardTemplatesLoaded();
         if (_cardTemplatesByKind != null
             && _cardTemplatesByKind.TryGetValue(kind, out var card)
             && card != null
             && card.disasterCardEffect != null)
-            return card.disasterCardEffect;
+        {
+            effect = card.disasterCardEffect;
+            return true;
+        }
 
         EnsureEffectsLoaded();
-        if (_effectsByKind != null && _effectsByKind.TryGetValue(kind, out var effect) && effect != null)
-            return effect;
+        if (_effectsByKind != null && _effectsByKind.TryGetValue(kind, out effect) && effect != null)
+            return true;
 
+        effect = null;
+        return false;
+    }
+
+    private static PlaceholderDisasterEffectSO CreateRuntimePlaceholderEffect(DisasterKind kind)
+    {
         var fallback = ScriptableObject.CreateInstance<PlaceholderDisasterEffectSO>();
-        fallback.ConfigureForKind(kind);
+        fallback.ConfigureForRuntime(
+            kind,
+            NotificationMessages.TryGetValue(kind, out var msg) ? msg : GetDescription(kind),
+            ResolveStaticImportantPopupKind(kind));
         return fallback;
     }
+
+    private static ImportantPopupKind ResolveStaticImportantPopupKind(DisasterKind kind)
+        => (ImportantPopupKind)((int)ImportantPopupKind.DisasterEruption + (int)kind);
 
     private static void EnsureEffectsLoaded()
     {
