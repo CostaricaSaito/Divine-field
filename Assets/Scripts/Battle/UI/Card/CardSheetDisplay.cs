@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class CardSheetDisplay : MonoBehaviour
 {
     [Header("UI参照")]
-    [Tooltip("未設定時は Panel/BG を自動検索。顕現カードの枠差し替えに使用。")]
+    [Tooltip("未設定時は Panel/BG または BG を自動検索。CardData.cardDisplayFrameSprite 指定時に枠差し替え。")]
     [SerializeField] private Image cardSheetBackground;
 
     public Image artworkSlot;
@@ -35,13 +35,13 @@ public class CardSheetDisplay : MonoBehaviour
     private int _displayDefense;
     private Image _orbTintOverlay;
 
+    private Sprite _defaultCardSheetBackgroundSprite;
+
     private void Awake()
     {
-        if (cardSheetBackground == null)
-        {
-            var t = transform.Find("Panel/BG");
-            if (t != null) cardSheetBackground = t.GetComponent<Image>();
-        }
+        ResolveCardSheetBackgroundReference();
+        if (cardSheetBackground != null)
+            _defaultCardSheetBackgroundSprite = cardSheetBackground.sprite;
     }
     
     /// <param name="ownerForMpDisplay">魔法の消費MP表示・眼精疲労／群発頭痛の見た目に使う。null ならカード素の mpCost。</param>
@@ -53,8 +53,8 @@ public class CardSheetDisplay : MonoBehaviour
         currentCardData = cardData;
         _ownerForDisplay = ownerForMpDisplay;
         _sheetContext = sheetContext;
-        if (cardSheetBackground != null && cardData != null && cardData.cardDisplayFrameSprite != null)
-            cardSheetBackground.sprite = cardData.cardDisplayFrameSprite;
+        ResolveCardSheetBackgroundReference();
+        ApplyCardSheetBackground(cardData);
 
         SetupArtwork(cardData);
         if (cardNameText) cardNameText.text = cardData.cardName;
@@ -64,6 +64,28 @@ public class CardSheetDisplay : MonoBehaviour
         if (descText) descText.text = cardData.description;
         SetupElementDisplay(cardData);
         SetupGoldOrMpCostDisplay(cardData, ownerForMpDisplay);
+    }
+
+    /// <summary>
+    /// CardSheet prefab: BG is usually a root child named "BG" (not under Panel).
+    /// </summary>
+    private void ResolveCardSheetBackgroundReference()
+    {
+        if (cardSheetBackground != null) return;
+
+        var t = transform.Find("Panel/BG");
+        if (t == null) t = transform.Find("BG");
+        if (t != null) cardSheetBackground = t.GetComponent<Image>();
+    }
+
+    private void ApplyCardSheetBackground(CardData cardData)
+    {
+        if (cardSheetBackground == null) return;
+
+        if (cardData != null && cardData.cardDisplayFrameSprite != null)
+            cardSheetBackground.sprite = cardData.cardDisplayFrameSprite;
+        else if (_defaultCardSheetBackgroundSprite != null)
+            cardSheetBackground.sprite = _defaultCardSheetBackgroundSprite;
     }
 
     public CardData GetCurrentCardData() => currentCardData;

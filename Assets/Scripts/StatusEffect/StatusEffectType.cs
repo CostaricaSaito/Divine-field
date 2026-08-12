@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 状態異常の種類（全15種 + None + カード用特殊値）。
@@ -53,7 +53,7 @@ public enum StatusEffectType
     RandomOneAilment = 100,
 
     /// <summary>
-    /// 天変地異「神無月」：物理与ダメ2倍・試合終了まで・解除不可。公式IDではない。
+    /// Disaster Kannaduki: physical attack power x2, until match end, cannot remove. Not an official ID.
     /// </summary>
     Kannaduki = 101,
 }

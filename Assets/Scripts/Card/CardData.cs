@@ -325,7 +325,8 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Tooltip("第1段の実ダメ通過時に臨時効果。DEF0 だけのカード識別には使わない。")]
     public OrbCardRuleSO orbReactionRule;
 
-    [Header("顕現・特殊表示")]
+    [Header("カードシート表示")]
+    [Tooltip("指定時は CardSheet の BG にこのスプライトを使用（カード種別を問わない）。")]
     public Sprite cardDisplayFrameSprite;
 
     [Header("UI参照（非表示）")]

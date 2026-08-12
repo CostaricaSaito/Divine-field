@@ -46,51 +46,33 @@ public class EconomicUIHandler : MonoBehaviour
     {
         if (EconomicAction.I == null) return;
 
-        // ゲーム終了処理中は経済アクションを再アクティブ化しない
         if (BattleManager.I != null && BattleManager.I.IsGameEndTriggered)
         {
-            if (buyButton != null) buyButton.interactable = false;
-            if (sellButton != null) sellButton.interactable = false;
-            if (exchangeButton != null) exchangeButton.interactable = false;
+            ApplyEconomicButton(buyButton, buyCooldownText, false, 0);
+            ApplyEconomicButton(sellButton, sellCooldownText, false, 0);
+            ApplyEconomicButton(exchangeButton, exchangeCooldownText, false, 0);
             return;
         }
 
-        if (BattleManager.I != null && BattleManager.I.IsHandReloadPopupOpen)
+        bool phaseAllowed = BattleManager.I == null || BattleManager.I.PlayerCanUseEconomicActions();
+
+        bool canBuy = phaseAllowed && EconomicAction.I.CanBuy();
+        bool canSell = phaseAllowed && EconomicAction.I.CanSell();
+        bool canExchange = phaseAllowed && EconomicAction.I.CanExchange();
+
+        if (BattleManager.I != null)
         {
-            if (buyButton != null) { buyButton.interactable = false; buyButton.image.color = Color.gray; }
-            if (sellButton != null) { sellButton.interactable = false; sellButton.image.color = Color.gray; }
-            if (exchangeButton != null) { exchangeButton.interactable = false; exchangeButton.image.color = Color.gray; }
-            return;
+            if (isBuyPopupOpen || BattleManager.I.IsBuyProcessActive())
+                canBuy = true;
+            if (BattleManager.I.IsSellProcessActive())
+                canSell = true;
+            if (BattleManager.I.IsExchangeProcessActive())
+                canExchange = true;
         }
 
-        if (buyButton != null)
-        {
-            bool canBuy = EconomicAction.I.CanBuy();
-            buyButton.interactable = canBuy;
-            if (buyCooldownText != null)
-                buyCooldownText.text = canBuy ? "" : EconomicAction.I.GetBuyCooldown().ToString();
-            buyButton.image.color = canBuy ? Color.white : Color.gray;
-        }
-
-        if (sellButton != null)
-        {
-            bool canSell = EconomicAction.I.CanSell();
-            sellButton.interactable = canSell;
-            if (sellCooldownText != null)
-                sellCooldownText.text = canSell ? "" : EconomicAction.I.GetSellCooldown().ToString();
-            sellButton.image.color = canSell ? Color.white : Color.gray;
-        }
-
-        if (exchangeButton != null)
-        {
-            bool canExchange = EconomicAction.I.CanExchange();
-            exchangeButton.interactable = canExchange;
-            if (exchangeCooldownText != null)
-                exchangeCooldownText.text = canExchange ? "" : EconomicAction.I.GetExchangeCooldown().ToString();
-            exchangeButton.image.color = canExchange ? Color.white : Color.gray;
-        }
-
-        Debug.Log($"[EconomicUIHandler] 経済アクションボタン更新完了");
+        ApplyEconomicButton(buyButton, buyCooldownText, canBuy, EconomicAction.I.GetBuyCooldown());
+        ApplyEconomicButton(sellButton, sellCooldownText, canSell, EconomicAction.I.GetSellCooldown());
+        ApplyEconomicButton(exchangeButton, exchangeCooldownText, canExchange, EconomicAction.I.GetExchangeCooldown());
     }
 
     /// <summary>ゲーム終了時：各ボタンを非インタラクティブ化。</summary>
@@ -104,7 +86,7 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>買うボタンが押されたときの処理</summary>
     public void OnBuyButtonPressed()
     {
-        if (EconomicAction.I == null || !EconomicAction.I.CanBuy())
+        if (EconomicAction.I == null)
         {
             Debug.LogWarning("[EconomicUIHandler] 買うアクションは使用できません");
             return;
@@ -115,6 +97,18 @@ public class EconomicUIHandler : MonoBehaviour
             Debug.Log("[EconomicUIHandler] 買いアクション進行中 → キャンセル");
             CancelBuyPopup();
             BattleManager.I?.CancelCurrentEconomicAction();
+            return;
+        }
+
+        if (BattleManager.I != null && !BattleManager.I.PlayerCanUseEconomicActions())
+        {
+            Debug.LogWarning("[EconomicUIHandler] 買うアクションは AttackSelect 中のみ使用できます");
+            return;
+        }
+
+        if (!EconomicAction.I.CanBuy())
+        {
+            Debug.LogWarning("[EconomicUIHandler] 買うアクションは使用できません");
             return;
         }
 
@@ -137,6 +131,18 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>売るボタンが押されたときの処理</summary>
     public void OnSellButtonPressed()
     {
+        if (BattleManager.I != null && BattleManager.I.IsSellProcessActive())
+        {
+            BattleManager.I.CancelCurrentEconomicAction();
+            return;
+        }
+
+        if (BattleManager.I != null && !BattleManager.I.PlayerCanUseEconomicActions())
+        {
+            Debug.LogWarning("[EconomicUIHandler] 売るアクションは AttackSelect 中のみ使用できます");
+            return;
+        }
+
         if (EconomicAction.I == null || !EconomicAction.I.CanSell())
         {
             Debug.LogWarning("[EconomicUIHandler] 売るアクションは使用できません");
@@ -154,16 +160,22 @@ public class EconomicUIHandler : MonoBehaviour
     /// <summary>交換ボタンが押されたときの処理</summary>
     public void OnExchangeButtonPressed()
     {
-        if (EconomicAction.I == null || !EconomicAction.I.CanExchange())
-        {
-            Debug.LogWarning("[EconomicUIHandler] 交換アクションは使用できません");
-            return;
-        }
-
         if (BattleManager.I != null && BattleManager.I.IsExchangeProcessActive())
         {
             Debug.Log("[EconomicUIHandler] 交換ポップアップ表示中 → キャンセル");
             BattleManager.I.CancelCurrentEconomicAction();
+            return;
+        }
+
+        if (BattleManager.I != null && !BattleManager.I.PlayerCanUseEconomicActions())
+        {
+            Debug.LogWarning("[EconomicUIHandler] 両替アクションは AttackSelect 中のみ使用できます");
+            return;
+        }
+
+        if (EconomicAction.I == null || !EconomicAction.I.CanExchange())
+        {
+            Debug.LogWarning("[EconomicUIHandler] 交換アクションは使用できません");
             return;
         }
 
@@ -205,6 +217,7 @@ public class EconomicUIHandler : MonoBehaviour
         }
 
         isBuyPopupOpen = true;
+        UpdateButtons();
 
         confirmPopup.Setup(
             onConfirm: () => {
@@ -218,6 +231,7 @@ public class EconomicUIHandler : MonoBehaviour
                 Debug.Log("[EconomicUIHandler] 買いアクションキャンセル");
                 isBuyPopupOpen = false;
                 currentBuyPopup = null;
+                UpdateButtons();
                 Destroy(popup);
             }
         );
@@ -235,6 +249,7 @@ public class EconomicUIHandler : MonoBehaviour
         isBuyPopupOpen = false;
         Destroy(currentBuyPopup);
         currentBuyPopup = null;
+        UpdateButtons();
     }
 
     /// <summary>SellConfirmPopup の Prefab を取得（BattleManager から使用）</summary>
@@ -251,5 +266,14 @@ public class EconomicUIHandler : MonoBehaviour
     {
         if (popupCanvas != null) return popupCanvas;
         return BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
+    }
+
+    private static void ApplyEconomicButton(Button button, TMP_Text cooldownText, bool interactable, int cooldown)
+    {
+        if (button == null) return;
+        button.interactable = interactable;
+        button.image.color = interactable ? Color.white : Color.gray;
+        if (cooldownText != null)
+            cooldownText.text = interactable ? "" : cooldown.ToString();
     }
 }

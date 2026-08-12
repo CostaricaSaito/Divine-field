@@ -1,6 +1,5 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,6 +8,9 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class BahamutSummonCoordinator
 {
+    private const string ConfirmButtonSeAddress = "Assets/SE/決定ボタンを押す3.mp3";
+    private const string CancelButtonSeAddress = "Assets/SE/キャンセル4.mp3";
+
     private readonly ISummonSkillHost _host;
     private readonly SummonSkillCoordinator _manifestationHost;
     private GameObject _popupRoot;
@@ -69,25 +71,19 @@ public sealed class BahamutSummonCoordinator
         _host.ClearAttackSelectionNeutral();
 
         _popupRoot = Object.Instantiate(prefab, canvas.transform, false);
-        var rt = _popupRoot.GetComponent<RectTransform>();
-        if (rt != null)
-        {
-            rt.localScale = Vector3.one;
-            // Prefab root is a full-screen dim overlay; do not collapse to center anchor.
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = Vector2.zero;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-        }
 
-        BindPopupUi(_popupRoot, summoner, opponent, summonerSide);
+        BindPopupButtons(_popupRoot.transform, summoner, opponent, summonerSide);
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
         BattleUIManager.I?.DisableEconomicActionButtonsTemporarily();
         _manifestationHost.RefreshButtonInteractables();
         return true;
+    }
+
+    public void DismissPopupIfOpen()
+    {
+        if (!IsPopupOpen) return;
+        OnPopupCancelClicked();
     }
 
     public async Task TryRunEnemyMegaFlareAsync(CancellationToken cancellationToken)
@@ -123,74 +119,57 @@ public sealed class BahamutSummonCoordinator
         return Resources.Load<GameObject>("Prefab/BahamutPopup");
     }
 
-    private void BindPopupUi(
-        GameObject root,
+    private void BindPopupButtons(
+        Transform root,
         PlayerStatus summoner,
         PlayerStatus opponent,
         PlayerType summonerSide)
     {
-        var summon = summoner.summonData;
-        if (summon == null || root == null) return;
+        if (root == null) return;
 
-        var panel = root.transform.Find("Bahamut");
-        if (panel == null) panel = root.transform;
-
-        var nameT = panel.Find("BahamutPopupName")?.GetComponent<TMP_Text>();
-        if (nameT != null)
-            nameT.text = "バハムート能力発動";
-
-        BindSkillDesc(panel, "PassiveSkillButton", summon.passiveSkillDescription);
-        BindSkillDesc(panel, "SpecialSkillButton", summon.specialSkillDescription);
-
-        var passiveBtn = panel.Find("PassiveSkillButton")?.GetComponent<Button>();
-        var specialBtn = panel.Find("SpecialSkillButton")?.GetComponent<Button>();
-        var cancelBtn = panel.Find("CancelButton")?.GetComponent<Button>();
+        var panel = root.Find("Bahamut");
+        if (panel == null) panel = root;
 
         bool canMega = BahamutRules.CanUseMegaFlare(
             summoner, _host.SummonTurnCounters, _host.CurrentState, _host.CurrentTurnOwner, summonerSide);
         bool canGiga = BahamutRules.CanUseGigaFlare(
             summoner, _host.CurrentState, _host.CurrentTurnOwner, summonerSide);
 
-        if (passiveBtn != null)
-        {
-            passiveBtn.interactable = canMega;
-            passiveBtn.onClick.RemoveAllListeners();
-            if (canMega)
-                passiveBtn.onClick.AddListener(() => OnMegaFlareClicked(summoner, opponent));
-        }
+        WireSkillButton(
+            panel.Find("PassiveSkillButton")?.GetComponent<Button>(),
+            canMega,
+            () => OnMegaFlareClicked(summoner, opponent));
 
-        if (specialBtn != null)
-        {
-            specialBtn.interactable = canGiga;
-            specialBtn.onClick.RemoveAllListeners();
-            if (canGiga)
-                specialBtn.onClick.AddListener(() => OnGigaFlareClicked(summoner, opponent));
-        }
+        WireSkillButton(
+            panel.Find("SpecialSkillButton")?.GetComponent<Button>(),
+            canGiga,
+            () => OnGigaFlareClicked(summoner, opponent));
 
+        var cancelBtn = panel.Find("CancelButton")?.GetComponent<Button>();
         if (cancelBtn != null)
         {
             cancelBtn.onClick.RemoveAllListeners();
-            cancelBtn.onClick.AddListener(OnPopupCancelClicked);
+            cancelBtn.onClick.AddListener(() =>
+            {
+                SoundEffectPlayer.I?.Play(CancelButtonSeAddress);
+                OnPopupCancelClicked();
+            });
         }
     }
 
-    private static void BindSkillDesc(Transform panel, string buttonName, string description)
+    private static void WireSkillButton(Button button, bool interactable, UnityEngine.Events.UnityAction onClick)
     {
-        var btn = panel.Find(buttonName);
-        if (btn == null) return;
-        TMP_Text descT = btn.Find($"{buttonName}Desc")?.GetComponent<TMP_Text>();
-        if (descT == null)
+        if (button == null) return;
+
+        button.interactable = interactable;
+        button.onClick.RemoveAllListeners();
+        if (!interactable) return;
+
+        button.onClick.AddListener(() =>
         {
-            for (int i = 0; i < btn.childCount; i++)
-            {
-                var child = btn.GetChild(i);
-                if (!child.name.Contains("Desc")) continue;
-                descT = child.GetComponent<TMP_Text>();
-                if (descT != null) break;
-            }
-        }
-        if (descT != null && !string.IsNullOrEmpty(description))
-            descT.text = description;
+            SoundEffectPlayer.I?.Play(ConfirmButtonSeAddress);
+            onClick();
+        });
     }
 
     private void OnPopupCancelClicked()

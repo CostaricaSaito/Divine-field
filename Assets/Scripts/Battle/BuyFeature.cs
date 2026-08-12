@@ -52,9 +52,10 @@ public class BuyFeature
             return false;
         }
 
-        if (battleManager.CurrentState != GameState.AttackPhase)
+        if (battleManager.CurrentState != GameState.AttackPhase
+            || !battleManager.PlayerCanUseEconomicActions())
         {
-            Debug.LogWarning("[BuyFeature] 攻撃フェーズ以外では買うアクションは使用できません");
+            Debug.LogWarning("[BuyFeature] AttackSelect 中以外では買うアクションは使用できません");
             return false;
         }
 

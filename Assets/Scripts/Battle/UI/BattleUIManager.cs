@@ -51,6 +51,7 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private ArchMagicBarrierPresenter archMagicBarrierPresenter;
     [SerializeField] private RestraintHeavyOverlayPresenter restraintHeavyPresenter;
     [SerializeField] private MagicPanelPresenter magicPanelPresenter;
+    [SerializeField] private EnemyCurrentMagicPopupPresenter enemyCurrentMagicPopupPresenter;
     [SerializeField] private BattlePopupPresenter popupPresenter;
     [SerializeField] private BattleCardUIController cardController;
 
@@ -78,6 +79,11 @@ public class BattleUIManager : MonoBehaviour
             turnCountRoot = turnCountText.transform.parent != null ? turnCountText.transform.parent.gameObject : null;
         if (turnCountBackground == null && turnCountRoot != null)
             turnCountBackground = turnCountRoot.GetComponent<Image>();
+
+        if (enemyCurrentMagicPopupPresenter == null)
+            enemyCurrentMagicPopupPresenter = GetComponent<EnemyCurrentMagicPopupPresenter>();
+        if (enemyCurrentMagicPopupPresenter == null)
+            enemyCurrentMagicPopupPresenter = gameObject.AddComponent<EnemyCurrentMagicPopupPresenter>();
         if (turnCountRoot != null)
             turnCountRoot.SetActive(false);
 
@@ -476,6 +482,8 @@ public class BattleUIManager : MonoBehaviour
 
         economicHandler?.DisableAllButtons();
 
+        HideEnemyCurrentMagicPopup();
+
         SetHandClickable(false);
 
         Debug.Log("[BattleUIManager] ゲーム終了：バトル UI を非表示化しました");
@@ -619,7 +627,15 @@ public class BattleUIManager : MonoBehaviour
     public void UpdateMagicPanel() => magicPanelPresenter?.UpdatePanel();
 
     /// <summary>相手 MagicPool 変更時（BattleManager から登録）。相手用パネルがあれば再描画。</summary>
-    public void OnEnemyMagicPoolChanged() => magicPanelPresenter?.UpdateEnemyPanel();
+    public void OnEnemyMagicPoolChanged()
+    {
+        magicPanelPresenter?.UpdateEnemyPanel();
+        enemyCurrentMagicPopupPresenter?.RefreshIfOpen();
+    }
+
+    public void ShowEnemyCurrentMagicPopup() => enemyCurrentMagicPopupPresenter?.TryShow();
+
+    public void HideEnemyCurrentMagicPopup() => enemyCurrentMagicPopupPresenter?.Hide();
 
     /// <summary>
     /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。

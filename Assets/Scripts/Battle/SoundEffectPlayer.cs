@@ -40,6 +40,11 @@ public class SoundEffectPlayer : MonoBehaviour
             return;
         }
         I = this;
+
+        // DontDestroyOnLoad requires a root GameObject (Battle scene nests this under SystemObject).
+        if (seSource != null && seSource.gameObject != gameObject)
+            seSource.transform.SetParent(transform, true);
+        transform.SetParent(null);
         DontDestroyOnLoad(gameObject);
 
         if (seSource == null)

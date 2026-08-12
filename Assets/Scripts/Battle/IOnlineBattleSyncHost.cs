@@ -11,6 +11,7 @@ public interface IOnlineBattleSyncHost
     BattleManager Manager { get; }
     bool IsOnlineMatch { get; }
     bool IsGameEndTriggered { get; }
+    bool IsOpponentForfeitPending { get; }
 
     int GetOnlineTurnTag();
 

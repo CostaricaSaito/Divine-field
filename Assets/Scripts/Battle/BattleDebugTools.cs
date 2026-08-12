@@ -417,21 +417,31 @@ public class BattleDebugTools : MonoBehaviour
         if (!_debugPanelWindowStates.TryGetValue(windowId, out var state))
             state = new DebugPanelWindowState { ExpandedHeight = layoutH };
 
-        if (!state.Minimized && windowRect.height > titleBarH + 8f)
-            state.ExpandedHeight = windowRect.height;
+        if (state.ExpandedHeight < layoutH * 0.5f)
+            state.ExpandedHeight = layoutH;
 
         float btnSize = Mathf.Clamp(titleBarH - 4f, 18f, 30f);
         float minimizedTotalH = titleBarH + btnSize + 6f;
+        float expandedMinH = titleBarH + 8f;
+
+        if (!state.Minimized && windowRect.height > minimizedTotalH + 4f)
+            state.ExpandedHeight = windowRect.height;
+
         float targetH = state.Minimized
             ? minimizedTotalH
-            : Mathf.Max(titleBarH + 8f, state.ExpandedHeight);
+            : Mathf.Max(expandedMinH, state.ExpandedHeight);
         windowRect.width = w;
         windowRect.height = targetH;
         _debugPanelWindowStates[windowId] = state;
 
         windowRect = GUI.Window(windowId, windowRect, id =>
         {
-            DrawDebugPanelMinimizeButton(w, btnSize, windowId);
+            DrawDebugPanelMinimizeButton(
+                w,
+                btnSize,
+                windowId,
+                layoutH,
+                expandedMinH);
 
             bool isMinimized = _debugPanelWindowStates.TryGetValue(windowId, out var liveState)
                 && liveState.Minimized;
@@ -447,7 +457,9 @@ public class BattleDebugTools : MonoBehaviour
         if (_debugPanelWindowStates.TryGetValue(windowId, out state))
         {
             windowRect.width = w;
-            windowRect.height = state.Minimized ? minimizedTotalH : state.ExpandedHeight;
+            windowRect.height = state.Minimized
+                ? minimizedTotalH
+                : Mathf.Max(expandedMinH, state.ExpandedHeight);
             _debugPanelWindowStates[windowId] = state;
         }
     }
@@ -458,16 +470,31 @@ public class BattleDebugTools : MonoBehaviour
         return Mathf.Max(24f, _debugPanelWindowStyle.lineHeight + _debugPanelWindowStyle.padding.vertical + 4f);
     }
 
-    private void DrawDebugPanelMinimizeButton(float windowWidth, float btnSize, int windowId)
+    private void DrawDebugPanelMinimizeButton(
+        float windowWidth,
+        float btnSize,
+        int windowId,
+        float layoutDefaultHeight,
+        float expandedMinH)
     {
         if (!_debugPanelWindowStates.TryGetValue(windowId, out var state))
-            state = new DebugPanelWindowState();
+            state = new DebugPanelWindowState { ExpandedHeight = layoutDefaultHeight };
 
         Rect btnRect = new Rect(windowWidth - btnSize - 6f, 2f, btnSize, btnSize);
         string label = state.Minimized ? "\u25a1" : "\u2212";
         if (GUI.Button(btnRect, label, _debugPanelMinimizeButtonStyle))
         {
-            state.Minimized = !state.Minimized;
+            if (state.Minimized)
+            {
+                state.Minimized = false;
+                if (state.ExpandedHeight < expandedMinH + 4f)
+                    state.ExpandedHeight = layoutDefaultHeight;
+            }
+            else
+            {
+                state.Minimized = true;
+            }
+
             _debugPanelWindowStates[windowId] = state;
         }
     }
@@ -904,9 +931,7 @@ public class BattleDebugTools : MonoBehaviour
     /// </summary>
     public void ApplyInitialSummonOverrides(PlayerStatus player, PlayerStatus enemy)
     {
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-        return;
-#endif
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (player != null && overridePlayerInitialSummon && debugPlayerInitialSummon != null)
         {
             player.SetSummonData(debugPlayerInitialSummon);
@@ -918,6 +943,7 @@ public class BattleDebugTools : MonoBehaviour
             enemy.SetSummonData(debugEnemyInitialSummon);
             Debug.Log($"[BattleDebugTools] Enemy initial summon override: {debugEnemyInitialSummon.summonName}");
         }
+#endif
     }
 
     /// <summary>

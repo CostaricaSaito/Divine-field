@@ -44,7 +44,7 @@ public sealed class OnlineBattleSyncService
 
     public async Task RunResolveStateSyncAsync(CancellationToken ct)
     {
-        if (!_host.IsOnlineMatch || _host.IsGameEndTriggered) return;
+        if (!_host.IsOnlineMatch || _host.IsGameEndTriggered || _host.IsOpponentForfeitPending) return;
 
         try
         {
@@ -111,7 +111,7 @@ public sealed class OnlineBattleSyncService
     /// <returns>true when turn owner was applied by sync (caller should skip ToggleTurnOwner).</returns>
     public async Task<bool> RunTurnBoundarySyncAsync(CancellationToken ct)
     {
-        if (!_host.IsOnlineMatch || _host.IsGameEndTriggered) return false;
+        if (!_host.IsOnlineMatch || _host.IsGameEndTriggered || _host.IsOpponentForfeitPending) return false;
 
         try
         {

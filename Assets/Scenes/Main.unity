@@ -274,7 +274,7 @@ GameObject:
   - component: {fileID: 171737410}
   - component: {fileID: 171737409}
   - component: {fileID: 171737408}
-  - component: {fileID: 171737407}
+  - component: {fileID: 171737411}
   m_Layer: 5
   m_Name: HowtoPlayButton
   m_TagString: Untagged
@@ -302,7 +302,7 @@ RectTransform:
   m_AnchoredPosition: {x: 176.68, y: 892.75}
   m_SizeDelta: {x: 582.2334, y: 109.1688}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &171737407
+--- !u!114 &171737411
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -311,11 +311,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 171737405}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0f5c44e98a9d5b4c99b608da0fffaf4, type: 3}
+  m_Script: {fileID: 11500000, guid: c7d8e9f0a1b24c3d9e0f1a2b3c4d5e6f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  targetSceneName: Battle
-  clickSeAddress: 
+  menuPrefabResourcePath: Prefab/HowToPlay
+  menuParent: {fileID: 0}
 --- !u!114 &171737408
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -359,19 +359,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 171737409}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: SceneTransitionManager, Assembly-CSharp
-        m_MethodName: FadeToScene
-        m_Mode: 5
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: Battle
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &171737409
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -769,6 +757,7 @@ GameObject:
   - component: {fileID: 277555051}
   - component: {fileID: 277555050}
   - component: {fileID: 277555049}
+  - component: {fileID: 277555052}
   m_Layer: 5
   m_Name: FriendBattleButton
   m_TagString: Untagged
@@ -877,6 +866,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 277555047}
   m_CullTransparentMesh: 1
+--- !u!114 &277555052
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 277555047}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f36b0d65217445884a4c7f240752fc4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  alphaThreshold: 0.1
+  useSpritePhysicsShapeFallback: 1
 --- !u!1 &294813529
 GameObject:
   m_ObjectHideFlags: 0
@@ -1434,6 +1437,7 @@ GameObject:
   - component: {fileID: 727806238}
   - component: {fileID: 727806240}
   - component: {fileID: 727806239}
+  - component: {fileID: 727806241}
   m_Layer: 5
   m_Name: SummonButton
   m_TagString: Untagged
@@ -1517,7 +1521,7 @@ MonoBehaviour:
     m_SelectOnDown: {fileID: 0}
     m_SelectOnLeft: {fileID: 0}
     m_SelectOnRight: {fileID: 0}
-  m_Transition: 0
+  m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
     m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
@@ -1542,6 +1546,20 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &727806241
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 727806236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f36b0d65217445884a4c7f240752fc4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  alphaThreshold: 0.1
+  useSpritePhysicsShapeFallback: 1
 --- !u!1 &750883606
 GameObject:
   m_ObjectHideFlags: 0

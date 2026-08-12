@@ -205,8 +205,8 @@ public class PlayerStatus
     }
 
     /// <summary>
-    /// 与えるダメージに状態異常を適用（神無月・衰弱など）。受け手へ渡す直前の値に対して適用する。
-    /// 神無月は衰弱より先に適用し、衰弱は常に最後（17→34→17 などの丸めずれを防ぐ）。
+    /// Apply Kannaduki / Weaken etc. to physical attack power (same order as TOTALATKDEF).
+    /// Kannaduki first, Weaken last (avoids 17→34→17 rounding skew).
     /// </summary>
     public int ApplyOutgoingDamageModifiers(int amount)
     {

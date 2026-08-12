@@ -33,6 +33,7 @@ public static class NetworkBattleBridge
         TributeBlood = 10, // attacker -> defender : HP paid for Tribute Blood
         DebugInjectCard = 11,        // host -> client : dev-only synchronized hand inject
         DebugInjectCardRequest = 12, // client -> host : dev-only inject request (host applies + forwards)
+        Forfeit = 13,                // either peer : voluntary leave (counts as defeat for sender)
     }
 
     public enum RemoteEconomicKind : byte
@@ -171,6 +172,9 @@ public static class NetworkBattleBridge
     /// <summary>Raised when the remote peer disconnects mid-session.</summary>
     public static event Action RemoteDisconnected;
 
+    /// <summary>Raised when the remote peer sends an explicit forfeit before disconnect.</summary>
+    public static event Action RemoteForfeitReceived;
+
     public static bool IsInitialized => _registered;
 
     public static void Initialize()
@@ -204,6 +208,14 @@ public static class NetworkBattleBridge
         }
 
         _registered = false;
+        CancelPendingWaits();
+    }
+
+    /// <summary>
+    /// Cancel in-flight WaitFor* tasks without tearing down the message handler (mid-battle opponent leave).
+    /// </summary>
+    public static void CancelPendingWaits()
+    {
         _attackQueue.Clear();
         _defenseQueue.Clear();
         _magicalSwordQueue.Clear();
@@ -364,6 +376,15 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent Defense ({count} cards)");
     }
 
+    /// <summary>Notify opponent that the local player forfeits (leaves battle).</summary>
+    public static void SendForfeit()
+    {
+        using var writer = new FastBufferWriter(16, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.Forfeit);
+        Send(writer);
+        Debug.Log("[NetworkBattleBridge] Sent Forfeit");
+    }
+
     public static void SendMagicalSwordChoice(bool paid, int powerBonus, int mpCost)
     {
         using var writer = new FastBufferWriter(64, Allocator.Temp);
@@ -407,6 +428,10 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent DebugInjectCardRequest ({cardName}, hostPlayer={targetIsHostPlayer})");
     }
 #endif
+
+    /// <summary>True while blocked waiting for remote attack or defense selection.</summary>
+    public static bool IsWaitingForRemoteSelection()
+        => _attackWaiter != null || _defenseWaiter != null;
 
     /// <summary>Wait for the opponent's main action (empty list = pass).</summary>
     public static Task<RemoteAttack> WaitForRemoteAttackAsync(CancellationToken ct)
@@ -759,6 +784,13 @@ public static class NetworkBattleBridge
                 Debug.Log($"[NetworkBattleBridge] TributeBlood choice received (hpPaid={hpPaid})");
                 Dispatch(_tributeBloodQueue, ref _tributeBloodWaiter,
                     new TributeBloodChoice { HpPaid = hpPaid });
+                break;
+            }
+
+            case MsgType.Forfeit:
+            {
+                Debug.Log("[NetworkBattleBridge] Remote forfeit received");
+                RemoteForfeitReceived?.Invoke();
                 break;
             }
 

@@ -20,6 +20,12 @@ public sealed class BattlePhaseController
 
     public CancellationToken GetPhaseToken() => _phaseCts != null ? _phaseCts.Token : default;
 
+    /// <summary>Cancel in-flight phase work (network waits, turn runners) without disposing the controller.</summary>
+    public void CancelActivePhase()
+    {
+        _phaseCts?.Cancel();
+    }
+
     public void Dispose()
     {
         _phaseCts?.Cancel();
@@ -51,6 +57,7 @@ public sealed class BattlePhaseController
         _host.IsProcessingUseButton = false;
         HandleStateChange();
         HandReloadController.I?.RefreshReloadEntryButton();
+        BattleUIManager.I?.UpdateEconomicActionButtons();
     }
 
     public void EnterAttackPhase()
@@ -342,6 +349,13 @@ public sealed class BattlePhaseController
         try
         {
             if (_host.CurrentState != GameState.EndPhase) return;
+
+            if (_host.Manager != null && _host.Manager.IsOpponentForfeitPending)
+            {
+                if (_host.Manager.BattleExit != null)
+                    await _host.Manager.BattleExit.CompleteOpponentForfeitVictoryAsync();
+                return;
+            }
 
             PlayerStatus attackerStatus = _host.CurrentTurnOwner == PlayerType.Player
                 ? _host.PlayerStatus

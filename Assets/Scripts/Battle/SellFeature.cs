@@ -49,7 +49,9 @@ public class SellFeature
 
     public async Task<bool> ExecuteSellActionAsync()
     {
-        if (battleManager == null || battleManager.CurrentState != GameState.AttackPhase)
+        if (battleManager == null
+            || battleManager.CurrentState != GameState.AttackPhase
+            || !battleManager.PlayerCanUseEconomicActions())
         {
             return false;
         }

@@ -47,9 +47,11 @@ public class ExchangeFeature : MonoBehaviour
 
     public async Task ExecuteExchangeActionAsync()
     {
-        if (battleManager == null || battleManager.CurrentState != GameState.AttackPhase)
+        if (battleManager == null
+            || battleManager.CurrentState != GameState.AttackPhase
+            || !battleManager.PlayerCanUseEconomicActions())
         {
-            Debug.LogWarning("[ExchangeFeature] 両替アクションは AttackSelect フェーズ以外では実行できません");
+            Debug.LogWarning("[ExchangeFeature] 両替アクションは AttackSelect 中のみ実行できます");
             return;
         }
 

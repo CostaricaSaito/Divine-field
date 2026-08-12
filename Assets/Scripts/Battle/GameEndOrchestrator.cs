@@ -109,6 +109,32 @@ public sealed class GameEndOrchestrator
         return true;
     }
 
+    /// <summary>
+    /// Online opponent forfeit/disconnect: skip HP death, Ojyou, PostDeath, and GAMESET; show Victory result directly.
+    /// </summary>
+    public async Task ForceOpponentForfeitVictoryAsync(CancellationToken ct = default)
+    {
+        if (_gameEndTriggered) return;
+        _gameEndTriggered = true;
+
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            BattleUIManager.I?.HideBattleUIForGameEnd();
+            _host.CardStatsDisplay?.HideAllForGameEnd();
+            _host.SetGameState(GameState.BattleEndPhase);
+            await RunGameResultScreenAsync(playerDead: false, enemyDead: false);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[GameEndOrchestrator] Opponent forfeit victory cancelled");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+    }
+
     private async Task RunOjyouPopupOnlyAsync(bool playerDead, bool enemyDead, bool startBgmFade, CancellationToken ct)
     {
         OjyouPopup popupLifetimeRef = null;

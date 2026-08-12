@@ -701,7 +701,6 @@ GameObject:
   - component: {fileID: 133051671}
   - component: {fileID: 133051674}
   - component: {fileID: 133051673}
-  - component: {fileID: 133051676}
   m_Layer: 5
   m_Name: CardDisplayPanel
   m_TagString: Untagged
@@ -766,18 +765,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 133051670}
   m_CullTransparentMesh: 1
---- !u!114 &133051676
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 133051670}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0e4727aee8e782741a09ca0b0517c940, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &145475514
 GameObject:
   m_ObjectHideFlags: 0
@@ -5948,13 +5935,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u767A\u52D5\u4E2D\u306E\n\u9B54\u6CD5"
+  m_text: "\u767A\u52D5\u4E2D\u306E\u9B54\u6CD5"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 44ca7a785a044104499727f4790cbd83, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: 11f2ee769678ef3478fb35b0b295eb0b, type: 2}
@@ -5981,8 +5968,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 30
+  m_fontSizeBase: 30
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -6976,7 +6963,6 @@ GameObject:
   - component: {fileID: 540115811}
   - component: {fileID: 540115814}
   - component: {fileID: 540115813}
-  - component: {fileID: 540115815}
   m_Layer: 5
   m_Name: EnemyCardDisplayPanel
   m_TagString: Untagged
@@ -7041,18 +7027,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 540115810}
   m_CullTransparentMesh: 1
---- !u!114 &540115815
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 540115810}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0e4727aee8e782741a09ca0b0517c940, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &550855548
 GameObject:
   m_ObjectHideFlags: 0
@@ -9684,6 +9658,7 @@ GameObject:
   - component: {fileID: 1113383168}
   - component: {fileID: 1113383167}
   - component: {fileID: 1113383166}
+  - component: {fileID: 1113383169}
   m_Layer: 5
   m_Name: EnemyCurrentMagicButton
   m_TagString: Untagged
@@ -9708,8 +9683,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 430.28094, y: -865}
-  m_SizeDelta: {x: 123.3891, y: 99.491}
+  m_AnchoredPosition: {x: 418.80957, y: -866.7}
+  m_SizeDelta: {x: 145, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1113383166
 MonoBehaviour:
@@ -9793,6 +9768,18 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1113383164}
   m_CullTransparentMesh: 1
+--- !u!114 &1113383169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1113383164}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0a6b4c3e5f7489012cdef3456789012, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1175184530
 GameObject:
   m_ObjectHideFlags: 0
@@ -11832,6 +11819,7 @@ MonoBehaviour:
   shivaDirectAttackFreezeSettings: {fileID: 11400000, guid: c5f9a2b3d4e5678901abcdef12345678, type: 2}
   summonSkillButton: {fileID: 1904038048}
   enemySummonSkillButton: {fileID: 30631432}
+  bahamutPopupPrefab: {fileID: 0}
   cardPurchaseAnimation: {fileID: 830370672}
   cardSellAnimation: {fileID: 1376425099}
   gameResultPrefab: {fileID: 45535123951503131, guid: 3fcb4c72a397aeb4dab0988f528c4b52, type: 3}
@@ -12802,6 +12790,7 @@ GameObject:
   - component: {fileID: 2036596105}
   - component: {fileID: 2036596107}
   - component: {fileID: 2036596106}
+  - component: {fileID: 2036596108}
   m_Layer: 5
   m_Name: ReturnToTopButton
   m_TagString: Untagged
@@ -12867,6 +12856,19 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2036596104}
   m_CullTransparentMesh: 1
+--- !u!114 &2036596108
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2036596104}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5d9e3f1a2b4438591c2d3e4f5678901, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  clickSeAddress: Assets/SE/決定ボタンを押す3.mp3
 --- !u!1 &2039896230
 GameObject:
   m_ObjectHideFlags: 0
@@ -12885,6 +12887,7 @@ GameObject:
   - component: {fileID: 2039896235}
   - component: {fileID: 2039896234}
   - component: {fileID: 2039896233}
+  - component: {fileID: 2039896241}
   m_Layer: 5
   m_Name: BattleUIManager
   m_TagString: Untagged
@@ -12931,6 +12934,7 @@ MonoBehaviour:
   archMagicBarrierPresenter: {fileID: 0}
   restraintHeavyPresenter: {fileID: 2039896236}
   magicPanelPresenter: {fileID: 2039896235}
+  enemyCurrentMagicPopupPresenter: {fileID: 2039896241}
   popupPresenter: {fileID: 2039896234}
   cardController: {fileID: 2039896233}
   turnCountRoot: {fileID: 1966137401}
@@ -13086,6 +13090,19 @@ MonoBehaviour:
   exchangePopupPrefab: {fileID: 4859073390059423885, guid: 35cdf38aa3c489540807f9921899407c, type: 3}
   exchangeConfirmPopupPrefab: {fileID: 4859073390059423885, guid: a0670d19a33074b4da82f5186b422e54, type: 3}
   popupCanvas: {fileID: 871309408}
+--- !u!114 &2039896241
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2039896230}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b9cc7aa35234a4c9ac9663290accc15, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentMagicsPrefab: {fileID: 0}
 --- !u!1 &2074869781
 GameObject:
   m_ObjectHideFlags: 0

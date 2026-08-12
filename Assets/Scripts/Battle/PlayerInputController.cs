@@ -33,6 +33,8 @@ public sealed class PlayerInputController
         _isProcessingUseButton = false;
         BattleUIManager.I?.SetHandClickable(true);
         BattleUIManager.I?.RefreshUseButton();
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     public void ResetDefenseUseButtonLocks()
@@ -40,12 +42,16 @@ public sealed class PlayerInputController
         _isProcessingUseButton = false;
         _playerDefenseCombatResolving = false;
         BattleUIManager.I?.HideYurusuButton();
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     public void ResetAllLocks()
     {
         _isProcessingUseButton = false;
         _playerDefenseCombatResolving = false;
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     public void SetSelectedCard(CardUI ui)
@@ -158,6 +164,8 @@ public sealed class PlayerInputController
             _isProcessingUseButton = true;
             BattleUIManager.I?.SetHandClickable(false);
             BattleUIManager.I?.RefreshUseButton();
+            BattleUIManager.I?.UpdateEconomicActionButtons();
+            HandReloadController.I?.RefreshReloadEntryButton();
 
             if (_host.IsAdHocDefenseWaitActive())
             {
@@ -172,12 +180,14 @@ public sealed class PlayerInputController
         _isProcessingUseButton = true;
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.RefreshUseButton();
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        HandReloadController.I?.RefreshReloadEntryButton();
 
         if (_host.CurrentState == GameState.AttackPhase && _host.Attacker == PlayerType.Player)
         {
             if (_host.PlayerStatus != null && _host.PlayerStatus.HasFreezeEffect())
             {
-                _isProcessingUseButton = false;
+                UnlockUseButton();
                 return;
             }
 
@@ -647,6 +657,8 @@ public sealed class PlayerInputController
         _isProcessingUseButton = false;
         BattleUIManager.I?.SetHandClickable(true);
         BattleUIManager.I?.RefreshUseButton();
+        BattleUIManager.I?.UpdateEconomicActionButtons();
+        HandReloadController.I?.RefreshReloadEntryButton();
     }
 
     private void ClearCombatSnapshots()

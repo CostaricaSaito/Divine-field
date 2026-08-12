@@ -39,6 +39,9 @@ public class RemotePlayerAgent : EnemyAI
         HandRefillService handRefill,
         PlayerStatus enemyStatus)
     {
+        if (await TryCompleteDeferredOpponentForfeitAsync())
+            return null;
+
         SoundEffectPlayer.I?.Play("Assets/SE/鳩時計1.mp3");
         Debug.Log("[RemotePlayerAgent] Waiting for remote attack selection...");
         LastAttackSelection = null;
@@ -169,6 +172,9 @@ public class RemotePlayerAgent : EnemyAI
         ElementType attackElement,
         List<CardData> incomingForReflection = null)
     {
+        if (await TryCompleteDeferredOpponentForfeitAsync())
+            return null;
+
         Debug.Log("[RemotePlayerAgent] Waiting for remote defense selection...");
         LastDefenseSelection = null;
 
@@ -410,5 +416,15 @@ public class RemotePlayerAgent : EnemyAI
         if (HammadnessRules.ContainsHammadness(resolved)) return true;
         if (GodrageRules.IsGodrageDoublingCombo(resolved)) return true;
         return false;
+    }
+
+    static async Task<bool> TryCompleteDeferredOpponentForfeitAsync()
+    {
+        var bm = BattleManager.I;
+        if (bm == null || !bm.IsOpponentForfeitPending || bm.BattleExit == null)
+            return false;
+
+        await bm.BattleExit.CompleteOpponentForfeitVictoryAsync();
+        return true;
     }
 }

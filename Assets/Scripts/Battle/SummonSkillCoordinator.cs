@@ -62,6 +62,14 @@ public sealed class SummonSkillCoordinator
         return TryOpenStandardManifestationPopup(summoner, opponent);
     }
 
+    public void DismissPopupIfOpen()
+    {
+        if (_bahamut.IsPopupOpen)
+            _bahamut.DismissPopupIfOpen();
+        if (_popupRoot != null)
+            OnPopupCancelClicked();
+    }
+
     public async Task TryRunEnemyMegaFlareAsync(CancellationToken cancellationToken)
         => await _bahamut.TryRunEnemyMegaFlareAsync(cancellationToken);
 

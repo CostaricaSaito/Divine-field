@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,6 +53,14 @@ public class HandReloadController : MonoBehaviour
     public bool IsHandReloadUiBlocking => _popupOpen || _sequenceRunning;
 
     public bool IsReloadPopupContentOpen => _popupOpen;
+
+    /// <summary>Reload popup only (not mid-sequence). Used when another blocking UI takes over.</summary>
+    public void DismissReloadPopupIfOpen()
+    {
+        if (!_popupOpen) return;
+        ClosePopupOnly();
+        BattleManager.I?.RefreshUIFromHandReloadClose();
+    }
 
     void Awake()
     {

@@ -1983,7 +1983,7 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Bahamut Mega Flare: ImportantPopup → card sheet → attack resolve (100% hit, no smoke).
+    /// Bahamut Mega Flare: 0.5s → ImportantPopup → 0.5s → white flash → card sheet → attack resolve.
     /// </summary>
     public async Task RunMegaFlareSequenceAsync(
         PlayerStatus summoner,
@@ -2001,19 +2001,22 @@ public class CardSequenceManager : MonoBehaviour
 
         Side side = ReferenceEquals(summoner, battleManager.GetPlayerStatus()) ? Side.Player : Side.Enemy;
 
-        float introLife = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.MegaFlare, null, side)
-            : 0f;
-        await ImportantPopupSettings.WaitAfterLifetimeAsync(introLife, cancellationToken);
+        await Task.Delay(500, cancellationToken);
+
+        if (BattleUIManager.I != null)
+            BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.MegaFlare, null, side);
+
+        await Task.Delay(500, cancellationToken);
 
         var card = battleManager.cardDealer != null
             ? battleManager.cardDealer.InstantiateCardFromTemplate(template)
             : null;
         if (card == null) return;
 
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+
         // Hand-not-in-deck card: ShowCardDetail → AddCardSelection fails while summon flow is active.
         BattleUIManager.I?.ShowCardSheetVisualOnly(card, side);
-        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
         cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
         cardStatsDisplay?.UpdateDisplay();
         SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");

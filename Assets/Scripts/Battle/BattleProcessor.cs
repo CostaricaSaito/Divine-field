@@ -330,8 +330,8 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 反射で跳ね返す攻撃の「既存パイプライン適用後」の攻撃力（加護・防御側抑制まで）。
-    /// 元の攻撃者／防御者（例：敵がプレイヤーを狙ったとき）で計算する。
+    /// Reflection attack power after the shared pipeline (blessings, suppression, Kannaduki/Weaken).
+    /// Uses original attacker/defender (e.g. when enemy targeted the player).
     /// </summary>
     public int ComputeReflectionIncomingAttackPower(
         List<CardData> attackCards,
@@ -679,7 +679,11 @@ public class BattleProcessor : MonoBehaviour
         totalAttackPower = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
             attacker, defender, attackCards, totalAttackPower);
 
-        Debug.Log($"[BattleProcessor] ===== 最終攻撃力（防御側抑制後）: {totalAttackPower} =====");
+        // Match TOTALATKDEF / reflection pipeline: Kannaduki and Weaken apply to physical ATK.
+        if (!CardRules.IsMagicClassifiedAttackCombo(attackCards))
+            totalAttackPower = attacker.ApplyOutgoingDamageModifiers(totalAttackPower);
+
+        Debug.Log($"[BattleProcessor] ===== final ATK (after outgoing modifiers): {totalAttackPower} =====");
         return totalAttackPower;
     }
     
@@ -1061,12 +1065,10 @@ public class BattleProcessor : MonoBehaviour
 
         int baseDamage = attackPower - defensePower;
         int firstPhaseDamage = Mathf.Max(0, baseDamage);
-        if (!CardRules.IsMagicClassifiedAttackCombo(attackCards))
-            firstPhaseDamage = attacker.ApplyOutgoingDamageModifiers(firstPhaseDamage);
 
-        Debug.Log($"[BattleProcessor] ===== ダメージ計算 =====");
-        Debug.Log($"[BattleProcessor] 基本ダメージ: {attackPower} - {defensePower} = {baseDamage}");
-        Debug.Log($"[BattleProcessor] 第1段（超過・与ダメ補正後）: {firstPhaseDamage}");
+        Debug.Log($"[BattleProcessor] ===== damage calc =====");
+        Debug.Log($"[BattleProcessor] excess: {attackPower} - {defensePower} = {baseDamage}");
+        Debug.Log($"[BattleProcessor] phase1 (ATK already includes Kannaduki/Weaken): {firstPhaseDamage}");
 
         if (defender.IsCastingArchMagic)
         {

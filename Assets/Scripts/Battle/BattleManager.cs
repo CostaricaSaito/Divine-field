@@ -20,6 +20,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     private readonly CombatSnapshotStore _combatSnapshots = new();
     private readonly BattleBootstrap _bootstrap = new();
+    private BattleExitCoordinator _battleExit;
+    private bool _opponentForfeitPending;
     private GameEndOrchestrator _gameEnd;
     private OnlineBattleSyncService _onlineSync;
     private EnemyTurnRunner _enemyTurn;
@@ -43,6 +45,14 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     public EnemyDefenseResolver EnemyDefense => _enemyDefense;
     public PlayerInputController PlayerInput => _playerInput;
     public BattlePhaseController PhaseController => _phaseController;
+    public BattleExitCoordinator BattleExit => _battleExit;
+
+    /// <summary>Opponent disconnected/forfeited mid-sequence; complete victory at EndPhase or next remote wait.</summary>
+    public bool IsOpponentForfeitPending => _opponentForfeitPending;
+
+    public void SetOpponentForfeitPending(bool pending) => _opponentForfeitPending = pending;
+
+    public void ClearOpponentForfeitPending() => _opponentForfeitPending = false;
 
     PlayerStatus IBattleContext.PlayerStatus => playerStatus;
     PlayerStatus IBattleContext.EnemyStatus => enemyStatus;
@@ -544,12 +554,15 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     private void Awake()
     {
         I = this;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         ResolveBattleDebugToolsReference();
+#endif
         _adHocDefense = new AdHocDefenseCoordinator(this);
         _dualBladeDefense = new DualBladeDefenseCoordinator(this);
         _battleOpening = new BattleOpeningCoordinator(this);
         _summonSkills = new SummonSkillCoordinator(this);
         _gameEnd = new GameEndOrchestrator(this);
+        _battleExit = new BattleExitCoordinator(this);
         _onlineSync = new OnlineBattleSyncService(this);
         _enemyTurn = new EnemyTurnRunner(this);
         _enemyDefense = new EnemyDefenseResolver(this);
@@ -567,6 +580,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
             "[BattleManager] BattleBgmController is missing. Wire it on BattleManager or attach it to the BGM object in the Battle scene.");
     }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void ResolveBattleDebugToolsReference()
     {
         if (battleDebugTools != null) return;
@@ -578,8 +592,18 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         if (battleDebugTools == null)
             Debug.LogWarning("[BattleManager] BattleDebugTools not found. Debug summon overrides will not apply.");
     }
+#endif
 
-    void Start() => _bootstrap.RunStartup(this);
+    void Start()
+    {
+        _bootstrap.RunStartup(this);
+        _battleExit?.Initialize();
+    }
+
+    /// <summary>Top-left ReturnToTop: CPU exits immediately; online shows LeavingCaution.</summary>
+    public void RequestReturnToTop() => _battleExit?.RequestReturnToTop();
+
+    public bool IsBattleExitInProgress => _battleExit?.IsExitInProgress ?? false;
 
     BattleManager IBattleBootstrapHost.Manager => this;
     List<CardData> IBattleBootstrapHost.PlayerHand => playerHand;
@@ -659,6 +683,27 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     /// <summary>手札リロードのポップアップ表示中、またはリロード演出シーケンス中。経済・魔法パネル等のブロックに使用。</summary>
     public bool IsHandReloadPopupOpen => HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking;
+
+    /// <summary>
+    /// プレイヤーが buy/sell/exchange を新規開始できる AttackSelect（MainActionSelect）か。
+    /// リロード入口と同じ層2/3・ターン条件（3枚以上同種などのリロード固有条件は除く）。
+    /// </summary>
+    public bool PlayerCanUseEconomicActions()
+    {
+        if (IsGameEndTriggered) return false;
+        if (!IsBattleOpeningSequenceComplete) return false;
+        if (CurrentState != GameState.AttackPhase) return false;
+        if (CurrentBattleStep != BattleStep.MainActionSelect) return false;
+        if (CurrentTurnOwner != PlayerType.Player) return false;
+
+        var ps = GetPlayerStatus();
+        if (ps != null && ps.IsCastingArchMagic) return false;
+        if (ps != null && ps.HasFreezeEffect()) return false;
+        if (IsUseButtonLocked) return false;
+        if (IsPlayerDefenseCombatResolving) return false;
+        if (IsHandReloadPopupOpen) return false;
+        return true;
+    }
 
     /// <summary>手札リロードのキャンセル／リロード確定演出の完了後、攻撃フェーズの手札・ボタンを再構築する。</summary>
     public void RefreshUIFromHandReloadClose()
@@ -891,6 +936,14 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         }
     }
 
+    /// <summary>手札リロード・召喚スキル・経済アクションなど、操作ブロック系 UI を閉じる。</summary>
+    public void CloseBlockingBattlePopups()
+    {
+        HandReloadController.I?.DismissReloadPopupIfOpen();
+        _summonSkills?.DismissPopupIfOpen();
+        CancelCurrentEconomicAction();
+    }
+
     /// <summary>
     /// 「買う」アクションを実行（BuyFeatureに委譲）
     /// </summary>
@@ -935,8 +988,13 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     public bool IsGameEndTriggered => _gameEnd?.IsGameEndTriggered ?? false;
 
-    public Task<bool> TryHandleDeathIfAnyAsync(CancellationToken ct = default)
-        => _gameEnd.TryHandleDeathIfAnyAsync(ct);
+    public async Task<bool> TryHandleDeathIfAnyAsync(CancellationToken ct = default)
+    {
+        bool ended = await _gameEnd.TryHandleDeathIfAnyAsync(ct);
+        if (ended)
+            ClearOpponentForfeitPending();
+        return ended;
+    }
 
     BattleManager IGameEndOrchestratorHost.Manager => this;
     MonoBehaviour IGameEndOrchestratorHost.HostBehaviour => this;
@@ -970,6 +1028,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     BattleManager IOnlineBattleSyncHost.Manager => this;
     bool IOnlineBattleSyncHost.IsOnlineMatch => IsOnlineMatch;
     bool IOnlineBattleSyncHost.IsGameEndTriggered => _gameEnd?.IsGameEndTriggered ?? false;
+    bool IOnlineBattleSyncHost.IsOpponentForfeitPending => _opponentForfeitPending;
     int IOnlineBattleSyncHost.GetOnlineTurnTag()
         => _summonTurnCounters.PlayerOwnTurnsEnded + _summonTurnCounters.EnemyOwnTurnsEnded;
     PlayerStatus IOnlineBattleSyncHost.PlayerStatus => playerStatus;
@@ -1239,6 +1298,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     private void OnDestroy()
     {
+        _battleExit?.Shutdown();
         _bootstrap.Shutdown(this);
         _phaseController?.Dispose();
     }

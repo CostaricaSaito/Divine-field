@@ -58,6 +58,9 @@ public sealed class EnemyTurnRunner
         var attack = await _host.EnemyAI.ExecuteAttackTurnAsync(
             _host.CpuHand, _host.BattleProcessor, _host.HandRefill, _host.EnemyStatus);
 
+        if (_host.Manager != null && _host.Manager.IsGameEndTriggered)
+            return;
+
         if (attack == null)
         {
             _host.SetGameState(GameState.CombatResolvePhase);

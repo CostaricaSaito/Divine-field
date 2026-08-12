@@ -74,6 +74,7 @@ public class SummonSkillButton : MonoBehaviour
     {
         if (_self == null || _opponent == null || BattleManager.I == null) return;
 
+        SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す3.mp3");
         BattleManager.I.ClearPlayerSelfAttackTargetMode();
 
         if (!BattleManager.I.TryOpenSummonSkillPopup(_self, _opponent))
