@@ -120,6 +120,8 @@ public sealed class DamagePopupSettings : ScriptableObject
                 new Color(1f, 0.92f, 0.35f), Color.white),
             HandReloadEntry(DamagePopupKind.HandReload, "\u30ea\u30ed\u30fc\u30c9"),
             HandReloadEntry(DamagePopupKind.HandDiscardRestart, "\u5f15\u304d\u76f4\u3057"),
+            MessageEntry(DamagePopupKind.OrdinReflectionBounce, "\u5f3e\u304d\u8fd4\u3059",
+                new Color(0.78f, 0.8f, 0.84f, 1f), Color.black, Color.white),
         };
     }
 

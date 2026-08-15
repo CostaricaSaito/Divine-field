@@ -79,7 +79,7 @@ public static class OrbDefenseReactionFlow
             else if (orb.orbReactionRule is OrbOfAquatideRuleSO)
             {
                 await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
-                if (originalDefender != null && !originalDefender.IsDead())
+                if (originalDefender != null)
                 {
                     int heal = Mathf.Min(originalDefender.maxHP, firstPhaseDamageB * 2);
                     await battleProcessor.ApplyOrbHpRecoveryAsync(orb, originalDefender, heal, cancellationToken);
@@ -117,25 +117,40 @@ public static class OrbDefenseReactionFlow
                 return;
             }
 
-            List<CardData> picks;
-            try
+            CardData card = null;
+            while (true)
             {
-                picks = await bm.WaitForReflectionChainDefenseAsync(attackSnap, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
+                List<CardData> picks;
+                try
+                {
+                    picks = await bm.WaitForReflectionChainDefenseAsync(attackSnap, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+
+                if (picks == null || picks.Count == 0)
+                {
+                    await battleProcessor.ResolveOrbCounterCombatAsync(
+                        attackSnap, firstPhaseDamageB, null, counterAtt, target, bm.playerHand, false);
+                    return;
+                }
+
+                card = picks[0];
+                if (card == null) return;
+
+                if (ShiningBarrierRules.IsBarrierOnlySelection(picks))
+                {
+                    await ShiningBarrierDefenseFlow.RunPlayerAdHocBarrierInterceptAsync(
+                        bm, battleProcessor, bm.HandRefill, card, cancellationToken);
+                    if (cancellationToken.IsCancellationRequested) return;
+                    continue;
+                }
+
+                break;
             }
 
-            if (picks == null || picks.Count == 0)
-            {
-                await battleProcessor.ResolveOrbCounterCombatAsync(
-                    attackSnap, firstPhaseDamageB, null, counterAtt, target, bm.playerHand, false);
-                return;
-            }
-
-            CardData card = picks[0];
-            if (card == null) return;
             if (card.cardType == CardType.Magic && bm.Sequences != null)
                 await bm.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(card, cancellationToken);
             else
@@ -164,8 +179,23 @@ public static class OrbDefenseReactionFlow
         else
         {
             if (bm.GetEnemyAI() == null) return;
-            var pick = await bm.GetEnemyAI().ExecuteDefenseSelectAsync(
-                bm.cpuHand, ElementHelper.GetCombinedElement(attackSnap), attackSnap);
+
+            CardData pick = await bm.GetEnemyAI().ExecuteDefenseSelectAsync(
+                bm.cpuHand, ElementHelper.GetIncomingAttackElement(attackSnap), attackSnap);
+            while (pick != null && ShiningBarrierRules.IsShiningBarrierCard(pick))
+            {
+                pick = await ShiningBarrierDefenseFlow.RunEnemyStripIncomingAndReSelectAsync(
+                    bm,
+                    battleProcessor,
+                    bm.HandRefill,
+                    pick,
+                    attackSnap,
+                    bm.cpuHand,
+                    bm.GetEnemyAI(),
+                    skipInitialBarrierDisplay: false,
+                    cancellationToken);
+                if (cancellationToken.IsCancellationRequested) return;
+            }
 
             if (pick != null)
             {

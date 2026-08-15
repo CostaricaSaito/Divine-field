@@ -168,6 +168,29 @@ public class BattlePopupPresenter : MonoBehaviour
         return 0f;
     }
 
+    /// <summary>オーディン切り払い「弾き返す」。白フラッシュ50ms・物理反射SE・銀背景ポップアップ。</summary>
+    public float ShowOrdinReflectionBouncePopup(PlayerStatus target)
+    {
+        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
+        SoundEffectPlayer.I?.Play(ReflectionBounceAudio.Physical);
+        var popup = SpawnPopupFor(target);
+        if (popup == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] オーディン反射ポップアップ生成に失敗");
+            return 0f;
+        }
+
+        var damageText = popup.GetComponent<DamagePopup>();
+        if (damageText != null)
+        {
+            damageText.SetupOrdinReflectionBounce();
+            return damageText.fadeDuration;
+        }
+
+        Debug.LogWarning("[BattlePopupPresenter] DamagePopup が見つかりません（オーディン反射）");
+        return 0f;
+    }
+
     /// <summary>打ち払い「打ち払う」。白フラッシュ50ms・金属バットSE・黄背景ポップアップ。</summary>
     public float ShowParryIntroPopup(PlayerStatus target)
     {

@@ -28,6 +28,9 @@ public class CardSheetDisplay : MonoBehaviour
     [SerializeField] private Color mpCostClusterBoxColor = new Color(0.88f, 0.22f, 0.22f, 1f);
     [SerializeField] private Color mpCostClusterTextColor = Color.white;
 
+    [Header("MagicPool remaining uses overlay (Magic Fountain presentation)")]
+    [SerializeField] private TMP_Text cardSheetPoolUsesText;
+
     private CardData currentCardData;
     private PlayerStatus _ownerForDisplay;
     private HitRateApplicability.SheetContext _sheetContext = HitRateApplicability.SheetContext.Normal;
@@ -64,6 +67,82 @@ public class CardSheetDisplay : MonoBehaviour
         if (descText) descText.text = cardData.description;
         SetupElementDisplay(cardData);
         SetupGoldOrMpCostDisplay(cardData, ownerForMpDisplay);
+        HidePoolRemainingUsesDisplay();
+    }
+
+    /// <summary>Show pooled magic remaining uses over ArtworkSlot (Magic Fountain).</summary>
+    public void SetPoolRemainingUsesDisplay(int uses)
+    {
+        EnsurePoolUsesText();
+        if (cardSheetPoolUsesText == null) return;
+
+        cardSheetPoolUsesText.gameObject.SetActive(true);
+        ApplyPoolUsesTextStyle();
+        cardSheetPoolUsesText.text = uses.ToString();
+    }
+
+    public void HidePoolRemainingUsesDisplay()
+    {
+        if (cardSheetPoolUsesText != null)
+            cardSheetPoolUsesText.gameObject.SetActive(false);
+    }
+
+    private void EnsurePoolUsesText()
+    {
+        if (cardSheetPoolUsesText != null) return;
+
+        Transform parent = artworkSlot != null ? artworkSlot.transform : transform;
+        var existing = parent.Find("CardSheet_PoolUses");
+        if (existing != null)
+        {
+            cardSheetPoolUsesText = existing.GetComponent<TMP_Text>();
+            ApplyPoolUsesTextStyle();
+            return;
+        }
+
+        var go = new GameObject("CardSheet_PoolUses", typeof(RectTransform), typeof(TextMeshProUGUI));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+
+        cardSheetPoolUsesText = go.GetComponent<TextMeshProUGUI>();
+        ApplyPoolUsesTextStyle();
+    }
+
+    private void ApplyPoolUsesTextStyle()
+    {
+        if (cardSheetPoolUsesText == null) return;
+
+        TMP_FontAsset font = cardNameText != null ? cardNameText.font : cardSheetPoolUsesText.font;
+        if (font == null) return;
+
+        cardSheetPoolUsesText.font = font;
+        cardSheetPoolUsesText.alignment = TextAlignmentOptions.Center;
+        cardSheetPoolUsesText.fontSize = 100f;
+        cardSheetPoolUsesText.fontStyle = FontStyles.Bold;
+        cardSheetPoolUsesText.raycastTarget = false;
+        cardSheetPoolUsesText.color = Color.white;
+
+        Material sharedMat = font.material;
+        if (sharedMat == null) return;
+
+        const float outlineWidth = 0.3f;
+        var mat = Instantiate(sharedMat);
+        if (mat.HasProperty(ShaderUtilities.ID_FaceColor))
+            mat.SetColor(ShaderUtilities.ID_FaceColor, Color.white);
+        if (mat.HasProperty(ShaderUtilities.ID_OutlineColor))
+            mat.SetColor(ShaderUtilities.ID_OutlineColor, Color.black);
+        if (mat.HasProperty(ShaderUtilities.ID_OutlineWidth))
+            mat.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
+
+        cardSheetPoolUsesText.fontSharedMaterial = sharedMat;
+        cardSheetPoolUsesText.fontMaterial = mat;
+        cardSheetPoolUsesText.outlineWidth = outlineWidth;
+        cardSheetPoolUsesText.outlineColor = Color.black;
     }
 
     /// <summary>
@@ -106,7 +185,7 @@ public class CardSheetDisplay : MonoBehaviour
     private void RefreshHitRateLineOnAtkDefText()
     {
         if (currentCardData == null || atkDefText == null) return;
-        if (HammadnessRules.IsHammadnessCard(currentCardData))
+        if (HammadnessRules.IsHammadnessCard(currentCardData) && _displayAttack <= 0)
         {
             atkDefText.text = HammadnessRules.AtkQuestionMarkLabel;
             return;

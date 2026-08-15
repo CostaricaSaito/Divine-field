@@ -274,7 +274,7 @@ public class BattleProcessor : MonoBehaviour
         int defensePower = CalculateTotalDefensePower(defenseCard, defender);
 
         // 属性マッチング: 属性が一致しない防御は無効
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
         ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
         if (attackElement != ElementType.None && defenseCard != null
             && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
@@ -363,7 +363,7 @@ public class BattleProcessor : MonoBehaviour
             defenseCard = null;
 
         int defensePower = CalculateTotalDefensePower(defenseCard, defender);
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
         ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
         if (attackElement != ElementType.None && defenseCard != null
             && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
@@ -413,7 +413,7 @@ public class BattleProcessor : MonoBehaviour
 
         int attackPower = GetOrbCounterDisplayedAttackPower(attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
         int defensePower = CalculateTotalDefensePower(defenseCard, counterTarget);
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
         ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
         if (attackElement != ElementType.None && defenseCard != null
             && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
@@ -990,7 +990,7 @@ public class BattleProcessor : MonoBehaviour
         int defensePower = CalculateTotalDefensePower(defenseCards, defender);
 
         // 属性マッチング: 防御の合算属性が攻撃属性と一致しなければ防御力0
-        ElementType attackElement = ElementHelper.GetCombinedElement(attackCards);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
         ElementType defElement = ElementHelper.GetCombinedElement(defenseCards);
         if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
             && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -256,10 +257,7 @@ public class BuyFeature
 
         var ui = cardDealer.CreateCardUIForHand(acquired);
         if (ui != null)
-        {
-            ui.Reveal();
-            CardDealAudio.Play(acquired, true);
-        }
+            _ = HandRevealPresentation.RevealCardAsync(acquired, ui, new HandRevealBatchContext(), CancellationToken.None);
     }
 
     public bool IsBuyProcessActive() => isBuyModeActive || isProcessingBuy;

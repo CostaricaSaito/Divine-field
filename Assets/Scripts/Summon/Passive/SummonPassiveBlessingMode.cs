@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// <see cref="SummonData"/> の加護の決め方。SerializeReference の代わりにインスペクター互換の enum で指定する。
 /// </summary>
 public enum SummonPassiveBlessingMode
@@ -21,4 +21,6 @@ public enum SummonPassiveBlessingMode
     Shiva = 7,
     /// <summary>アルカディアス（攻撃フェーズ Primary 等を必中。命中率は <see cref="HitRateRules"/>）</summary>
     Arcadias = 8,
+    /// <summary>オーディン（切り払い：無属性物理攻撃を5%で自動反射）</summary>
+    Ordin = 9,
 }

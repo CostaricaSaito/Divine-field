@@ -179,12 +179,12 @@ public class CardSelectionManager : MonoBehaviour
             return false;
         }
 
-        // ===== 攻撃：魔法（Primary）＋ 物理（Attack + Flexible）は同時不可。Primary同士同様、既存を消して新カードへ差し替え =====
+        // ===== 攻撃：魔法と物理攻撃の併用は Flexible/AddOn 同士のみ。違反時は既存を消して新カードへ差し替え =====
         if (BattleManager.I != null
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player
             && !BattleManager.I.IsReflectionChainDefensePending()
-            && AttackComboSelectionRules.ConflictsMagicPrimaryWithPhysicalAttackFlexible(selectedCards, card))
+            && AttackComboSelectionRules.ConflictsAttackMagicUseRuleMix(selectedCards, card))
         {
             ClearAllWithUI();
         }

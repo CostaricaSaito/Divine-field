@@ -89,26 +89,62 @@ public class EnemyAI
     }
 
     /// <summary>
-    /// 攻撃カードの選び方：通常攻撃を優先、なければ使えるものから選択
-    /// 魔法カードはMP消費可能な場合のみ候補
+    /// 攻撃カードの選び方。
+    /// 手札の攻撃系魔法を最優先し、プール済みなら物理攻撃とランダム選択。
+    /// 状態異常付与・回復魔法は有用な場合のみ。
     /// </summary>
-    public CardData SelectAttackCard(List<CardData> enemyHand, PlayerStatus enemyStatus, HandRefillService handRefill = null)
+    public CardData SelectAttackCard(
+        List<CardData> enemyHand,
+        PlayerStatus enemyStatus,
+        PlayerStatus playerStatus = null,
+        HandRefillService handRefill = null)
     {
         handRefill ??= BattleManager.I?.HandRefill;
-        // 大魔法（ArchMagic）は敵 AI の自動選択対象から除外する（現状は全て）。
-        // 将来 AI を拡張した場合のために明示的にスキップする。
-        // 第1優先: 通常攻撃カード（PrimaryAttack or Attack型）
-        foreach (var c in enemyHand)
-        {
-            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
-            if (c.cardType == CardType.Magic) continue;
-            if (ArchMagicRules.IsArchMagicCard(c)) continue;
-            if (CardRules.IsUsableInAttackPhase(c)
-                && (c.cardType == CardType.Attack || c.attackPhaseUseRule == AttackPhaseUseRule.Primary))
-                return c;
-        }
+        playerStatus ??= BattleManager.I?.GetPlayerStatus();
+        if (enemyHand == null) return null;
 
-        // 第2優先: その他の通常カード
+        var handAttackMagic = EnemyMagicAiRules.CollectPrioritizedHandAttackMagic(
+            enemyHand, enemyStatus, playerStatus, handRefill);
+        if (handAttackMagic.Count > 0)
+            return handAttackMagic[Random.Range(0, handAttackMagic.Count)];
+
+        CardData magicFountain = FindMagicFountainCard(enemyHand, handRefill);
+        if (magicFountain != null && OwnPoolHasMagic())
+            return magicFountain;
+
+        CardData magicSealer = FindMagicSealerCard(enemyHand, handRefill);
+        if (magicSealer != null && OpponentHasPooledMagic())
+            return magicSealer;
+
+        CardData arrowOfIndra = FindArrowOfIndraCard(enemyHand, handRefill);
+        if (arrowOfIndra != null && OpponentHasDestroyableHand())
+            return arrowOfIndra;
+
+        var poolMagic = EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
+        var physical = EnemyMagicAiRules.CollectPhysicalAttackCandidates(enemyHand, handRefill);
+
+        CardData primaryPhysical = PickPreferredPhysicalAttack(physical);
+        if (poolMagic.Count > 0 && primaryPhysical != null)
+            return Random.Range(0, 2) == 0
+                ? poolMagic[Random.Range(0, poolMagic.Count)]
+                : primaryPhysical;
+
+        if (poolMagic.Count > 0)
+            return poolMagic[Random.Range(0, poolMagic.Count)];
+
+        if (primaryPhysical != null)
+            return primaryPhysical;
+
+        var statusMagic = EnemyMagicAiRules.CollectUsefulHandStatusMagic(
+            enemyHand, enemyStatus, playerStatus, handRefill);
+        if (statusMagic.Count > 0)
+            return statusMagic[Random.Range(0, statusMagic.Count)];
+
+        var selfRecovery = EnemyMagicAiRules.CollectUsefulHandSelfRecoveryMagic(
+            enemyHand, enemyStatus, handRefill);
+        if (selfRecovery.Count > 0)
+            return selfRecovery[Random.Range(0, selfRecovery.Count)];
+
         foreach (var c in enemyHand)
         {
             if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
@@ -118,38 +154,97 @@ public class EnemyAI
                 return c;
         }
 
-        // 第3優先: 手札の魔法カード（MPが足りる＋プールに空き or 同種。パネル登録済みは手札攻撃に使わない）
-        foreach (var c in enemyHand)
-        {
-            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
-            if (c.cardType != CardType.Magic) continue;
-            if (!CardRules.IsUsableInAttackPhase(c)) continue;
-            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
-            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(c.mpCost)) continue;
-            if (MagicPoolManager.I != null && MagicPoolManager.I.IsInPool(c, PlayerType.Enemy)) continue;
-            if (MagicPoolManager.I != null && !MagicPoolManager.I.CanAddToPool(c, PlayerType.Enemy)) continue;
-            return c;
-        }
+        if (magicSealer != null)
+            return magicSealer;
+
+        if (arrowOfIndra != null)
+            return arrowOfIndra;
 
         return null;
     }
 
-    /// <summary>
-    /// 敵MagicPoolから使用可能なカードを選択（MPが足りるもの）
-    /// </summary>
-    public CardData SelectAttackFromPool(PlayerStatus enemyStatus)
+    private static CardData PickPreferredPhysicalAttack(List<CardData> physicalCandidates)
     {
-        if (MagicPoolManager.I == null) return null;
-        var poolEntries = MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy);
-        foreach (var entry in poolEntries)
+        if (physicalCandidates == null || physicalCandidates.Count == 0) return null;
+
+        foreach (var c in physicalCandidates)
         {
-            if (entry.cardData == null) continue;
-            if (!CardRules.IsUsableInAttackPhase(entry.cardData)) continue;
-            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
-            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(entry.cardData.mpCost)) continue;
-            return entry.cardData;
+            if (c != null
+                && (c.cardType == CardType.Attack || c.attackPhaseUseRule == AttackPhaseUseRule.Primary))
+                return c;
+        }
+
+        return physicalCandidates[Random.Range(0, physicalCandidates.Count)];
+    }
+
+    private static CardData FindMagicFountainCard(List<CardData> enemyHand, HandRefillService handRefill)
+    {
+        if (enemyHand == null) return null;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            var c = enemyHand[i];
+            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
+            if (!MagicFountainRules.IsMagicFountainCard(c)) continue;
+            if (!CardRules.IsUsableInAttackPhase(c)) continue;
+            return c;
         }
         return null;
+    }
+
+    private static bool OwnPoolHasMagic()
+    {
+        return MagicPoolManager.I != null
+            && MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy).Count > 0;
+    }
+
+    private static CardData FindMagicSealerCard(List<CardData> enemyHand, HandRefillService handRefill)
+    {
+        if (enemyHand == null) return null;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            var c = enemyHand[i];
+            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
+            if (!MagicSealerRules.IsMagicSealerCard(c)) continue;
+            if (!CardRules.IsUsableInAttackPhase(c)) continue;
+            return c;
+        }
+        return null;
+    }
+
+    private static bool OpponentHasPooledMagic()
+    {
+        return MagicPoolManager.I != null
+            && MagicPoolManager.I.GetPoolEntries(PlayerType.Player).Count > 0;
+    }
+
+    private static CardData FindArrowOfIndraCard(List<CardData> enemyHand, HandRefillService handRefill)
+    {
+        if (enemyHand == null) return null;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            var c = enemyHand[i];
+            if (!IsEnemyHandCardAvailable(c, handRefill)) continue;
+            if (!ArrowOfIndraRules.IsArrowOfIndraCard(c)) continue;
+            if (!CardRules.IsUsableInAttackPhase(c)) continue;
+            return c;
+        }
+        return null;
+    }
+
+    private static bool OpponentHasDestroyableHand()
+    {
+        var bm = BattleManager.I;
+        if (bm?.playerHand == null) return false;
+        return HandDestroyRules.PickRandomDestroyableCard(bm.playerHand, PlayerType.Player) != null;
+    }
+
+    /// <summary>敵MagicPoolから使用可能なカードを選択（MPが足りる＋相手に効果があるもの）。</summary>
+    public CardData SelectAttackFromPool(PlayerStatus enemyStatus, PlayerStatus playerStatus = null)
+    {
+        playerStatus ??= BattleManager.I?.GetPlayerStatus();
+        var candidates = EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
+        if (candidates.Count == 0) return null;
+        return candidates[Random.Range(0, candidates.Count)];
     }
 
     /// <summary>
@@ -194,9 +289,15 @@ public class EnemyAI
             choices.RemoveAll(c => c != null && c.GetInstanceID() == excludeId);
         }
 
-        // 物理無効・打ち払いは専用ルート（ExecuteDefenseSelectAsync 先頭の優先分岐）のみ
-        choices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
-        choices.RemoveAll(c => c != null && ParryRules.IsParryCard(c));
+        // Dedicated reactive-only cards use ExecuteDefenseSelectAsync priority branches.
+        choices.RemoveAll(c =>
+            c != null
+            && BlockingRules.IsPhysicalBlockingCard(c)
+            && !CardRules.CanServeAsNormalArmorDefense(c));
+        choices.RemoveAll(c =>
+            c != null
+            && ParryRules.IsParryCard(c)
+            && !CardRules.CanServeAsNormalArmorDefense(c));
         if (choices.Count == 0)
             return null;
 
@@ -260,22 +361,11 @@ public class EnemyAI
         return null;
     }
 
-    /// <summary>MagicPool から攻撃可能な魔法候補。</summary>
-    protected List<CardData> GetPoolAttackCandidates(PlayerStatus enemyStatus)
+    /// <summary>MagicPool から攻撃可能な魔法候補（無意味な状態異常魔法は除外）。</summary>
+    protected List<CardData> GetPoolAttackCandidates(PlayerStatus enemyStatus, PlayerStatus playerStatus = null)
     {
-        var list = new List<CardData>();
-        if (MagicPoolManager.I == null) return list;
-
-        foreach (var entry in MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy))
-        {
-            var c = entry.cardData;
-            if (c == null) continue;
-            if (!CardRules.IsUsableInAttackPhase(c)) continue;
-            if (enemyStatus != null && enemyStatus.IsMagicUseForbidden()) continue;
-            if (enemyStatus != null && enemyStatus.currentMP < enemyStatus.GetEffectiveMagicMpCost(c.mpCost)) continue;
-            list.Add(c);
-        }
-        return list;
+        playerStatus ??= BattleManager.I?.GetPlayerStatus();
+        return EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
     }
 
     /// <summary>
@@ -284,12 +374,20 @@ public class EnemyAI
     public virtual List<CardData> SelectAttackCombo(List<CardData> enemyHand, PlayerStatus enemyStatus, HandRefillService handRefill = null)
     {
         handRefill ??= BattleManager.I?.HandRefill;
+        var playerStatus = BattleManager.I?.GetPlayerStatus();
         var handCandidates = CardRules.GetAttackChoices(enemyHand, PlayerType.Enemy);
         handCandidates.RemoveAll(c => c == null || ArchMagicRules.IsArchMagicCard(c) || !IsEnemyHandCardAvailable(c, handRefill));
+        handCandidates.RemoveAll(c =>
+        {
+            if (c == null || c.cardType != CardType.Magic) return false;
+            if (CardRules.IsRecoveryCard(c))
+                return !EnemyMagicAiRules.IsEnemySelfRecoveryMagicUseful(c, enemyStatus);
+            return !EnemyMagicAiRules.IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus);
+        });
 
-        var poolCandidates = GetPoolAttackCandidates(enemyStatus);
+        var poolCandidates = GetPoolAttackCandidates(enemyStatus, playerStatus);
 
-        var primary = SelectAttackCard(enemyHand, enemyStatus, handRefill);
+        var primary = SelectAttackCard(enemyHand, enemyStatus, playerStatus, handRefill);
         if (primary == null && poolCandidates.Count > 0)
             primary = poolCandidates[0];
 
@@ -562,6 +660,14 @@ public class EnemyAI
         if (defenseCard == null)
             defenseCard = SelectDefenseCard(cpuHand, attackElement, incomingForReflection);
 
+        if (defenseCard == null && incomingForReflection != null
+            && ShiningBarrierRules.CanUseAgainstIncoming(incomingForReflection))
+        {
+            defenseCard = FindShiningBarrierCard(cpuHand);
+            if (defenseCard != null)
+                Debug.Log($"[EnemyAI] 光のバリアを使用: {defenseCard.cardName}");
+        }
+
         if (defenseCard != null)
         {
             Debug.Log($"[EnemyAI] 防御カード選択完了: {defenseCard.cardName}");
@@ -573,6 +679,18 @@ public class EnemyAI
 
         await Task.Delay(500);
         return defenseCard;
+    }
+
+    private static CardData FindShiningBarrierCard(List<CardData> hand)
+    {
+        if (hand == null) return null;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            var c = hand[i];
+            if (c != null && ShiningBarrierRules.IsShiningBarrierCard(c))
+                return c;
+        }
+        return null;
     }
 
     /// <summary>

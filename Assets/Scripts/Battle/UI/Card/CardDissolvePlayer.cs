@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Plays UIEffect Dissolve on a card sheet GameObject at runtime.
+/// Plays UIEffect Dissolve on every visible graphic under a card sheet root.
 /// Transition texture/settings are copied from BarriarDamage.prefab (Transition-Noise00).
 /// </summary>
 public static class CardDissolvePlayer
@@ -18,6 +18,7 @@ public static class CardDissolvePlayer
     private static UIEffect _templateEffect;
     private static UIEffectTweener _templateTweener;
 
+    /// <summary>Dissolve the entire card sheet (BG, artwork, texts, icons).</summary>
     public static async Task PlayAsync(GameObject sheetRoot, CancellationToken ct)
     {
         if (sheetRoot == null || ct.IsCancellationRequested) return;
@@ -35,6 +36,13 @@ public static class CardDissolvePlayer
             tasks.Add(PlayOnHostAsync(host, ct));
 
         await Task.WhenAll(tasks);
+    }
+
+    /// <summary>Dissolve an already-instantiated <see cref="CardSheetDisplay"/>.</summary>
+    public static Task PlayAsync(CardSheetDisplay sheetDisplay, CancellationToken ct)
+    {
+        if (sheetDisplay == null) return Task.CompletedTask;
+        return PlayAsync(sheetDisplay.gameObject, ct);
     }
 
     private static async Task PlayOnHostAsync(GameObject hostGo, CancellationToken ct)
@@ -74,22 +82,22 @@ public static class CardDissolvePlayer
 
     private static List<GameObject> CollectEffectHosts(GameObject sheetRoot)
     {
-        var list = new List<GameObject>(2);
-        TryAddHost(list, sheetRoot.transform.Find("Panel/BG"));
-        TryAddHost(list, sheetRoot.transform.Find("ArtworkSlot"));
-        if (list.Count > 0) return list;
+        var list = new List<GameObject>(12);
+        var seen = new HashSet<int>();
 
-        var graphic = sheetRoot.GetComponentInChildren<Graphic>(true);
-        if (graphic != null)
+        if (sheetRoot == null) return list;
+
+        var graphics = sheetRoot.GetComponentsInChildren<Graphic>(includeInactive: true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            var graphic = graphics[i];
+            if (graphic == null || !graphic.gameObject.activeInHierarchy) continue;
+            int id = graphic.gameObject.GetInstanceID();
+            if (!seen.Add(id)) continue;
             list.Add(graphic.gameObject);
-        return list;
-    }
+        }
 
-    private static void TryAddHost(List<GameObject> list, Transform t)
-    {
-        if (t == null) return;
-        if (t.GetComponent<Graphic>() != null)
-            list.Add(t.gameObject);
+        return list;
     }
 
     private static void CacheDissolveTemplate()

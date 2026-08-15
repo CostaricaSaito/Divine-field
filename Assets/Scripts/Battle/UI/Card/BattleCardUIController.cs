@@ -282,6 +282,72 @@ public class BattleCardUIController : MonoBehaviour
         UpdateHandCardHighlights();
     }
 
+    /// <summary>
+    /// Append one card sheet to the display panel and rebuild layout for the given order.
+    /// Used by Magic Fountain sequential reveal.
+    /// </summary>
+    public CardSheetDisplay AppendCardSheetVisualOnly(
+        CardData card,
+        Side side,
+        IReadOnlyList<CardData> orderedCardsForLayout,
+        PlayerStatus ownerForMpDisplay = null)
+    {
+        if (card == null || orderedCardsForLayout == null || orderedCardsForLayout.Count == 0)
+            return null;
+
+        Transform parent = side == Side.Player ? playerCardDisplayPanel : enemyCardDisplayPanel;
+        if (parent == null) return null;
+        if (!parent.gameObject.activeSelf) parent.gameObject.SetActive(true);
+
+        if (cardSheetPrefab == null)
+        {
+            HandleCardDisplayFallback(card, side);
+            return null;
+        }
+
+        var go = Instantiate(cardSheetPrefab, parent);
+        if (!go.activeSelf) go.SetActive(true);
+
+        CardSheetDisplay display = go.GetComponent<CardSheetDisplay>();
+        if (display != null)
+        {
+            if (ownerForMpDisplay == null)
+            {
+                ownerForMpDisplay = side == Side.Player
+                    ? BattleManager.I?.GetPlayerStatus()
+                    : BattleManager.I?.GetEnemyStatus();
+            }
+            display.Setup(card, ownerForMpDisplay);
+        }
+
+        activeCardSheets.Add(go);
+
+        if (cardLayoutManager != null)
+        {
+            if (parent is RectTransform prt) cardLayoutManager.SetLayoutPanelRect(prt);
+            var panelSheets = CollectActiveSheetsOnPanel(parent);
+            cardLayoutManager.SetActiveCardSheets(panelSheets);
+            cardLayoutManager.RebuildLayoutForCardDataOrder(new List<CardData>(orderedCardsForLayout));
+            cardLayoutManager.SetActiveCardSheets(activeCardSheets);
+        }
+
+        UpdateHandCardHighlights();
+        return display;
+    }
+
+    private List<GameObject> CollectActiveSheetsOnPanel(Transform panel)
+    {
+        var list = new List<GameObject>();
+        if (panel == null) return list;
+        for (int i = 0; i < activeCardSheets.Count; i++)
+        {
+            var go = activeCardSheets[i];
+            if (go != null && go.transform.parent == panel)
+                list.Add(go);
+        }
+        return list;
+    }
+
     //==== パブリックAPI：カード選択管理 =====
     public List<CardData> GetSelectedCards() => cardSelectionManager.GetSelectedCards();
 

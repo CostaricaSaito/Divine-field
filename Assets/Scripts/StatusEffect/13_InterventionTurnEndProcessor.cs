@@ -198,6 +198,10 @@ public static class InterventionTurnEndProcessor
         }
 
         bm.BeginInterventionPlayerDefensePhase(atkList);
+        if (await OrdinSlashReflectFlow.TryInterceptPlayerDefenseAsync(
+                bm, atkList, OrdinInterceptContext.Intervention, ct))
+            return;
+
         List<CardData> defs;
         try
         {

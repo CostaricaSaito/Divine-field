@@ -141,6 +141,13 @@ public class SummonData : ScriptableObject
         return name == "Arcadias" || StableSummonId == "arcadias";
     }
 
+    /// <summary>Whether Odin slash reflect passive (切り払い) applies on qualifying incoming attacks.</summary>
+    public bool IsOrdinSlashReflect()
+    {
+        if (passiveBlessingMode == SummonPassiveBlessingMode.Ordin) return true;
+        return name == "Ordin" || StableSummonId == "ordin";
+    }
+
     /// <summary>Whether Bahamut Mega Flare / dual-skill popup rules apply.</summary>
     public bool IsBahamut() => BahamutRules.IsBahamut(this);
 

@@ -32,11 +32,7 @@ public static class ReflectionRules
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack)) return false;
-        var list = new List<CardData>(incomingAttack.Count);
-        for (int i = 0; i < incomingAttack.Count; i++)
-            list.Add(incomingAttack[i]);
-        if (ElementHelper.GetCombinedElement(list) != ElementType.None)
-            return false;
+        if (ElementHelper.GetIncomingAttackElement(incomingAttack) != ElementType.None) return false;
         if (CardRules.IsMagicClassifiedAttackCombo(incomingAttack)) return false;
         return true;
     }

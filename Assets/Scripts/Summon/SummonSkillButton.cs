@@ -53,10 +53,7 @@ public class SummonSkillButton : MonoBehaviour
         else
         {
             can = _self != null
-                && !_self.hasUsedManifestationSkill
-                && DisadvantageRules.IsDisadvantaged(_self)
-                && _self.summonData != null
-                && _self.summonData.manifestationCard != null
+                && UltimateReadyRules.IsAvailable(_self)
                 && turnOk
                 && !_self.IsCastingArchMagic
                 && !_self.HasFreezeEffect()
@@ -64,7 +61,8 @@ public class SummonSkillButton : MonoBehaviour
                 && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
                 && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
                 && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
-                && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0);
+                && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0)
+                && (BattleManager.I == null || !BattleManager.I.ShouldDeferPlayerSummonGlow(_self) || !isLocalPlayerSide);
         }
 
         _button.interactable = can;

@@ -172,23 +172,7 @@ public class BattleDebugTools : MonoBehaviour
     private bool _showAilmentDebugPanelCacheInitialized;
     private bool _showDisasterDebugPanelCacheInitialized;
 
-    [ContextMenu("デバッグ：プレイヤーHPを10に設定")]
-    public void SetPlayerHPTo10()
-    {
-        if (!Application.isPlaying || battleManager == null)
-        {
-            Debug.LogWarning("[BattleDebugTools] 再生中かつ battleManager 設定が必要です。");
-            return;
-        }
-
-        var player = battleManager.GetPlayerStatus();
-        player.currentHP = 10;
-        RefreshStatusUi();
-
-        Debug.Log("[BattleDebugTools] デバッグ：プレイヤーHPを10に設定しました");
-    }
-
-    [ContextMenu("デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定")]
+    [ContextMenu("デバッグ：プレイヤー HP10 / MP0 / GP0 に設定")]
     public void SetPlayerHp10Mp0Gp0()
     {
         if (!Application.isPlaying || battleManager == null)
@@ -202,8 +186,22 @@ public class BattleDebugTools : MonoBehaviour
         player.currentMP = Mathf.Clamp(0, 0, player.maxMP);
         player.currentGP = Mathf.Clamp(0, 0, player.maxGP);
         RefreshStatusUi();
+        battleManager.SyncUltimateReadyState(player);
 
         Debug.Log("[BattleDebugTools] デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定しました（合計10・劣勢境界）");
+    }
+
+    [ContextMenu("デバッグ：次のプレイヤードローを SuperRare+ に固定")]
+    public void DebugArmNextDrawSuperRarePlus()
+    {
+        if (!EnsurePlaying()) return;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        CardDealer.DebugForceNextPlayerDrawSuperRarePlus = true;
+        Debug.Log("[BattleDebugTools] 次のプレイヤードローを SuperRare+ に固定しました（1回のみ）。");
+#else
+        Debug.LogWarning("[BattleDebugTools] ドローデバッグは Editor / Development ビルドでのみ利用できます。");
+#endif
     }
 
     [ContextMenu("デバッグ：ターンカウントを49に設定")]
@@ -224,61 +222,6 @@ public class BattleDebugTools : MonoBehaviour
 
         Debug.Log(
             $"[BattleDebugTools] ターンカウントを {targetDisplay} に設定しました（次ターン終了で {targetDisplay + 1}）");
-    }
-
-    /// <summary>衰弱のアイコン・効果テスト用。</summary>
-    [ContextMenu("テスト：プレイヤーに衰弱を付与")]
-    public void TestApplyWeakenToPlayer()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.Weaken);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] テスト：プレイヤーに衰弱を付与しました");
-    }
-
-    [ContextMenu("テスト：敵に衰弱を付与")]
-    public void TestApplyWeakenToEnemy()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetEnemyStatus(), StatusEffectType.Weaken);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] テスト：敵に衰弱を付与しました");
-    }
-
-    [ContextMenu("テスト：プレイヤーに病を付与（ターン終了で病系処理）")]
-    public void TestApplySicknessToPlayer()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.Sickness);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] プレイヤーに「病」を付与。攻撃フェーズ終了後の EndPhase で病系処理が走ります。");
-    }
-
-    [ContextMenu("テスト：プレイヤーに重病を付与")]
-    public void TestApplySevereSicknessToPlayer()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.SevereSickness);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] プレイヤーに「重病」を付与。");
-    }
-
-    [ContextMenu("テスト：プレイヤーに煉獄病を付与")]
-    public void TestApplyPurgatorySicknessToPlayer()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.PurgatorySickness);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] プレイヤーに「煉獄病」を付与。");
-    }
-
-    [ContextMenu("テスト：プレイヤーに楽園病を付与")]
-    public void TestApplyParadiseSicknessToPlayer()
-    {
-        if (!EnsurePlaying()) return;
-        ApplyGrantForDebug(battleManager.GetPlayerStatus(), StatusEffectType.ParadiseSickness);
-        RefreshStatusUi();
-        Debug.Log("[BattleDebugTools] プレイヤーに「楽園病」を付与。");
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -565,6 +508,10 @@ public class BattleDebugTools : MonoBehaviour
             InterventionTurnEndProcessor.DebugForceInterventionChance100,
             "介入発生率100%（デバッグ）");
 
+        OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100 = GUILayout.Toggle(
+            OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100,
+            "オーディン切り払い100%（デバッグ）");
+
         GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
     }
 
@@ -677,6 +624,21 @@ public class BattleDebugTools : MonoBehaviour
                 $"プレイヤー {battleManager.playerHand?.Count ?? 0} / CPU {battleManager.cpuHand?.Count ?? 0} / 上限 {BattleManager.MaxHandCards}",
                 _debugPanelLineStyle);
         }
+
+        GUILayout.Space(6f);
+        GUILayout.Label("ドロー抽選（デバッグ）", _debugPanelLineStyle);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        bool superRareDrawArmed = CardDealer.DebugForceNextPlayerDrawSuperRarePlus;
+        GUILayout.Label(
+            superRareDrawArmed ? "次ドロー: SuperRare+ 固定（待機中）" : "次ドロー: 通常抽選",
+            _debugPanelLineStyle);
+        if (GUILayout.Button(
+                superRareDrawArmed ? "SuperRare+ 固定（待機中・再設定）" : "次ドロー SuperRare+ 固定",
+                _debugPanelButtonStyle))
+            DebugArmNextDrawSuperRarePlus();
+#else
+        GUILayout.Label("Editor / Development ビルドでのみ利用できます", _debugPanelLineStyle);
+#endif
 
         _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", _debugPanelTextFieldStyle, GUILayout.ExpandWidth(true));
         GUILayout.Label("フィルタ（カード名・asset名の部分一致）", _debugPanelLineStyle);
@@ -962,7 +924,6 @@ public class BattleDebugTools : MonoBehaviour
         }
     }
 
-    [ContextMenu("デバッグ：プレイヤー召喚をガルーダに切替")]
     public void DebugSetPlayerSummonGaruda()
     {
         if (!EnsurePlaying()) return;
@@ -977,7 +938,6 @@ public class BattleDebugTools : MonoBehaviour
         Debug.Log("[BattleDebugTools] プレイヤー召喚をガルーダに設定しました。");
     }
 
-    [ContextMenu("デバッグ：敵召喚をガルーダに切替")]
     public void DebugSetEnemySummonGaruda()
     {
         if (!EnsurePlaying()) return;
@@ -1004,30 +964,15 @@ public class BattleDebugTools : MonoBehaviour
 #endif
     }
 
-    [ContextMenu("デバッグ：天変地異固定をトグル")]
-    public void DebugTogglePinDisasterKind()
+    [ContextMenu("デバッグ：オーディン切り払い100%をトグル")]
+    public void DebugToggleOrdinSlashReflect100()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        DisasterCatalog.DebugPinDisasterKind = !DisasterCatalog.DebugPinDisasterKind;
-        Debug.Log(
-            "[BattleDebugTools] 天変地異固定: " +
-            $"{DisasterCatalog.DebugPinDisasterKind} → {DisasterCatalog.GetDisplayName(DisasterCatalog.DebugPinnedDisasterKind)}");
+        OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100 =
+            !OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100;
+        Debug.Log($"[BattleDebugTools] オーディン切り払い100%: {OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100}");
 #else
-        Debug.LogWarning("[BattleDebugTools] 天変地異デバッグは Editor / Development ビルドでのみ利用できます。");
-#endif
-    }
-
-    [ContextMenu("デバッグ：天変地異固定種別を次へ")]
-    public void DebugCyclePinnedDisasterKind()
-    {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        DisasterCatalog.DebugPinDisasterKind = true;
-        DisasterCatalog.CycleDebugPinnedDisasterKind(1);
-        Debug.Log(
-            "[BattleDebugTools] 天変地異固定: " +
-            DisasterCatalog.GetDisplayName(DisasterCatalog.DebugPinnedDisasterKind));
-#else
-        Debug.LogWarning("[BattleDebugTools] 天変地異デバッグは Editor / Development ビルドでのみ利用できます。");
+        Debug.LogWarning("[BattleDebugTools] オーディンデバッグは Editor / Development ビルドでのみ利用できます。");
 #endif
     }
 

@@ -4,21 +4,15 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// Hand card destruction presentation and removal from hand list / UI.
+/// Legacy entry point for Indra hand destroy. Prefer <see cref="CardDestroyPresentation"/>.
 /// </summary>
 public static class HandDestroyService
 {
-    public const string DestroyMessage = "雷が手札を破壊する";
-    public const string NoTargetMessage = "破壊する手札がない！";
-    public const string SeAddress = "Assets/SE/Thunder-Synthetic01-1.mp3";
-    private const int PreDissolveHoldMs = 500;
+    public const string DestroyMessage = CardDestroyPresentation.Presets.IndraHandDestroy.DestroyMessage;
+    public const string NoTargetMessage = CardDestroyPresentation.Presets.IndraHandDestroy.NoTargetMessage;
+    public const string SeAddress = CardDestroyPresentation.Presets.IndraHandDestroy.SoundEffectPath;
 
-    private static readonly Color MessageColor = new Color(1f, 0.92f, 0.35f);
-
-    /// <summary>
-    /// Full sequence: message popup, card reveal, dissolve, remove from hand.
-    /// </summary>
-    public static async Task PlayDestroySequenceAsync(
+    public static Task PlayDestroySequenceAsync(
         BattleManager bm,
         PlayerStatus blessingOwner,
         PlayerStatus victim,
@@ -27,82 +21,9 @@ public static class HandDestroyService
         CardData targetCard,
         bool noTarget,
         CancellationToken ct)
-    {
-        var ui = BattleUIManager.I;
-        if (ui == null || blessingOwner == null) return;
+        => CardDestroyPresentation.PlayIndraHandDestroyAsync(
+            bm, blessingOwner, victim, victimHand, victimIsPlayerHand, targetCard, noTarget, ct);
 
-        string message = noTarget ? NoTargetMessage : DestroyMessage;
-        SoundEffectPlayer.I?.Play(SeAddress);
-        float fadeSec = ui.ShowMessagePopupForTarget(blessingOwner, message, MessageColor);
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, ct);
-        if (ct.IsCancellationRequested || noTarget || targetCard == null) return;
-
-        Side victimSide = victimIsPlayerHand ? Side.Player : Side.Enemy;
-
-        ui.ShowCardSheetVisualOnly(targetCard, victimSide);
-        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-
-        GameObject sheetRoot = null;
-        if (ui.TryGetCardSheetDisplayForCardData(targetCard, out var sheetDisplay) && sheetDisplay != null)
-            sheetRoot = sheetDisplay.gameObject;
-
-        await Task.Delay(PreDissolveHoldMs, ct);
-        if (ct.IsCancellationRequested) return;
-
-        if (sheetRoot != null)
-            await CardDissolvePlayer.PlayAsync(sheetRoot, ct);
-
-        ui.DestroyCardSheetsForCardDataOnPanel(targetCard, victimSide);
-        RemoveFromHand(bm, victimHand, targetCard, victimIsPlayerHand);
-    }
-
-    /// <summary>
-    /// Resolve destroy target on victim hand (by index from host sync, else by name).
-    /// </summary>
     public static CardData ResolveTargetCard(List<CardData> victimHand, string cardName, int handIndex)
-    {
-        if (victimHand == null || victimHand.Count == 0) return null;
-
-        if (handIndex >= 0 && handIndex < victimHand.Count)
-        {
-            var atIndex = victimHand[handIndex];
-            if (atIndex != null && (string.IsNullOrEmpty(cardName) || atIndex.cardName == cardName))
-                return atIndex;
-        }
-
-        if (string.IsNullOrEmpty(cardName)) return null;
-
-        for (int i = 0; i < victimHand.Count; i++)
-        {
-            var c = victimHand[i];
-            if (c != null && c.cardName == cardName)
-                return c;
-        }
-
-        return null;
-    }
-
-    private static void RemoveFromHand(
-        BattleManager bm,
-        List<CardData> hand,
-        CardData card,
-        bool isPlayerHand)
-    {
-        if (hand == null || card == null) return;
-
-        if (isPlayerHand && card.cardUI != null)
-        {
-            var uiObj = card.cardUI.gameObject;
-            card.cardUI = null;
-            Object.Destroy(uiObj);
-        }
-
-        hand.Remove(card);
-
-        if (isPlayerHand && bm != null && bm.handPanel is RectTransform rt)
-            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
-
-        if (isPlayerHand)
-            BattleUIManager.I?.SetIntroModeUI(hand);
-    }
+        => CardDestroyPresentation.ResolveTargetCard(victimHand, cardName, handIndex);
 }

@@ -22,7 +22,7 @@ public static class SummonIndraLifecycle
         bool noTarget,
         CancellationToken ct)
     {
-        await HandDestroyService.PlayDestroySequenceAsync(
+        await CardDestroyPresentation.PlayIndraHandDestroyAsync(
             bm, blessingOwner, victim, victimHand, victimIsPlayerHand, targetCard, noTarget, ct);
     }
 }

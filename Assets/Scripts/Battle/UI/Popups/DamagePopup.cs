@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Text;
 using System.Threading;
@@ -189,6 +189,9 @@ public class DamagePopup : MonoBehaviour
                 return;
             case DamagePopupKind.ParryIntro:
                 SetupParryYellowBanner(messageOverride ?? entry.message);
+                return;
+            case DamagePopupKind.OrdinReflectionBounce:
+                SetupOrdinReflectionBounce(messageOverride ?? entry.message);
                 return;
             case DamagePopupKind.HandReload:
             case DamagePopupKind.HandDiscardRestart:
@@ -458,6 +461,24 @@ public class DamagePopup : MonoBehaviour
         SetupRainbowMessage(
             string.IsNullOrEmpty(message) ? entry.message : message,
             entry.outlineColor);
+    }
+
+    /// <summary>オーディン切り払い：銀背景・黒字・白縁の「弾き返す」。</summary>
+    public void SetupOrdinReflectionBounce(string message = null)
+    {
+        var entry = ResolveSettings().GetEntryOrDefault(DamagePopupKind.OrdinReflectionBounce);
+        ApplyBackground(entry);
+        string text = string.IsNullOrEmpty(message) ? entry.message : message;
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize: false);
+        var t = messageText != null ? messageText : valueText;
+        if (t != null)
+        {
+            t.richText = false;
+            if (t.fontSharedMaterial == null && t.font != null)
+                t.fontSharedMaterial = t.font.material;
+            float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.22f;
+            ApplyOutlinedMaterialInstance(t, entry.outlineColor, ow);
+        }
     }
 
     private void SetupRainbowMessage(string message, Color outlineColor)

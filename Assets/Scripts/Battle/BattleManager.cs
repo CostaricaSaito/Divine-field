@@ -114,6 +114,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     [SerializeField] private DiseaseTurnEndSettings diseaseTurnEndSettings;
     [SerializeField, FormerlySerializedAs("shivaDirectAttackSealSettings")]
     private ShivaDirectAttackFreezeSettings shivaDirectAttackFreezeSettings;
+    [SerializeField] private OrdinSlashReflectSettings ordinSlashReflectSettings;
 
     [Header("UI/演出")]
     public SummonSkillButton summonSkillButton;
@@ -127,6 +128,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     [Header("リザルト")]
     [Tooltip("未設定時は Resources.Load(\"Prefab/GameResult\") を試す")]
     [SerializeField] private GameObject gameResultPrefab;
+    [Tooltip("未設定時は Resources.Load(\"Prefab/NPCResult\") を試す")]
+    [SerializeField] private GameObject npcResultPrefab;
     
     [SerializeField] private HandRefillService handRefill;
     public HandRefillService HandRefill => handRefill;
@@ -188,6 +191,13 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     /// <summary>攻撃フェーズでプレイヤーが「自分自身」を攻撃対象にするモード（TotalATK/DEF タップで切替）。</summary>
     private bool _playerSelfAttackTargetMode;
+
+    /// <summary>Shining Barrier: incoming attack resolves as None element until cleared.</summary>
+    private bool _incomingAttackForceNoneElement;
+    public bool IncomingAttackForceNoneElement => _incomingAttackForceNoneElement;
+
+    public void SetIncomingAttackForceNoneElement(bool value) => _incomingAttackForceNoneElement = value;
+    public void ClearIncomingAttackForceNoneElement() => _incomingAttackForceNoneElement = false;
 
     /// <summary>自分自身への攻撃を確定するモードか（CPUは使用しない）。</summary>
     public bool IsPlayerSelfAttackTargetMode => _playerSelfAttackTargetMode;
@@ -273,6 +283,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     void IDualBladeDefenseHost.ClearCardStatsSequence()
         => cardStatsDisplay?.ClearSequenceCards();
+
+    void IDualBladeDefenseHost.ClearIncomingAttackForceNoneElement()
+        => ClearIncomingAttackForceNoneElement();
 
     void IDualBladeDefenseHost.SetEnemyAttackSequenceDisplay(List<CardData> attackCards)
     {
@@ -636,6 +649,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     DiseaseTurnEndSettings IBattleBootstrapHost.DiseaseTurnEndSettings => diseaseTurnEndSettings;
     ShivaDirectAttackFreezeSettings IBattleBootstrapHost.ShivaDirectAttackFreezeSettings
         => shivaDirectAttackFreezeSettings;
+
+    OrdinSlashReflectSettings IBattleBootstrapHost.OrdinSlashReflectSettings
+        => ordinSlashReflectSettings;
     BuyFeature IBattleBootstrapHost.BuyFeature => buyFeature;
     SellFeature IBattleBootstrapHost.SellFeature => sellFeature;
     void IBattleBootstrapHost.BeginOpeningSequence() => _ = BattleStartSequenceAsync();
@@ -744,11 +760,11 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     private List<CardData> GetAttackCardsForCombat()
     {
         var uiAttackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
-        IReadOnlyList<CardData> remoteLast = null;
-        if (IsOnlineMatch && enemyAI is RemotePlayerAgent remote)
-            remoteLast = remote.LastAttackSelection;
+        IReadOnlyList<CardData> attackerLastSelection = null;
+        if (Attacker == PlayerType.Enemy && enemyAI != null)
+            attackerLastSelection = enemyAI.LastAttackSelection;
         return _combatSnapshots.ResolveAttackCardsForCombat(
-            Attacker, uiAttackCards, IsOnlineMatch, remoteLast);
+            Attacker, uiAttackCards, attackerLastSelection);
     }
 
     public void RefreshSummonSkillButtonInteractables()
@@ -857,6 +873,18 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     {
         cardStatsDisplay?.ClearSequenceCardsAndAttackDisplayLocks();
         cardStatsDisplay?.UpdateDisplay();
+    }
+
+    /// <summary>防御やり直し前にシーケンス表示だけクリアする。</summary>
+    public void ClearCardStatsSequenceOnly()
+        => cardStatsDisplay?.ClearSequenceCards();
+
+    /// <summary>プレイヤー防御フェーズ用：相手攻撃の CardSheet / TotalATKDEF を再掲示。</summary>
+    public void SetEnemyIncomingAttackDisplay(List<CardData> attackCards)
+    {
+        if (attackCards == null || attackCards.Count == 0) return;
+        BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(attackCards, Side.Enemy);
+        SetStatsDisplaySequenceCards(attackCards, "攻撃", Side.Enemy);
     }
 
     /// <summary>
@@ -1005,6 +1033,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     EnemyAI IGameEndOrchestratorHost.EnemyAI => enemyAI;
     CardStatsDisplay IGameEndOrchestratorHost.CardStatsDisplay => cardStatsDisplay;
     GameObject IGameEndOrchestratorHost.GameResultPrefab => gameResultPrefab;
+    GameObject IGameEndOrchestratorHost.NpcResultPrefab => npcResultPrefab;
+    bool IGameEndOrchestratorHost.IsOnlineMatch => IsOnlineMatch;
     bool IGameEndOrchestratorHost.IsPostDeathSequenceActive
     {
         get => _postDeathSequenceActive;
@@ -1268,6 +1298,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     void IBattlePhaseControllerHost.ClearConfusionAttackTargetResolvedForDisplay()
         => ClearConfusionAttackTargetResolvedForDisplay();
     void IBattlePhaseControllerHost.ClearOnlineEnemyAttackCombo() => ClearOnlineEnemyAttackCombo();
+    void IBattlePhaseControllerHost.ClearEnemyAttackComboForCombat() => ClearEnemyAttackComboForCombat();
     void IBattlePhaseControllerHost.ClearMagicalSwordEnemyAttackState() => ClearMagicalSwordEnemyAttackState();
     void IBattlePhaseControllerHost.SetSuppressEnemyStaleAttackerInTotalByOrb(bool value)
         => SetSuppressEnemyStaleAttackerInTotalByOrb(value);

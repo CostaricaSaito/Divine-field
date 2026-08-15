@@ -2,7 +2,7 @@
 
 /// <summary>
 /// RP に基づくランク（プロファイル表示・リザルト・マッチング用）。
-/// 各区間は [最小, 最大)（最大は含まない）。レジェンドのみ 3600 以上。
+/// 各区間は [最小, 最大)（最大は含まない）。マスターのみ 3200 以上。
 /// </summary>
 /// <summary>ランク帯 ID（<see cref="PlayerRank"/> の Tiers 配列順と一致）。</summary>
 public enum RankTierId
@@ -14,24 +14,22 @@ public enum RankTierId
     Platinum,
     Diamond,
     Master,
-    Legend,
 }
 
 public static class PlayerRank
 {
     public const int DefaultStartingRp = 1500;
-    public const int TierCount = 8;
+    public const int TierCount = 7;
 
     private static readonly RankTier[] Tiers =
     {
-        new RankTier(1500, 1700, "ノービス"),
+        new RankTier(1500, 1700, "ルーキー"),
         new RankTier(1700, 1900, "ブロンズ"),
         new RankTier(1900, 2200, "シルバー"),
         new RankTier(2200, 2400, "ゴールド"),
         new RankTier(2400, 2800, "プラチナ"),
         new RankTier(2800, 3200, "ダイアモンド"),
-        new RankTier(3200, 3600, "マスター"),
-        new RankTier(3600, int.MaxValue, "レジェンド"),
+        new RankTier(3200, int.MaxValue, "マスター"),
     };
 
     private readonly struct RankTier
@@ -90,9 +88,9 @@ public static class PlayerRank
         return true;
     }
 
-    public static bool IsMaxRank(int rp) => rp >= 3600;
+    public static bool IsMaxRank(int rp) => rp >= Tiers[Tiers.Length - 1].MinInclusive;
 
-    /// <summary>次のランク帯の下限 RP まであと何 RP か。レジェンドは 0。</summary>
+    /// <summary>次のランク帯の下限 RP まであと何 RP か。マスターは 0。</summary>
     public static int GetRemainingRpToNextTier(int rp)
     {
         rp = Mathf.Max(0, rp);
@@ -110,7 +108,7 @@ public static class PlayerRank
         return t.MaxExclusive - rp;
     }
 
-    /// <summary>現在のランク帯内での進捗 0〜1。レジェンドは 1。ノービス未満は 0。</summary>
+    /// <summary>現在のランク帯内での進捗 0〜1。マスターは 1。ルーキー未満は 0。</summary>
     public static float GetProgressInCurrentTier01(int rp)
     {
         rp = Mathf.Max(0, rp);

@@ -267,34 +267,18 @@ public sealed class RankMatchPopupView : MonoBehaviour
         _matchmakingCts?.Dispose();
         _matchmakingCts = new CancellationTokenSource();
 
-        var overlayParent = overlayRoot != null ? overlayRoot : (RectTransform)transform;
-        _matchingOverlay = MatchingOverlayView.Show(overlayParent, () => _matchmakingCts?.Cancel());
-        _matchingOverlay.SetStatus("サーバに接続しています");
-        var progress = new Progress<string>(s => _matchingOverlay?.SetStatus(s));
+        var overlayParent = overlayRoot != null ? overlayRoot : transform;
+        bool matched = await RankMatchmakingFlow.RunAndEnterBattleAsync(
+            overlayParent,
+            _matchmakingCts,
+            overlay => _matchingOverlay = overlay);
 
-        bool matched = false;
-        try
+        if (!matched && this != null)
         {
-            matched = await MatchmakingService.FindMatchAsync(_matchmakingCts.Token, progress);
-        }
-        finally
-        {
-            if (matched && this != null)
-            {
-                _matchingOverlay?.SetCancelInteractable(false);
-                _matchingOverlay?.SetStatus($"{OnlineMatchContext.RemotePlayerName} と対戦！");
-                await Task.Delay(800);
-                if (!SceneFadeNavigation.TryFadeToScene("Battle"))
-                    UnityEngine.SceneManagement.SceneManager.LoadScene("Battle");
-            }
-            else if (this != null)
-            {
-                _matchingOverlay?.Close();
-                _matchingOverlay = null;
-                SetCloseButtonInteractable(true);
-                SetRankRuleButtonInteractable(true);
-                SetBattleReadyButtonInteractable(true);
-            }
+            _matchingOverlay = null;
+            SetCloseButtonInteractable(true);
+            SetRankRuleButtonInteractable(true);
+            SetBattleReadyButtonInteractable(true);
         }
     }
 

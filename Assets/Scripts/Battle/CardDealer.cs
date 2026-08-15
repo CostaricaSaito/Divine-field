@@ -51,6 +51,11 @@ public class CardDealer : MonoBehaviour
     /// <summary>SuperRare 以上の重み展開済み抽選プール（現実改変用）。</summary>
     private List<CardData> _superRarePlusDrawPool;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>Debug: next player-side weighted draw uses SuperRare+ pool (one-shot).</summary>
+    public static bool DebugForceNextPlayerDrawSuperRarePlus { get; set; }
+#endif
+
     /// <summary>element が闇のテンプレートのみ（ダークプリパレーション抽選用）。</summary>
     private CardData[] _darkCardTemplates;
 
@@ -270,6 +275,21 @@ public class CardDealer : MonoBehaviour
     /// <returns>生成されたカードインスタンス</returns>
     private CardData DrawRandomCardInstance(PlayerType forSide)
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (DebugForceNextPlayerDrawSuperRarePlus && forSide == PlayerType.Player)
+        {
+            DebugForceNextPlayerDrawSuperRarePlus = false;
+            var forced = DrawSuperRarePlusRandomCard(forSide);
+            if (forced != null)
+            {
+                Debug.Log($"[CardDealer] Debug forced SuperRare+ draw: {forced.cardName} ({forced.rarity})");
+                return forced;
+            }
+
+            Debug.LogWarning("[CardDealer] Debug SuperRare+ draw failed; falling back to normal pool.");
+        }
+#endif
+
         if (_weightedDrawPool == null || _weightedDrawPool.Count == 0)
             BuildWeightedDrawPool();
 

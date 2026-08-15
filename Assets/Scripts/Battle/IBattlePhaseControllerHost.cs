@@ -43,6 +43,7 @@ public interface IBattlePhaseControllerHost
     void ClearPlayerSelfAttackTargetMode();
     void ClearConfusionAttackTargetResolvedForDisplay();
     void ClearOnlineEnemyAttackCombo();
+    void ClearEnemyAttackComboForCombat();
     void ClearMagicalSwordEnemyAttackState();
     void SetSuppressEnemyStaleAttackerInTotalByOrb(bool value);
     void ClearReflectionAttackTotalDisplay();
@@ -53,4 +54,7 @@ public interface IBattlePhaseControllerHost
     List<CardData> GetAttackCardsForCombat();
     void ToggleTurnOwner();
     Task<bool> TryHandleDeathIfAnyAsync(CancellationToken ct);
+
+    /// <summary>Consume one-shot ultimate-ready presentation flag for the player turn.</summary>
+    bool TryConsumeUltimateReadyPresentation();
 }

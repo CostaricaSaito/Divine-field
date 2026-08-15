@@ -137,7 +137,7 @@ public sealed class BattlePhaseController
                 break;
 
             case GameState.StandByPhase:
-                OnStandByPhaseEntered();
+                _ = RunStandByPhaseEnteredAsync();
                 break;
 
             case GameState.AttackPhase:
@@ -167,8 +167,10 @@ public sealed class BattlePhaseController
         }
     }
 
-    private void OnStandByPhaseEntered()
+    private async Task RunStandByPhaseEnteredAsync()
     {
+        CancellationToken phaseToken = GetPhaseToken();
+
         BattleUIManager.I?.HideYurusuButton();
         BattleUIManager.I?.RefreshTurnCountDisplay(_host.SummonTurnCounters, _host.CurrentTurnOwner);
 
@@ -189,6 +191,7 @@ public sealed class BattlePhaseController
         BattleUIManager.I?.HideAllCardDetails();
         _host.CurrentAttackCard = null;
         _host.ClearOnlineEnemyAttackCombo();
+        _host.ClearEnemyAttackComboForCombat();
         _host.ClearMagicalSwordEnemyAttackState();
         _host.SetSuppressEnemyStaleAttackerInTotalByOrb(false);
         _host.CardStatsDisplay?.UpdateDisplay();
@@ -200,6 +203,18 @@ public sealed class BattlePhaseController
             ? _host.PlayerStatus != null && _host.PlayerStatus.IsCastingArchMagic
             : _host.EnemyStatus != null && _host.EnemyStatus.IsCastingArchMagic;
 
+        if (_host.CurrentTurnOwner == PlayerType.Player && _host.TryConsumeUltimateReadyPresentation())
+        {
+            try
+            {
+                await UltimateReadyPresentation.PlayAsync(phaseToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
         SetGameState(GameState.AttackPhase);
         if (_host.CurrentTurnOwner == PlayerType.Enemy && !ownerIsCasting)
             _ = _host.EnemyTurn.RunAsync();
@@ -210,9 +225,24 @@ public sealed class BattlePhaseController
         bool sellFlowFromPendingConfirm = _host.CurrentAttackCard != null
             && _host.CurrentAttackCard.cardName == EconomicActionNames.Sell;
         bool reachedDefenseConfirm = false;
+        CancellationToken phaseToken = GetPhaseToken();
 
         try
         {
+            var attackCards = _host.GetAttackCardsForCombat();
+            if (attackCards != null && attackCards.Count > 0)
+            {
+                if (_host.Defender == PlayerType.Enemy)
+                {
+                    if (await OrdinSlashReflectFlow.TryInterceptEnemyDefenseAsync(
+                            _host.Manager, attackCards, OrdinInterceptContext.NormalDefensePhase, phaseToken))
+                        return;
+                }
+                else if (await OrdinSlashReflectFlow.TryInterceptPlayerDefenseAsync(
+                             _host.Manager, attackCards, OrdinInterceptContext.NormalDefensePhase, phaseToken))
+                    return;
+            }
+
             await Task.Delay(1000);
             SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
             Debug.Log("[BattlePhaseController] 攻撃カード確定、防御カード選択開始");
@@ -221,7 +251,7 @@ public sealed class BattlePhaseController
 
             if (_host.Defender == PlayerType.Enemy)
             {
-                ElementType attackElement = ElementHelper.GetCombinedElement(_host.GetAttackCardsForCombat());
+                ElementType attackElement = ElementHelper.GetIncomingAttackElement(_host.GetAttackCardsForCombat());
                 _host.SelectedDefenseCard = await _host.EnemyAI.ExecuteDefenseSelectAsync(
                     _host.CpuHand, attackElement, _host.GetAttackCardsForCombat());
 
@@ -538,36 +568,8 @@ public sealed class BattlePhaseController
         }
     }
 
-    private async Task RevealFaceDownCardsAsync()
-    {
-        if (_host.HandPanel == null)
-        {
-            Debug.LogWarning("[BattlePhaseController] handPanelが設定されていません");
-            return;
-        }
-
-        int childCountSnapshot = _host.HandPanel.childCount;
-        for (int i = 0; i < childCountSnapshot; i++)
-        {
-            var child = _host.HandPanel.GetChild(i);
-            if (child == null) continue;
-            var cardUI = child.GetComponent<CardUI>();
-            if (cardUI == null) continue;
-            try
-            {
-                if (!cardUI.IsFaceDown()) continue;
-
-                var data = cardUI.GetCardData();
-                if (data != null)
-                    CardDealAudio.Play(data, true);
-                await Task.Delay(50);
-                cardUI.Reveal();
-                await Task.Delay(300);
-            }
-            catch (MissingReferenceException)
-            {
-                continue;
-            }
-        }
-    }
+    private Task RevealFaceDownCardsAsync()
+        => HandRevealPresentation.RevealFaceDownCardsLeftToRightAsync(
+            _host.HandPanel,
+            GetPhaseToken());
 }

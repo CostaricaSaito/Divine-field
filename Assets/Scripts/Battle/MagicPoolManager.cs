@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -200,6 +200,30 @@ public class MagicPoolManager : MonoBehaviour
         var result = new List<CardData>();
         foreach (var e in GetPool(owner)) result.Add(e.cardData);
         return result;
+    }
+
+    /// <summary>Remove every entry from the victim's MagicPool and refresh UI.</summary>
+    public void ClearPool(PlayerType owner = PlayerType.Player)
+    {
+        var pool = GetPool(owner);
+        if (pool.Count == 0) return;
+        pool.Clear();
+        Debug.Log($"[MagicPoolManager] ClearPool({owner})");
+        NotifyPoolChanged(owner);
+    }
+
+    /// <summary>Add remaining uses to every pooled magic card (Magic Fountain).</summary>
+    public void AddRemainingUsesToAll(PlayerType owner, int amount)
+    {
+        if (amount <= 0) return;
+        var pool = GetPool(owner);
+        if (pool.Count == 0) return;
+
+        for (int i = 0; i < pool.Count; i++)
+            pool[i].remainingUses += amount;
+
+        Debug.Log($"[MagicPoolManager] AddRemainingUsesToAll({owner}, +{amount})");
+        NotifyPoolChanged(owner);
     }
 
     // ===== 内部ヘルパー =====

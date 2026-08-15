@@ -346,9 +346,11 @@ public class TotalAtkDefPanelResolver
             if (selectedAttackCards != null && selectedAttackCards.Count > 0
                 && IsPlayerAttackSelectionNumericAtkZero(selectedAttackCards))
             {
-                bool recovery = selectedAttackCards.Count == 1
-                    && CardRules.IsRecoveryCard(selectedAttackCards[0]);
-                return TotalAtkDefCombatPhaseRules.FormatEffectTargetToggleLabel(battleManager, recovery);
+                bool recoveryLikeTargetToggle = selectedAttackCards.Count == 1
+                    && (CardRules.IsRecoveryCard(selectedAttackCards[0])
+                        || MagicFountainRules.IsMagicFountainCard(selectedAttackCards[0]));
+                return TotalAtkDefCombatPhaseRules.FormatEffectTargetToggleLabel(
+                    battleManager, recoveryLikeTargetToggle);
             }
 
             if (selectedAttackCards != null && selectedAttackCards.Count > 1)
@@ -478,7 +480,7 @@ public class TotalAtkDefPanelResolver
         {
             var incoming = TotalAtkDefCombatPhaseRules.GetIncomingAttackSnapshotForDefenseUi(battleManager);
             if (incoming != null && incoming.Count > 0)
-                return ElementHelper.GetCombinedElement(incoming);
+                return ElementHelper.GetIncomingAttackElement(incoming);
         }
 
         if (DisasterCombatContext.TryGetAttackerStrikeForPanel(true, out var disasterElCards, out _))
@@ -540,7 +542,7 @@ public class TotalAtkDefPanelResolver
         {
             var incoming = TotalAtkDefCombatPhaseRules.GetIncomingAttackSnapshotForDefenseUi(battleManager);
             if (incoming != null && incoming.Count > 0)
-                return ElementHelper.GetCombinedElement(incoming);
+                return ElementHelper.GetIncomingAttackElement(incoming);
         }
 
         if (DisasterCombatContext.TryGetAttackerStrikeForPanel(false, out var disasterEnemyElCards, out _))
@@ -565,6 +567,9 @@ public class TotalAtkDefPanelResolver
         if (battleManager.CurrentTurnOwner == PlayerType.Enemy
             && !battleManager.IsSuppressingEnemyStaleAttackerInTotalByOrb())
         {
+            var incoming = TotalAtkDefCombatPhaseRules.GetIncomingAttackSnapshotForDefenseUi(battleManager);
+            if (incoming != null && incoming.Count > 0)
+                return ElementHelper.GetIncomingAttackElement(incoming);
             var card = battleManager.GetCurrentAttackCard();
             if (card != null) return card.element;
         }

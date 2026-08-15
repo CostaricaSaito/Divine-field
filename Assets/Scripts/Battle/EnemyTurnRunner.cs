@@ -248,10 +248,10 @@ public sealed class EnemyTurnRunner
 
     private List<CardData> GetAttackCardsForTurn(CardData primary)
     {
-        if (_host.CombatSnapshots.TryGetOnlineEnemyAttackCombo(out var onlineCombo))
-            return new List<CardData>(onlineCombo);
         if (_host.EnemyAI?.LastAttackSelection != null && _host.EnemyAI.LastAttackSelection.Count > 0)
             return new List<CardData>(_host.EnemyAI.LastAttackSelection);
+        if (_host.CombatSnapshots.TryGetOnlineEnemyAttackCombo(out var onlineCombo))
+            return new List<CardData>(onlineCombo);
         return primary != null ? new List<CardData> { primary } : new List<CardData>();
     }
 
@@ -272,10 +272,22 @@ public sealed class EnemyTurnRunner
         if (attack == null) return _host.PlayerStatus;
         if (_host.EnemyStatus != null && _host.EnemyStatus.HasConfusionEffect())
             return BattleRandom.Range(0, 2) == 0 ? _host.EnemyStatus : _host.PlayerStatus;
+
         bool remoteTargetToggled = _host.IsOnlineMatch
             && _host.EnemyAI is RemotePlayerAgent remoteAgent && remoteAgent.LastAttackTargetSelf;
-        if (CardRules.IsRecoveryCard(attack))
-            return remoteTargetToggled ? _host.PlayerStatus : _host.EnemyStatus;
-        return remoteTargetToggled ? _host.EnemyStatus : _host.PlayerStatus;
+
+        if (CardRules.IsRecoveryCard(attack) || MagicFountainRules.IsMagicFountainCard(attack))
+        {
+            if (!_host.IsOnlineMatch && MagicFountainRules.IsMagicFountainCard(attack))
+                return _host.EnemyStatus;
+            if (remoteTargetToggled)
+                return _host.PlayerStatus;
+            return _host.EnemyStatus;
+        }
+
+        if (remoteTargetToggled)
+            return _host.EnemyStatus;
+
+        return _host.PlayerStatus;
     }
 }

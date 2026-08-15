@@ -210,6 +210,19 @@ public static class PhysicalReflectionFlow
 
             if (defenderSide == PlayerType.Enemy)
             {
+                if (await OrdinSlashReflectFlow.TryRunEnemyBounceInReflectionChainAsync(
+                        battleManager,
+                        battleProcessor,
+                        incomingAttackCards,
+                        incomingPower,
+                        reflectionBlessingAttacker,
+                        reflectionBlessingDefender,
+                        cancellationToken))
+                {
+                    defenderSide = PlayerType.Player;
+                    continue;
+                }
+
                 ElementType atkEl = ElementHelper.GetCombinedElement(incomingAttackCards);
                 CardData pick = await enemyAI.ExecuteDefenseSelectAsync(
                     battleManager.cpuHand, atkEl, incomingAttackCards);
@@ -326,6 +339,19 @@ public static class PhysicalReflectionFlow
                 }
                 battleManager.ClearStatsDisplaySequenceCards();
                 return;
+            }
+
+            if (await OrdinSlashReflectFlow.TryRunPlayerBounceInReflectionChainAsync(
+                    battleManager,
+                    battleProcessor,
+                    incomingAttackCards,
+                    incomingPower,
+                    reflectionBlessingAttacker,
+                    reflectionBlessingDefender,
+                    cancellationToken))
+            {
+                defenderSide = PlayerType.Enemy;
+                continue;
             }
 
             List<CardData> picks = await battleManager.WaitForReflectionChainDefenseAsync(

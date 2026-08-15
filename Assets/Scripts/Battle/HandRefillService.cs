@@ -122,7 +122,7 @@ public class HandRefillService : MonoBehaviour
                 if (slot.usedCard == null || slot.usedCard.GetInstanceID() != source.GetInstanceID())
                     continue;
 
-                await ReplacePlayerBackSlotAsync(slot, playerHand, ct);
+                await ReplacePlayerBackSlotAsync(slot, playerHand, ct, revealImmediately: true);
                 _playerBackSlotsThisTurn.RemoveAt(i);
                 if (playerHand.Contains(source))
                     playerHand.Remove(source);
@@ -196,15 +196,19 @@ public class HandRefillService : MonoBehaviour
             ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
             if (ui.GetCardData() != newCard)
                 ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
-            ui.button.interactable = true;
-            await Task.Delay(150, ct);
-            CardDealAudio.Play(newCard, true);
-            ui.Reveal();
-            await Task.Delay(100, ct);
+            if (ui.button != null)
+                ui.button.interactable = false;
+
+            var batch = new HandRevealBatchContext();
+            await HandRevealPresentation.RevealCardAsync(newCard, ui, batch, ct);
         }
     }
 
-    private async Task ReplacePlayerBackSlotAsync(BackSlot slot, List<CardData> playerHand, CancellationToken ct)
+    private async Task ReplacePlayerBackSlotAsync(
+        BackSlot slot,
+        List<CardData> playerHand,
+        CancellationToken ct,
+        bool revealImmediately = false)
     {
         if (ct.IsCancellationRequested) return;
 
@@ -244,12 +248,13 @@ public class HandRefillService : MonoBehaviour
             slot.ui.Setup(newCard, cardBackSprite, playerHandRareBackPresentation: true);
         }
 
-        slot.ui.button.interactable = true;
+        slot.ui.button.interactable = false;
 
-        await Task.Delay(150, ct);
-        CardDealAudio.Play(newCard, true);
-        slot.ui.Reveal();
-        await Task.Delay(100, ct);
+        if (revealImmediately)
+        {
+            var batch = new HandRevealBatchContext();
+            await HandRevealPresentation.RevealCardAsync(newCard, slot.ui, batch, ct);
+        }
     }
 
     // TurnEnd：裏向きスロットを新カードに置き換え（1枚ずつ順次処理）、敵も使用済みカードを新しいカードで置き換え
@@ -354,17 +359,8 @@ public class HandRefillService : MonoBehaviour
     {
         if (card?.cardUI == null) return;
 
-        if (card.cardUI.button != null)
-            card.cardUI.button.interactable = true;
-
-        await Task.Delay(150, ct);
-        if (ct.IsCancellationRequested) return;
-
-        CardDealAudio.Play(card, true);
-
-        card.cardUI.Reveal();
-
-        await Task.Delay(100, ct);
+        var batch = new HandRevealBatchContext();
+        await HandRevealPresentation.RevealCardAsync(card, card.cardUI, batch, ct);
     }
 
     /// <summary>手札リロード：DamagePopup 寿命後の追加インターバル（ms）。</summary>
@@ -425,17 +421,14 @@ public class HandRefillService : MonoBehaviour
         CancellationToken ct = default)
     {
         if (work == null) return;
+
+        var batch = new HandRevealBatchContext();
         for (int i = 0; i < work.Count; i++)
         {
             if (ct.IsCancellationRequested) return;
             var w = work[i];
             if (w.Ui == null || w.NewCard == null) continue;
-            if (w.Ui.button != null) w.Ui.button.interactable = true;
-            await Task.Delay(150, ct);
-            if (ct.IsCancellationRequested) return;
-            CardDealAudio.Play(w.NewCard, true);
-            w.Ui.Reveal();
-            await Task.Delay(100, ct);
+            await HandRevealPresentation.RevealCardAsync(w.NewCard, w.Ui, batch, ct);
         }
     }
 
@@ -521,8 +514,14 @@ public class HandRefillService : MonoBehaviour
         await Task.Delay(revealPauseMs, ct);
         if (ct.IsCancellationRequested) return;
 
-        foreach (var ui in revealUIs)
-            ui?.Reveal();
+        var revealBatch = new HandRevealBatchContext();
+        for (int i = 0; i < revealUIs.Count; i++)
+        {
+            if (ct.IsCancellationRequested) return;
+            var ui = revealUIs[i];
+            if (ui == null) continue;
+            await HandRevealPresentation.RevealCardAsync(ui.GetCardData(), ui, revealBatch, ct);
+        }
         SoundEffectPlayer.I?.Play("Assets/SE/バトル開始.mp3");
 
         BattleUIManager.I?.SetHandClickable(true);
@@ -647,6 +646,7 @@ public class HandRefillService : MonoBehaviour
         if (ct.IsCancellationRequested) return;
 
         // ⑤ 0.05秒間隔で1枚ずつ表向け
+        var revealBatch = new HandRevealBatchContext();
         for (int i = 0; i < revealUIs.Count; i++)
         {
             if (ct.IsCancellationRequested) return;
@@ -654,9 +654,7 @@ public class HandRefillService : MonoBehaviour
             var ui = revealUIs[i];
             if (ui == null) continue;
 
-            if (ui.button != null) ui.button.interactable = true;
-            CardDealAudio.Play(ui.GetCardData(), true);
-            ui.Reveal();
+            await HandRevealPresentation.RevealCardAsync(ui.GetCardData(), ui, revealBatch, ct);
 
             if (i < revealUIs.Count - 1)
                 await Task.Delay(revealIntervalMs, ct);

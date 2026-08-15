@@ -34,6 +34,10 @@ public static class NetworkBattleBridge
         DebugInjectCard = 11,        // host -> client : dev-only synchronized hand inject
         DebugInjectCardRequest = 12, // client -> host : dev-only inject request (host applies + forwards)
         Forfeit = 13,                // either peer : voluntary leave (counts as defeat for sender)
+        MagicSealerEffect = 14,      // host -> client : Magic Sealer pool destroy presentation
+        MagicFountainEffect = 15,    // host -> client : Magic Fountain pool refill presentation
+        ArrowOfIndraEffect = 16,     // host -> client : Arrow of Indra hand destroy presentation
+        ShiningBarrierApplied = 17,  // either -> peer : incoming attack forced to None element
     }
 
     public enum RemoteEconomicKind : byte
@@ -54,6 +58,35 @@ public static class NetworkBattleBridge
     {
         public int TurnTag;
         public List<SummonTurnEndEffectEntry> Effects;
+    }
+
+    /// <summary>Host -> client: Magic Sealer destroys victim MagicPool entries.</summary>
+    public struct MagicSealerEffectSync
+    {
+        public int TurnTag;
+        public bool VictimIsHostPlayer;
+        public bool NoTarget;
+        public List<string> DestroyedCardNames;
+    }
+
+    /// <summary>Host -> client: Magic Fountain refills target MagicPool uses.</summary>
+    public struct MagicFountainEffectSync
+    {
+        public int TurnTag;
+        public bool TargetIsHostPlayer;
+        public bool NoTarget;
+        public List<string> CardNames;
+        public List<int> StartUses;
+    }
+
+    /// <summary>Host -> client: Arrow of Indra destroys victim hand cards.</summary>
+    public struct ArrowOfIndraEffectSync
+    {
+        public int TurnTag;
+        public bool VictimIsHostPlayer;
+        public bool NoTarget;
+        public List<string> CardNames;
+        public List<int> HandIndices;
     }
 
     public struct PeerProfile
@@ -157,6 +190,9 @@ public static class NetworkBattleBridge
     static readonly Queue<int> _turnReadyQueue = new();
     static readonly Queue<TurnBoundarySync> _turnSyncQueue = new();
     static readonly Queue<SummonTurnEndEffectsSync> _summonTurnEndEffectsQueue = new();
+    static readonly Queue<MagicSealerEffectSync> _magicSealerEffectQueue = new();
+    static readonly Queue<MagicFountainEffectSync> _magicFountainEffectQueue = new();
+    static readonly Queue<ArrowOfIndraEffectSync> _arrowOfIndraEffectQueue = new();
 
     static TaskCompletionSource<RemoteAttack> _attackWaiter;
     static TaskCompletionSource<List<string>> _defenseWaiter;
@@ -166,6 +202,9 @@ public static class NetworkBattleBridge
     static TaskCompletionSource<int> _turnReadyWaiter;
     static TaskCompletionSource<TurnBoundarySync> _turnSyncWaiter;
     static TaskCompletionSource<SummonTurnEndEffectsSync> _summonTurnEndEffectsWaiter;
+    static TaskCompletionSource<MagicSealerEffectSync> _magicSealerEffectWaiter;
+    static TaskCompletionSource<MagicFountainEffectSync> _magicFountainEffectWaiter;
+    static TaskCompletionSource<ArrowOfIndraEffectSync> _arrowOfIndraEffectWaiter;
     static TaskCompletionSource<PeerProfile> _helloWaiter;
     static TaskCompletionSource<MatchConfig> _configWaiter;
 
@@ -224,6 +263,8 @@ public static class NetworkBattleBridge
         _turnReadyQueue.Clear();
         _turnSyncQueue.Clear();
         _summonTurnEndEffectsQueue.Clear();
+        _magicSealerEffectQueue.Clear();
+        _magicFountainEffectQueue.Clear();
         _attackWaiter?.TrySetCanceled();
         _defenseWaiter?.TrySetCanceled();
         _magicalSwordWaiter?.TrySetCanceled();
@@ -232,6 +273,8 @@ public static class NetworkBattleBridge
         _turnReadyWaiter?.TrySetCanceled();
         _turnSyncWaiter?.TrySetCanceled();
         _summonTurnEndEffectsWaiter?.TrySetCanceled();
+        _magicSealerEffectWaiter?.TrySetCanceled();
+        _magicFountainEffectWaiter?.TrySetCanceled();
         _helloWaiter?.TrySetCanceled();
         _configWaiter?.TrySetCanceled();
         _attackWaiter = null;
@@ -242,6 +285,8 @@ public static class NetworkBattleBridge
         _turnReadyWaiter = null;
         _turnSyncWaiter = null;
         _summonTurnEndEffectsWaiter = null;
+        _magicSealerEffectWaiter = null;
+        _magicFountainEffectWaiter = null;
         _helloWaiter = null;
         _configWaiter = null;
     }
@@ -505,6 +550,173 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent SummonTurnEndEffects (tag={turnTag}, count={count})");
     }
 
+    /// <summary>Host only: Magic Sealer pool destroy presentation payload.</summary>
+    public static void SendMagicSealerEffect(int turnTag, MagicSealerEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(512, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.MagicSealerEffect);
+        WriteMagicSealerEffectSync(writer, turnTag, sync);
+        Send(writer);
+        int count = sync.DestroyedCardNames != null ? sync.DestroyedCardNames.Count : 0;
+        Debug.Log($"[NetworkBattleBridge] Sent MagicSealerEffect (tag={turnTag}, count={count}, noTarget={sync.NoTarget})");
+    }
+
+    /// <summary>Client only: wait for host-authoritative Magic Sealer effect.</summary>
+    public static async Task<MagicSealerEffectSync> WaitForMagicSealerEffectAsync(
+        int turnTag,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            MagicSealerEffectSync sync;
+            if (_magicSealerEffectQueue.Count > 0)
+            {
+                sync = _magicSealerEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<MagicSealerEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _magicSealerEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] MagicSealerEffect wait timed out");
+                    return new MagicSealerEffectSync { NoTarget = true, DestroyedCardNames = new List<string>() };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.TurnTag >= turnTag || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale MagicSealerEffect (tag={sync.TurnTag})");
+        }
+    }
+
+    /// <summary>Host only: Magic Fountain pool refill presentation payload.</summary>
+    public static void SendMagicFountainEffect(int turnTag, MagicFountainEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(512, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.MagicFountainEffect);
+        WriteMagicFountainEffectSync(writer, turnTag, sync);
+        Send(writer);
+        int count = sync.CardNames != null ? sync.CardNames.Count : 0;
+        Debug.Log($"[NetworkBattleBridge] Sent MagicFountainEffect (tag={turnTag}, count={count}, noTarget={sync.NoTarget})");
+    }
+
+    /// <summary>Client only: wait for host-authoritative Magic Fountain effect.</summary>
+    public static async Task<MagicFountainEffectSync> WaitForMagicFountainEffectAsync(
+        int turnTag,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            MagicFountainEffectSync sync;
+            if (_magicFountainEffectQueue.Count > 0)
+            {
+                sync = _magicFountainEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<MagicFountainEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _magicFountainEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] MagicFountainEffect wait timed out");
+                    return new MagicFountainEffectSync
+                    {
+                        NoTarget = true,
+                        CardNames = new List<string>(),
+                        StartUses = new List<int>(),
+                    };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.TurnTag >= turnTag || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale MagicFountainEffect (tag={sync.TurnTag})");
+        }
+    }
+
+    /// <summary>Host only: Arrow of Indra hand destroy presentation payload.</summary>
+    public static void SendArrowOfIndraEffect(int turnTag, ArrowOfIndraEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(512, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.ArrowOfIndraEffect);
+        WriteArrowOfIndraEffectSync(writer, turnTag, sync);
+        Send(writer);
+        int count = sync.CardNames != null ? sync.CardNames.Count : 0;
+        Debug.Log($"[NetworkBattleBridge] Sent ArrowOfIndraEffect (tag={turnTag}, count={count}, noTarget={sync.NoTarget})");
+    }
+
+    /// <summary>Client only: wait for host-authoritative Arrow of Indra effect.</summary>
+    public static async Task<ArrowOfIndraEffectSync> WaitForArrowOfIndraEffectAsync(
+        int turnTag,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            ArrowOfIndraEffectSync sync;
+            if (_arrowOfIndraEffectQueue.Count > 0)
+            {
+                sync = _arrowOfIndraEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<ArrowOfIndraEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _arrowOfIndraEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] ArrowOfIndraEffect wait timed out");
+                    return new ArrowOfIndraEffectSync
+                    {
+                        NoTarget = true,
+                        CardNames = new List<string>(),
+                        HandIndices = new List<int>(),
+                    };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.TurnTag >= turnTag || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale ArrowOfIndraEffect (tag={sync.TurnTag})");
+        }
+    }
+
+    /// <summary>Notify peer that Shining Barrier stripped incoming attack element.</summary>
+    public static void SendShiningBarrierApplied(int turnTag)
+    {
+        using var writer = new FastBufferWriter(16, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.ShiningBarrierApplied);
+        writer.WriteValueSafe(turnTag);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent ShiningBarrierApplied (tag={turnTag})");
+    }
+
     /// <summary>Client only: wait for host-authoritative summon turn-end effects.</summary>
     public static async Task<List<SummonTurnEndEffectEntry>> WaitForSummonTurnEndEffectsAsync(
         int turnTag,
@@ -620,6 +832,26 @@ public static class NetworkBattleBridge
         return list;
     }
 
+    static void WriteIntList(FastBufferWriter writer, List<int> list)
+    {
+        int count = list != null ? list.Count : 0;
+        writer.WriteValueSafe(count);
+        for (int i = 0; i < count; i++)
+            writer.WriteValueSafe(list[i]);
+    }
+
+    static List<int> ReadIntList(FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out int count);
+        var list = new List<int>(count);
+        for (int i = 0; i < count; i++)
+        {
+            reader.ReadValueSafe(out int value);
+            list.Add(value);
+        }
+        return list;
+    }
+
     static void WriteArchMagicSideSync(FastBufferWriter writer, ArchMagicSideSync sync)
     {
         writer.WriteValueSafe(sync.RemainingTurns);
@@ -692,6 +924,64 @@ public static class NetworkBattleBridge
         reader.ReadValueSafe(out entry.VictimHandIndex);
         entry.DrawnCardNames = ReadStringList(reader);
         return entry;
+    }
+
+    static void WriteMagicSealerEffectSync(FastBufferWriter writer, int turnTag, MagicSealerEffectSync sync)
+    {
+        writer.WriteValueSafe(turnTag);
+        writer.WriteValueSafe(sync.VictimIsHostPlayer);
+        writer.WriteValueSafe(sync.NoTarget);
+        WriteStringList(writer, sync.DestroyedCardNames);
+    }
+
+    static MagicSealerEffectSync ReadMagicSealerEffectSync(FastBufferReader reader)
+    {
+        var sync = new MagicSealerEffectSync();
+        reader.ReadValueSafe(out sync.TurnTag);
+        reader.ReadValueSafe(out sync.VictimIsHostPlayer);
+        reader.ReadValueSafe(out sync.NoTarget);
+        sync.DestroyedCardNames = ReadStringList(reader);
+        return sync;
+    }
+
+    static void WriteMagicFountainEffectSync(FastBufferWriter writer, int turnTag, MagicFountainEffectSync sync)
+    {
+        writer.WriteValueSafe(turnTag);
+        writer.WriteValueSafe(sync.TargetIsHostPlayer);
+        writer.WriteValueSafe(sync.NoTarget);
+        WriteStringList(writer, sync.CardNames);
+        WriteIntList(writer, sync.StartUses);
+    }
+
+    static MagicFountainEffectSync ReadMagicFountainEffectSync(FastBufferReader reader)
+    {
+        var sync = new MagicFountainEffectSync();
+        reader.ReadValueSafe(out sync.TurnTag);
+        reader.ReadValueSafe(out sync.TargetIsHostPlayer);
+        reader.ReadValueSafe(out sync.NoTarget);
+        sync.CardNames = ReadStringList(reader);
+        sync.StartUses = ReadIntList(reader);
+        return sync;
+    }
+
+    static void WriteArrowOfIndraEffectSync(FastBufferWriter writer, int turnTag, ArrowOfIndraEffectSync sync)
+    {
+        writer.WriteValueSafe(turnTag);
+        writer.WriteValueSafe(sync.VictimIsHostPlayer);
+        writer.WriteValueSafe(sync.NoTarget);
+        WriteStringList(writer, sync.CardNames);
+        WriteIntList(writer, sync.HandIndices);
+    }
+
+    static ArrowOfIndraEffectSync ReadArrowOfIndraEffectSync(FastBufferReader reader)
+    {
+        var sync = new ArrowOfIndraEffectSync();
+        reader.ReadValueSafe(out sync.TurnTag);
+        reader.ReadValueSafe(out sync.VictimIsHostPlayer);
+        reader.ReadValueSafe(out sync.NoTarget);
+        sync.CardNames = ReadStringList(reader);
+        sync.HandIndices = ReadIntList(reader);
+        return sync;
     }
 
     static void Send(FastBufferWriter writer)
@@ -840,6 +1130,38 @@ public static class NetworkBattleBridge
                 var sync = ReadSummonTurnEndEffectsSync(reader);
                 Debug.Log($"[NetworkBattleBridge] SummonTurnEndEffects received (tag={sync.TurnTag}, count={sync.Effects?.Count ?? 0})");
                 Dispatch(_summonTurnEndEffectsQueue, ref _summonTurnEndEffectsWaiter, sync);
+                break;
+            }
+
+            case MsgType.MagicSealerEffect:
+            {
+                var sync = ReadMagicSealerEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] MagicSealerEffect received (tag={sync.TurnTag}, noTarget={sync.NoTarget})");
+                Dispatch(_magicSealerEffectQueue, ref _magicSealerEffectWaiter, sync);
+                break;
+            }
+
+            case MsgType.MagicFountainEffect:
+            {
+                var sync = ReadMagicFountainEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] MagicFountainEffect received (tag={sync.TurnTag}, noTarget={sync.NoTarget})");
+                Dispatch(_magicFountainEffectQueue, ref _magicFountainEffectWaiter, sync);
+                break;
+            }
+
+            case MsgType.ArrowOfIndraEffect:
+            {
+                var sync = ReadArrowOfIndraEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] ArrowOfIndraEffect received (tag={sync.TurnTag}, noTarget={sync.NoTarget})");
+                Dispatch(_arrowOfIndraEffectQueue, ref _arrowOfIndraEffectWaiter, sync);
+                break;
+            }
+
+            case MsgType.ShiningBarrierApplied:
+            {
+                reader.ReadValueSafe(out int turnTag);
+                Debug.Log($"[NetworkBattleBridge] ShiningBarrierApplied received (tag={turnTag})");
+                ShiningBarrierDefenseFlow.ApplyForceNoneFromNetwork();
                 break;
             }
 

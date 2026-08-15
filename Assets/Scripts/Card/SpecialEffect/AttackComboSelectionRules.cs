@@ -99,8 +99,9 @@ public static class AttackComboSelectionRules
         {
             var c = attackChoicesFromHand[i];
             if (c == null) continue;
-            if (CanPickAttackCardNow(c, currentAttackSelection))
-                list.Add(c);
+            if (!CanPickAttackCardNow(c, currentAttackSelection)) continue;
+            if (ConflictsAttackMagicUseRuleMix(currentAttackSelection, c)) continue;
+            list.Add(c);
         }
         return list;
     }
@@ -116,24 +117,32 @@ public static class AttackComboSelectionRules
         return card.cardType == CardType.Attack || CardRules.IsRecoveryCard(card);
     }
 
-    public static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
+    /// <summary>
+    /// Attack + magic in one combo is allowed only when every magic and every physical attack
+    /// uses <see cref="AttackPhaseUseRule.Flexible"/> or <see cref="AttackPhaseUseRule.AddOn"/>.
+    /// </summary>
+    public static bool ConflictsAttackMagicUseRuleMix(
         IReadOnlyList<CardData> currentSelection,
         CardData adding)
     {
         if (adding == null) return false;
-        bool hasMagicPrimary = false;
-        bool hasPhysicalFlexible = false;
-        for (int i = 0; i < (currentSelection?.Count ?? 0); i++)
+        var tentative = new List<CardData>();
+        if (currentSelection != null)
         {
-            var c = currentSelection[i];
-            if (c == null) continue;
-            if (IsMagicPrimaryAttackInCombo(c)) hasMagicPrimary = true;
-            if (IsPhysicalAttackFlexibleInCombo(c)) hasPhysicalFlexible = true;
+            for (int i = 0; i < currentSelection.Count; i++)
+            {
+                if (currentSelection[i] != null) tentative.Add(currentSelection[i]);
+            }
         }
-        if (IsMagicPrimaryAttackInCombo(adding)) hasMagicPrimary = true;
-        if (IsPhysicalAttackFlexibleInCombo(adding)) hasPhysicalFlexible = true;
-        return hasMagicPrimary && hasPhysicalFlexible;
+        tentative.Add(adding);
+        return HasAttackMagicMix(tentative) && !IsValidAttackMagicUseRuleMix(tentative);
     }
+
+    /// <summary>Legacy name; prefer <see cref="ConflictsAttackMagicUseRuleMix"/>.</summary>
+    public static bool ConflictsMagicPrimaryWithPhysicalAttackFlexible(
+        IReadOnlyList<CardData> currentSelection,
+        CardData adding)
+        => ConflictsAttackMagicUseRuleMix(currentSelection, adding);
 
     /// <summary>
     /// Player UI / AI: whether <paramref name="card"/> may join the current attack selection.
@@ -174,7 +183,7 @@ public static class AttackComboSelectionRules
             && !GrandMagicRules.IsGrandMagicStyleAttackCard(card))
             return false;
 
-        if (ConflictsMagicPrimaryWithPhysicalAttackFlexible(selection, card))
+        if (ConflictsAttackMagicUseRuleMix(selection, card))
             return false;
 
         SelectionRole role = card.attackPhaseRole;
@@ -257,20 +266,44 @@ public static class AttackComboSelectionRules
         return IsValidAttackSelection(combo) ? combo : new List<CardData> { primary };
     }
 
-    private static bool IsMagicPrimaryAttackInCombo(CardData c)
+    private static bool HasAttackMagicMix(IReadOnlyList<CardData> cards)
     {
-        return c != null
-            && c.cardType == CardType.Magic
-            && !CardRules.IsRecoveryCard(c)
-            && c.attackPhaseUseRule == AttackPhaseUseRule.Primary;
+        if (cards == null || cards.Count == 0) return false;
+        bool hasMagic = false;
+        bool hasPhysicalAttack = false;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var c = cards[i];
+            if (c == null) continue;
+            if (IsComboMagicCard(c)) hasMagic = true;
+            if (IsComboPhysicalAttackCard(c)) hasPhysicalAttack = true;
+        }
+        return hasMagic && hasPhysicalAttack;
     }
 
-    private static bool IsPhysicalAttackFlexibleInCombo(CardData c)
+    private static bool IsValidAttackMagicUseRuleMix(IReadOnlyList<CardData> cards)
     {
-        return c != null
-            && c.cardType == CardType.Attack
-            && c.attackPhaseUseRule == AttackPhaseUseRule.Flexible;
+        if (cards == null) return true;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var c = cards[i];
+            if (c == null) continue;
+            if (IsComboMagicCard(c) && !IsFlexibleOrAddOnUseRule(c)) return false;
+            if (IsComboPhysicalAttackCard(c) && !IsFlexibleOrAddOnUseRule(c)) return false;
+        }
+        return true;
     }
+
+    private static bool IsComboMagicCard(CardData c) =>
+        c != null && c.cardType == CardType.Magic && !CardRules.IsRecoveryCard(c);
+
+    private static bool IsComboPhysicalAttackCard(CardData c) =>
+        c != null && c.cardType == CardType.Attack;
+
+    private static bool IsFlexibleOrAddOnUseRule(CardData c) =>
+        c != null
+        && (c.attackPhaseUseRule == AttackPhaseUseRule.Flexible
+            || c.attackPhaseUseRule == AttackPhaseUseRule.AddOn);
 
     private static bool HasMagicInSelection(IReadOnlyList<CardData> selection)
     {

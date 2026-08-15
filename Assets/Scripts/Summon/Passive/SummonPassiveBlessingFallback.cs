@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// <see cref="SummonData"/> の加護を、アセット名または <see cref="SummonPassiveBlessingMode"/> から生成する。
 /// </summary>
 public static class SummonPassiveBlessingFallback
@@ -22,6 +22,8 @@ public static class SummonPassiveBlessingFallback
             case SummonPassiveBlessingMode.Shiva:
                 return null;
             case SummonPassiveBlessingMode.Arcadias:
+                return null;
+            case SummonPassiveBlessingMode.Ordin:
                 return null;
             case SummonPassiveBlessingMode.AutoByAssetName:
             default:
@@ -47,6 +49,8 @@ public static class SummonPassiveBlessingFallback
             case "Siva":
                 return null;
             case "Arcadias":
+                return null;
+            case "Ordin":
                 return null;
             default:
                 return null;

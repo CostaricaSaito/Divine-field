@@ -190,6 +190,13 @@ public class BattleUIManager : MonoBehaviour
     public void ShowCardSheetsVisualOnlyBatch(IReadOnlyList<CardData> cards, Side side) =>
         cardController?.ShowCardSheetsVisualOnlyBatch(cards, side);
 
+    public CardSheetDisplay AppendCardSheetVisualOnly(
+        CardData card,
+        Side side,
+        IReadOnlyList<CardData> orderedCardsForLayout,
+        PlayerStatus ownerForMpDisplay = null)
+        => cardController?.AppendCardSheetVisualOnly(card, side, orderedCardsForLayout, ownerForMpDisplay);
+
     //==== パブリックAPI：カード選択管理 =====
     public List<CardData> GetSelectedCards()
         => cardController != null ? cardController.GetSelectedCards() : new List<CardData>();
@@ -323,6 +330,9 @@ public class BattleUIManager : MonoBehaviour
     /// </summary>
     public float ShowReflectionBouncePopup(PlayerStatus target, bool magicReflection = false)
         => popupPresenter != null ? popupPresenter.ShowReflectionBouncePopup(target, magicReflection) : 0f;
+
+    public float ShowOrdinReflectionBouncePopup(PlayerStatus target)
+        => popupPresenter != null ? popupPresenter.ShowOrdinReflectionBouncePopup(target) : 0f;
 
     /// <summary>無効化「護身」ポップアップ。戻り値は <see cref="DamagePopup.fadeDuration"/>（秒）。</summary>
     public float ShowBlockingNullifyPopup(PlayerStatus target)

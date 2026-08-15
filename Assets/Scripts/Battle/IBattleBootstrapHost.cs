@@ -38,6 +38,7 @@ public interface IBattleBootstrapHost
     StatusProgressionConfig StatusProgressionConfig { get; }
     DiseaseTurnEndSettings DiseaseTurnEndSettings { get; }
     ShivaDirectAttackFreezeSettings ShivaDirectAttackFreezeSettings { get; }
+    OrdinSlashReflectSettings OrdinSlashReflectSettings { get; }
 
     BuyFeature BuyFeature { get; }
     SellFeature SellFeature { get; }

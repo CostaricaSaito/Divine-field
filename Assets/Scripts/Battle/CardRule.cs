@@ -45,7 +45,10 @@ public static class CardRules
         if (IsRecoveryCard(c)) return true;
         if (c.cardType == CardType.Magic) return false;
         if (c.cardType == CardType.Special)
+        {
+            if (ShiningBarrierRules.IsShiningBarrierCard(c)) return false;
             return c.specialCardEffect != null && c.postDeathCardEffect == null;
+        }
         return c.cardType == CardType.Attack || c.cardType == CardType.Recovery;
     }
 
@@ -58,6 +61,7 @@ public static class CardRules
         if (c.usableInDefensePhase) return true;
         if (ReflectionRules.IsReflectionCard(c) && c.defensePhaseUseRule != DefensePhaseUseRule.None)
             return true;
+        if (ShiningBarrierRules.IsShiningBarrierCard(c)) return true;
         return c.cardType == CardType.Defense;
     }
 
@@ -73,7 +77,10 @@ public static class CardRules
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
             return true;
         if (c.cardType == CardType.Special && c.specialCardEffect != null && c.postDeathCardEffect == null)
+        {
+            if (ShiningBarrierRules.IsShiningBarrierCard(c)) return false;
             return true;
+        }
         return c.canApplyStatusEffect
             && c.statusEffectToApply != StatusEffectType.None
             && c.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve;
@@ -140,7 +147,7 @@ public static class CardRules
         if (IncomingRequiresFullOnlyReactiveDefense(incomingAttack))
             return GetFullOnlyReactiveDefenseChoices(hand, incomingAttack);
 
-        ElementType attackElement = ElementHelper.GetCombinedElement(incomingAttack);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(incomingAttack);
         var defenseChoices = GetDefenseChoicesAgainstAttack(hand, attackElement, incomingAttack);
 
         foreach (var c in hand)
@@ -150,7 +157,10 @@ public static class CardRules
         }
 
         defenseChoices.RemoveAll(c =>
-            c != null && ReflectionRules.IsReflectionCard(c) && !ReflectionRules.CanReflectIncoming(c, incomingAttack));
+            c != null
+            && ReflectionRules.IsReflectionCard(c)
+            && !ReflectionRules.CanReflectIncoming(c, incomingAttack)
+            && !CanServeAsNormalArmorDefense(c));
 
         if (BlockingRules.CanBlockPhysical(incomingAttack))
         {
@@ -162,14 +172,30 @@ public static class CardRules
         }
         else
         {
-            defenseChoices.RemoveAll(c => c != null && BlockingRules.IsPhysicalBlockingCard(c));
+            defenseChoices.RemoveAll(c =>
+                c != null
+                && BlockingRules.IsPhysicalBlockingCard(c)
+                && !CanServeAsNormalArmorDefense(c));
         }
 
-        defenseChoices.RemoveAll(c => c != null && ParryRules.IsParryCard(c) && !ParryRules.CanParryIncoming(c, incomingAttack));
+        defenseChoices.RemoveAll(c =>
+            c != null
+            && ParryRules.IsParryCard(c)
+            && !ParryRules.CanParryIncoming(c, incomingAttack)
+            && !CanServeAsNormalArmorDefense(c));
         foreach (var c in hand)
         {
             if (c != null && ParryRules.CanParryIncoming(c, incomingAttack) && !defenseChoices.Contains(c))
                 defenseChoices.Add(c);
+        }
+
+        if (incomingAttack != null && ShiningBarrierRules.CanUseAgainstIncoming(incomingAttack))
+        {
+            foreach (var c in hand)
+            {
+                if (c != null && ShiningBarrierRules.IsShiningBarrierCard(c) && !defenseChoices.Contains(c))
+                    defenseChoices.Add(c);
+            }
         }
 
         return defenseChoices;
@@ -346,6 +372,28 @@ public static class CardRules
             if (!IsStatusOnlyMagicCard(c)) return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Free ルールの二役防具、または反応系を持たない通常防具。
+    /// 反応（反射・無効・打ち払い）が成立しない攻撃に対して DEF として使える。
+    /// </summary>
+    public static bool CanServeAsNormalArmorDefense(CardData c)
+    {
+        if (c == null || c.defensePower <= 0) return false;
+
+        bool armorLike = c.cardType == CardType.Defense
+            || (c.cardType == CardType.Attack && c.usableInDefensePhase);
+        if (!armorLike) return false;
+
+        if (c.reflectionKind == ReflectionKind.None
+            && c.blockingKind == BlockingKind.None
+            && c.parryKind == ParryKind.None)
+        {
+            return true;
+        }
+
+        return c.defensePhaseUseRule == DefensePhaseUseRule.Free;
     }
 
     /// <summary>反射・ブロッキング・打ち払いではない通常の盾防御（濃霧付与などでは防げない）。</summary>

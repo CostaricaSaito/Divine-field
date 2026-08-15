@@ -51,6 +51,7 @@ public sealed class DualBladeDefenseCoordinator
         {
             if (cancellationToken.IsCancellationRequested) return;
 
+            _host.ClearIncomingAttackForceNoneElement();
             BattleUIManager.I?.HideAllCardDetails();
             _host.ClearCardStatsSequence();
             _host.UpdateCardStatsDisplay();
@@ -71,6 +72,16 @@ public sealed class DualBladeDefenseCoordinator
 
             await Task.Delay(500, cancellationToken);
             if (cancellationToken.IsCancellationRequested) return;
+
+            var attackCards = _host.GetAttackCardsForCombat();
+            if (attackCards != null && attackCards.Count > 0
+                && BattleManager.I != null
+                && await OrdinSlashReflectFlow.TryInterceptPlayerDefenseAsync(
+                    BattleManager.I,
+                    attackCards,
+                    OrdinInterceptContext.DualBladeSecondDefense,
+                    cancellationToken))
+                return;
 
             SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
             Debug.Log("[DualBladeDefenseCoordinator] 双剣デュアリズム: 2回目の防御選択");

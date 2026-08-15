@@ -170,6 +170,10 @@ public static class DisasterCombatRunner
             return await bm.TryHandleDeathIfAnyAsync(cancellationToken) ? false : true;
 
         bm.BeginDisasterPlayerDefensePhase(atkList);
+        if (await OrdinSlashReflectFlow.TryInterceptPlayerDefenseAsync(
+                bm, atkList, OrdinInterceptContext.Disaster, cancellationToken))
+            return true;
+
         List<CardData> defs;
         try
         {
@@ -290,6 +294,10 @@ public static class DisasterCombatRunner
         }
 
         bm.BeginDisasterPlayerDefensePhase(atkList);
+        if (await OrdinSlashReflectFlow.TryInterceptPlayerDefenseAsync(
+                bm, atkList, OrdinInterceptContext.Disaster, cancellationToken))
+            return true;
+
         List<CardData> defs;
         try
         {

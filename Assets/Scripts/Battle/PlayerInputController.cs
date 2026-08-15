@@ -646,8 +646,9 @@ public sealed class PlayerInputController
     {
         if (_host.PlayerStatus != null && _host.PlayerStatus.HasConfusionEffect())
             return BattleRandom.Range(0, 2) == 0 ? _host.PlayerStatus : _host.EnemyStatus;
-        bool recover = card != null && CardRules.IsRecoveryCard(card);
-        if (recover)
+        bool recoverOrFountain = card != null
+            && (CardRules.IsRecoveryCard(card) || MagicFountainRules.IsMagicFountainCard(card));
+        if (recoverOrFountain)
             return _host.IsPlayerSelfAttackTargetMode ? _host.EnemyStatus : _host.PlayerStatus;
         return _host.IsPlayerSelfAttackTargetMode ? _host.PlayerStatus : _host.EnemyStatus;
     }

@@ -429,6 +429,17 @@ public class CardSequenceManager : MonoBehaviour
             return;
         }
 
+        if (cardType == "防御"
+            && battleManager.DefenderPublic == PlayerType.Player
+            && ShiningBarrierRules.IsBarrierOnlySelection(selectedCards))
+        {
+            await ShiningBarrierDefenseFlow.RunPlayerInterceptAsync(
+                battleManager,
+                selectedCards[0],
+                cancellationToken);
+            return;
+        }
+
         // ④戦闘解決処理
         PlayerStatus atk;
         PlayerStatus def;
@@ -636,6 +647,7 @@ public class CardSequenceManager : MonoBehaviour
         battleManager.SetCurrentAttackCard(null);
         cardStatsDisplay?.UpdateDisplay();
 
+        battleManager.ClearIncomingAttackForceNoneElement();
         battleManager.SetGameState(GameState.CombatResolvePhase);
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
         battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
@@ -756,6 +768,37 @@ public class CardSequenceManager : MonoBehaviour
 
         var defenseCards = battleManager.GetEnemyDefenseCardsForCombat();
         CardData selectedDefenseCard = defenseCards.Count > 0 ? defenseCards[0] : null;
+
+        if (ShiningBarrierRules.IsBarrierOnlySelection(defenseCards))
+        {
+            bool resolved = await ShiningBarrierDefenseFlow.RunEnemyInterceptAsync(
+                battleManager,
+                battleProcessor,
+                handRefill,
+                selectedDefenseCard,
+                attackCards,
+                defHand,
+                battleManager.GetEnemyAI(),
+                cancellationToken,
+                skipInitialBarrierDisplay: true);
+            if (resolved)
+            {
+                if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
+                    && dualBladeStrikeIndex == 0
+                    && !atk.IsDead() && !def.IsDead())
+                {
+                    await PresentDualBladeSecondStrikeAttackRevealAsync(attackCards, atk, cancellationToken);
+                    return await ResolvePlayerAttackCombatAsync(
+                        attackCards, atk, def, defHand, cancellationToken, 1);
+                }
+
+                if (await battleManager.TryHandleDeathIfAnyAsync(cancellationToken))
+                    return false;
+
+                return true;
+            }
+        }
+
         bool showYurusuDuringCombat =
             battleManager.DefenderPublic == PlayerType.Enemy && defenseCards.Count == 0 && BattleUIManager.I != null;
 

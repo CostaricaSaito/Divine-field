@@ -156,7 +156,10 @@ public sealed class GameEndOrchestrator
 
         SoundEffectPlayer.I?.Play(OjyouBellSeAddress);
         if (startBgmFade)
+        {
             _ = BattleBgmController.Instance?.FadeOutBattleBgmAndStopAsync(lifetime);
+            _ = BattleBackgroundVideoController.Instance?.StopAsync(lifetime, ct);
+        }
 
         await Task.Delay(TimeSpan.FromSeconds(lifetime), ct);
     }
@@ -164,7 +167,10 @@ public sealed class GameEndOrchestrator
     private async Task RunGameEndPresentationAsync(bool playerDead, bool enemyDead, bool startBgmFade, CancellationToken ct)
     {
         if (startBgmFade)
+        {
             _ = BattleBgmController.Instance?.FadeOutBattleBgmAndStopAsync(2.0f);
+            _ = BattleBackgroundVideoController.Instance?.StopAsync(2.0f, ct);
+        }
 
         if (BattleUIManager.I != null)
         {
@@ -188,6 +194,14 @@ public sealed class GameEndOrchestrator
 
     private async Task RunGameResultScreenAsync(bool playerDead, bool enemyDead)
     {
+        if (_host.IsOnlineMatch)
+            await RunOnlineGameResultScreenAsync(playerDead, enemyDead);
+        else
+            await RunNpcResultScreenAsync(playerDead, enemyDead);
+    }
+
+    private async Task RunOnlineGameResultScreenAsync(bool playerDead, bool enemyDead)
+    {
         GameObject prefab = _host.GameResultPrefab != null
             ? _host.GameResultPrefab
             : Resources.Load<GameObject>("Prefab/GameResult");
@@ -210,10 +224,7 @@ public sealed class GameEndOrchestrator
             return;
         }
 
-        GameResultController.ResultKind kind;
-        if (playerDead && enemyDead) kind = GameResultController.ResultKind.Stalemate;
-        else if (playerDead) kind = GameResultController.ResultKind.Defeat;
-        else kind = GameResultController.ResultKind.Victory;
+        var kind = ResolveResultKind(playerDead, enemyDead);
 
         try
         {
@@ -223,5 +234,48 @@ public sealed class GameEndOrchestrator
         {
             Debug.LogException(ex);
         }
+    }
+
+    private async Task RunNpcResultScreenAsync(bool playerDead, bool enemyDead)
+    {
+        GameObject prefab = _host.NpcResultPrefab != null
+            ? _host.NpcResultPrefab
+            : Resources.Load<GameObject>("Prefab/NPCResult");
+        if (prefab == null)
+        {
+            Debug.LogWarning("[GameEndOrchestrator] NPCResult prefab not found");
+            return;
+        }
+
+        var battleUi = BattleUIManager.I;
+        Transform parentForResult = battleUi != null ? battleUi.transform.root : null;
+        GameObject resultGo = parentForResult != null
+            ? UnityEngine.Object.Instantiate(prefab, parentForResult, false)
+            : UnityEngine.Object.Instantiate(prefab);
+
+        var controller = resultGo.GetComponent<NPCResultController>();
+        if (controller == null)
+        {
+            Debug.LogWarning("[GameEndOrchestrator] NPCResultController missing on prefab");
+            return;
+        }
+
+        var kind = ResolveResultKind(playerDead, enemyDead);
+
+        try
+        {
+            await controller.ShowAsync(kind, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+    }
+
+    static GameResultController.ResultKind ResolveResultKind(bool playerDead, bool enemyDead)
+    {
+        if (playerDead && enemyDead) return GameResultController.ResultKind.Stalemate;
+        if (playerDead) return GameResultController.ResultKind.Defeat;
+        return GameResultController.ResultKind.Victory;
     }
 }

@@ -16,6 +16,8 @@ public interface IGameEndOrchestratorHost
     EnemyAI EnemyAI { get; }
     CardStatsDisplay CardStatsDisplay { get; }
     GameObject GameResultPrefab { get; }
+    GameObject NpcResultPrefab { get; }
+    bool IsOnlineMatch { get; }
 
     bool IsPostDeathSequenceActive { get; set; }
 

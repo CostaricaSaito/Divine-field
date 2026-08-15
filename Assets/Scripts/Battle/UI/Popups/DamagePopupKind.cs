@@ -17,4 +17,5 @@ public enum DamagePopupKind
     HandDiscardRestart = 11,
     HealMp = 12,
     HealGp = 13,
+    OrdinReflectionBounce = 14,
 }

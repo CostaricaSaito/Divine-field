@@ -15,7 +15,7 @@ public static class BlockingRules
     public static bool CanBlockPhysical(IReadOnlyList<CardData> incomingAttack)
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
-        if (ElementHelper.GetCombinedElement(incomingAttack) != ElementType.None) return false;
+        if (ElementHelper.GetIncomingAttackElement(incomingAttack) != ElementType.None) return false;
         return ReflectionRules.CanReflectPhysical(incomingAttack);
     }
 

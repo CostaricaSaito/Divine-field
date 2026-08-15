@@ -18,6 +18,7 @@ public sealed class BattleBootstrap
         RefreshStartupDisplays(host);
         host.EnsureBattleBgmController();
         BattleBgmController.Instance?.StartBattleSession();
+        BattleBackgroundVideoController.Instance?.StartBattleSession();
         host.BeginOpeningSequence();
     }
 
@@ -51,6 +52,7 @@ public sealed class BattleBootstrap
         host.SetPlayerStatus(player);
         host.SetEnemyStatus(enemy);
         HitRateRules.ResetHitRateDisplayMonitor();
+        BattleManager.I?.ResetUltimateReadyTracker();
     }
 
     private static void AssignInitialSummonData(IBattleBootstrapHost host)
@@ -100,6 +102,7 @@ public sealed class BattleBootstrap
         host.BattleProcessor.Initialize(host.PlayerStatus, host.EnemyStatus, host.StatusUI, host.CardDealer);
         DiseaseTurnEndProcessor.BindSettings(host.DiseaseTurnEndSettings);
         ShivaDirectAttackFreezeFlow.BindSettings(host.ShivaDirectAttackFreezeSettings);
+        OrdinSlashReflectFlow.BindSettings(host.OrdinSlashReflectSettings);
         host.BattleProcessor.ConfigureStatusEffects(host.StatusProgressionConfig);
 
         if (host.HandRefill != null)

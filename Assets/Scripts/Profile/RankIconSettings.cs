@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// ランク帯ごとのアイコン Sprite をまとめる ScriptableObject。
-/// RP は <see cref="PlayerProfileService"/> に永続化され、表示時に RP → ランク → アイコンを解決します。
+/// ランク帯ごとのアイコン Sprite とアクセントカラーをまとめる ScriptableObject。
+/// RP は <see cref="PlayerProfileService"/> に永続化され、表示時に RP → ランク → 見た目を解決します。
 /// </summary>
 [CreateAssetMenu(fileName = "RankIconSettings", menuName = "Divine/Profile/Rank Icon Settings")]
 public sealed class RankIconSettings : ScriptableObject
@@ -16,6 +16,7 @@ public sealed class RankIconSettings : ScriptableObject
     {
         public RankTierId tier = RankTierId.Novice;
         public Sprite icon;
+        public Color accentColor = Color.white;
     }
 
     [SerializeField] private List<Entry> entries = new List<Entry>();
@@ -51,7 +52,23 @@ public sealed class RankIconSettings : ScriptableObject
         return null;
     }
 
+    public Color GetAccentColor(RankTierId tier)
+    {
+        if (entries == null) return Color.white;
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var e = entries[i];
+            if (e != null && e.tier == tier)
+                return e.accentColor;
+        }
+
+        return Color.white;
+    }
+
     public Sprite GetIconForRp(int rp) => GetIcon(PlayerRank.GetTierId(rp));
+
+    public Color GetAccentColorForRp(int rp) => GetAccentColor(PlayerRank.GetTierId(rp));
 
     public Sprite GetIconForNextTier(int rp)
     {
@@ -62,8 +79,8 @@ public sealed class RankIconSettings : ScriptableObject
     }
 
 #if UNITY_EDITOR
-    [ContextMenu("エントリを8ランク（公式順）で初期化")]
-    void EditorInitializeEightEntries()
+    [ContextMenu("エントリを7ランク（公式順）で初期化")]
+    void EditorInitializeSevenEntries()
     {
         entries ??= new List<Entry>();
         entries.Clear();

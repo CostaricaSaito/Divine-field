@@ -68,6 +68,18 @@ public static class ElementHelper
         return core;
     }
 
+    /// <summary>
+    /// Incoming attack element for defense UI and combat (honors Shining Barrier force-None flag).
+    /// </summary>
+    public static ElementType GetIncomingAttackElement(IReadOnlyList<CardData> cards, bool applySpellbookElementForce = true)
+    {
+        if (cards == null || cards.Count == 0) return ElementType.None;
+        var bm = BattleManager.I;
+        if (bm != null && bm.IncomingAttackForceNoneElement)
+            return ElementType.None;
+        return GetCombinedElement(cards, applySpellbookElementForce);
+    }
+
     /// <summary>魔導書の属性固定を適用しない合算（演出中の表示用）。</summary>
     private static ElementType GetCombinedElementCore(IReadOnlyList<CardData> cards)
     {

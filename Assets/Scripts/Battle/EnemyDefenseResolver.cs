@@ -42,11 +42,6 @@ public sealed class EnemyDefenseResolver
     public async Task ResolveConfirmAsync()
     {
         var defenseCardsToDisplay = GetDefenseCardsForCombat();
-        if (defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0)
-        {
-            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCardsToDisplay);
-        }
-
         var atk = (_host.Attacker == PlayerType.Player) ? _host.PlayerStatus : _host.EnemyStatus;
         var def = (_host.Defender == PlayerType.Player) ? _host.PlayerStatus : _host.EnemyStatus;
         var defHand = (_host.Defender == PlayerType.Player) ? _host.PlayerHand : _host.CpuHand;
@@ -56,6 +51,44 @@ public sealed class EnemyDefenseResolver
             ? defenseCardsToDisplay
             : new List<CardData>();
         CardData enemyDefenseCard = defenseCardsForCombat.Count > 0 ? defenseCardsForCombat[0] : null;
+
+        var phaseToken = _host.GetPhaseToken();
+
+        if (ShiningBarrierRules.IsBarrierOnlySelection(defenseCardsForCombat))
+        {
+            bool resolved = await ShiningBarrierDefenseFlow.RunEnemyInterceptAsync(
+                _host.Manager,
+                _host.BattleProcessor,
+                _host.HandRefill,
+                enemyDefenseCard,
+                attackCards,
+                defHand,
+                _host.EnemyAI,
+                phaseToken);
+            if (resolved)
+            {
+                if (phaseToken.IsCancellationRequested) return;
+                if (await _host.TryHandleDeathIfAnyAsync(phaseToken)) return;
+
+                _host.ClearMagicalExplosionComboMpPoolSnapshot();
+                _host.ClearMillionDollarBazookaComboGpPoolSnapshot();
+                _host.ClearTributeBloodHpPaidSnapshot();
+                _host.ClearHammadnessRollSnapshot();
+                BattleUIManager.I?.HideAllCardDetails();
+                _host.Manager?.ClearIncomingAttackForceNoneElement();
+                _host.ClearCardStatsSequenceAndAttackLocks();
+                _host.CurrentAttackCard = null;
+                _host.SetSuppressEnemyStaleAttackerInTotalByOrb(false);
+                _host.UpdateCardStatsDisplay();
+                _host.SetGameState(GameState.CombatResolvePhase);
+                return;
+            }
+        }
+
+        if (defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0)
+        {
+            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCardsToDisplay);
+        }
 
         bool enemyPhysicalReflect = enemyDefenseCard != null
             && ReflectionRules.CanReflectIncoming(enemyDefenseCard, attackCards)
@@ -69,7 +102,6 @@ public sealed class EnemyDefenseResolver
         bool enemyParry = enemyDefenseCard != null
             && ParryRules.RequiresParryExclusiveLock(enemyDefenseCard, attackCards);
 
-        var phaseToken = _host.GetPhaseToken();
         bool showYurusuDuringCombat =
             _host.Defender == PlayerType.Enemy && defenseCardsForCombat.Count == 0 && BattleUIManager.I != null;
         using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))

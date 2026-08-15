@@ -22,6 +22,7 @@ public interface IDualBladeDefenseHost
     void RefreshPlayerDefensePhaseInteractivity();
     void TryAutoPassPlayerDefenseIfChantingArchMagic();
     void ClearCardStatsSequence();
+    void ClearIncomingAttackForceNoneElement();
     void SetEnemyAttackSequenceDisplay(List<CardData> attackCards);
     void UpdateCardStatsDisplay();
 }

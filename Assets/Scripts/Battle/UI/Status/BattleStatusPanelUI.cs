@@ -140,12 +140,16 @@ public class BattleStatusUI : MonoBehaviour
 
         if (player != null)
         {
-            playerSummonIcon.sprite = player.summonData != null ? player.summonData.GetBattleStatusIconSprite() : null;
+            var playerSprite = player.summonData != null ? player.summonData.GetBattleStatusIconSprite() : null;
+            playerSummonIcon.sprite = playerSprite;
+            SummonRainbowFramePresenter.SyncIconSprite(playerSummonIcon, playerSprite);
             playerNameText.text = player.DisplayName;
 
-            UpdateRainbowLowHpOverlay(playerSummonIcon, player, viewerUnderFog);
+            UpdateRainbowLowHpOverlay(playerSummonIcon, player, viewerUnderFog, isPlayerSide: true);
 
-            playerSummonIcon.color = viewerUnderFog ? FogSummonTint : _playerSummonColorNatural;
+            SummonRainbowFramePresenter.ApplyIconTint(
+                playerSummonIcon,
+                viewerUnderFog ? FogSummonTint : _playerSummonColorNatural);
 
             RefreshAilmentIconRow(playerAilmentIconRow, player, viewerUnderFog);
         }
@@ -156,12 +160,16 @@ public class BattleStatusUI : MonoBehaviour
 
         if (enemy != null)
         {
-            enemySummonIcon.sprite = enemy.summonData != null ? enemy.summonData.GetBattleStatusIconSprite() : null;
+            var enemySprite = enemy.summonData != null ? enemy.summonData.GetBattleStatusIconSprite() : null;
+            enemySummonIcon.sprite = enemySprite;
+            SummonRainbowFramePresenter.SyncIconSprite(enemySummonIcon, enemySprite);
             enemyNameText.text = enemy.DisplayName;
 
-            UpdateRainbowLowHpOverlay(enemySummonIcon, enemy, viewerUnderFog);
+            UpdateRainbowLowHpOverlay(enemySummonIcon, enemy, viewerUnderFog, isPlayerSide: false);
 
-            enemySummonIcon.color = viewerUnderFog ? FogSummonTint : _enemySummonColorNatural;
+            SummonRainbowFramePresenter.ApplyIconTint(
+                enemySummonIcon,
+                viewerUnderFog ? FogSummonTint : _enemySummonColorNatural);
 
             RefreshAilmentIconRow(enemyAilmentIconRow, enemy, viewerUnderFog);
         }
@@ -171,46 +179,25 @@ public class BattleStatusUI : MonoBehaviour
         }
 
         if (player != null)
+        {
             BattleBgmController.Instance?.SyncFromPlayer(player);
+            BattleManager.I?.SyncUltimateReadyState(player);
+        }
     }
 
-    /// <summary>劣勢時（HP+MP+GP 合計が閾値以下）の召喚アイコン虹演出。濃霧視点（人間に濃霧）のときは停止。</summary>
-    private static void UpdateRainbowLowHpOverlay(Image summonIcon, PlayerStatus ps, bool viewerUnderFog)
+    /// <summary>劣勢時の召喚アイコン虹枠（RainbowFrame 93x93 を背面に表示）。</summary>
+    private static void UpdateRainbowLowHpOverlay(
+        Image summonIcon, PlayerStatus ps, bool viewerUnderFog, bool isPlayerSide)
     {
         if (summonIcon == null || ps == null) return;
-        Transform overlay = summonIcon.transform.Find("RainbowOverlay");
-        if (overlay == null) return;
 
-        var overlayRt = overlay.GetComponent<RectTransform>();
-        SyncRainbowOverlayRectToSummonIcon(summonIcon, overlayRt);
+        bool eligible = UltimateReadyRules.IsAvailable(ps);
+        if (isPlayerSide && BattleManager.I != null && BattleManager.I.ShouldDeferPlayerSummonGlow(ps))
+            eligible = false;
 
-        if (!viewerUnderFog && DisadvantageRules.IsDisadvantaged(ps) && !ps.hasUsedManifestationSkill)
-        {
-            if (!overlay.GetComponent<RainbowOutline>())
-                overlay.gameObject.AddComponent<RainbowOutline>();
-        }
-        else
-        {
-            if (overlay.GetComponent<RainbowOutline>())
-                Destroy(overlay.GetComponent<RainbowOutline>());
-            var ovImg = overlay.GetComponent<Image>();
-            if (ovImg != null)
-                ovImg.color = new Color(1, 1, 1, 0);
-        }
-    }
-
-    /// <summary>RainbowOverlay を召喚アイコン Image の矩形に完全一致させる。</summary>
-    private static void SyncRainbowOverlayRectToSummonIcon(Image summonIcon, RectTransform overlayRt)
-    {
-        if (summonIcon == null || overlayRt == null) return;
-        var iconRt = summonIcon.rectTransform;
-        overlayRt.SetParent(iconRt, false);
-        overlayRt.anchorMin = Vector2.zero;
-        overlayRt.anchorMax = Vector2.one;
-        overlayRt.pivot = new Vector2(0.5f, 0.5f);
-        overlayRt.anchoredPosition = Vector2.zero;
-        overlayRt.sizeDelta = Vector2.zero;
-        overlayRt.localScale = Vector3.one;
+        SummonRainbowFramePresenter.SetRainbowFrameActive(
+            summonIcon,
+            !viewerUnderFog && eligible);
     }
 
     private IEnumerator CoFadeFogVfx(bool toConcealed)

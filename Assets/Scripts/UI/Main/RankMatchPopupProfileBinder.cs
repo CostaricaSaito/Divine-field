@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// RankMatchPopup のプロフィール表示（ランク名・RP・スライダー・アイコン）。
+/// RankMatchPopup のプロフィール表示（ランク名・RP・スライダー・アイコン・ランク色）。
 /// UI は Prefab 上のオブジェクトを Inspector または名前で参照します。
 /// </summary>
 [DisallowMultipleComponent]
@@ -15,8 +15,9 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
     [Header("テキスト")]
     [SerializeField] private TMP_Text currentRankText;
     [SerializeField] private TMP_Text playerNameText;
-    [SerializeField] private TMP_Text nextRankValueText;
+    [SerializeField] private TMP_Text rpLabelText;
     [SerializeField] private TMP_Text rpValueText;
+    [SerializeField] private TMP_Text nextRankValueText;
 
     [Header("ランクアイコン")]
     [SerializeField] private Image currentRankBadgeImage;
@@ -25,6 +26,8 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
 
     [Header("進捗")]
     [SerializeField] private Slider nextRankSlider;
+    [Tooltip("未割当時は NextRankSlider の Fill を使用します。")]
+    [SerializeField] private Image nextRankSliderFillImage;
 
     [Header("最大ランク時の NextRankValue 表示")]
     [SerializeField] private string maxRankNextValueText = "—";
@@ -35,10 +38,17 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
 
         var name = ResolvePlayerName();
         var rp = ResolveCurrentRp();
+        var settings = RankIconSettings.Resolve();
+        var tierId = PlayerRank.GetTierId(rp);
+        var accentColor = settings != null ? settings.GetAccentColor(tierId) : Color.white;
 
         SetText(currentRankText, PlayerRank.GetDisplayName(rp));
         SetText(playerNameText, name);
         SetText(rpValueText, rp.ToString());
+        ApplyAccentColor(currentRankText, accentColor);
+        ApplyAccentColor(playerNameText, accentColor);
+        ApplyAccentColor(rpLabelText, accentColor);
+        ApplyAccentColor(rpValueText, accentColor);
 
         if (PlayerRank.IsMaxRank(rp))
         {
@@ -51,7 +61,8 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
             ApplySlider(PlayerRank.GetProgressInCurrentTier01(rp));
         }
 
-        ApplyRankIcons(rp);
+        ApplySliderFillColor(accentColor);
+        ApplyRankIcons(rp, settings);
     }
 
     void ResolveReferences()
@@ -72,12 +83,15 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
 
         if (currentRankText == null) currentRankText = FindTmp("CurrentRankText");
         if (playerNameText == null) playerNameText = FindTmp("PlayerNameText");
-        if (nextRankValueText == null) nextRankValueText = FindTmp("NextRankValue");
+        if (rpLabelText == null) rpLabelText = FindTmp("RPtext");
         if (rpValueText == null) rpValueText = FindTmp("RPvalue");
+        if (nextRankValueText == null) nextRankValueText = FindTmp("NextRankValue");
         if (currentRankBadgeImage == null) currentRankBadgeImage = FindImage("CurrentRankBadge");
         if (rankIconAsIsImage == null) rankIconAsIsImage = FindImage("RankIconASIS");
         if (rankIconNextImage == null) rankIconNextImage = FindImage("RankIconNEXT");
         if (nextRankSlider == null) nextRankSlider = FindComp<Slider>("NextRankSlider");
+        if (nextRankSliderFillImage == null && nextRankSlider != null)
+            nextRankSliderFillImage = nextRankSlider.fillRect?.GetComponent<Image>();
     }
 
     TMP_Text FindTmp(string objectName) => FindComp<TMP_Text>(objectName);
@@ -116,9 +130,8 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
         return Mathf.Max(0, PlayerProfileService.Data.currentRp);
     }
 
-    void ApplyRankIcons(int rp)
+    void ApplyRankIcons(int rp, RankIconSettings settings)
     {
-        var settings = RankIconSettings.Resolve();
         if (settings == null)
             return;
 
@@ -137,6 +150,18 @@ public sealed class RankMatchPopupProfileBinder : MonoBehaviour
         nextRankSlider.minValue = 0f;
         nextRankSlider.maxValue = 1f;
         nextRankSlider.value = Mathf.Clamp01(progress01);
+    }
+
+    void ApplySliderFillColor(Color color)
+    {
+        if (nextRankSliderFillImage != null)
+            nextRankSliderFillImage.color = color;
+    }
+
+    static void ApplyAccentColor(TMP_Text target, Color color)
+    {
+        if (target != null)
+            target.color = color;
     }
 
     static void SetText(TMP_Text target, string value)

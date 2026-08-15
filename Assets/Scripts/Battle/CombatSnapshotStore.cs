@@ -102,8 +102,7 @@ public sealed class CombatSnapshotStore
     public List<CardData> ResolveAttackCardsForCombat(
         PlayerType attacker,
         IReadOnlyList<CardData> uiSelectedAttackCards,
-        bool isOnlineMatch,
-        IReadOnlyList<CardData> remoteLastAttackSelection)
+        IReadOnlyList<CardData> attackerLastAttackSelection)
     {
         if (attacker == PlayerType.Player)
         {
@@ -120,18 +119,30 @@ public sealed class CombatSnapshotStore
 
         if (_enemyAttackComboForCombat != null && _enemyAttackComboForCombat.Count > 0)
             return new List<CardData>(_enemyAttackComboForCombat);
-        if (_onlineEnemyAttackCombo != null && _currentAttackCard != null
-            && _onlineEnemyAttackCombo.Contains(_currentAttackCard))
+        if (_onlineEnemyAttackCombo != null && _onlineEnemyAttackCombo.Count > 0
+            && MatchesCurrentAttackContext(_onlineEnemyAttackCombo))
             return new List<CardData>(_onlineEnemyAttackCombo);
-        if (isOnlineMatch
-            && remoteLastAttackSelection != null
-            && remoteLastAttackSelection.Count > 0
-            && _currentAttackCard != null
-            && remoteLastAttackSelection.Contains(_currentAttackCard))
-            return new List<CardData>(remoteLastAttackSelection);
+        if (attackerLastAttackSelection != null && attackerLastAttackSelection.Count > 0
+            && MatchesCurrentAttackContext(attackerLastAttackSelection))
+            return new List<CardData>(attackerLastAttackSelection);
         return _currentAttackCard != null
             ? new List<CardData> { _currentAttackCard }
             : new List<CardData>();
+    }
+
+    /// <summary>
+    /// 単一 <see cref="_currentAttackCard"/> フォールバックを避け、多枚コンボを優先するための一致判定。
+    /// </summary>
+    private bool MatchesCurrentAttackContext(IReadOnlyList<CardData> candidate)
+    {
+        if (candidate == null || candidate.Count == 0) return false;
+        if (_currentAttackCard == null) return candidate.Count > 1;
+        for (int i = 0; i < candidate.Count; i++)
+        {
+            if (candidate[i] == _currentAttackCard)
+                return true;
+        }
+        return false;
     }
 
     public void SetConfusionAttackTargetResolvedForDisplay(bool targetsSelf)

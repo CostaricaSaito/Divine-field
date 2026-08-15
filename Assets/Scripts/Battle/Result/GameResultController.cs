@@ -35,16 +35,20 @@ public class GameResultController : MonoBehaviour
     [SerializeField] private TMP_Text underdogRpText;
     [SerializeField] private TMP_Text stylishRpText;
     [SerializeField] private TMP_Text rpCostText;
+    [SerializeField] private TMP_Text resultRpLabelText;
     [SerializeField] private TMP_Text resultRpValueText;
     [SerializeField] private TMP_Text nextRankValueText;
 
     [Header("ランクアイコン / スライダー")]
+    [SerializeField] private Image rankIconImage;
     [SerializeField] private Image rankIconAsIsImage;
-    [SerializeField] private Image rankIconNextImage;
+    [Tooltip("Prefab 上の RankIconTOBE / RankIconNEXT。")]
+    [SerializeField] private Image rankIconToBeImage;
     [SerializeField] private Slider nextRankSlider;
 
     [Header("操作")]
     [SerializeField] private Button backToMainButton;
+    [SerializeField] private Button reMatchingButton;
     [SerializeField] private string mainSceneName = "Main";
 
     [Header("ルートフェード")]
@@ -98,6 +102,9 @@ public class GameResultController : MonoBehaviour
     private Vector2 _resultTitleJpAnchoredEnd;
     private Vector2 _resultTitleEnAnchoredEnd;
     private bool _resultTitleEndCaptured;
+    CancellationTokenSource _matchmakingCts;
+    MatchingOverlayView _matchingOverlay;
+    bool _isRematching;
 
     private void Awake()
     {
@@ -120,11 +127,28 @@ public class GameResultController : MonoBehaviour
             backToMainButton.onClick.AddListener(OnBackToMainClicked);
         }
 
+        if (reMatchingButton != null)
+        {
+            reMatchingButton.interactable = false;
+            reMatchingButton.onClick.AddListener(OnReMatchingClicked);
+        }
+
+        ConfigureReMatchingButtonVisibility();
+
         EnsureResultBgmSource();
     }
 
     private void OnDestroy()
     {
+        _matchmakingCts?.Cancel();
+        _matchmakingCts?.Dispose();
+        _matchmakingCts = null;
+
+        if (backToMainButton != null)
+            backToMainButton.onClick.RemoveListener(OnBackToMainClicked);
+        if (reMatchingButton != null)
+            reMatchingButton.onClick.RemoveListener(OnReMatchingClicked);
+
         if (resultBgmSource != null)
             resultBgmSource.Stop();
         if (SoundEffectPlayer.I != null)
@@ -208,8 +232,7 @@ public class GameResultController : MonoBehaviour
         int newRpPreview = Mathf.Max(0, preRpForResult + totalPreview);
 
         ApplyHeaderTexts(kind);
-        ApplyProfileTexts(newRpPreview);
-        ApplyRankIcons(newRpPreview);
+        ApplyRankVisuals(preRpForResult, newRpPreview);
         EnsureResultBgmSource();
 
         PrepareResultTitleIntroStart();
@@ -249,6 +272,7 @@ public class GameResultController : MonoBehaviour
         // 8. ResultRPvalue：試合前 CurrentRP から今回の増減を反映した値
         int preRp = ResolvePreBattleRpForResult();
         int newRp = Mathf.Max(0, preRp + total);
+        var rankSettings = RankIconSettings.Resolve();
         AudioClip gaugeClip = await LoadAudioClipAddressAsync(seResultRpGaugeAddress, ct);
         float resultRpAnimSeconds = gaugeClip != null
             ? gaugeClip.length
@@ -257,12 +281,14 @@ public class GameResultController : MonoBehaviour
         {
             if (resultRpValueText != null)
                 resultRpValueText.text = newRp.ToString();
+            ApplyResultRpAccentColors(newRp, rankSettings);
         }
         else
         {
             if (gaugeClip != null)
                 SoundEffectPlayer.I?.Play(gaugeClip);
-            await CountUpTextAsync(resultRpValueText, preRp, newRp, resultRpAnimSeconds, false, ct);
+            await CountUpTextAsync(resultRpValueText, preRp, newRp, resultRpAnimSeconds, false, ct, rp =>
+                ApplyResultRpAccentColors(rp, rankSettings));
         }
 
         // 9. インターバル
@@ -287,9 +313,8 @@ public class GameResultController : MonoBehaviour
         if (nextRankValueText != null && PlayerRank.IsMaxRank(newRp))
             nextRankValueText.text = "—";
 
-        // 11. BackToMain を押せるようにする
-        if (backToMainButton != null)
-            backToMainButton.interactable = true;
+        // 11. BackToMain / ReMatching を押せるようにする
+        SetResultActionButtonsInteractable(true);
 
         // 12. ランタイム RP と永続化（GameProfile が無い環境でも newRp を必ず保存）
         if (GameProfile.I != null)
@@ -472,9 +497,12 @@ public class GameResultController : MonoBehaviour
         }
     }
 
-    /// <param name="rpForRankLabel">表示するランク算出用 RP（リザルトでは適用後の RP）。</param>
-    private void ApplyProfileTexts(int rpForRankLabel)
+    /// <param name="preRp">試合開始時点の RP（RankIconASIS 用）。</param>
+    /// <param name="newRp">試合後の RP（表示テキスト・RankIcon / RankIconTOBE 用）。</param>
+    private void ApplyRankVisuals(int preRp, int newRp)
     {
+        var settings = RankIconSettings.Resolve();
+
         string name = (GameProfile.I != null) ? GameProfile.I.PlayerName : "プレイヤー";
         if (GameProfile.I == null)
         {
@@ -483,28 +511,74 @@ public class GameResultController : MonoBehaviour
         }
 
         SetTextIfPresent(playerNameText, name);
-        SetTextIfPresent(playerRankText, PlayerRank.GetDisplayName(rpForRankLabel));
+        SetTextIfPresent(playerRankText, PlayerRank.GetDisplayName(newRp));
+
+        if (settings != null)
+        {
+            var accentColor = settings.GetAccentColorForRp(newRp);
+            ApplyAccentColor(playerRankText, accentColor);
+            ApplyAccentColor(playerNameText, accentColor);
+            ApplyResultRpAccentColors(newRp, settings);
+
+            SetSprite(rankIconImage, settings.GetIconForRp(newRp));
+            SetSprite(rankIconAsIsImage, settings.GetIconForRp(preRp));
+            SetSprite(rankIconToBeImage, settings.GetIconForRp(newRp));
+        }
     }
 
-    private void ApplyRankIcons(int rpForIcons)
+    private void ApplyResultRpAccentColors(int rp, RankIconSettings settings)
     {
-        var settings = RankIconSettings.Resolve();
         if (settings == null) return;
 
-        var current = settings.GetIconForRp(rpForIcons);
-        var next = settings.GetIconForNextTier(rpForIcons);
+        var accentColor = settings.GetAccentColorForRp(rp);
+        ApplyAccentColor(resultRpLabelText, accentColor);
+        ApplyAccentColor(resultRpValueText, accentColor);
+    }
 
-        if (rankIconAsIsImage != null)
-        {
-            rankIconAsIsImage.sprite = current;
-            rankIconAsIsImage.enabled = current != null;
-        }
+    private static void ApplyAccentColor(TMP_Text target, Color color)
+    {
+        if (target != null)
+            target.color = color;
+    }
 
-        if (rankIconNextImage != null)
+    private static void SetSprite(Image target, Sprite sprite)
+    {
+        if (target == null) return;
+        target.sprite = sprite;
+        target.enabled = sprite != null;
+    }
+
+    private async Task CountUpTextAsync(
+        TMP_Text target,
+        int from,
+        int to,
+        float seconds,
+        bool formatSigned,
+        CancellationToken ct,
+        Action<int> onStep = null)
+    {
+        if (target == null) return;
+        float dur = Mathf.Max(0.01f, seconds);
+        float elapsed = 0f;
+        int lastStepRp = from;
+        target.text = FormatRpValue(from, formatSigned);
+        onStep?.Invoke(from);
+        while (elapsed < dur)
         {
-            rankIconNextImage.sprite = next;
-            rankIconNextImage.enabled = next != null;
+            ct.ThrowIfCancellationRequested();
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+            int current = Mathf.RoundToInt(Mathf.Lerp(from, to, t));
+            target.text = FormatRpValue(current, formatSigned);
+            if (current != lastStepRp)
+            {
+                lastStepRp = current;
+                onStep?.Invoke(current);
+            }
+            await Task.Yield();
         }
+        target.text = FormatRpValue(to, formatSigned);
+        onStep?.Invoke(to);
     }
 
     private async Task FadeRootAsync(float from, float to, float seconds, CancellationToken ct)
@@ -526,20 +600,7 @@ public class GameResultController : MonoBehaviour
 
     private async Task CountUpTextAsync(TMP_Text target, int from, int to, float seconds, bool formatSigned, CancellationToken ct)
     {
-        if (target == null) return;
-        float dur = Mathf.Max(0.01f, seconds);
-        float elapsed = 0f;
-        target.text = FormatRpValue(from, formatSigned);
-        while (elapsed < dur)
-        {
-            ct.ThrowIfCancellationRequested();
-            elapsed += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(elapsed / dur);
-            int current = Mathf.RoundToInt(Mathf.Lerp(from, to, t));
-            target.text = FormatRpValue(current, formatSigned);
-            await Task.Yield();
-        }
-        target.text = FormatRpValue(to, formatSigned);
+        await CountUpTextAsync(target, from, to, seconds, formatSigned, ct, null);
     }
 
     private async Task CountUpWithSliderAsync(
@@ -602,6 +663,8 @@ public class GameResultController : MonoBehaviour
 
     private void OnBackToMainClicked()
     {
+        if (_isRematching) return;
+
         // オンライン対戦のセッション後始末（オフラインでは何もしない）
         if (OnlineMatchContext.IsOnline)
             MatchmakingService.EndOnlineSession();
@@ -615,5 +678,59 @@ public class GameResultController : MonoBehaviour
         {
             UnityEngine.SceneManagement.SceneManager.LoadScene(mainSceneName);
         }
+    }
+
+    void OnReMatchingClicked()
+    {
+        if (_isRematching || MatchmakingService.IsBusy) return;
+        if (!OnlineMatchContext.IsOnline) return;
+
+        SoundEffectPlayer.I?.Play(seBackToMainCursorAddress);
+        _ = RunRematchingAsync();
+    }
+
+    async Task RunRematchingAsync()
+    {
+        _isRematching = true;
+        SetResultActionButtonsInteractable(false);
+
+        if (resultBgmSource != null)
+            resultBgmSource.Stop();
+
+        _matchmakingCts?.Dispose();
+        _matchmakingCts = new CancellationTokenSource();
+
+        bool matched = await RankMatchmakingFlow.RunAndEnterBattleAsync(
+            ResolveMatchingOverlayParent(),
+            _matchmakingCts,
+            overlay => _matchingOverlay = overlay);
+
+        if (!matched && this != null)
+        {
+            _matchingOverlay = null;
+            _isRematching = false;
+            SetResultActionButtonsInteractable(true);
+        }
+    }
+
+    void ConfigureReMatchingButtonVisibility()
+    {
+        if (reMatchingButton == null) return;
+        reMatchingButton.gameObject.SetActive(OnlineMatchContext.IsOnline);
+    }
+
+    void SetResultActionButtonsInteractable(bool interactable)
+    {
+        if (backToMainButton != null)
+            backToMainButton.interactable = interactable;
+
+        if (reMatchingButton != null && reMatchingButton.gameObject.activeSelf)
+            reMatchingButton.interactable = interactable;
+    }
+
+    Transform ResolveMatchingOverlayParent()
+    {
+        var canvas = GetComponentInChildren<Canvas>(true);
+        return canvas != null ? canvas.transform : transform;
     }
 }
