@@ -230,6 +230,25 @@ public sealed class BattlePhaseController
         try
         {
             var attackCards = _host.GetAttackCardsForCombat();
+            PlayerStatus atk = _host.Attacker == PlayerType.Player ? _host.PlayerStatus : _host.EnemyStatus;
+            PlayerStatus def = _host.Defender == PlayerType.Player ? _host.PlayerStatus : _host.EnemyStatus;
+            var defHand = _host.Defender == PlayerType.Player ? _host.PlayerHand : _host.CpuHand;
+
+            if (OrdinUltimateRules.CanConsumeForOpponentStrike(atk, def, _host.CurrentAttackCard)
+                && attackCards != null && attackCards.Count > 0)
+            {
+                if (await ZantestukenCombatFlow.TryResolveDefensePhaseSkipAsync(
+                        _host.Manager,
+                        _host.Manager.battleProcessor,
+                        attackCards,
+                        atk,
+                        def,
+                        defHand,
+                        _host.CurrentAttackCard,
+                        phaseToken))
+                    return;
+            }
+
             if (attackCards != null && attackCards.Count > 0)
             {
                 if (_host.Defender == PlayerType.Enemy)

@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.Serialization;
 using TMPro;
 
 [System.Serializable]
@@ -36,16 +37,11 @@ public class SummonData : ScriptableObject
     [TextArea(2, 4)]
     public string description;
 
-    [Header("Skills")]
+    [Header("Passive Skill (加護スキル)")]
     public string passiveSkillName;
 
     [TextArea(2, 4)]
     public string passiveSkillDescription;
-
-    public string activeSkillName;
-
-    [TextArea(2, 4)]
-    public string activeSkillDescription;
 
     public Sprite characterSprite;
     public Sprite backgroundSprite;
@@ -67,21 +63,27 @@ public class SummonData : ScriptableObject
     [Tooltip("Shared by NewSummon name/subtitle/skill names and battle popup skill name.")]
     public SummonTextStyle textStyle;
 
-    [Header("Special skill")]
-    public string specialSkillName;
+    [Header("Ultimate Skill (アルティメットスキル)")]
+    [FormerlySerializedAs("specialSkillName")]
+    public string ultimateSkillName;
 
     [TextArea(2, 4)]
-    public string specialSkillDescription;
+    [FormerlySerializedAs("specialSkillDescription")]
+    public string ultimateSkillDescription;
 
-    [Tooltip("Description style for battle special skill popup.")]
-    public SummonTextStyle popupSkillDescStyle;
+    [Tooltip("Description style for battle ultimate skill popup.")]
+    [FormerlySerializedAs("popupSkillDescStyle")]
+    public SummonTextStyle ultimateSkillPopupDescStyle;
 
-    public Sprite specialSkillCutInSprite;
-    public AudioClip specialSkillSE;
+    [FormerlySerializedAs("specialSkillCutInSprite")]
+    public Sprite ultimateSkillCutInSprite;
 
-    [Header("Manifestation")]
-    [Tooltip("Card resolved on manifestation. Empty disables manifestation button.")]
-    public CardData manifestationCard;
+    [FormerlySerializedAs("specialSkillSE")]
+    public AudioClip ultimateSkillSE;
+
+    [Tooltip("Optional CardType.Ultimate card resolved when the ultimate skill uses card combat.")]
+    [FormerlySerializedAs("manifestationCard")]
+    public CardData ultimateSkillCard;
 
     [Header("Passive blessing (runtime)")]
     [SerializeField]

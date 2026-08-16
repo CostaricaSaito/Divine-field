@@ -383,7 +383,7 @@ public class BattleBgmController : MonoBehaviour
     {
         if (_source == null || player == null) return;
 
-        bool want = DisadvantageRules.IsDisadvantaged(player) && !player.hasUsedManifestationSkill;
+        bool want = DisadvantageRules.IsDisadvantaged(player);
 
         if (!_lastDisadvantageWant.HasValue)
         {
@@ -490,8 +490,20 @@ public class BattleBgmController : MonoBehaviour
 
         _fadeCoroutine = null;
 
-        if (!toDisadvantage && _playlistRotationEnabled && _baselineNormalClip != null)
+        if (toDisadvantage)
+        {
+            var resolvedPlaylist = ResolvePlaylist();
+            if (resolvedPlaylist?.BgmTitlePrefab != null && disadvantageClip != null)
+            {
+                _ = ShowBgmTitleAsync(
+                    resolvedPlaylist.BgmTitlePrefab,
+                    BattleBgmPlaylistSO.FormatTrackTitle(disadvantageClip));
+            }
+        }
+        else if (_playlistRotationEnabled && _baselineNormalClip != null)
+        {
             BeginTrackEndWatch();
+        }
     }
 
     private void SetBackgroundAlpha(float a)

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 
 /// <summary>
-/// 大魔法（ArchMagic）および顕現（Ultimate）の「大魔法系攻撃」判定。
+/// ArchMagic and Ultimate Skill card grand-magic attack classification.
 /// 反射・打ち払い・無効化は対応する Kind が <see cref="ReflectionKind.Full"/> 等のときのみ有効。
 /// </summary>
 public static class GrandMagicRules

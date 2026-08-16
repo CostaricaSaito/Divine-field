@@ -66,6 +66,12 @@ public sealed class PlayerInputController
             return;
         }
 
+        if (UltimateReloadFlow.IsPopupOpen)
+        {
+            UltimateReloadFlow.OnHandCardClicked(card);
+            return;
+        }
+
         if (_host.IsPlayerDefenseInputActive())
         {
             if (!CardRules.IsUsableInDefensePhase(card))

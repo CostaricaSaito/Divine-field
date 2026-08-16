@@ -185,9 +185,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     /// <summary>Resources の SummonSkillPopup が開いている間、手札・経済・重複表示を防ぐ。</summary>
     public bool IsSummonSkillPopupOpen => _summonSkills?.IsPopupOpen ?? false;
 
-    /// <summary>顕現／メガフレア等、召喚スキル演出が走っている間。</summary>
+    /// <summary>Ultimate Skill / Mega Flare 等、召喚スキル演出が走っている間。</summary>
     public bool IsAnySummonSkillFlowRunning =>
-        _summonSkills != null && (_summonSkills.IsManifestationFlowRunning || _summonSkills.IsMegaFlareFlowRunning);
+        _summonSkills != null && (_summonSkills.IsUltimateSkillFlowRunning || _summonSkills.IsMegaFlareFlowRunning);
 
     /// <summary>攻撃フェーズでプレイヤーが「自分自身」を攻撃対象にするモード（TotalATK/DEF タップで切替）。</summary>
     private bool _playerSelfAttackTargetMode;
@@ -698,7 +698,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 #endif
 
     /// <summary>手札リロードのポップアップ表示中、またはリロード演出シーケンス中。経済・魔法パネル等のブロックに使用。</summary>
-    public bool IsHandReloadPopupOpen => HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking;
+    public bool IsHandReloadPopupOpen =>
+        (HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking)
+        || UltimateReloadFlow.IsUiBlocking;
 
     /// <summary>
     /// プレイヤーが buy/sell/exchange を新規開始できる AttackSelect（MainActionSelect）か。
@@ -779,10 +781,10 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     public bool TryOpenSummonSkillPopup(PlayerStatus summoner, PlayerStatus opponent)
         => _summonSkills.TryOpenPopup(summoner, opponent);
 
-    public Task PresentEnemyManifestationAttackToPlayerDefenseAsync(
+    public Task PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(
         List<CardData> atkList,
         CancellationToken cancellationToken)
-        => _summonSkills.PresentEnemyManifestationAttackToPlayerDefenseAsync(atkList, cancellationToken);
+        => _summonSkills.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(atkList, cancellationToken);
 
     MonoBehaviour ISummonSkillHost.HostBehaviour => this;
     List<CardData> ISummonSkillHost.PlayerHand => playerHand;

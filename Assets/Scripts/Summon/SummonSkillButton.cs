@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// BottomStatusPanel summon icon: manifestation popup (or Bahamut dual-skill popup).
+/// BottomStatusPanel summon icon: Ultimate Skill popup (or Bahamut dual-skill popup).
 /// </summary>
 public class SummonSkillButton : MonoBehaviour
 {

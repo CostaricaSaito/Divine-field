@@ -2,17 +2,16 @@
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.UI;
 
 /// <summary>
-/// Summon skill popup, player manifestation flow, and enemy manifestation handoff.
+/// Summon icon popup, player ultimate skill flow, and enemy ultimate skill handoff.
 /// </summary>
 public sealed class SummonSkillCoordinator
 {
     private readonly ISummonSkillHost _host;
     private readonly BahamutSummonCoordinator _bahamut;
     private GameObject _popupRoot;
-    private bool _manifestationFlowRunning;
+    private bool _ultimateSkillFlowRunning;
 
     public SummonSkillCoordinator(ISummonSkillHost host)
     {
@@ -22,12 +21,12 @@ public sealed class SummonSkillCoordinator
 
     public bool IsPopupOpen => _popupRoot != null || _bahamut.IsPopupOpen;
 
-    public bool IsManifestationFlowRunning => _manifestationFlowRunning;
+    public bool IsUltimateSkillFlowRunning => _ultimateSkillFlowRunning;
 
     public bool IsMegaFlareFlowRunning => _bahamut.IsMegaFlareFlowRunning;
 
     public bool IsAnySummonFlowRunning =>
-        _manifestationFlowRunning || _bahamut.IsMegaFlareFlowRunning;
+        _ultimateSkillFlowRunning || _bahamut.IsMegaFlareFlowRunning;
 
     public static SummonData ResolveRandomEnemySummon()
     {
@@ -59,7 +58,7 @@ public sealed class SummonSkillCoordinator
         if (BahamutRules.IsBahamut(summoner.summonData))
             return _bahamut.TryOpenPopup(summoner, opponent);
 
-        return TryOpenStandardManifestationPopup(summoner, opponent);
+        return TryOpenUltimateSkillPopup(summoner, opponent);
     }
 
     public void DismissPopupIfOpen()
@@ -73,17 +72,17 @@ public sealed class SummonSkillCoordinator
     public async Task TryRunEnemyMegaFlareAsync(CancellationToken cancellationToken)
         => await _bahamut.TryRunEnemyMegaFlareAsync(cancellationToken);
 
-    internal void StartManifestationFromBahamutPopup(PlayerStatus summoner, PlayerStatus opponent)
+    internal void BeginUltimateSkillActivation(PlayerStatus summoner, PlayerStatus opponent)
     {
-        if (_manifestationFlowRunning) return;
+        if (_ultimateSkillFlowRunning) return;
         RefreshButtonInteractables();
-        _manifestationFlowRunning = true;
-        summoner.MarkManifestationSkillUsed();
+        _ultimateSkillFlowRunning = true;
+        summoner.MarkUltimateSkillUsed();
         _host.StatusUI?.UpdateStatus(_host.PlayerStatus, _host.EnemyStatus);
-        _ = RunManifestationFlowAsync(summoner, opponent);
+        _ = RunUltimateSkillFlowAsync(summoner, opponent);
     }
 
-    public async Task PresentEnemyManifestationAttackToPlayerDefenseAsync(
+    public async Task PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(
         List<CardData> atkList,
         CancellationToken cancellationToken)
     {
@@ -134,9 +133,9 @@ public sealed class SummonSkillCoordinator
         _host.SetGameState(GameState.DefensePhase);
     }
 
-    private bool TryOpenStandardManifestationPopup(PlayerStatus summoner, PlayerStatus opponent)
+    private bool TryOpenUltimateSkillPopup(PlayerStatus summoner, PlayerStatus opponent)
     {
-        if (summoner.hasUsedManifestationSkill) return false;
+        if (summoner.hasUsedUltimateSkill) return false;
         if (summoner.HasFreezeEffect()) return false;
         if (_host.CurrentState != GameState.AttackPhase) return false;
 
@@ -144,7 +143,8 @@ public sealed class SummonSkillCoordinator
         if (_host.CurrentTurnOwner != (summonerIsPlayer ? PlayerType.Player : PlayerType.Enemy))
             return false;
 
-        if (summoner.summonData == null || summoner.summonData.manifestationCard == null) return false;
+        var summon = summoner.summonData;
+        if (summon == null || !UltimateReadyRules.HasUltimateSkill(summon)) return false;
         if (CardSelectionManager.I != null && CardSelectionManager.I.SelectedCardCount > 0) return false;
 
         var prefab = Resources.Load<GameObject>("Prefab/SummonSkillPopup");
@@ -158,73 +158,21 @@ public sealed class SummonSkillCoordinator
         if (canvas == null) return false;
 
         _popupRoot = Object.Instantiate(prefab, canvas.transform, false);
-        var rt = _popupRoot.GetComponent<RectTransform>();
-        if (rt != null)
-        {
-            rt.localScale = Vector3.one;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = Vector2.zero;
-        }
 
-        BindStandardPopupUi(_popupRoot, summoner, opponent);
+        var view = _popupRoot.GetComponent<SummonSkillPopupView>();
+        if (view == null)
+            view = _popupRoot.AddComponent<SummonSkillPopupView>();
+
+        view.Bind(
+            summon,
+            () => OnUltimateSkillConfirmClicked(summoner, opponent),
+            OnPopupCancelClicked);
+
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
         BattleUIManager.I?.DisableEconomicActionButtonsTemporarily();
         RefreshButtonInteractables();
         return true;
-    }
-
-    private static Transform ResolvePopupPanel(Transform root)
-    {
-        if (root == null) return null;
-        if (root.Find("SummonButton") != null) return root;
-        for (int i = 0; i < root.childCount; i++)
-        {
-            var child = root.GetChild(i);
-            if (child != null && child.Find("SummonButton") != null)
-                return child;
-        }
-        return root;
-    }
-
-    private void BindStandardPopupUi(GameObject root, PlayerStatus summoner, PlayerStatus opponent)
-    {
-        var summon = summoner.summonData;
-        if (summon == null || root == null) return;
-
-        var panel = ResolvePopupPanel(root.transform);
-        if (panel == null) return;
-
-        var nameT = panel.Find("SummonSkillName")?.GetComponent<TMPro.TMP_Text>();
-        var descT = panel.Find("SummonSkillDesc")?.GetComponent<TMPro.TMP_Text>();
-        var manifestBtn = panel.Find("SummonButton")?.GetComponent<Button>();
-        var cancelBtn = panel.Find("CancelButton")?.GetComponent<Button>();
-
-        if (nameT != null)
-        {
-            nameT.text = summon.specialSkillName;
-            summon.ApplyStyleTo(nameT, summon.textStyle);
-        }
-        if (descT != null)
-        {
-            descT.text = summon.specialSkillDescription;
-            summon.ApplyStyleTo(descT, summon.popupSkillDescStyle);
-        }
-
-        if (manifestBtn != null)
-        {
-            manifestBtn.onClick.RemoveAllListeners();
-            manifestBtn.onClick.AddListener(() => OnManifestClicked(summoner, opponent));
-        }
-        if (cancelBtn != null)
-        {
-            cancelBtn.onClick.RemoveAllListeners();
-            cancelBtn.onClick.AddListener(OnPopupCancelClicked);
-        }
-
-        if (manifestBtn == null || cancelBtn == null)
-            Debug.LogWarning("[SummonSkillCoordinator] SummonButton/CancelButton not found on popup prefab.");
     }
 
     private void OnPopupCancelClicked()
@@ -240,11 +188,11 @@ public sealed class SummonSkillCoordinator
         }
     }
 
-    private void OnManifestClicked(PlayerStatus summoner, PlayerStatus opponent)
+    private void OnUltimateSkillConfirmClicked(PlayerStatus summoner, PlayerStatus opponent)
     {
-        if (_manifestationFlowRunning) return;
+        if (_ultimateSkillFlowRunning) return;
         DestroyPopup();
-        StartManifestationFromBahamutPopup(summoner, opponent);
+        BeginUltimateSkillActivation(summoner, opponent);
     }
 
     private void DestroyPopup()
@@ -254,7 +202,7 @@ public sealed class SummonSkillCoordinator
         _popupRoot = null;
     }
 
-    private async Task RunManifestationFlowAsync(PlayerStatus summoner, PlayerStatus opponent)
+    private async Task RunUltimateSkillFlowAsync(PlayerStatus summoner, PlayerStatus opponent)
     {
         try
         {
@@ -262,11 +210,11 @@ public sealed class SummonSkillCoordinator
             BattleUIManager.I?.SetUseButtonInteractable(false);
 
             if (_host.Sequences != null)
-                await _host.Sequences.RunManifestationSkillSequenceAsync(summoner, opponent);
+                await _host.Sequences.RunUltimateSkillSequenceAsync(summoner, opponent);
         }
         finally
         {
-            _manifestationFlowRunning = false;
+            _ultimateSkillFlowRunning = false;
             RefreshButtonInteractables();
             if (_host.CurrentState == GameState.AttackPhase && _host.CurrentTurnOwner == PlayerType.Player)
                 _host.EnterAttackPhase();

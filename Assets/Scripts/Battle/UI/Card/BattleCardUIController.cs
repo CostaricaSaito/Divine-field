@@ -750,7 +750,8 @@ public class BattleCardUIController : MonoBehaviour
             var cardData = cardUI.GetCardData();
             if (cardData == null) continue;
 
-            bool reloadSel = HandReloadController.I != null && HandReloadController.I.IsReloadSelected(cardData);
+            bool reloadSel = (HandReloadController.I != null && HandReloadController.I.IsReloadSelected(cardData))
+                || UltimateReloadFlow.IsSelected(cardData);
             bool isSelected = cardSelectionManager.IsCardSelected(cardData) || reloadSel;
             cardUI.SetHighlight(isSelected);
         }

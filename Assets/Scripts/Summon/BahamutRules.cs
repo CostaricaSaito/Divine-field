@@ -68,9 +68,9 @@ public static class BahamutRules
     {
         if (!MeetsCommonAttackSelectGate(summoner, state, turnOwner, summonerSide))
             return false;
-        if (summoner.hasUsedManifestationSkill) return false;
+        if (summoner.hasUsedUltimateSkill) return false;
         if (!DisadvantageRules.IsDisadvantaged(summoner)) return false;
-        var card = summoner.summonData != null ? summoner.summonData.manifestationCard : null;
+        var card = summoner.summonData != null ? summoner.summonData.ultimateSkillCard : null;
         if (card == null)
             card = GetGigaFlareTemplate();
         return card != null;

@@ -138,13 +138,13 @@ public class PlayerStatus
         archMagicRemainingTurns = 0;
     }
 
-    // ===== 顕現スキル（1バトル1回） =====
-    /// <summary>顕現スキルを使用済みか。使用後は窮地でも虹演出・再発動不可。</summary>
-    public bool hasUsedManifestationSkill { get; private set; }
+    // ===== Ultimate Skill (1 per battle) =====
+    /// <summary>アルティメットスキル使用済み。使用後は劣勢演出・再発動不可。</summary>
+    public bool hasUsedUltimateSkill { get; private set; }
 
-    public void MarkManifestationSkillUsed() => hasUsedManifestationSkill = true;
+    public void MarkUltimateSkillUsed() => hasUsedUltimateSkill = true;
 
-    // ===== バハムート・メガフレア（1バトル1回、顕現とは独立） =====
+    // ===== Bahamut Mega Flare (1 per battle, independent of ultimate skill) =====
     public bool hasUsedMegaFlare { get; private set; }
 
     public void MarkMegaFlareUsed() => hasUsedMegaFlare = true;
@@ -316,6 +316,30 @@ public class PlayerStatus
     {
         foreach (var e in activeEffects)
             if (e != null && e.EffectType == StatusEffectType.Confusion) return true;
+        return false;
+    }
+
+    /// <summary>斬鉄剣バフが付与されているか。</summary>
+    public bool HasZantestukenEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Zantestuken) return true;
+        return false;
+    }
+
+    /// <summary>斬鉄剣バフを消費（成功命中時のみ呼ぶ）。</summary>
+    public bool ConsumeZantestukenEffect()
+    {
+        for (int i = activeEffects.Count - 1; i >= 0; i--)
+        {
+            var e = activeEffects[i];
+            if (e != null && e.EffectType == StatusEffectType.Zantestuken)
+            {
+                e.OnRemove(this);
+                activeEffects.RemoveAt(i);
+                return true;
+            }
+        }
         return false;
     }
 

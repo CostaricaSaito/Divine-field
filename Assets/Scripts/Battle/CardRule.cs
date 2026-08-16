@@ -74,7 +74,7 @@ public static class CardRules
         if (IsPassiveHandOnly(c)) return false;
         if (IsRecoveryCard(c)) return true;
         if (c.cureAllStatusEffects
-            && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic))
+            && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic || c.cardType == CardType.Ultimate))
             return true;
         if (c.cardType == CardType.Special && c.specialCardEffect != null && c.postDeathCardEffect == null)
         {
@@ -215,10 +215,35 @@ public static class CardRules
         return IsUsableInDefensePhase(c) && !IsUsableInAttackPhase(c);
     }
 
+    /// <summary>Ultimate Skill カードで回復・全治癒効果を持つか。</summary>
+    public static bool IsUltimateRecoverySkillCard(CardData c)
+    {
+        return c != null && c.cardType == CardType.Ultimate && HasRecoveryEffect(c);
+    }
+
+    /// <summary>Ultimate Skill カードでドロー＋マリガン（Ascendant Shade 等）か。</summary>
+    public static bool IsUltimateDrawMulliganSkillCard(CardData c)
+    {
+        return GarudaUltimateRules.IsAscendantShadeCard(c);
+    }
+
+    /// <summary>Ultimate Skill カードで相手手札破壊（Judgement Thunder 等）か。</summary>
+    public static bool IsUltimateHandDestroySkillCard(CardData c)
+    {
+        return IndraUltimateRules.IsJudgementThunderCard(c);
+    }
+
+    /// <summary>Ultimate Skill カードで斬鉄剣バフ（Zantestuken 等）か。</summary>
+    public static bool IsUltimateZantestukenSkillCard(CardData c)
+    {
+        return OrdinUltimateRules.IsZantestukenCard(c);
+    }
+
     // 回復カードかどうか
     public static bool IsRecoveryCard(CardData c)
     {
         if (c == null) return false;
+        if (IsUltimateRecoverySkillCard(c)) return true;
         return c.cardType == CardType.Recovery || (c.cardType == CardType.Magic && HasRecoveryEffect(c));
     }
 
@@ -340,8 +365,20 @@ public static class CardRules
         return any;
     }
 
+    /// <summary>攻撃コンボに Ultimate Skill カードが含まれるか。</summary>
+    public static bool ContainsUltimateSkillCard(IReadOnlyList<CardData> cards)
+    {
+        if (cards == null) return false;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i] != null && cards[i].cardType == CardType.Ultimate)
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
-    /// 魔法単体攻撃に相当する分類（魔法コンボ、または単独の顕現カード）。反射・衰弱除外などに使用。
+    /// 魔法単体攻撃に相当する分類（魔法コンボ、または単独の Ultimate Skill カード）。反射・衰弱除外などに使用。
     /// </summary>
     public static bool IsMagicClassifiedAttackCombo(IReadOnlyList<CardData> cards)
     {

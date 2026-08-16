@@ -1,21 +1,21 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Ultimate (manifestation / active) skill availability for the player.
+/// Ultimate Skill availability for the player summon button and Ultimate Ready presentation.
 /// </summary>
 public static class UltimateReadyRules
 {
     public static bool HasUltimateSkill(SummonData summon)
     {
         if (summon == null) return false;
-        if (summon.manifestationCard != null) return true;
+        if (summon.ultimateSkillCard != null) return true;
         if (BahamutRules.IsBahamut(summon)) return true;
-        return !string.IsNullOrWhiteSpace(summon.activeSkillName);
+        return !string.IsNullOrWhiteSpace(summon.ultimateSkillName);
     }
 
     public static bool IsAvailable(PlayerStatus ps)
     {
-        if (ps == null || ps.hasUsedManifestationSkill) return false;
+        if (ps == null || ps.hasUsedUltimateSkill) return false;
         if (!HasUltimateSkill(ps.summonData)) return false;
         return DisadvantageRules.IsDisadvantaged(ps);
     }

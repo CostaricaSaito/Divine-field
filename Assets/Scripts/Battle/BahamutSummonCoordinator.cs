@@ -12,14 +12,14 @@ public sealed class BahamutSummonCoordinator
     private const string CancelButtonSeAddress = "Assets/SE/キャンセル4.mp3";
 
     private readonly ISummonSkillHost _host;
-    private readonly SummonSkillCoordinator _manifestationHost;
+    private readonly SummonSkillCoordinator _summonSkillCoordinator;
     private GameObject _popupRoot;
     private bool _megaFlareFlowRunning;
 
-    public BahamutSummonCoordinator(ISummonSkillHost host, SummonSkillCoordinator manifestationHost)
+    public BahamutSummonCoordinator(ISummonSkillHost host, SummonSkillCoordinator summonSkillCoordinator)
     {
         _host = host;
-        _manifestationHost = manifestationHost;
+        _summonSkillCoordinator = summonSkillCoordinator;
     }
 
     public bool IsPopupOpen => _popupRoot != null;
@@ -38,7 +38,7 @@ public sealed class BahamutSummonCoordinator
 
         if (_host.IsEconomicActionInProgress()) return false;
         if (_host.IsHandReloadPopupOpen()) return false;
-        if (IsPopupOpen || _manifestationHost.IsManifestationFlowRunning || _megaFlareFlowRunning)
+        if (IsPopupOpen || _summonSkillCoordinator.IsUltimateSkillFlowRunning || _megaFlareFlowRunning)
             return false;
 
         return true;
@@ -76,7 +76,7 @@ public sealed class BahamutSummonCoordinator
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
         BattleUIManager.I?.DisableEconomicActionButtonsTemporarily();
-        _manifestationHost.RefreshButtonInteractables();
+        _summonSkillCoordinator.RefreshButtonInteractables();
         return true;
     }
 
@@ -108,7 +108,7 @@ public sealed class BahamutSummonCoordinator
         finally
         {
             _megaFlareFlowRunning = false;
-            _manifestationHost.RefreshButtonInteractables();
+            _summonSkillCoordinator.RefreshButtonInteractables();
         }
     }
 
@@ -141,7 +141,8 @@ public sealed class BahamutSummonCoordinator
             () => OnMegaFlareClicked(summoner, opponent));
 
         WireSkillButton(
-            panel.Find("SpecialSkillButton")?.GetComponent<Button>(),
+            panel.Find("UltimateSkillButton")?.GetComponent<Button>()
+                ?? panel.Find("SpecialSkillButton")?.GetComponent<Button>(),
             canGiga,
             () => OnGigaFlareClicked(summoner, opponent));
 
@@ -175,7 +176,7 @@ public sealed class BahamutSummonCoordinator
     private void OnPopupCancelClicked()
     {
         DestroyPopup();
-        _manifestationHost.RefreshButtonInteractables();
+        _summonSkillCoordinator.RefreshButtonInteractables();
         if (_host.CurrentState == GameState.AttackPhase && _host.CurrentTurnOwner == PlayerType.Player)
             _host.EnterAttackPhase();
         else if (_host.CurrentState == GameState.AttackPhase && _host.CurrentTurnOwner == PlayerType.Enemy)
@@ -205,7 +206,7 @@ public sealed class BahamutSummonCoordinator
     private void OnGigaFlareClicked(PlayerStatus summoner, PlayerStatus opponent)
     {
         DestroyPopup();
-        _manifestationHost.StartManifestationFromBahamutPopup(summoner, opponent);
+        _summonSkillCoordinator.BeginUltimateSkillActivation(summoner, opponent);
     }
 
     private async Task RunMegaFlareFlowAsync(PlayerStatus summoner, PlayerStatus opponent)
@@ -221,7 +222,7 @@ public sealed class BahamutSummonCoordinator
         finally
         {
             _megaFlareFlowRunning = false;
-            _manifestationHost.RefreshButtonInteractables();
+            _summonSkillCoordinator.RefreshButtonInteractables();
             if (_host.CurrentState == GameState.AttackPhase && _host.CurrentTurnOwner == PlayerType.Player)
                 _host.EnterAttackPhase();
             else if (_host.CurrentState == GameState.DefensePhase && _host.Defender == PlayerType.Player)

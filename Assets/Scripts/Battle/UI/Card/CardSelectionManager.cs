@@ -150,7 +150,7 @@ public class CardSelectionManager : MonoBehaviour
             }
         }
 
-        // ===== Standalone（大魔法・顕現等）／グランド枠：他と併用不可。ポップアップは出さず既存をクリアして新カードへ差し替え =====
+        // ===== Standalone (ArchMagic / Ultimate Skill etc.) / grand slot: exclusive; replace selection without popup =====
         if (BattleManager.I != null
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player

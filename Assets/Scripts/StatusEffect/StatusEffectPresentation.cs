@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 状態異常ポップアップ用の表示名・配色。配色は <see cref="StatusEffectPopupSettings"/>（Unity Inspector）。
@@ -12,6 +12,8 @@ public static class StatusEffectPresentation
             return "RANDOM（全状態異常から1つ）";
         if (type == StatusEffectType.Kannaduki)
             return "神無月";
+        if (type == StatusEffectType.Zantestuken)
+            return "\u65AC\u9244\u5263";
         int id = StatusEffectCatalog.ToOfficialId(type);
         if (id < 1 || id > 15) return string.Empty;
         return StatusEffectCatalog.OfficialDisplayNames[id - 1];

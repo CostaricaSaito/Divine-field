@@ -415,6 +415,32 @@ public class HandRefillService : MonoBehaviour
         return result;
     }
 
+    /// <summary>
+    /// Enemy hand mulligan: replace selected cards with new random draws (no UI).
+    /// </summary>
+    public void ReplaceEnemyHandCardsForMulligan(IReadOnlyList<CardData> oldCards, List<CardData> enemyHand)
+    {
+        if (oldCards == null || enemyHand == null) return;
+
+        var seenIndex = new HashSet<int>();
+        foreach (var old in oldCards)
+        {
+            if (old == null) continue;
+            int idx = enemyHand.IndexOf(old);
+            if (idx < 0 || !seenIndex.Add(idx)) continue;
+
+            var newC = DrawRandomCard(PlayerType.Enemy);
+            if (newC == null)
+            {
+                Debug.LogWarning("[HandRefillService] Ultimate mulligan: enemy draw failed");
+                continue;
+            }
+
+            enemyHand[idx] = newC;
+            DestroyCardDataInstance(old);
+        }
+    }
+
     /// <summary>リロード：左から順に <see cref="ReplacePlayerBackSlotAsync"/> と同様の間隔で表向け。</summary>
     public async Task RevealHandReloadSlotsSequentially(
         IReadOnlyList<HandReloadSlotWork> work,

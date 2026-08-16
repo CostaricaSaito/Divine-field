@@ -7,10 +7,14 @@ public static class SummonPassiveBlessingApplier
 {
     /// <summary>
     /// 攻撃者の召喚データに加護があれば、カード合計攻撃力に反映する。
+    /// Ultimate Skill 攻撃は加護対象外。
     /// </summary>
     public static int ApplyAttackPowerBonus(PlayerStatus attacker, List<CardData> attackCards, int sumOfCardAttackPower)
     {
         if (attacker == null || attackCards == null || attackCards.Count == 0)
+            return sumOfCardAttackPower;
+
+        if (CardRules.ContainsUltimateSkillCard(attackCards))
             return sumOfCardAttackPower;
 
         if (attacker.HasCurseBindEffect())
@@ -28,6 +32,7 @@ public static class SummonPassiveBlessingApplier
 
     /// <summary>
     /// 防御者の召喚データに、相手の合計攻撃力を抑える加護があれば反映する（命中前・ATK-DEF より前）。
+    /// Ultimate Skill 攻撃は加護対象外。
     /// </summary>
     public static int ApplyDefenderOpponentAttackSuppression(
         PlayerStatus attacker,
@@ -36,6 +41,9 @@ public static class SummonPassiveBlessingApplier
         int attackPowerAfterAttackerSideModifiers)
     {
         if (defender == null || attackCards == null || attackCards.Count == 0)
+            return attackPowerAfterAttackerSideModifiers;
+
+        if (CardRules.ContainsUltimateSkillCard(attackCards))
             return attackPowerAfterAttackerSideModifiers;
 
         if (defender.HasCurseBindEffect())

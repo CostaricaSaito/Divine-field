@@ -56,4 +56,9 @@ public enum StatusEffectType
     /// Disaster Kannaduki: physical attack power x2, until match end, cannot remove. Not an official ID.
     /// </summary>
     Kannaduki = 101,
+
+    /// <summary>
+    /// Odin Zantestuken ultimate: next opponent-target hit skips defense. Indelible until consumed on hit.
+    /// </summary>
+    Zantestuken = 102,
 }

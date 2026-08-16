@@ -10,7 +10,7 @@ public enum GameState
     /// <summary>Layer2: スタンバイ（ターン開始処理・UI 初期化）。</summary>
     StandByPhase,
 
-    /// <summary>Layer2: 攻撃側メイン（攻撃／回復／経済／顕現など、メイン行動は1回）。</summary>
+    /// <summary>Layer2: attack-side main (attack / recovery / economy / Ultimate Skill etc.; one main action).</summary>
     AttackPhase,
 
     /// <summary>Layer2: 防御側の選択。</summary>

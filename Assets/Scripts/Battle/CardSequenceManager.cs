@@ -73,6 +73,28 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Ultimate Skill: CardDisplayPanel via <see cref="BattleUIManager.ShowCardSheetVisualOnly"/>
+    /// (hand-not-in-deck; <see cref="BattleUIManager.ShowCardDetail"/> fails while summon flow is active).
+    /// </summary>
+    public async Task PlayUltimateSkillCardPresentationAsync(CardData card, Side side, CancellationToken ct)
+    {
+        if (card == null) return;
+
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "攻撃", side);
+        BattleUIManager.I?.ClearAllSelections();
+        BattleUIManager.I?.HideAllCardDetails();
+
+        await Task.Delay(300, ct);
+
+        BattleUIManager.I?.ShowCardSheetVisualOnly(card, side);
+        cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
+        cardStatsDisplay?.UpdateDisplay();
+        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+        await Task.Delay(500, ct);
+    }
+
+    /// <summary>
     /// カード演出シーケンスを開始（攻撃・防御共通）
     /// ①表示ゾーンクリア → ②カード順次表示（0.5秒インターバル） → ③カード処理 → ④戦闘解決
     /// </summary>
@@ -761,6 +783,32 @@ public class CardSequenceManager : MonoBehaviour
             {
                 await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHitCheck: true);
             }
+            return true;
+        }
+
+        if (await ZantestukenCombatFlow.TryResolveUnblockableStrikeAsync(
+                battleManager,
+                battleProcessor,
+                attackCards,
+                atk,
+                def,
+                defHand,
+                battleManager.GetCurrentAttackCard(),
+                cancellationToken,
+                dualBladeStrikeIndex))
+        {
+            if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
+                && dualBladeStrikeIndex == 0
+                && !atk.IsDead() && !def.IsDead())
+            {
+                await PresentDualBladeSecondStrikeAttackRevealAsync(attackCards, atk, cancellationToken);
+                return await ResolvePlayerAttackCombatAsync(
+                    attackCards, atk, def, defHand, cancellationToken, 1);
+            }
+
+            if (await battleManager.TryHandleDeathIfAnyAsync(cancellationToken))
+                return false;
+
             return true;
         }
 
@@ -1980,16 +2028,16 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 顕現スキル：プレースホルダー演出後にカード表示→1000ms→戦闘解決（大魔法系の反射ルール）。
+    /// Ultimate Skill: card presentation, then draw+mulligan, recovery (self), hand destroy, zantestuken buff, or combat resolve.
     /// </summary>
-    public async Task RunManifestationSkillSequenceAsync(PlayerStatus summoner, PlayerStatus opponent)
+    public async Task RunUltimateSkillSequenceAsync(PlayerStatus summoner, PlayerStatus opponent)
     {
         if (battleManager == null || summoner == null || opponent == null) return;
         var summon = summoner.summonData;
-        var template = summon != null ? summon.manifestationCard : null;
+        var template = summon != null ? summon.ultimateSkillCard : null;
         if (template == null)
         {
-            Debug.LogWarning("[CardSequenceManager] manifestationCard が未設定です");
+            Debug.LogWarning("[CardSequenceManager] ultimateSkillCard is not assigned");
             return;
         }
 
@@ -1999,6 +2047,31 @@ public class CardSequenceManager : MonoBehaviour
         if (card == null) return;
 
         Side side = ReferenceEquals(summoner, battleManager.GetPlayerStatus()) ? Side.Player : Side.Enemy;
+
+        if (CardRules.IsUltimateDrawMulliganSkillCard(card))
+        {
+            await RunUltimateDrawMulliganSkillSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsUltimateRecoverySkillCard(card))
+        {
+            await RunUltimateRecoverySkillSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsUltimateHandDestroySkillCard(card))
+        {
+            await RunUltimateHandDestroySkillSequenceAsync(
+                card, summoner, opponent, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsUltimateZantestukenSkillCard(card))
+        {
+            await RunUltimateZantestukenSkillSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
 
         BattleUIManager.I?.ShowInterventionAttackSheet(card, side);
         BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
@@ -2021,8 +2094,161 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            await battleManager.PresentEnemyManifestationAttackToPlayerDefenseAsync(attackCards, CancellationToken.None);
+            await battleManager.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(attackCards, CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// Ultimate Skill (recovery): confirm presentation, then HP → MP → ailment clear on summoner.
+    /// </summary>
+    private async Task RunUltimateRecoverySkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, cancellationToken);
+
+        await battleProcessor.ResolveImmediateEffectAsync(card, summoner, summoner, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ultimate Skill (hand destroy): card sheet, then destroy ceil(opponent hand / 2) on victim panel.
+    /// </summary>
+    private async Task RunUltimateHandDestroySkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        PlayerStatus opponent,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        bool victimIsPlayer = ReferenceEquals(opponent, battleManager.GetPlayerStatus());
+        var victimHand = victimIsPlayer ? battleManager.playerHand : battleManager.cpuHand;
+        Side victimSide = victimIsPlayer ? Side.Player : Side.Enemy;
+        PlayerType victimOwner = victimIsPlayer ? PlayerType.Player : PlayerType.Enemy;
+
+        var picks = IndraUltimateRules.BuildDestroyPicks(victimHand, victimOwner);
+        if (picks.Count > 0)
+        {
+            var cards = new List<CardData>(picks.Count);
+            for (int i = 0; i < picks.Count; i++)
+            {
+                if (picks[i].Card != null)
+                    cards.Add(picks[i].Card);
+            }
+
+            if (cards.Count > 0)
+            {
+                await JudgementThunderUltimatePresentation.PlayDestroySequenceAsync(
+                    opponent, victimSide, cards, cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested) return;
+
+                for (int i = 0; i < cards.Count; i++)
+                {
+                    CardDestroyPresentation.RemoveFromHand(
+                        battleManager, victimHand, cards[i], victimIsPlayer);
+                }
+            }
+        }
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ultimate Skill (Zantestuken): card sheet, grant buff + activation popup, then cleanup.
+    /// </summary>
+    private async Task RunUltimateZantestukenSkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        OrdinUltimateRules.ApplyZantestukenBuff(summoner);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+
+        float fadeSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowMessagePopupForTarget(
+                summoner, OrdinUltimateRules.ActivationMessage, OrdinUltimateRules.ActivationMessageColor)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ultimate Skill (draw + mulligan): card sheet, draw to cap face-up, optional mulligan, then cleanup.
+    /// </summary>
+    private async Task RunUltimateDrawMulliganSkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        bool isPlayer = side == Side.Player;
+        var hand = isPlayer ? battleManager.playerHand : battleManager.cpuHand;
+
+        await GarudaUltimateRules.DrawHandToMaxFaceUpAsync(
+            battleManager, handRefill, hand, isPlayer, cancellationToken);
+
+        IReadOnlyList<CardData> mulliganPicks;
+        if (isPlayer)
+        {
+            mulliganPicks = await UltimateReloadFlow.RunPlayerSelectionAsync(cancellationToken);
+        }
+        else
+        {
+            mulliganPicks = GarudaUltimateRules.PickEnemyMulliganCards(hand);
+        }
+
+        if (mulliganPicks != null && mulliganPicks.Count > 0)
+        {
+            if (isPlayer)
+            {
+                await UltimateReloadFlow.RunPlayerMulliganSequenceAsync(
+                    battleManager, handRefill, mulliganPicks, cancellationToken);
+            }
+            else
+            {
+                UltimateReloadFlow.ReplaceEnemyHandForMulligan(handRefill, mulliganPicks, hand);
+            }
+        }
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
     }
 
     /// <summary>
@@ -2079,7 +2305,7 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            await battleManager.PresentEnemyManifestationAttackToPlayerDefenseAsync(
+            await battleManager.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(
                 attackCards, cancellationToken);
         }
     }

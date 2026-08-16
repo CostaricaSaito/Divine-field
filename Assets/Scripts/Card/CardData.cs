@@ -16,7 +16,7 @@ public enum CardType
     /// </summary>
     ArchMagic = 5,
     /// <summary>
-    /// 顕現スキル専用。手札に配られず、顕現フローでのみ使用。
+    /// Ultimate Skill only. Not dealt to hand; resolved only through the ultimate skill flow.
     /// </summary>
     Ultimate = 6,
     /// <summary>
@@ -86,7 +86,7 @@ public enum AttackPhaseUseRule
 {
     /// <summary>メイン。他カードの後乗り可。メイン同士は 1 手札選択内で並ばない想定（Primary 衝突ルール）。</summary>
     Primary = 0,
-    /// <summary>単独専用。大魔法・顕現・即時1枚枠等。他カードと 1 コンボ内では併用不可。</summary>
+    /// <summary>Standalone only. ArchMagic / Ultimate Skill / single immediate slot etc.</summary>
     Standalone = 1,
     /// <summary>単独でもメインに連結でも可。手札上は常に ATK+ 表記想定。従: Neutral/Addable 相当の「後乗り可」含む。</summary>
     Flexible = 2,
@@ -287,7 +287,7 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     private bool _legacyIsRare;
 
     [Header("攻撃 Phase Use Rule（手札併用）")]
-    [Tooltip("攻撃フェーズの組合せ。大魔法/顕現は Standalone 推奨。")]
+    [Tooltip("Attack-phase combo rule. ArchMagic / Ultimate Skill cards should use Standalone.")]
     public AttackPhaseUseRule attackPhaseUseRule = AttackPhaseUseRule.Flexible;
 
     [Header("防御 Phase Use Rule（手札衝突）")]

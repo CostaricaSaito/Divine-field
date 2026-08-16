@@ -555,7 +555,7 @@ public class BattleUIManager : MonoBehaviour
 
     public void UpdateEconomicActionButtons() => economicHandler?.UpdateButtons();
 
-    /// <summary>顕現ポップアップ等：経済ボタンを一時的に無効化（解除後は <see cref="UpdateEconomicActionButtons"/>）。</summary>
+    /// <summary>Ultimate Skill popup etc.: temporarily disable economic buttons (restore via <see cref="UpdateEconomicActionButtons"/>).</summary>
     public void DisableEconomicActionButtonsTemporarily() => economicHandler?.DisableAllButtons();
 
     public void OnBuyButtonPressed() => economicHandler?.OnBuyButtonPressed();

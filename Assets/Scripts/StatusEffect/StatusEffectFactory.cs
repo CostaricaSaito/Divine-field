@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public static class StatusEffectFactory
 {
@@ -49,6 +49,9 @@ public static class StatusEffectFactory
 
             case StatusEffectType.Kannaduki:
                 return new KannadukiEffect();
+
+            case StatusEffectType.Zantestuken:
+                return new ZantestukenEffect();
 
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");

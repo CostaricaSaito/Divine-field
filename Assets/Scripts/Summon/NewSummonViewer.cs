@@ -194,8 +194,8 @@ public class NewSummonViewer : MonoBehaviour
         SetText(summonNameEngText, data.summonNameEng);
         SetText(passiveNameText, data.passiveSkillName);
         SetText(passiveDescText, data.passiveSkillDescription);
-        SetText(activeNameText, data.activeSkillName);
-        SetText(activeDescText, data.activeSkillDescription);
+        SetText(activeNameText, data.ultimateSkillName);
+        SetText(activeDescText, data.ultimateSkillDescription);
         SetText(descriptionText, data.description);
 
         EnsureStyleMaterials();
