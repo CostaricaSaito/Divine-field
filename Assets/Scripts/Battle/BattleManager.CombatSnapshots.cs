@@ -102,6 +102,15 @@ public partial class BattleManager
     public void ClearTributeBloodHpPaidSnapshot()
         => _combatSnapshots.ClearTributeBloodHpPaidSnapshot();
 
+    public bool IsRagnarokDisasterTriggeredThisAttack
+        => _combatSnapshots.IsRagnarokDisasterTriggeredThisAttack;
+
+    public void MarkRagnarokDisasterTriggeredThisAttack()
+        => _combatSnapshots.MarkRagnarokDisasterTriggeredThisAttack();
+
+    public void ClearRagnarokDisasterTriggeredThisAttack()
+        => _combatSnapshots.ClearRagnarokDisasterTriggeredThisAttack();
+
     public void SetCurrentAttackCard(CardData card)
         => _combatSnapshots.SetCurrentAttackCard(card);
 

@@ -327,6 +327,22 @@ public class PlayerStatus
         return false;
     }
 
+    /// <summary>千年王国バフが付与されているか。</summary>
+    public bool HasMilleniumKingdomEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.MilleniumKingdom) return true;
+        return false;
+    }
+
+    /// <summary>闇の帷バフが付与されているか。</summary>
+    public bool HasDiabolicEmissionEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.DiabolicEmission) return true;
+        return false;
+    }
+
     /// <summary>斬鉄剣バフを消費（成功命中時のみ呼ぶ）。</summary>
     public bool ConsumeZantestukenEffect()
     {
@@ -334,6 +350,22 @@ public class PlayerStatus
         {
             var e = activeEffects[i];
             if (e != null && e.EffectType == StatusEffectType.Zantestuken)
+            {
+                e.OnRemove(this);
+                activeEffects.RemoveAt(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>闇の帷バフを消費（成功命中時のみ呼ぶ）。</summary>
+    public bool ConsumeDiabolicEmissionEffect()
+    {
+        for (int i = activeEffects.Count - 1; i >= 0; i--)
+        {
+            var e = activeEffects[i];
+            if (e != null && e.EffectType == StatusEffectType.DiabolicEmission)
             {
                 e.OnRemove(this);
                 activeEffects.RemoveAt(i);

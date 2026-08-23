@@ -196,8 +196,21 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     private bool _incomingAttackForceNoneElement;
     public bool IncomingAttackForceNoneElement => _incomingAttackForceNoneElement;
 
+    /// <summary>Diabolic Emission: incoming attack resolves as Dark element until cleared.</summary>
+    private bool _incomingAttackForceDarkElement;
+    public bool IncomingAttackForceDarkElement => _incomingAttackForceDarkElement;
+
     public void SetIncomingAttackForceNoneElement(bool value) => _incomingAttackForceNoneElement = value;
     public void ClearIncomingAttackForceNoneElement() => _incomingAttackForceNoneElement = false;
+
+    public void SetIncomingAttackForceDarkElement(bool value) => _incomingAttackForceDarkElement = value;
+    public void ClearIncomingAttackForceDarkElement() => _incomingAttackForceDarkElement = false;
+
+    public void ClearIncomingAttackElementOverrides()
+    {
+        ClearIncomingAttackForceNoneElement();
+        ClearIncomingAttackForceDarkElement();
+    }
 
     /// <summary>自分自身への攻撃を確定するモードか（CPUは使用しない）。</summary>
     public bool IsPlayerSelfAttackTargetMode => _playerSelfAttackTargetMode;
@@ -285,7 +298,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         => cardStatsDisplay?.ClearSequenceCards();
 
     void IDualBladeDefenseHost.ClearIncomingAttackForceNoneElement()
-        => ClearIncomingAttackForceNoneElement();
+        => ClearIncomingAttackElementOverrides();
 
     void IDualBladeDefenseHost.SetEnemyAttackSequenceDisplay(List<CardData> attackCards)
     {
@@ -728,18 +741,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     {
         if (CurrentState != GameState.AttackPhase || CurrentTurnOwner != PlayerType.Player) return;
         ClearPlayerSelfAttackTargetMode();
-        var attackables = CardRules.GetAttackChoices(playerHand);
-        if (attackables.Count == 0)
-        {
-            BattleUIManager.I?.SetPrayModeUI(playerHand);
-        }
-        else
-        {
-            if (shouldGrayOutCards)
-                BattleUIManager.I?.RefreshAttackInteractivity(playerHand, CardRules.GetAttackChoices(playerHand));
-            else
-                BattleUIManager.I?.SetIntroModeUI(playerHand);
-        }
+        PrayerFlow.RefreshPlayerAttackPhaseHandUi(playerHand, shouldGrayOutCards);
         BattleUIManager.I?.UpdateEconomicActionButtons();
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
         BattleUIManager.I?.RefreshUseButton();

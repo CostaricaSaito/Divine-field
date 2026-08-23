@@ -74,6 +74,21 @@ public class RemotePlayerAgent : EnemyAI
             return null;
         }
 
+        if (remoteAttack.EconomicKind == NetworkBattleBridge.RemoteEconomicKind.Prayer)
+        {
+            Debug.Log("[RemotePlayerAgent] Remote prayer");
+            try
+            {
+                await PrayerFlow.RunRemoteTurnOwnerPrayerAsync(
+                    enemyStatus, cpuHand, handRefill, CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            return null;
+        }
+
         var names = remoteAttack.CardNames;
         if (names == null || names.Count == 0)
         {
@@ -237,6 +252,16 @@ public class RemotePlayerAgent : EnemyAI
 
         Debug.Log($"[RemotePlayerAgent] Remote defense: {resolved[0].cardName} ({resolved.Count} cards)");
         return resolved[0];
+    }
+
+    public override Task<CardData> ExecuteParryRerunDefenseSelectAsync(
+        List<CardData> cpuHand,
+        ElementType attackElement,
+        List<CardData> incomingAttack,
+        CardData usedParryCard)
+    {
+        Debug.Log("[RemotePlayerAgent] Waiting for remote parry-rerun defense...");
+        return ExecuteDefenseSelectAsync(cpuHand, attackElement, incomingAttack);
     }
 
     /// <summary>

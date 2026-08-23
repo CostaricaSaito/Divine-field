@@ -302,7 +302,8 @@ public class BattleProcessor : MonoBehaviour
             ? new List<CardData> { defenseCard }
             : null;
         await ApplyCombatDamageSequenceAfterHitAsync(
-            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseList);
+            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseList,
+            allowRagnarokDisaster: true);
     }
 
     /// <summary>
@@ -446,7 +447,8 @@ public class BattleProcessor : MonoBehaviour
             defenseList,
             skipDefenseOrbReactions: true,
             applyDynamiteRecoil: false,
-            countsAsDirectAttack: false);
+            countsAsDirectAttack: false,
+            allowRagnarokDisaster: false);
     }
 
     /// <summary>宝玉反撃力（TOTAL 表示用と戦闘解決のどちらでも同式）。</summary>
@@ -1015,7 +1017,8 @@ public class BattleProcessor : MonoBehaviour
         }
 
         await ApplyCombatDamageSequenceAfterHitAsync(
-            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseCards);
+            attackCards, attackElement, attacker, defender, attackPower, defensePower, defenseCards,
+            allowRagnarokDisaster: true);
     }
 
     /// <summary>
@@ -1050,7 +1053,8 @@ public class BattleProcessor : MonoBehaviour
         IReadOnlyList<CardData> defenseCardsForStatusRule = null,
         bool skipDefenseOrbReactions = false,
         bool applyDynamiteRecoil = true,
-        bool countsAsDirectAttack = true)
+        bool countsAsDirectAttack = true,
+        bool allowRagnarokDisaster = true)
     {
         if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
         {
@@ -1154,6 +1158,23 @@ public class BattleProcessor : MonoBehaviour
                     defender,
                     CancellationToken.None);
             }
+        }
+
+        if ((attacker != null && attacker.currentHP <= 0)
+            || (defender != null && defender.currentHP <= 0))
+        {
+            if (await TryHandleCombatDeathIfAnyAsync(attacker, defender))
+                return;
+        }
+        else
+        {
+            await RagnarokDisasterFlow.TryRunAfterCombatDamageAsync(
+                this,
+                attackCards,
+                firstPhaseDamage,
+                attacker,
+                defender,
+                allowRagnarokDisaster);
         }
 
         if (await TryHandleCombatDeathIfAnyAsync(attacker, defender))

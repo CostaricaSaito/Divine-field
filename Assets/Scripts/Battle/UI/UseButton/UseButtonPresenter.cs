@@ -277,12 +277,6 @@ public class UseButtonPresenter : MonoBehaviour
         if (ps == null) return;
 
         var hand = bm.playerHand;
-        if (hand != null && CardRules.GetAttackChoices(hand).Count == 0)
-        {
-            SetUseButtonLabel("祈り");
-            SetUseButtonInteractable(true);
-            return;
-        }
 
         var selected = BattleUIManager.I != null
             ? BattleUIManager.I.GetSelectedCards()
@@ -296,6 +290,14 @@ public class UseButtonPresenter : MonoBehaviour
                 SetUseButtonInteractable(false);
                 return;
             }
+
+            if (hand != null && PrayerFlow.IsEligibleHand(hand))
+            {
+                SetUseButtonLabel("祈り");
+                SetUseButtonInteractable(true);
+                return;
+            }
+
             SetUseButtonLabel("使用");
             SetUseButtonInteractable(false);
             return;

@@ -239,6 +239,18 @@ public static class CardRules
         return OrdinUltimateRules.IsZantestukenCard(c);
     }
 
+    /// <summary>Ultimate Skill カードで千年王国バフ（Millenium Kingdom 等）か。</summary>
+    public static bool IsUltimateMilleniumKingdomSkillCard(CardData c)
+    {
+        return ArcadiasUltimateRules.IsMilleniumKingdomCard(c);
+    }
+
+    /// <summary>Ultimate Skill カードで闇の帷バフ（Diabolic Emission 等）か。</summary>
+    public static bool IsUltimateDiabolicEmissionSkillCard(CardData c)
+    {
+        return DiabolosUltimateRules.IsDiabolicEmissionCard(c);
+    }
+
     // 回復カードかどうか
     public static bool IsRecoveryCard(CardData c)
     {
@@ -272,6 +284,20 @@ public static class CardRules
     {
         if (c == null || c.cardType != CardType.Magic) return false;
         return IsRecoveryCard(c);
+    }
+
+    /// <summary>
+    /// 手札に CardType.Attack が1枚でもあるか。
+    /// </summary>
+    public static bool HasAttackTypeCardInHand(IReadOnlyList<CardData> hand)
+    {
+        if (hand == null) return false;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            if (hand[i] != null && hand[i].cardType == CardType.Attack)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

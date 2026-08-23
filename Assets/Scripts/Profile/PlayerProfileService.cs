@@ -19,6 +19,15 @@ public static class PlayerProfileService
         }
     }
 
+    public static string PlayerGuid
+    {
+        get
+        {
+            EnsureLoaded();
+            return _data?.playerGuid ?? string.Empty;
+        }
+    }
+
     public static void EnsureLoaded()
     {
         if (_loaded) return;

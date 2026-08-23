@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 天変地異の演出シーケンスと効果解決を統括する。
-/// トリガー源（Special カード・将来のラグナロク/自然発生等）はここへ集約する。
+/// トリガー源（Special カード・ラグナロク等）はここへ集約する。
 /// </summary>
 public static class DisasterOrchestrator
 {

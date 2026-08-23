@@ -77,6 +77,8 @@ public static class ElementHelper
         var bm = BattleManager.I;
         if (bm != null && bm.IncomingAttackForceNoneElement)
             return ElementType.None;
+        if (bm != null && bm.IncomingAttackForceDarkElement)
+            return ElementType.Dark;
         return GetCombinedElement(cards, applySpellbookElementForce);
     }
 

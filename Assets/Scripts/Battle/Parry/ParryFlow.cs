@@ -166,8 +166,10 @@ public static class ParryFlow
             ElementType atkEl = ElementHelper.GetCombinedElement(incomingPlayerAttackCards);
             CardData second = await enemyAI.ExecuteParryRerunDefenseSelectAsync(
                 battleManager.cpuHand, atkEl, incomingPlayerAttackCards, enemyParryDefenseCard);
+            var secondPicks = GetEnemyDefensePicks(enemyAI, second);
 
-            if (second != null && ParryRules.RequiresParryExclusiveLock(second, incomingPlayerAttackCards))
+            if (secondPicks.Count == 1
+                && ParryRules.RequiresParryExclusiveLock(secondPicks[0], incomingPlayerAttackCards))
             {
                 await RunEnemyDefenderParriesPlayerAttackAsync(
                     battleManager,
@@ -175,35 +177,43 @@ public static class ParryFlow
                     handRefill,
                     enemyAI,
                     incomingPlayerAttackCards,
-                    second,
+                    secondPicks[0],
                     cancellationToken);
                 return;
             }
 
-            if (second != null)
+            if (secondPicks.Count > 0)
             {
-                BattleUIManager.I?.ShowEnemyDefenseCardPresentation(second);
-                SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-                await Task.Delay(500, cancellationToken);
+                await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(secondPicks);
             }
 
-            bool showEnemyYurusu = second == null && BattleUIManager.I != null;
+            bool showEnemyYurusu = secondPicks.Count == 0 && BattleUIManager.I != null;
             using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
             {
-                await battleProcessor.ResolveCombatAsync(
-                    incomingPlayerAttackCards,
-                    second,
-                    player,
-                    enemy,
-                    battleManager.cpuHand,
-                    skipHitCheck: true);
+                if (secondPicks.Count > 1)
+                {
+                    await battleProcessor.ResolveCombatAsync(
+                        incomingPlayerAttackCards,
+                        secondPicks,
+                        player,
+                        enemy,
+                        battleManager.cpuHand,
+                        skipHitCheck: true);
+                }
+                else
+                {
+                    await battleProcessor.ResolveCombatAsync(
+                        incomingPlayerAttackCards,
+                        secondPicks.Count > 0 ? secondPicks[0] : null,
+                        player,
+                        enemy,
+                        battleManager.cpuHand,
+                        skipHitCheck: true);
+                }
             }
 
-            if (second != null)
-            {
-                handRefill?.RecordEnemyUse(second);
-                battleProcessor.UseCard(second, battleManager.cpuHand);
-            }
+            ConsumeEnemyParryRerunDefenseCards(
+                secondPicks, battleManager, battleProcessor, handRefill);
             return;
         }
 
@@ -235,6 +245,36 @@ public static class ParryFlow
         finally
         {
             battleManager.ClearReflectionAttackTotalDisplay();
+        }
+    }
+
+    static List<CardData> GetEnemyDefensePicks(EnemyAI enemyAI, CardData fallback)
+    {
+        if (enemyAI is RemotePlayerAgent remote
+            && remote.LastDefenseSelection != null
+            && remote.LastDefenseSelection.Count > 0)
+            return new List<CardData>(remote.LastDefenseSelection);
+        if (fallback != null)
+            return new List<CardData> { fallback };
+        return new List<CardData>();
+    }
+
+    static void ConsumeEnemyParryRerunDefenseCards(
+        List<CardData> cards,
+        BattleManager battleManager,
+        BattleProcessor battleProcessor,
+        HandRefillService handRefill)
+    {
+        if (cards == null || cards.Count == 0) return;
+
+        bool skipOnlineMagic = battleManager != null && battleManager.IsOnlineMatch;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var card = cards[i];
+            if (card == null) continue;
+            if (skipOnlineMagic && card.cardType == CardType.Magic) continue;
+            handRefill?.RecordEnemyUse(card);
+            battleProcessor?.UseCard(card, battleManager.cpuHand);
         }
     }
 }

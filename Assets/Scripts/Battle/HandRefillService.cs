@@ -315,6 +315,29 @@ public class HandRefillService : MonoBehaviour
     }
 
     /// <summary>
+    /// Add one card to a hand using that side's draw stream. No player-hand UI
+    /// (opponent mirror / data-only).
+    /// </summary>
+    public CardData DrawCardDataOnly(List<CardData> hand, PlayerType forSide)
+    {
+        if (hand == null || cardDealer == null)
+        {
+            Debug.LogWarning("[HandRefillService] DrawCardDataOnly: hand or dealer is null");
+            return null;
+        }
+
+        var newCard = DrawRandomCard(forSide);
+        if (newCard == null)
+        {
+            Debug.LogWarning("[HandRefillService] DrawCardDataOnly: draw failed");
+            return null;
+        }
+
+        hand.Add(newCard);
+        return newCard;
+    }
+
+    /// <summary>
     /// カードを1枚ドローして手札に追加（裏面のまま）。ドローした CardData を返す。
     /// </summary>
     /// <param name="trailingDelayMs">配布後の待機（ms）。0 で即時。</param>
@@ -392,7 +415,6 @@ public class HandRefillService : MonoBehaviour
             int idx = playerHand.IndexOf(old);
             if (idx < 0 || !seenIndex.Add(idx)) continue;
             var ui = old.cardUI;
-            if (ui == null) continue;
 
             var newC = DrawRandomCard(drawForSide);
             if (newC == null)
@@ -405,8 +427,11 @@ public class HandRefillService : MonoBehaviour
             newC.cardUI = ui;
             DestroyCardDataInstance(old);
 
-            ui.Setup(newC, cardBackSprite, playerHandRareBackPresentation: true);
-            if (ui.button != null) ui.button.interactable = false;
+            if (ui != null)
+            {
+                ui.Setup(newC, cardBackSprite, playerHandRareBackPresentation: true);
+                if (ui.button != null) ui.button.interactable = false;
+            }
 
             result.Add(new HandReloadSlotWork { HandIndex = idx, NewCard = newC, Ui = ui });
         }

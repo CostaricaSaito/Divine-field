@@ -98,20 +98,9 @@ public sealed class BattlePhaseController
         if (_host.Attacker == PlayerType.Player)
         {
             _host.ClearPlayerSelfAttackTargetMode();
-            var attackables = CardRules.GetAttackChoices(_host.PlayerHand);
-            if (attackables.Count == 0)
-            {
-                BattleUIManager.I?.SetPrayModeUI(_host.PlayerHand);
-            }
-            else
-            {
-                if (_host.ShouldGrayOutCards)
-                    BattleUIManager.I?.RefreshAttackInteractivity(_host.PlayerHand, CardRules.GetAttackChoices(_host.PlayerHand));
-                else
-                    BattleUIManager.I?.SetIntroModeUI(_host.PlayerHand);
+            PrayerFlow.RefreshPlayerAttackPhaseHandUi(_host.PlayerHand, _host.ShouldGrayOutCards);
 
-                BattleUIManager.I?.UpdateEconomicActionButtons();
-            }
+            BattleUIManager.I?.UpdateEconomicActionButtons();
 
             BattleUIManager.I?.RefreshMagicCardInteractivity(_host.PlayerHand);
             BattleUIManager.I?.RefreshUseButton();
@@ -233,6 +222,19 @@ public sealed class BattlePhaseController
             PlayerStatus atk = _host.Attacker == PlayerType.Player ? _host.PlayerStatus : _host.EnemyStatus;
             PlayerStatus def = _host.Defender == PlayerType.Player ? _host.PlayerStatus : _host.EnemyStatus;
             var defHand = _host.Defender == PlayerType.Player ? _host.PlayerHand : _host.CpuHand;
+
+            if (ArcadiasUltimateRules.ShouldNullifyIncoming(atk, def, attackCards, _host.CurrentAttackCard)
+                && attackCards != null && attackCards.Count > 0)
+            {
+                if (await MilleniumKingdomCombatFlow.TryResolveDefensePhaseNullifyAsync(
+                        _host.Manager,
+                        attackCards,
+                        atk,
+                        def,
+                        _host.CurrentAttackCard,
+                        phaseToken))
+                    return;
+            }
 
             if (OrdinUltimateRules.CanConsumeForOpponentStrike(atk, def, _host.CurrentAttackCard)
                 && attackCards != null && attackCards.Count > 0)

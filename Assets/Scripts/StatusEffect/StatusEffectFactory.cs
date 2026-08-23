@@ -53,6 +53,12 @@ public static class StatusEffectFactory
             case StatusEffectType.Zantestuken:
                 return new ZantestukenEffect();
 
+            case StatusEffectType.MilleniumKingdom:
+                return new MilleniumKingdomEffect();
+
+            case StatusEffectType.DiabolicEmission:
+                return new DiabolicEmissionEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

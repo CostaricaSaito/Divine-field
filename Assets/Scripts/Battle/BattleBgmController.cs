@@ -60,6 +60,8 @@ public class BattleBgmController : MonoBehaviour
     private CancellationTokenSource _trackRotationCts;
     private bool _presentationBgmPaused;
 
+    private float ScaledTargetVolume => GameSettings.ScaleBgmVolume(_targetVolume);
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -90,6 +92,16 @@ public class BattleBgmController : MonoBehaviour
             _disadvantageBackgroundSprite = disadvantageBackground;
         else if (!string.IsNullOrEmpty(disadvantageBackgroundAddress))
             _disadvantageBackgroundSprite = TryLoadDisadvantageSpriteSync(disadvantageBackgroundAddress);
+
+        GameSettings.BgmVolumeChanged += HandleBgmVolumeChanged;
+    }
+
+    private void HandleBgmVolumeChanged()
+    {
+        if (_source == null) return;
+        if (_source.volume <= 0.0001f && !_source.isPlaying)
+            return;
+        _source.volume = ScaledTargetVolume;
     }
 
     private void OnDestroy()
@@ -101,6 +113,8 @@ public class BattleBgmController : MonoBehaviour
         _titlePresentationCts?.Dispose();
         if (Instance == this)
             Instance = null;
+
+        GameSettings.BgmVolumeChanged -= HandleBgmVolumeChanged;
     }
 
     /// <summary>Battle bootstrap: pick random BGM from playlist, start playback, show title prefab.</summary>
@@ -129,7 +143,7 @@ public class BattleBgmController : MonoBehaviour
         _baselineNormalClip = clip;
         _source.clip = clip;
         _source.loop = false;
-        _source.volume = _targetVolume;
+        _source.volume = ScaledTargetVolume;
         _source.Play();
 
         _playlistRotationEnabled = true;
@@ -302,7 +316,7 @@ public class BattleBgmController : MonoBehaviour
             _source.volume = 0f;
             _source.Play();
 
-            await FadeVolumeAsync(_targetVolume, trackFadeInSeconds, fadeCt);
+            await FadeVolumeAsync(ScaledTargetVolume, trackFadeInSeconds, fadeCt);
 
             if (playlist.BgmTitlePrefab != null)
                 _ = ShowBgmTitleAsync(playlist.BgmTitlePrefab, BattleBgmPlaylistSO.FormatTrackTitle(next));
@@ -411,7 +425,7 @@ public class BattleBgmController : MonoBehaviour
 
     private IEnumerator CoFadeToMode(bool toDisadvantage)
     {
-        float v0 = _targetVolume;
+        float v0 = ScaledTargetVolume;
         float outDur = Mathf.Max(0.05f, fadeOutSeconds);
         float t = 0f;
         Image bg = battleBackgroundImage;

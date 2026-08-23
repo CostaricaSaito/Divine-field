@@ -37,6 +37,9 @@ public sealed class RankMatchPopupView : MonoBehaviour
     [SerializeField] private Button closeButton;
     [SerializeField] private Button rankRuleButton;
     [SerializeField] private Button battleReadyButton;
+    [SerializeField] private Button leaderBoardButton;
+    [Tooltip("未割当なら RankMatchPopup からの相対参照で LeaderBoard prefab を探します。")]
+    [SerializeField] private LeaderboardView leaderboardPrefab;
     [Tooltip("未割当なら Resources/Prefab/RankMatchRule を使用。")]
     [SerializeField] private RankMatchRulePopupView rankRulePopupPrefab;
 
@@ -71,6 +74,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
     bool _isAnimating;
     Action _onOpenComplete;
     RankMatchRulePopupView _rankRulePopupInstance;
+    LeaderboardView _leaderboardInstance;
     CancellationTokenSource _matchmakingCts;
     MatchingOverlayView _matchingOverlay;
 
@@ -86,6 +90,7 @@ public sealed class RankMatchPopupView : MonoBehaviour
         WireCloseButton();
         WireRankRuleButton();
         WireBattleReadyButton();
+        WireLeaderBoardButton();
         ApplyInitialHiddenState();
     }
 
@@ -108,6 +113,9 @@ public sealed class RankMatchPopupView : MonoBehaviour
 
         if (battleReadyButton != null)
             battleReadyButton.onClick.RemoveListener(OnBattleReadyButtonClicked);
+
+        if (leaderBoardButton != null)
+            leaderBoardButton.onClick.RemoveListener(OnLeaderBoardButtonClicked);
 
         _matchmakingCts?.Cancel();
         _matchmakingCts?.Dispose();
@@ -190,6 +198,8 @@ public sealed class RankMatchPopupView : MonoBehaviour
             rankRuleButton = contentRoot.Find("RankRuleButton")?.GetComponent<Button>();
         if (battleReadyButton == null && contentRoot != null)
             battleReadyButton = contentRoot.Find("BattleReadyButton")?.GetComponent<Button>();
+        if (leaderBoardButton == null && contentRoot != null)
+            leaderBoardButton = contentRoot.Find("LeaderBoardButton")?.GetComponent<Button>();
         if (profileBinder == null)
             profileBinder = GetComponent<RankMatchPopupProfileBinder>();
     }
@@ -249,6 +259,40 @@ public sealed class RankMatchPopupView : MonoBehaviour
         if (battleReadyButton == null) return;
         battleReadyButton.onClick.RemoveListener(OnBattleReadyButtonClicked);
         battleReadyButton.onClick.AddListener(OnBattleReadyButtonClicked);
+    }
+
+    void WireLeaderBoardButton()
+    {
+        if (leaderBoardButton == null) return;
+        leaderBoardButton.onClick.RemoveListener(OnLeaderBoardButtonClicked);
+        leaderBoardButton.onClick.AddListener(OnLeaderBoardButtonClicked);
+    }
+
+    void OnLeaderBoardButtonClicked()
+    {
+        if (!_isOpen || _isAnimating) return;
+        if (_leaderboardInstance != null) return;
+
+        var view = EnsureLeaderboardInstance();
+        if (view == null) return;
+    }
+
+    LeaderboardView EnsureLeaderboardInstance()
+    {
+        if (_leaderboardInstance != null)
+            return _leaderboardInstance;
+
+        var prefab = leaderboardPrefab;
+        if (prefab == null)
+        {
+            Debug.LogError("[RankMatchPopupView] Leaderboard prefab is not assigned.", this);
+            return null;
+        }
+
+        var parent = overlayRoot != null ? overlayRoot : transform;
+        _leaderboardInstance = Instantiate(prefab, parent);
+        _leaderboardInstance.transform.SetAsLastSibling();
+        return _leaderboardInstance;
     }
 
     void OnBattleReadyButtonClicked()

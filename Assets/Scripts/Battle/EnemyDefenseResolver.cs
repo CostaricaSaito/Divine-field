@@ -75,7 +75,7 @@ public sealed class EnemyDefenseResolver
                 _host.ClearTributeBloodHpPaidSnapshot();
                 _host.ClearHammadnessRollSnapshot();
                 BattleUIManager.I?.HideAllCardDetails();
-                _host.Manager?.ClearIncomingAttackForceNoneElement();
+                _host.Manager?.ClearIncomingAttackElementOverrides();
                 _host.ClearCardStatsSequenceAndAttackLocks();
                 _host.CurrentAttackCard = null;
                 _host.SetSuppressEnemyStaleAttackerInTotalByOrb(false);

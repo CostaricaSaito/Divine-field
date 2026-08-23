@@ -288,11 +288,9 @@ public sealed class PlayerInputController
         var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
         if (selectedAttackCards == null || selectedAttackCards.Count == 0)
         {
-            if (_host.IsOnlineMatch && CardRules.GetAttackChoices(_host.PlayerHand).Count == 0)
+            if (PrayerFlow.IsEligibleHand(_host.PlayerHand))
             {
-                Debug.Log("[PlayerInput] Online attack pass (prayer)");
-                NetworkBattleBridge.SendAttackSelection(null);
-                _host.SetGameState(GameState.CombatResolvePhase);
+                _ = RunPlayerPrayerAsync();
                 return;
             }
 
@@ -657,6 +655,29 @@ public sealed class PlayerInputController
         if (recoverOrFountain)
             return _host.IsPlayerSelfAttackTargetMode ? _host.EnemyStatus : _host.PlayerStatus;
         return _host.IsPlayerSelfAttackTargetMode ? _host.PlayerStatus : _host.EnemyStatus;
+    }
+
+    private async Task RunPlayerPrayerAsync()
+    {
+        var token = _host.GetPhaseToken();
+        try
+        {
+            if (_host.IsOnlineMatch)
+                NetworkBattleBridge.SendPrayer();
+
+            await PrayerFlow.RunPlayerPrayerAsync(_host, token);
+            if (token.IsCancellationRequested) return;
+
+            _host.SetGameState(GameState.CombatResolvePhase);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        finally
+        {
+            UnlockUseButton();
+        }
     }
 
     private void UnlockUseButton()

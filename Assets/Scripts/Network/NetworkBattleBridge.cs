@@ -38,6 +38,7 @@ public static class NetworkBattleBridge
         MagicFountainEffect = 15,    // host -> client : Magic Fountain pool refill presentation
         ArrowOfIndraEffect = 16,     // host -> client : Arrow of Indra hand destroy presentation
         ShiningBarrierApplied = 17,  // either -> peer : incoming attack forced to None element
+        HandReload = 18,             // either -> peer : hand reload (selected slot indices)
     }
 
     public enum RemoteEconomicKind : byte
@@ -46,7 +47,11 @@ public static class NetworkBattleBridge
         Buy = 1,
         Sell = 2,
         Exchange = 3,
+        Prayer = 4,
     }
+
+    /// <summary>Remote peer confirmed a hand reload. Argument is hand indices in draw order.</summary>
+    public static event Action<IReadOnlyList<int>> RemoteHandReloadReceived;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     /// <summary>Development only: both peers apply the same inject (cardName, host-player hand?).</summary>
@@ -387,6 +392,17 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent Economic Exchange (HP={afterHp}, MP={afterMp}, GP={afterGp})");
     }
 
+    public static void SendPrayer()
+    {
+        using var writer = new FastBufferWriter(128, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.Attack);
+        writer.WriteValueSafe(0);
+        writer.WriteValueSafe(false);
+        WriteEconomicPayload(writer, RemoteEconomicKind.Prayer, "", 0, 0, 0);
+        Send(writer);
+        Debug.Log("[NetworkBattleBridge] Sent Prayer");
+    }
+
     static void WriteEconomicPayload(
         FastBufferWriter writer,
         RemoteEconomicKind kind,
@@ -419,6 +435,19 @@ public static class NetworkBattleBridge
         WriteCardNames(writer, cards, out int count);
         Send(writer);
         Debug.Log($"[NetworkBattleBridge] Sent Defense ({count} cards)");
+    }
+
+    /// <summary>Notify peer of a confirmed hand reload. Indices are in draw order.</summary>
+    public static void SendHandReload(IReadOnlyList<int> handIndices)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp);
+        writer.WriteValueSafe((byte)MsgType.HandReload);
+        int count = handIndices != null ? handIndices.Count : 0;
+        writer.WriteValueSafe(count);
+        for (int i = 0; i < count; i++)
+            writer.WriteValueSafe(handIndices[i]);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent HandReload ({count} slots)");
     }
 
     /// <summary>Notify opponent that the local player forfeits (leaves battle).</summary>
@@ -1162,6 +1191,20 @@ public static class NetworkBattleBridge
                 reader.ReadValueSafe(out int turnTag);
                 Debug.Log($"[NetworkBattleBridge] ShiningBarrierApplied received (tag={turnTag})");
                 ShiningBarrierDefenseFlow.ApplyForceNoneFromNetwork();
+                break;
+            }
+
+            case MsgType.HandReload:
+            {
+                reader.ReadValueSafe(out int count);
+                var indices = new List<int>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    reader.ReadValueSafe(out int index);
+                    indices.Add(index);
+                }
+                Debug.Log($"[NetworkBattleBridge] HandReload received ({count} slots)");
+                RemoteHandReloadReceived?.Invoke(indices);
                 break;
             }
 

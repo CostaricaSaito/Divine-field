@@ -669,7 +669,7 @@ public class CardSequenceManager : MonoBehaviour
         battleManager.SetCurrentAttackCard(null);
         cardStatsDisplay?.UpdateDisplay();
 
-        battleManager.ClearIncomingAttackForceNoneElement();
+        battleManager.ClearIncomingAttackElementOverrides();
         battleManager.SetGameState(GameState.CombatResolvePhase);
         battleManager.ClearMagicalExplosionComboMpPoolSnapshot();
         battleManager.ClearMillionDollarBazookaComboGpPoolSnapshot();
@@ -678,6 +678,7 @@ public class CardSequenceManager : MonoBehaviour
         battleManager.ClearMagicalSwordPlayerAttackState();
         battleManager.ClearMagicalSwordEnemyAttackState();
         battleManager.ClearPlayerAttackComboForCombat();
+        battleManager.ClearRagnarokDisasterTriggeredThisAttack();
     }
 
     /// <summary>
@@ -783,6 +784,42 @@ public class CardSequenceManager : MonoBehaviour
             {
                 await battleProcessor.ResolveCombatAsync(attackCards, (CardData)null, atk, def, defHand, skipHitCheck: true);
             }
+            return true;
+        }
+
+        if (await DiabolicEmissionCombatFlow.TryApplyDarkEmissionAfterHitAsync(
+                battleManager,
+                attackCards,
+                atk,
+                def,
+                battleManager.GetCurrentAttackCard(),
+                cancellationToken,
+                dualBladeStrikeIndex))
+        {
+            cardStatsDisplay?.UpdateDisplay();
+        }
+
+        if (await MilleniumKingdomCombatFlow.TryResolveNullifyAfterHitAsync(
+                battleManager,
+                attackCards,
+                atk,
+                def,
+                battleManager.GetCurrentAttackCard(),
+                cancellationToken,
+                dualBladeStrikeIndex))
+        {
+            if (DualBladeDualismRules.ContainsDualBladeDualism(attackCards)
+                && dualBladeStrikeIndex == 0
+                && !atk.IsDead() && !def.IsDead())
+            {
+                await PresentDualBladeSecondStrikeAttackRevealAsync(attackCards, atk, cancellationToken);
+                return await ResolvePlayerAttackCombatAsync(
+                    attackCards, atk, def, defHand, cancellationToken, 1);
+            }
+
+            if (await battleManager.TryHandleDeathIfAnyAsync(cancellationToken))
+                return false;
+
             return true;
         }
 
@@ -2028,7 +2065,7 @@ public class CardSequenceManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Ultimate Skill: card presentation, then draw+mulligan, recovery (self), hand destroy, zantestuken buff, or combat resolve.
+    /// Ultimate Skill: card presentation, then draw+mulligan, recovery (self), hand destroy, zantestuken, millennium kingdom, or combat resolve.
     /// </summary>
     public async Task RunUltimateSkillSequenceAsync(PlayerStatus summoner, PlayerStatus opponent)
     {
@@ -2070,6 +2107,18 @@ public class CardSequenceManager : MonoBehaviour
         if (CardRules.IsUltimateZantestukenSkillCard(card))
         {
             await RunUltimateZantestukenSkillSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsUltimateMilleniumKingdomSkillCard(card))
+        {
+            await RunUltimateMilleniumKingdomSkillSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsUltimateDiabolicEmissionSkillCard(card))
+        {
+            await RunUltimateDiabolicEmissionSkillSequenceAsync(card, summoner, side, CancellationToken.None);
             return;
         }
 
@@ -2192,6 +2241,68 @@ public class CardSequenceManager : MonoBehaviour
         float fadeSec = BattleUIManager.I != null
             ? BattleUIManager.I.ShowMessagePopupForTarget(
                 summoner, OrdinUltimateRules.ActivationMessage, OrdinUltimateRules.ActivationMessageColor)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ultimate Skill (Millenium Kingdom): card sheet, grant persistent nullify buff + popup, then cleanup.
+    /// </summary>
+    private async Task RunUltimateMilleniumKingdomSkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        ArcadiasUltimateRules.ApplyMilleniumKingdomBuff(summoner);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+
+        float fadeSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowMessagePopupForTarget(
+                summoner,
+                ArcadiasUltimateRules.LightProtectionMessage,
+                ArcadiasUltimateRules.LightProtectionMessageColor)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ultimate Skill (Diabolic Emission): card sheet, grant Dark-strike buff + popup, then cleanup.
+    /// </summary>
+    private async Task RunUltimateDiabolicEmissionSkillSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        DiabolosUltimateRules.ApplyDiabolicEmissionBuff(summoner);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+
+        float fadeSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowMessagePopupForTarget(
+                summoner,
+                DiabolosUltimateRules.ActivationMessage,
+                DiabolosUltimateRules.ActivationMessageColor)
             : DamagePopup.DefaultFadeDurationIfUnknown;
         await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, cancellationToken);
 

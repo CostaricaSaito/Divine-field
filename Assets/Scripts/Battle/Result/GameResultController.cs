@@ -166,6 +166,9 @@ public class GameResultController : MonoBehaviour
             resultBgmSource.loop = true;
             resultBgmSource.spatialBlend = 0f;
         }
+
+        if (resultBgmSource.GetComponent<BgmVolumeBinder>() == null)
+            resultBgmSource.gameObject.AddComponent<BgmVolumeBinder>();
     }
 
     /// <summary>
@@ -329,6 +332,12 @@ public class GameResultController : MonoBehaviour
         }
 
         PlayerProfileService.RecordMatchEnd(kind, summonId, newRp);
+
+        if (OnlineMatchContext.IsOnline)
+        {
+            string displayName = PlayerProfileService.Data.displayName;
+            _ = RankLeaderboardService.TrySubmitScoreAsync(newRp, displayName);
+        }
     }
 
     private async Task StartResultBgmForKindAsync(ResultKind kind, CancellationToken ct)
@@ -346,7 +355,11 @@ public class GameResultController : MonoBehaviour
         resultBgmSource.Stop();
         resultBgmSource.clip = clip;
         resultBgmSource.loop = true;
-        resultBgmSource.volume = 0.45f;
+        const float resultBgmBaseVolume = 0.45f;
+        if (resultBgmSource.TryGetComponent<BgmVolumeBinder>(out var binder))
+            binder.SetBaseVolume(resultBgmBaseVolume);
+        else
+            resultBgmSource.volume = GameSettings.ScaleBgmVolume(resultBgmBaseVolume);
         resultBgmSource.Play();
     }
 

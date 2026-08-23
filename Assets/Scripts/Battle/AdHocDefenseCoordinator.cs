@@ -233,13 +233,6 @@ public sealed class AdHocDefenseCoordinator
             return false;
         }
 
-        if (_host.IsOnlineMatch && count > 1)
-        {
-            BattleUIManager.I?.ShowInfoPopupOnCardPanel(
-                "オンライン対戦ではカードは1枚ずつ使用できます", new Color(0.95f, 0.25f, 0.2f));
-            return false;
-        }
-
         return true;
     }
 }

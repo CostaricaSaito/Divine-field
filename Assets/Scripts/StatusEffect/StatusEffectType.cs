@@ -61,4 +61,14 @@ public enum StatusEffectType
     /// Odin Zantestuken ultimate: next opponent-target hit skips defense. Indelible until consumed on hit.
     /// </summary>
     Zantestuken = 102,
+
+    /// <summary>
+    /// Arcadias Millenium Kingdom ultimate: nullify opponent magic/attribute attacks until match end.
+    /// </summary>
+    MilleniumKingdom = 103,
+
+    /// <summary>
+    /// Diabolos Diabolic Emission ultimate: next opponent-target hit resolves as Dark element. Indelible until consumed on hit.
+    /// </summary>
+    DiabolicEmission = 104,
 }

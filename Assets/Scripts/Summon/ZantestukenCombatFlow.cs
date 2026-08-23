@@ -115,7 +115,7 @@ public static class ZantestukenCombatFlow
         bm.ClearTributeBloodHpPaidSnapshot();
         bm.ClearHammadnessRollSnapshot();
         BattleUIManager.I?.HideAllCardDetails();
-        bm.ClearIncomingAttackForceNoneElement();
+        bm.ClearIncomingAttackElementOverrides();
         bm.ClearStatsDisplaySequenceCards();
         bm.SetCurrentAttackCard(null);
         bm.SetSelectedDefenseCard(null);

@@ -390,7 +390,7 @@ public static class OrdinSlashReflectFlow
         BattleUIManager.I?.HideAllCardDetails();
         bm.ClearStatsDisplaySequenceCards();
         bm.SetCurrentAttackCard(null);
-        bm.ClearIncomingAttackForceNoneElement();
+        bm.ClearIncomingAttackElementOverrides();
         bm.SetGameState(GameState.CombatResolvePhase);
     }
 

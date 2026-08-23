@@ -209,6 +209,12 @@ public sealed class BattleExitCoordinator
 
         PlayerProfileService.RecordMatchEnd(GameResultController.ResultKind.Defeat, summonId, afterRp);
         GameProfile.I?.SetCurrentRpAfterBattleResult(afterRp);
+
+        if (OnlineMatchContext.IsOnline)
+        {
+            string displayName = PlayerProfileService.Data.displayName;
+            _ = RankLeaderboardService.TrySubmitScoreAsync(afterRp, displayName);
+        }
     }
 
     private static async Task FadeToMainSceneAsync()

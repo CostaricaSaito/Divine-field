@@ -243,6 +243,18 @@ public sealed class EnemyTurnRunner
             await DamagePopup.WaitAfterPopupLifetimeAsync(popupSec);
         }
 
+        if (_host.Manager != null)
+        {
+            await DiabolicEmissionCombatFlow.TryApplyDarkEmissionAfterHitAsync(
+                _host.Manager,
+                atkList,
+                _host.EnemyStatus,
+                _host.PlayerStatus,
+                _host.CurrentAttackCard,
+                token);
+            _host.UpdateCardStatsDisplay();
+        }
+
         _host.SetGameState(GameState.DefensePhase);
     }
 

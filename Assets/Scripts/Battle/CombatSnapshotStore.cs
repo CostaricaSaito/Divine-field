@@ -47,6 +47,8 @@ public sealed class CombatSnapshotStore
     private List<CardData> _postDeathChainAttackDisplay;
     private Side _postDeathChainAttackDisplaySide = Side.Player;
 
+    private bool _ragnarokDisasterTriggeredThisAttack;
+
     public CardData CurrentAttackCard
     {
         get => _currentAttackCard;
@@ -339,6 +341,18 @@ public sealed class CombatSnapshotStore
     public void ClearPostDeathChainAttackDisplay()
     {
         _postDeathChainAttackDisplay = null;
+    }
+
+    public bool IsRagnarokDisasterTriggeredThisAttack => _ragnarokDisasterTriggeredThisAttack;
+
+    public void MarkRagnarokDisasterTriggeredThisAttack()
+    {
+        _ragnarokDisasterTriggeredThisAttack = true;
+    }
+
+    public void ClearRagnarokDisasterTriggeredThisAttack()
+    {
+        _ragnarokDisasterTriggeredThisAttack = false;
     }
 
     public void SetReflectionAttackTotalDisplayAfterSlide(

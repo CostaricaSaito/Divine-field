@@ -88,6 +88,7 @@ public class HandReloadController : MonoBehaviour
         }
 
         ForceHideReloadEntryControls();
+        NetworkBattleBridge.RemoteHandReloadReceived += OnRemoteHandReloadReceived;
     }
 
     void Start()
@@ -99,6 +100,7 @@ public class HandReloadController : MonoBehaviour
     void OnDestroy()
     {
         if (I == this) I = null;
+        NetworkBattleBridge.RemoteHandReloadReceived -= OnRemoteHandReloadReceived;
         StopSlideAndBlink();
     }
 
@@ -168,8 +170,6 @@ public class HandReloadController : MonoBehaviour
     public bool PlayerCanUseReloadEntry()
     {
         if (BattleManager.I == null) return false;
-        // オンライン対戦（PoC）：手札リロードは未対応
-        if (BattleManager.I.IsOnlineMatch) return false;
         if (!BattleManager.I.IsBattleOpeningSequenceComplete) return false;
         if (BattleManager.I.CurrentState != GameState.AttackPhase) return false;
         if (BattleManager.I.CurrentBattleStep != BattleStep.MainActionSelect) return false;
@@ -343,6 +343,7 @@ public class HandReloadController : MonoBehaviour
 
         var toReplace = new List<CardData>(_reloadSelection);
         var bm = BattleManager.I;
+        NotifyOnlineHandReloadIfNeeded(toReplace, bm.playerHand);
 
         ClosePopupOnly();
         if (reloadEntryButton != null) reloadEntryButton.interactable = false;
@@ -384,6 +385,72 @@ public class HandReloadController : MonoBehaviour
         BattleUIManager.I?.SetHandClickable(true);
         bm.UpdateTotalATKDEFDisplay();
         bm.RefreshUIFromHandReloadClose();
+    }
+
+    private static void NotifyOnlineHandReloadIfNeeded(IReadOnlyList<CardData> toReplace, List<CardData> hand)
+    {
+        if (BattleManager.I == null || !BattleManager.I.IsOnlineMatch) return;
+        if (toReplace == null || hand == null) return;
+
+        var indices = new List<int>(toReplace.Count);
+        for (int i = 0; i < toReplace.Count; i++)
+        {
+            int idx = hand.IndexOf(toReplace[i]);
+            if (idx >= 0)
+                indices.Add(idx);
+        }
+
+        if (indices.Count > 0)
+            NetworkBattleBridge.SendHandReload(indices);
+    }
+
+    private void OnRemoteHandReloadReceived(IReadOnlyList<int> handIndices)
+        => _ = MirrorRemoteHandReloadAsync(handIndices);
+
+    private async Task MirrorRemoteHandReloadAsync(IReadOnlyList<int> handIndices)
+    {
+        var bm = BattleManager.I;
+        if (bm == null || bm.HandRefill == null || bm.cpuHand == null) return;
+        if (handIndices == null || handIndices.Count == 0) return;
+
+        var oldCards = new List<CardData>(handIndices.Count);
+        for (int i = 0; i < handIndices.Count; i++)
+        {
+            int idx = handIndices[i];
+            if (idx < 0 || idx >= bm.cpuHand.Count) continue;
+            var card = bm.cpuHand[idx];
+            if (card != null)
+                oldCards.Add(card);
+        }
+
+        if (oldCards.Count == 0) return;
+
+        IReadOnlyList<HandRefillService.HandReloadSlotWork> work;
+        try
+        {
+            work = bm.HandRefill.BeginHandReloadReplaceAllFaceDown(
+                oldCards, bm.cpuHand, PlayerType.Enemy);
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            return;
+        }
+
+        if (work == null || work.Count == 0) return;
+
+        float fade = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowHandReloadPopup(bm.GetEnemyStatus())
+            : 0f;
+
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, CancellationToken.None);
+        await Task.Delay(HandRefillService.HandReloadAfterPopupWaitMs, CancellationToken.None);
+
+        if (bm.HandRefill != null)
+            await bm.HandRefill.RevealHandReloadSlotsSequentially(work, CancellationToken.None);
+
+        bm.UpdateTotalATKDEFDisplay();
+        BattleUIManager.I?.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
     }
 
     private void SyncPopupAfterSelectionChange()

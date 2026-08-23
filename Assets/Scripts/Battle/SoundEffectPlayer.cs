@@ -31,6 +31,7 @@ public class SoundEffectPlayer : MonoBehaviour
     [SerializeField] private AudioSource loopSeSource;
     private Dictionary<string, AudioClip> clipCache = new();
     private int _playGeneration;
+    private float _oneShotVolumeScale = 1f;
 
     private void Awake()
     {
@@ -59,6 +60,21 @@ public class SoundEffectPlayer : MonoBehaviour
             loopSeSource.loop = true;
             loopSeSource.spatialBlend = 0f;
         }
+
+        ApplySeVolume();
+        GameSettings.SeVolumeChanged += ApplySeVolume;
+    }
+
+    private void OnDestroy()
+    {
+        GameSettings.SeVolumeChanged -= ApplySeVolume;
+    }
+
+    private void ApplySeVolume()
+    {
+        _oneShotVolumeScale = GameSettings.SeVolume;
+        if (loopSeSource != null)
+            loopSeSource.volume = GameSettings.SeVolume;
     }
 
     /// <summary>
@@ -82,7 +98,7 @@ public class SoundEffectPlayer : MonoBehaviour
         // キャッシュから検索
         if (clipCache.TryGetValue(addressKey, out AudioClip cachedClip))
         {
-            seSource.PlayOneShot(cachedClip);
+            seSource.PlayOneShot(cachedClip, _oneShotVolumeScale);
             return;
         }
 
@@ -100,7 +116,7 @@ public class SoundEffectPlayer : MonoBehaviour
                     if (clip != null)
                     {
                         clipCache[addressKey] = clip;
-                        seSource.PlayOneShot(clip);
+                        seSource.PlayOneShot(clip, _oneShotVolumeScale);
                     }
                     else
                     {
@@ -127,7 +143,7 @@ public class SoundEffectPlayer : MonoBehaviour
             Debug.LogWarning("[SoundEffectPlayer] AudioClip が null です");
             return;
         }
-        seSource.PlayOneShot(clip);
+        seSource.PlayOneShot(clip, _oneShotVolumeScale);
     }
 
     /// <summary>ループ用 SE。事前に <see cref="StartLoopingAsync"/> するか、キャッシュ済みキー用。</summary>
@@ -139,7 +155,7 @@ public class SoundEffectPlayer : MonoBehaviour
             loopSeSource.Stop();
             loopSeSource.clip = clip;
             loopSeSource.loop = true;
-            loopSeSource.volume = 1f;
+            loopSeSource.volume = GameSettings.SeVolume;
             loopSeSource.Play();
             return;
         }
@@ -153,7 +169,7 @@ public class SoundEffectPlayer : MonoBehaviour
             loopSeSource.Stop();
             loopSeSource.clip = handle.Result;
             loopSeSource.loop = true;
-            loopSeSource.volume = 1f;
+            loopSeSource.volume = GameSettings.SeVolume;
             loopSeSource.Play();
         };
     }
@@ -183,7 +199,7 @@ public class SoundEffectPlayer : MonoBehaviour
         loopSeSource.Stop();
         loopSeSource.clip = clip;
         loopSeSource.loop = true;
-        loopSeSource.volume = 1f;
+        loopSeSource.volume = GameSettings.SeVolume;
         loopSeSource.Play();
     }
 

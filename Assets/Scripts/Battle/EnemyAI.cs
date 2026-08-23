@@ -325,7 +325,7 @@ public class EnemyAI
     /// <summary>
     /// 打ち払い失敗後の再防御。通常防具を優先し、なければ未使用の別枚打ち払いを許可。それもなければ null（許す）。
     /// </summary>
-    public async Task<CardData> ExecuteParryRerunDefenseSelectAsync(
+    public virtual async Task<CardData> ExecuteParryRerunDefenseSelectAsync(
         List<CardData> cpuHand,
         ElementType attackElement,
         List<CardData> incomingAttack,
