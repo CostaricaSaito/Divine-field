@@ -166,7 +166,7 @@ public static class ParryFlow
             ElementType atkEl = ElementHelper.GetCombinedElement(incomingPlayerAttackCards);
             CardData second = await enemyAI.ExecuteParryRerunDefenseSelectAsync(
                 battleManager.cpuHand, atkEl, incomingPlayerAttackCards, enemyParryDefenseCard);
-            var secondPicks = GetEnemyDefensePicks(enemyAI, second);
+            var secondPicks = EnemyDefenseSelectionHelper.GetDefensePicks(enemyAI, second);
 
             if (secondPicks.Count == 1
                 && ParryRules.RequiresParryExclusiveLock(secondPicks[0], incomingPlayerAttackCards))
@@ -212,7 +212,7 @@ public static class ParryFlow
                 }
             }
 
-            ConsumeEnemyParryRerunDefenseCards(
+            EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
                 secondPicks, battleManager, battleProcessor, handRefill);
             return;
         }
@@ -248,33 +248,4 @@ public static class ParryFlow
         }
     }
 
-    static List<CardData> GetEnemyDefensePicks(EnemyAI enemyAI, CardData fallback)
-    {
-        if (enemyAI is RemotePlayerAgent remote
-            && remote.LastDefenseSelection != null
-            && remote.LastDefenseSelection.Count > 0)
-            return new List<CardData>(remote.LastDefenseSelection);
-        if (fallback != null)
-            return new List<CardData> { fallback };
-        return new List<CardData>();
-    }
-
-    static void ConsumeEnemyParryRerunDefenseCards(
-        List<CardData> cards,
-        BattleManager battleManager,
-        BattleProcessor battleProcessor,
-        HandRefillService handRefill)
-    {
-        if (cards == null || cards.Count == 0) return;
-
-        bool skipOnlineMagic = battleManager != null && battleManager.IsOnlineMatch;
-        for (int i = 0; i < cards.Count; i++)
-        {
-            var card = cards[i];
-            if (card == null) continue;
-            if (skipOnlineMagic && card.cardType == CardType.Magic) continue;
-            handRefill?.RecordEnemyUse(card);
-            battleProcessor?.UseCard(card, battleManager.cpuHand);
-        }
-    }
 }

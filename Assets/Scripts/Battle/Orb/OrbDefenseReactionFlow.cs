@@ -113,11 +113,11 @@ public static class OrbDefenseReactionFlow
             if (target != null && target.IsDead())
             {
                 await battleProcessor.ResolveOrbCounterCombatAsync(
-                    attackSnap, firstPhaseDamageB, null, counterAtt, target, bm.playerHand, false);
+                    attackSnap, firstPhaseDamageB, (CardData)null, counterAtt, target, bm.playerHand, false);
                 return;
             }
 
-            CardData card = null;
+            List<CardData> finalPicks = null;
             while (true)
             {
                 List<CardData> picks;
@@ -133,35 +133,44 @@ public static class OrbDefenseReactionFlow
                 if (picks == null || picks.Count == 0)
                 {
                     await battleProcessor.ResolveOrbCounterCombatAsync(
-                        attackSnap, firstPhaseDamageB, null, counterAtt, target, bm.playerHand, false);
+                        attackSnap, firstPhaseDamageB, (CardData)null, counterAtt, target, bm.playerHand, false);
                     return;
                 }
 
-                card = picks[0];
-                if (card == null) return;
+                if (picks[0] == null) return;
 
                 if (ShiningBarrierRules.IsBarrierOnlySelection(picks))
                 {
                     await ShiningBarrierDefenseFlow.RunPlayerAdHocBarrierInterceptAsync(
-                        bm, battleProcessor, bm.HandRefill, card, cancellationToken);
+                        bm, battleProcessor, bm.HandRefill, picks[0], cancellationToken);
                     if (cancellationToken.IsCancellationRequested) return;
                     continue;
                 }
 
+                finalPicks = picks;
                 break;
             }
 
-            if (card.cardType == CardType.Magic && bm.Sequences != null)
-                await bm.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(card, cancellationToken);
-            else
+            for (int pi = 0; pi < finalPicks.Count; pi++)
             {
-                int slotIndex = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
-                if (slotIndex >= 0) bm.HandRefill?.RecordPlayerUseSlot(slotIndex);
-                battleProcessor.UseCard(card, bm.playerHand);
+                var defenseCard = finalPicks[pi];
+                if (defenseCard == null) continue;
+                if (defenseCard.cardType == CardType.Magic && bm.Sequences != null)
+                    await bm.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(
+                        defenseCard, cancellationToken);
+                else
+                {
+                    int slotIndex = defenseCard.cardUI != null ? defenseCard.cardUI.transform.GetSiblingIndex() : -1;
+                    if (slotIndex >= 0) bm.HandRefill?.RecordPlayerUseSlot(slotIndex);
+                    battleProcessor.UseCard(defenseCard, bm.playerHand);
+                }
             }
 
-            BattleUIManager.I?.ShowCardDetail(card, Side.Player);
-            bm.SetStatsDisplaySequenceCards(new List<CardData> { card }, "防御", Side.Player);
+            if (finalPicks.Count == 1)
+                BattleUIManager.I?.ShowCardDetail(finalPicks[0], Side.Player);
+            else
+                BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(finalPicks, Side.Player);
+            bm.SetStatsDisplaySequenceCards(finalPicks, "防御", Side.Player);
             SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             try
             {
@@ -172,8 +181,16 @@ public static class OrbDefenseReactionFlow
                 throw;
             }
 
-            await battleProcessor.ResolveOrbCounterCombatAsync(
-                attackSnap, firstPhaseDamageB, card, counterAtt, target, bm.playerHand, false);
+            if (finalPicks.Count > 1)
+            {
+                await battleProcessor.ResolveOrbCounterCombatAsync(
+                    attackSnap, firstPhaseDamageB, finalPicks, counterAtt, target, bm.playerHand, false);
+            }
+            else
+            {
+                await battleProcessor.ResolveOrbCounterCombatAsync(
+                    attackSnap, firstPhaseDamageB, finalPicks[0], counterAtt, target, bm.playerHand, false);
+            }
             bm.ClearStatsDisplaySequenceCards();
         }
         else
@@ -197,12 +214,12 @@ public static class OrbDefenseReactionFlow
                 if (cancellationToken.IsCancellationRequested) return;
             }
 
-            if (pick != null)
+            var defensePicks = EnemyDefenseSelectionHelper.GetDefensePicks(bm.GetEnemyAI(), pick);
+
+            if (defensePicks.Count > 0)
             {
-                bm.HandRefill?.RecordEnemyUse(pick);
-                battleProcessor.UseCard(pick, bm.cpuHand);
-                BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
-                bm.SetStatsDisplaySequenceCards(new List<CardData> { pick }, "防御", Side.Enemy);
+                await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defensePicks);
+                bm.SetStatsDisplaySequenceCards(defensePicks, "防御", Side.Enemy);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             }
             else
@@ -216,12 +233,29 @@ public static class OrbDefenseReactionFlow
                 throw;
             }
 
-            bool showEnemyYurusu = pick == null && BattleUIManager.I != null;
+            bool showEnemyYurusu = defensePicks.Count == 0 && BattleUIManager.I != null;
             using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
             {
-                await battleProcessor.ResolveOrbCounterCombatAsync(
-                    attackSnap, firstPhaseDamageB, pick, counterAtt, target, bm.cpuHand, false);
+                if (defensePicks.Count > 1)
+                {
+                    await battleProcessor.ResolveOrbCounterCombatAsync(
+                        attackSnap, firstPhaseDamageB, defensePicks, counterAtt, target, bm.cpuHand, false);
+                }
+                else
+                {
+                    await battleProcessor.ResolveOrbCounterCombatAsync(
+                        attackSnap,
+                        firstPhaseDamageB,
+                        defensePicks.Count > 0 ? defensePicks[0] : (CardData)null,
+                        counterAtt,
+                        target,
+                        bm.cpuHand,
+                        false);
+                }
             }
+
+            EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
+                defensePicks, bm, battleProcessor, bm.HandRefill);
 
             bm.ClearStatsDisplaySequenceCards();
         }

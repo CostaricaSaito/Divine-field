@@ -226,32 +226,34 @@ public static class PhysicalReflectionFlow
                 ElementType atkEl = ElementHelper.GetCombinedElement(incomingAttackCards);
                 CardData pick = await enemyAI.ExecuteDefenseSelectAsync(
                     battleManager.cpuHand, atkEl, incomingAttackCards);
+                var enemyPicks = EnemyDefenseSelectionHelper.GetDefensePicks(enemyAI, pick);
+                CardData primary = enemyPicks.Count > 0 ? enemyPicks[0] : null;
 
-                if (pick != null && BlockingRules.IsPhysicalBlockingCard(pick)
+                if (primary != null && BlockingRules.IsPhysicalBlockingCard(primary)
                     && BlockingRules.CanBlockPhysical(incomingAttackCards))
                 {
-                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(primary);
                     battleManager.SetStatsDisplaySequenceCards(
-                        new List<CardData> { pick }, "防御", Side.Enemy);
+                        new List<CardData> { primary }, "防御", Side.Enemy);
                     await Task.Delay(500, cancellationToken);
                     await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
                         battleManager,
                         battleProcessor,
                         handRefill,
                         incomingAttackCards,
-                        pick,
+                        primary,
                         cancellationToken);
                     battleManager.ClearStatsDisplaySequenceCards();
                     return;
                 }
 
-                if (pick != null && IsContinuingReflectionChain(pick, incomingAttackCards))
+                if (primary != null && IsContinuingReflectionChain(primary, incomingAttackCards))
                 {
-                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(primary);
                     await Task.Delay(500, cancellationToken);
 
-                    handRefill?.RecordEnemyUse(pick);
-                    battleProcessor.UseCard(pick, battleManager.cpuHand);
+                    handRefill?.RecordEnemyUse(primary);
+                    battleProcessor.UseCard(primary, battleManager.cpuHand);
 
                     if (IsImmediateIncoming(incomingAttackCards))
                     {
@@ -273,7 +275,7 @@ public static class PhysicalReflectionFlow
                     if (sec <= 0f) sec = DamagePopup.DefaultFadeDurationIfUnknown;
                     await DamagePopup.WaitAfterPopupLifetimeAsync(sec, cancellationToken);
 
-                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(pick, Side.Enemy);
+                    BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(primary, Side.Enemy);
 
                     if (BattleUIManager.I != null)
                         await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
@@ -286,9 +288,9 @@ public static class PhysicalReflectionFlow
                     continue;
                 }
 
-                if (pick != null && ParryRules.RequiresParryExclusiveLock(pick, incomingAttackCards))
+                if (primary != null && ParryRules.RequiresParryExclusiveLock(primary, incomingAttackCards))
                 {
-                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
+                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(primary);
                     await Task.Delay(500, cancellationToken);
 
                     await ParryFlow.RunEnemyDefenderParriesPlayerAttackAsync(
@@ -297,46 +299,59 @@ public static class PhysicalReflectionFlow
                         handRefill,
                         enemyAI,
                         incomingAttackCards,
-                        pick,
+                        primary,
                         cancellationToken);
                     battleManager.ClearStatsDisplaySequenceCards();
                     return;
                 }
 
-                if (pick == null && IsImmediateIncoming(incomingAttackCards))
+                if (primary == null && IsImmediateIncoming(incomingAttackCards))
                 {
                     await ResolveImmediateIncomingOnDefenderAsync(
                         battleProcessor, incomingAttackCards, enemy, player, cancellationToken);
                     return;
                 }
 
-                if (pick != null)
+                if (enemyPicks.Count > 0)
                 {
-                    BattleUIManager.I?.ShowEnemyDefenseCardPresentation(pick);
-                    battleManager.SetStatsDisplaySequenceCards(
-                        new List<CardData> { pick }, "防御", Side.Enemy);
+                    if (enemyPicks.Count == 1)
+                        BattleUIManager.I?.ShowEnemyDefenseCardPresentation(primary);
+                    else
+                        await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(enemyPicks);
+                    battleManager.SetStatsDisplaySequenceCards(enemyPicks, "防御", Side.Enemy);
                     SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                     await Task.Delay(500, cancellationToken);
                 }
 
-                bool showEnemyYurusu = pick == null && BattleUIManager.I != null;
+                bool showEnemyYurusu = enemyPicks.Count == 0 && BattleUIManager.I != null;
                 using (YurusuDisplayScope.ShowIf(showEnemyYurusu))
                 {
-                    await battleProcessor.ResolveReflectedCombatAsync(
-                        incomingAttackCards,
-                        incomingPower,
-                        pick,
-                        player,
-                        enemy,
-                        battleManager.cpuHand,
-                        skipHitCheck: true);
+                    if (enemyPicks.Count > 1)
+                    {
+                        await battleProcessor.ResolveReflectedCombatAsync(
+                            incomingAttackCards,
+                            incomingPower,
+                            enemyPicks,
+                            player,
+                            enemy,
+                            battleManager.cpuHand,
+                            skipHitCheck: true);
+                    }
+                    else
+                    {
+                        await battleProcessor.ResolveReflectedCombatAsync(
+                            incomingAttackCards,
+                            incomingPower,
+                            primary,
+                            player,
+                            enemy,
+                            battleManager.cpuHand,
+                            skipHitCheck: true);
+                    }
                 }
 
-                if (pick != null)
-                {
-                    handRefill?.RecordEnemyUse(pick);
-                    battleProcessor.UseCard(pick, battleManager.cpuHand);
-                }
+                EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
+                    enemyPicks, battleManager, battleProcessor, handRefill);
                 battleManager.ClearStatsDisplaySequenceCards();
                 return;
             }
@@ -369,7 +384,7 @@ public static class PhysicalReflectionFlow
                 await battleProcessor.ResolveReflectedCombatAsync(
                     incomingAttackCards,
                     incomingPower,
-                    null,
+                    (CardData)null,
                     enemy,
                     player,
                     battleManager.playerHand,
@@ -474,32 +489,53 @@ public static class PhysicalReflectionFlow
                 return;
             }
 
-            if (card.cardType == CardType.Magic && battleManager.Sequences != null)
+            for (int pi = 0; pi < picks.Count; pi++)
             {
-                await battleManager.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(
-                    card, cancellationToken);
-            }
-            else
-            {
-                int slot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
-                if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
-                battleProcessor.UseCard(card, battleManager.playerHand);
+                var defenseCard = picks[pi];
+                if (defenseCard == null) continue;
+                if (defenseCard.cardType == CardType.Magic && battleManager.Sequences != null)
+                {
+                    await battleManager.Sequences.ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(
+                        defenseCard, cancellationToken);
+                }
+                else
+                {
+                    int slot = defenseCard.cardUI != null ? defenseCard.cardUI.transform.GetSiblingIndex() : -1;
+                    if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
+                    battleProcessor.UseCard(defenseCard, battleManager.playerHand);
+                }
             }
 
-            ShowPlayerDefenseCardPresentation(card);
-            battleManager.SetStatsDisplaySequenceCards(
-                new List<CardData> { card }, "防御", Side.Player);
+            if (picks.Count == 1)
+                ShowPlayerDefenseCardPresentation(picks[0]);
+            else
+                BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(picks, Side.Player);
+            battleManager.SetStatsDisplaySequenceCards(picks, "防御", Side.Player);
             SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             await Task.Delay(500, cancellationToken);
 
-            await battleProcessor.ResolveReflectedCombatAsync(
-                incomingAttackCards,
-                incomingPower,
-                card,
-                enemy,
-                player,
-                battleManager.playerHand,
-                skipHitCheck: true);
+            if (picks.Count > 1)
+            {
+                await battleProcessor.ResolveReflectedCombatAsync(
+                    incomingAttackCards,
+                    incomingPower,
+                    picks,
+                    enemy,
+                    player,
+                    battleManager.playerHand,
+                    skipHitCheck: true);
+            }
+            else
+            {
+                await battleProcessor.ResolveReflectedCombatAsync(
+                    incomingAttackCards,
+                    incomingPower,
+                    card,
+                    enemy,
+                    player,
+                    battleManager.playerHand,
+                    skipHitCheck: true);
+            }
             battleManager.ClearStatsDisplaySequenceCards();
             return;
         }

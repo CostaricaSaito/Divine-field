@@ -146,28 +146,39 @@ public static class ShiningBarrierDefenseFlow
             skipInitialBarrierDisplay, ct);
         if (ct.IsCancellationRequested) return false;
 
-        bm.SetSelectedDefenseCard(second);
+        var defensePicks = EnemyDefenseSelectionHelper.GetDefensePicks(enemyAI, second);
+        bm.SetSelectedDefenseCard(defensePicks.Count > 0 ? defensePicks[0] : null);
 
-        if (second != null)
+        if (defensePicks.Count > 0)
         {
-            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(
-                new List<CardData> { second });
+            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defensePicks);
             SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
             await Task.Delay(500, ct);
         }
 
         var atk = bm.GetPlayerStatus();
-        bool showYurusu = second == null && BattleUIManager.I != null;
+        bool showYurusu = defensePicks.Count == 0 && BattleUIManager.I != null;
         using (YurusuDisplayScope.ShowIf(showYurusu))
         {
-            await processor.ResolveCombatAsync(attackCards, second, atk, defender, defHand, skipHitCheck: true);
+            if (defensePicks.Count > 1)
+            {
+                await processor.ResolveCombatAsync(
+                    attackCards, defensePicks, atk, defender, defHand, skipHitCheck: true);
+            }
+            else
+            {
+                await processor.ResolveCombatAsync(
+                    attackCards,
+                    defensePicks.Count > 0 ? defensePicks[0] : null,
+                    atk,
+                    defender,
+                    defHand,
+                    skipHitCheck: true);
+            }
         }
 
-        if (second != null)
-        {
-            handRefill?.RecordEnemyUse(second);
-            processor.UseCard(second, defHand);
-        }
+        EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
+            defensePicks, bm, processor, handRefill);
 
         return true;
     }

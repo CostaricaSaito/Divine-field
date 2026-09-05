@@ -331,6 +331,14 @@ public class EnemyAI
         List<CardData> incomingAttack,
         CardData usedParryCard)
     {
+        if (BattleManager.I != null && BattleManager.I.IsOnlineMatch)
+        {
+            Debug.LogError(
+                "[EnemyAI] ExecuteParryRerunDefenseSelectAsync must not run CPU selection during online match.");
+            await Task.Delay(500);
+            return null;
+        }
+
         Debug.Log("[EnemyAI] Parry rerun defense select");
 
         CardData normal = SelectDefenseCard(cpuHand, attackElement, incomingAttack, usedParryCard);

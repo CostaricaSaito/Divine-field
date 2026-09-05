@@ -392,6 +392,51 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
+    /// 反射ダメージ解決（複数防御カード対応）。
+    /// </summary>
+    public async Task ResolveReflectedCombatAsync(
+        List<CardData> attackCards,
+        int incomingAttackPower,
+        List<CardData> defenseCards,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        List<CardData> defenderHand,
+        bool skipHitCheck = true)
+    {
+        if (attackCards == null || attackCards.Count == 0 || attacker == null || defender == null)
+        {
+            Debug.LogWarning("[BattleProcessor] ResolveReflectedCombatAsync: invalid parameters");
+            return;
+        }
+
+        if (defender.IsCastingArchMagic)
+            defenseCards = null;
+
+        int defensePower = CalculateTotalDefensePower(defenseCards, defender);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
+        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
+        {
+            defensePower = 0;
+        }
+
+        if (!skipHitCheck)
+        {
+            bool hit = CheckHit(attackCards, attacker, defender);
+            if (!hit)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+                BattleUIManager.I?.ShowMissPopup(defender);
+                await TryHandleCombatDeathIfAnyAsync(attacker, defender);
+                return;
+            }
+        }
+
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards, attackElement, attacker, defender, incomingAttackPower, defensePower, defenseCards);
+    }
+
+    /// <summary>
     /// 宝玉「獄炎」等：受けた第1段ダメージ相当を基礎攻撃力にした単独反撃。命中は通常。宝玉連鎖内は再発火しない。
     /// </summary>
     public async Task ResolveOrbCounterCombatAsync(
@@ -445,6 +490,63 @@ public class BattleProcessor : MonoBehaviour
             attackPower,
             defensePower,
             defenseList,
+            skipDefenseOrbReactions: true,
+            applyDynamiteRecoil: false,
+            countsAsDirectAttack: false,
+            allowRagnarokDisaster: false);
+    }
+
+    /// <summary>
+    /// 宝玉「獄炎」等：複数防御カード対応。
+    /// </summary>
+    public async Task ResolveOrbCounterCombatAsync(
+        List<CardData> attackCards,
+        int receivedFirstPhaseDamageAsBase,
+        List<CardData> defenseCards,
+        PlayerStatus counterAttacker,
+        PlayerStatus counterTarget,
+        List<CardData> defenderHand,
+        bool skipHitCheck)
+    {
+        if (attackCards == null || attackCards.Count == 0 || counterAttacker == null || counterTarget == null)
+        {
+            Debug.LogWarning("[BattleProcessor] ResolveOrbCounterCombatAsync: invalid parameters");
+            return;
+        }
+
+        if (counterTarget.IsCastingArchMagic)
+            defenseCards = null;
+
+        int attackPower = GetOrbCounterDisplayedAttackPower(
+            attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
+        int defensePower = CalculateTotalDefensePower(defenseCards, counterTarget);
+        ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
+        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
+            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
+        {
+            defensePower = 0;
+        }
+
+        if (!skipHitCheck)
+        {
+            bool hit = CheckHit(attackCards, counterAttacker, counterTarget);
+            if (!hit)
+            {
+                SoundEffectPlayer.I?.Play("Assets/SE/剣の素振り1.mp3");
+                BattleUIManager.I?.ShowMissPopup(counterTarget);
+                await TryHandleCombatDeathIfAnyAsync(counterAttacker, counterTarget);
+                return;
+            }
+        }
+
+        await ApplyCombatDamageSequenceAfterHitAsync(
+            attackCards,
+            attackElement,
+            counterAttacker,
+            counterTarget,
+            attackPower,
+            defensePower,
+            defenseCards,
             skipDefenseOrbReactions: true,
             applyDynamiteRecoil: false,
             countsAsDirectAttack: false,

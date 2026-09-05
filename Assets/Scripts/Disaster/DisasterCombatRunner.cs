@@ -229,9 +229,7 @@ public static class DisasterCombatRunner
         var defenseCard = await bm.GetEnemyAI().ExecuteDefenseSelectAsync(
             bm.cpuHand, attackElement, atkList);
 
-        var defenseCards = new List<CardData>();
-        if (defenseCard != null)
-            defenseCards.Add(defenseCard);
+        var defenseCards = EnemyDefenseSelectionHelper.GetDefensePicks(bm.GetEnemyAI(), defenseCard);
 
         if (defenseCards.Count > 0)
             await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCards);
@@ -252,12 +250,8 @@ public static class DisasterCombatRunner
                 atkList, defenseCards, enemy, enemy, bm.cpuHand, skipHitCheck: true);
         }
 
-        foreach (var d in defenseCards)
-        {
-            if (d == null) continue;
-            bm.HandRefill?.RecordEnemyUse(d);
-            processor.UseCard(d, bm.cpuHand);
-        }
+        EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
+            defenseCards, bm, processor, bm.HandRefill);
 
         if (await bm.TryHandleDeathIfAnyAsync(cancellationToken))
             return false;
