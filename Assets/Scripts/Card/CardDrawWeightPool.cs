@@ -8,19 +8,22 @@ public static class CardDrawWeightPool
 {
     public const int UseRarityDefaultWeight = -1;
 
-    public static int ResolveDrawWeight(CardData template, CardDrawTableSO table)
+    public static int ResolveDrawWeight(CardData template, CardDrawTableSO table, bool disadvantageDraw = false)
     {
         if (template == null) return 0;
         if (template.customDrawWeight >= 0)
             return template.customDrawWeight;
         if (table == null) return 0;
-        return Mathf.Max(0, table.GetDefaultWeight(template.rarity));
+        return Mathf.Max(0, table.GetDefaultWeight(template.rarity, disadvantageDraw));
     }
 
     /// <summary>
     /// Ultimate 除外。allCards は名前順ソート済みであること（オンライン同期用）。
     /// </summary>
-    public static List<CardData> BuildExpandedTemplatePool(CardData[] allCards, CardDrawTableSO table)
+    public static List<CardData> BuildExpandedTemplatePool(
+        CardData[] allCards,
+        CardDrawTableSO table,
+        bool disadvantageDraw = false)
     {
         var pool = new List<CardData>();
         if (allCards == null || allCards.Length == 0) return pool;
@@ -30,7 +33,7 @@ public static class CardDrawWeightPool
             if (template == null || template.cardType == CardType.Ultimate
                 || template.cardType == CardType.Disaster) continue;
 
-            int weight = ResolveDrawWeight(template, table);
+            int weight = ResolveDrawWeight(template, table, disadvantageDraw);
             for (int i = 0; i < weight; i++)
                 pool.Add(template);
         }
@@ -43,7 +46,8 @@ public static class CardDrawWeightPool
     /// </summary>
     public static List<CardData> BuildSuperRarePlusExpandedTemplatePool(
         CardData[] allCards,
-        CardDrawTableSO table)
+        CardDrawTableSO table,
+        bool disadvantageDraw = false)
     {
         var pool = new List<CardData>();
         if (allCards == null || allCards.Length == 0) return pool;
@@ -54,7 +58,7 @@ public static class CardDrawWeightPool
                 || template.cardType == CardType.Disaster) continue;
             if (template.rarity < CardRarity.SuperRare) continue;
 
-            int weight = ResolveDrawWeight(template, table);
+            int weight = ResolveDrawWeight(template, table, disadvantageDraw);
             for (int i = 0; i < weight; i++)
                 pool.Add(template);
         }

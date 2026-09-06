@@ -46,25 +46,23 @@ public sealed class UltimateReadyStateTracker
         _deferPlayerSummonGlow = false;
     }
 
+    /// <summary>Called when the player latched disadvantage at StandBy (after a successful roll).</summary>
+    public void NotifyLatchedAtStandBy()
+    {
+        _wasAvailable = true;
+        _pendingPresentation = true;
+        _waitingForEnemyTurnBeforeShow = false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log("[UltimateReady] Player disadvantage latched at StandBy; presentation queued.");
+#endif
+    }
+
     public void Sync(PlayerStatus player, PlayerType currentTurnOwner, GameState currentState)
     {
         bool available = UltimateReadyRules.IsAvailable(player);
 
         if (currentTurnOwner == PlayerType.Enemy)
             _waitingForEnemyTurnBeforeShow = false;
-
-        if (available && !_wasAvailable)
-        {
-            _pendingPresentation = true;
-            if (currentTurnOwner == PlayerType.Player && currentState != GameState.StandByPhase)
-                _waitingForEnemyTurnBeforeShow = true;
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log(
-                "[UltimateReady] Conditions met. " +
-                $"Pending presentation after enemy turn: {_waitingForEnemyTurnBeforeShow}");
-#endif
-        }
 
         if (!available)
         {

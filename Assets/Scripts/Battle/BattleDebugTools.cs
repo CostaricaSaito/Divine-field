@@ -186,10 +186,33 @@ public class BattleDebugTools : MonoBehaviour
         player.currentMP = Mathf.Clamp(0, 0, player.maxMP);
         player.currentGP = Mathf.Clamp(0, 0, player.maxGP);
         RefreshStatusUi();
-        battleManager.SyncUltimateReadyState(player);
 
-        Debug.Log("[BattleDebugTools] デバッグ：プレイヤーを HP10 / MP0 / GP0 に設定しました（合計10・劣勢境界）");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        var enemy = battleManager.GetEnemyStatus();
+        int turn = battleManager.SummonTurnCounters != null
+            ? battleManager.SummonTurnCounters.CurrentBattleTurnDisplay
+            : 1;
+        var breakdown = DisadvantageRules.ComputeBreakdown(
+            player,
+            enemy,
+            battleManager.playerHand != null ? battleManager.playerHand.Count : 0,
+            battleManager.cpuHand != null ? battleManager.cpuHand.Count : 0,
+            turn);
+        Debug.Log($"[BattleDebugTools] HP10/MP0/GP0 set. Next StandBy roll: {breakdown}");
+#else
+        Debug.Log("[BattleDebugTools] HP10/MP0/GP0 set (total 10, 100% on next StandBy).");
+#endif
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    [ContextMenu("Debug: Force player disadvantage latch")]
+    public void DebugForcePlayerDisadvantageLatch()
+    {
+        if (!EnsurePlaying()) return;
+        battleManager.DebugForcePlayerDisadvantageLatch();
+        RefreshStatusUi();
+    }
+#endif
 
     [ContextMenu("デバッグ：次のプレイヤードローを SuperRare+ に固定")]
     public void DebugArmNextDrawSuperRarePlus()

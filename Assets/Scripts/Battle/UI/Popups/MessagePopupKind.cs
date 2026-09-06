@@ -25,4 +25,5 @@ public enum MessagePopupKind
     DisasterManaStream = 18,
     DisasterChaosAttractor = 19,
     DisasterInfection = 20,
+    ThiefHoodStoleCard = 21,
 }

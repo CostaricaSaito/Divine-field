@@ -185,7 +185,7 @@ public class BattleProcessor : MonoBehaviour
                 : target;
             if (recipient != null)
                 await TryApplyStatusOnCardEffectResolveAsync(
-                    card.statusEffectToApply, card.statusEffectChance, recipient, cancellationToken, card.freezeDuration);
+                    card.statusEffectToApply, card.statusEffectChance, recipient, cancellationToken, card.freezeDuration, card);
         }
 
         ProcessSpecialEffects(card, user, target);
@@ -205,12 +205,15 @@ public class BattleProcessor : MonoBehaviour
         int chance0To100,
         PlayerStatus recipient,
         CancellationToken ct,
-        int freezeDurationFromCard = 0)
+        int freezeDurationFromCard = 0,
+        CardData sourceCard = null)
     {
         if (recipient == null || effectType == StatusEffectType.None) return;
 
-        int roll = BattleRandom.Range(0, 100);
-        if (roll >= chance0To100) return;
+        bool passRoll = sourceCard != null
+            ? sourceCard.RollStatusEffectChance()
+            : chance0To100 >= 100 || (chance0To100 > 0 && BattleRandom.Range(0, 100) < chance0To100);
+        if (!passRoll) return;
 
         var cfg = statusProgressionConfig != null ? statusProgressionConfig : StatusProgressionConfig.GetRuntimeFallback();
         var (applyResult, grantFade) = recipient.TryApplyStatusEffect(
@@ -670,9 +673,10 @@ public class BattleProcessor : MonoBehaviour
         {
             if (card == null || !card.canApplyStatusEffect) continue;
             if (card.statusEffectToApply == StatusEffectType.None) continue;
-            if (card.statusEffectApplyTiming == StatusEffectApplyTiming.WithDamageThrough && finalDamage <= 0)
+            if (card.statusEffectApplyTiming != StatusEffectApplyTiming.WithDamageThrough)
                 continue;
-            if (BattleRandom.Range(0, 100) >= card.statusEffectChance) continue;
+            if (finalDamage <= 0) continue;
+            if (!card.RollStatusEffectChance()) continue;
 
             // ダメージ通過時の付与は常にダメージを受けた側へ（混沌の球等の RandomOneAilment 含む）
             PlayerStatus recipient = defender;
@@ -1243,6 +1247,17 @@ public class BattleProcessor : MonoBehaviour
         await ShivaDirectAttackFreezeFlow.TryApplyFreezeAfterDirectAttackAsync(
             attacker, defender, firstPhaseDamage, countsAsDirectAttack);
         UpdateStatusDisplay();
+
+        if (defenseCardsForStatusRule != null && attackCards != null)
+        {
+            await ThiefHoodDefenseFlow.TryRunAfterCombatDamageAsync(
+                this,
+                attackCards,
+                defenseCardsForStatusRule,
+                attacker,
+                defender,
+                CancellationToken.None);
+        }
 
         if (!skipDefenseOrbReactions
             && firstPhaseDamage > 0

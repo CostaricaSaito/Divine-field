@@ -48,8 +48,14 @@ public class CardDealer : MonoBehaviour
     /// <summary>重み展開済み抽選プール（Ultimate 除外。テンプレート参照を weight 回重复）。</summary>
     private List<CardData> _weightedDrawPool;
 
+    /// <summary>劣勢ラッチ済み側向けの重み展開済み抽選プール。</summary>
+    private List<CardData> _weightedDrawPoolDisadvantage;
+
     /// <summary>SuperRare 以上の重み展開済み抽選プール（現実改変用）。</summary>
     private List<CardData> _superRarePlusDrawPool;
+
+    /// <summary>劣勢時 SuperRare 以上プール。</summary>
+    private List<CardData> _superRarePlusDrawPoolDisadvantage;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     /// <summary>Debug: next player-side weighted draw uses SuperRare+ pool (one-shot).</summary>
@@ -118,21 +124,43 @@ public class CardDealer : MonoBehaviour
     private void BuildWeightedDrawPool()
     {
         EnsureDrawTable();
-        _weightedDrawPool = CardDrawWeightPool.BuildExpandedTemplatePool(allCards, drawTable);
+        _weightedDrawPool = CardDrawWeightPool.BuildExpandedTemplatePool(allCards, drawTable, disadvantageDraw: false);
+        _weightedDrawPoolDisadvantage = CardDrawWeightPool.BuildExpandedTemplatePool(allCards, drawTable, disadvantageDraw: true);
         if (_weightedDrawPool.Count == 0)
             Debug.LogWarning("[CardDealer] Weighted draw pool is empty. Check CardDrawTable and card weights.");
         else
-            Debug.Log($"[CardDealer] Weighted draw pool entries: {_weightedDrawPool.Count}");
+            Debug.Log($"[CardDealer] Weighted draw pool entries: normal={_weightedDrawPool.Count}, disadvantage={_weightedDrawPoolDisadvantage.Count}");
     }
 
     private void BuildSuperRarePlusDrawPool()
     {
         EnsureDrawTable();
-        _superRarePlusDrawPool = CardDrawWeightPool.BuildSuperRarePlusExpandedTemplatePool(allCards, drawTable);
+        _superRarePlusDrawPool = CardDrawWeightPool.BuildSuperRarePlusExpandedTemplatePool(allCards, drawTable, disadvantageDraw: false);
+        _superRarePlusDrawPoolDisadvantage = CardDrawWeightPool.BuildSuperRarePlusExpandedTemplatePool(allCards, drawTable, disadvantageDraw: true);
         if (_superRarePlusDrawPool.Count == 0)
             Debug.LogWarning("[CardDealer] SuperRare+ draw pool is empty. Check card rarities and weights.");
         else
-            Debug.Log($"[CardDealer] SuperRare+ draw pool entries: {_superRarePlusDrawPool.Count}");
+            Debug.Log($"[CardDealer] SuperRare+ draw pool entries: normal={_superRarePlusDrawPool.Count}, disadvantage={_superRarePlusDrawPoolDisadvantage.Count}");
+    }
+
+    private bool IsDisadvantageDrawForSide(PlayerType forSide)
+    {
+        var status = forSide == PlayerType.Player ? playerStatus : enemyStatus;
+        return DisadvantageRules.IsDisadvantaged(status);
+    }
+
+    private List<CardData> GetWeightedDrawPoolForSide(PlayerType forSide)
+    {
+        if (_weightedDrawPool == null || _weightedDrawPoolDisadvantage == null)
+            BuildWeightedDrawPool();
+        return IsDisadvantageDrawForSide(forSide) ? _weightedDrawPoolDisadvantage : _weightedDrawPool;
+    }
+
+    private List<CardData> GetSuperRarePlusDrawPoolForSide(PlayerType forSide)
+    {
+        if (_superRarePlusDrawPool == null || _superRarePlusDrawPoolDisadvantage == null)
+            BuildSuperRarePlusDrawPool();
+        return IsDisadvantageDrawForSide(forSide) ? _superRarePlusDrawPoolDisadvantage : _superRarePlusDrawPool;
     }
 
     private void BuildDarkCardTemplatePool()
@@ -290,10 +318,12 @@ public class CardDealer : MonoBehaviour
         }
 #endif
 
-        if (_weightedDrawPool == null || _weightedDrawPool.Count == 0)
+        var pool = GetWeightedDrawPoolForSide(forSide);
+        if (pool == null || pool.Count == 0)
             BuildWeightedDrawPool();
 
-        var template = CardDrawWeightPool.PickTemplate(_weightedDrawPool, forSide);
+        pool = GetWeightedDrawPoolForSide(forSide);
+        var template = CardDrawWeightPool.PickTemplate(pool, forSide);
         if (template == null)
         {
             Debug.LogWarning("[CardDealer] No drawable card template in weighted pool");
@@ -338,10 +368,12 @@ public class CardDealer : MonoBehaviour
     /// <summary>SuperRare 以上のテンプレートから1枚（現実改変・BattleRandom 同期）。</summary>
     public CardData DrawSuperRarePlusRandomCard(PlayerType forSide)
     {
-        if (_superRarePlusDrawPool == null || _superRarePlusDrawPool.Count == 0)
+        var pool = GetSuperRarePlusDrawPoolForSide(forSide);
+        if (pool == null || pool.Count == 0)
             BuildSuperRarePlusDrawPool();
 
-        var template = CardDrawWeightPool.PickTemplate(_superRarePlusDrawPool, forSide);
+        pool = GetSuperRarePlusDrawPoolForSide(forSide);
+        var template = CardDrawWeightPool.PickTemplate(pool, forSide);
         if (template == null)
         {
             Debug.LogWarning("[CardDealer] No drawable SuperRare+ template in pool");

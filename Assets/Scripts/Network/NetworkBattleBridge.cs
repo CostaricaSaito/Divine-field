@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,6 +39,7 @@ public static class NetworkBattleBridge
         ArrowOfIndraEffect = 16,     // host -> client : Arrow of Indra hand destroy presentation
         ShiningBarrierApplied = 17,  // either -> peer : incoming attack forced to None element
         HandReload = 18,             // either -> peer : hand reload (selected slot indices)
+        ThiefHoodEffect = 19,        // host -> client : Thief's Hood steal payload
     }
 
     public enum RemoteEconomicKind : byte
@@ -92,6 +93,15 @@ public static class NetworkBattleBridge
         public bool NoTarget;
         public List<string> CardNames;
         public List<int> HandIndices;
+    }
+
+    /// <summary>Host -> client: Thief's Hood copies incoming attack cards into defender hand.</summary>
+    public struct ThiefHoodEffectSync
+    {
+        public int TurnTag;
+        public bool DefenderIsHostPlayer;
+        public bool NoEffect;
+        public List<string> StolenTemplateNames;
     }
 
     public struct PeerProfile
@@ -198,6 +208,7 @@ public static class NetworkBattleBridge
     static readonly Queue<MagicSealerEffectSync> _magicSealerEffectQueue = new();
     static readonly Queue<MagicFountainEffectSync> _magicFountainEffectQueue = new();
     static readonly Queue<ArrowOfIndraEffectSync> _arrowOfIndraEffectQueue = new();
+    static readonly Queue<ThiefHoodEffectSync> _thiefHoodEffectQueue = new();
 
     static TaskCompletionSource<RemoteAttack> _attackWaiter;
     static TaskCompletionSource<List<string>> _defenseWaiter;
@@ -210,6 +221,7 @@ public static class NetworkBattleBridge
     static TaskCompletionSource<MagicSealerEffectSync> _magicSealerEffectWaiter;
     static TaskCompletionSource<MagicFountainEffectSync> _magicFountainEffectWaiter;
     static TaskCompletionSource<ArrowOfIndraEffectSync> _arrowOfIndraEffectWaiter;
+    static TaskCompletionSource<ThiefHoodEffectSync> _thiefHoodEffectWaiter;
     static TaskCompletionSource<PeerProfile> _helloWaiter;
     static TaskCompletionSource<MatchConfig> _configWaiter;
 
@@ -270,6 +282,8 @@ public static class NetworkBattleBridge
         _summonTurnEndEffectsQueue.Clear();
         _magicSealerEffectQueue.Clear();
         _magicFountainEffectQueue.Clear();
+        _arrowOfIndraEffectQueue.Clear();
+        _thiefHoodEffectQueue.Clear();
         _attackWaiter?.TrySetCanceled();
         _defenseWaiter?.TrySetCanceled();
         _magicalSwordWaiter?.TrySetCanceled();
@@ -280,6 +294,8 @@ public static class NetworkBattleBridge
         _summonTurnEndEffectsWaiter?.TrySetCanceled();
         _magicSealerEffectWaiter?.TrySetCanceled();
         _magicFountainEffectWaiter?.TrySetCanceled();
+        _arrowOfIndraEffectWaiter?.TrySetCanceled();
+        _thiefHoodEffectWaiter?.TrySetCanceled();
         _helloWaiter?.TrySetCanceled();
         _configWaiter?.TrySetCanceled();
         _attackWaiter = null;
@@ -292,6 +308,8 @@ public static class NetworkBattleBridge
         _summonTurnEndEffectsWaiter = null;
         _magicSealerEffectWaiter = null;
         _magicFountainEffectWaiter = null;
+        _arrowOfIndraEffectWaiter = null;
+        _thiefHoodEffectWaiter = null;
         _helloWaiter = null;
         _configWaiter = null;
     }
@@ -746,6 +764,59 @@ public static class NetworkBattleBridge
         Debug.Log($"[NetworkBattleBridge] Sent ShiningBarrierApplied (tag={turnTag})");
     }
 
+    /// <summary>Host only: Thief's Hood steal presentation payload.</summary>
+    public static void SendThiefHoodEffect(int turnTag, ThiefHoodEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(512, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.ThiefHoodEffect);
+        WriteThiefHoodEffectSync(writer, turnTag, sync);
+        Send(writer);
+        int count = sync.StolenTemplateNames != null ? sync.StolenTemplateNames.Count : 0;
+        Debug.Log($"[NetworkBattleBridge] Sent ThiefHoodEffect (tag={turnTag}, count={count}, noEffect={sync.NoEffect})");
+    }
+
+    /// <summary>Client only: wait for host-authoritative Thief's Hood effect.</summary>
+    public static async Task<ThiefHoodEffectSync> WaitForThiefHoodEffectAsync(
+        int turnTag,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            ThiefHoodEffectSync sync;
+            if (_thiefHoodEffectQueue.Count > 0)
+            {
+                sync = _thiefHoodEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<ThiefHoodEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _thiefHoodEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] ThiefHoodEffect wait timed out");
+                    return new ThiefHoodEffectSync
+                    {
+                        NoEffect = true,
+                        StolenTemplateNames = new List<string>(),
+                    };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.TurnTag >= turnTag || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale ThiefHoodEffect (tag={sync.TurnTag})");
+        }
+    }
+
     /// <summary>Client only: wait for host-authoritative summon turn-end effects.</summary>
     public static async Task<List<SummonTurnEndEffectEntry>> WaitForSummonTurnEndEffectsAsync(
         int turnTag,
@@ -1013,6 +1084,24 @@ public static class NetworkBattleBridge
         return sync;
     }
 
+    static void WriteThiefHoodEffectSync(FastBufferWriter writer, int turnTag, ThiefHoodEffectSync sync)
+    {
+        writer.WriteValueSafe(turnTag);
+        writer.WriteValueSafe(sync.DefenderIsHostPlayer);
+        writer.WriteValueSafe(sync.NoEffect);
+        WriteStringList(writer, sync.StolenTemplateNames);
+    }
+
+    static ThiefHoodEffectSync ReadThiefHoodEffectSync(FastBufferReader reader)
+    {
+        var sync = new ThiefHoodEffectSync();
+        reader.ReadValueSafe(out sync.TurnTag);
+        reader.ReadValueSafe(out sync.DefenderIsHostPlayer);
+        reader.ReadValueSafe(out sync.NoEffect);
+        sync.StolenTemplateNames = ReadStringList(reader);
+        return sync;
+    }
+
     static void Send(FastBufferWriter writer)
     {
         var nm = NetworkManager.Singleton;
@@ -1191,6 +1280,14 @@ public static class NetworkBattleBridge
                 reader.ReadValueSafe(out int turnTag);
                 Debug.Log($"[NetworkBattleBridge] ShiningBarrierApplied received (tag={turnTag})");
                 ShiningBarrierDefenseFlow.ApplyForceNoneFromNetwork();
+                break;
+            }
+
+            case MsgType.ThiefHoodEffect:
+            {
+                var sync = ReadThiefHoodEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] ThiefHoodEffect received (tag={sync.TurnTag}, noEffect={sync.NoEffect})");
+                Dispatch(_thiefHoodEffectQueue, ref _thiefHoodEffectWaiter, sync);
                 break;
             }
 

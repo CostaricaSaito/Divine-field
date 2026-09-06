@@ -144,6 +144,53 @@ public class PlayerStatus
 
     public void MarkUltimateSkillUsed() => hasUsedUltimateSkill = true;
 
+    // ===== Disadvantage (StandBy roll, latched until battle end) =====
+    public bool hasEnteredDisadvantage { get; private set; }
+
+    /// <summary>Own StandBy turns in a row with opponent HP - self HP &gt;= 20.</summary>
+    public int disadvantageHpGapConsecutiveOwnTurns { get; private set; }
+
+    public void EnterDisadvantage(string latchDump = null)
+    {
+        if (hasEnteredDisadvantage) return;
+        hasEnteredDisadvantage = true;
+        lastDisadvantageLatchDump = latchDump;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!string.IsNullOrEmpty(latchDump))
+            Debug.Log(latchDump);
+        else
+            Debug.Log($"{DisplayName}: entered disadvantage (latched until battle end).");
+#endif
+    }
+
+    /// <summary>Last latch dump (Editor / Development). Set when disadvantage is entered via roll.</summary>
+    public string lastDisadvantageLatchDump { get; private set; }
+
+    public void UpdateDisadvantageHpGapCounter(PlayerStatus opponent)
+    {
+        if (opponent == null)
+        {
+            disadvantageHpGapConsecutiveOwnTurns = 0;
+            return;
+        }
+
+        int gap = opponent.currentHP - currentHP;
+        if (gap >= DisadvantageRules.HpGapThresholdTier1)
+            disadvantageHpGapConsecutiveOwnTurns++;
+        else
+            disadvantageHpGapConsecutiveOwnTurns = 0;
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public void DebugForceEnterDisadvantage() => EnterDisadvantage();
+
+    public void DebugResetDisadvantageState()
+    {
+        hasEnteredDisadvantage = false;
+        disadvantageHpGapConsecutiveOwnTurns = 0;
+    }
+#endif
+
     // ===== Bahamut Mega Flare (1 per battle, independent of ultimate skill) =====
     public bool hasUsedMegaFlare { get; private set; }
 

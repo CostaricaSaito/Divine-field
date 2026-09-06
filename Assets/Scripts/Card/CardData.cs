@@ -266,7 +266,7 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     [Header("特殊効果")]
     public bool canApplyStatusEffect = false;
     [Range(0, 100)]
-    [Tooltip("WithDamageThrough / OnCardEffectResolve 等。")]
+    [Tooltip("0=never, 100=always. WithDamageThrough / OnCardEffectResolve.")]
     public int statusEffectChance = 0;
     public StatusEffectType statusEffectToApply = StatusEffectType.None;
     [Min(1)]
@@ -274,6 +274,18 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     public int freezeDuration = 2;
     [Tooltip("① ダメージ通過 / ② 解決時のみ 等。")]
     public StatusEffectApplyTiming statusEffectApplyTiming = StatusEffectApplyTiming.WithDamageThrough;
+
+    /// <summary>
+    /// Roll [0,100) against <see cref="statusEffectChance"/>. 100 always succeeds; 0 always fails.
+    /// </summary>
+    public bool RollStatusEffectChance()
+    {
+        if (!canApplyStatusEffect || statusEffectToApply == StatusEffectType.None)
+            return false;
+        if (statusEffectChance >= 100) return true;
+        if (statusEffectChance <= 0) return false;
+        return BattleRandom.Range(0, 100) < statusEffectChance;
+    }
 
     [Header("演出")]
     [Tooltip("手札抽選レア度。SuperRare 以上で裏面虹・レアSE。")]
@@ -479,6 +491,15 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
 
         if (_legacyIsRare && rarity == CardRarity.Common)
             rarity = CardRarity.SuperRare;
+
+        if (canApplyStatusEffect
+            && statusEffectToApply != StatusEffectType.None
+            && statusEffectChance <= 0)
+        {
+            Debug.LogWarning(
+                $"[{name}] canApplyStatusEffect is enabled but statusEffectChance is 0 — the effect will never apply.",
+                this);
+        }
     }
 #endif
 }

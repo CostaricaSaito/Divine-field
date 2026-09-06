@@ -22,8 +22,8 @@ public struct PopupMotionTiming
     public static PopupMotionTiming MessageDefaults => new PopupMotionTiming
     {
         floatSpeed = 30f,
-        fadeDuration = 1f,
-        postPopupIntervalMs = 250,
+        fadeDuration = 1.5f,
+        postPopupIntervalMs = 375,
     };
 
     public static PopupMotionTiming DamageDefaults => new PopupMotionTiming

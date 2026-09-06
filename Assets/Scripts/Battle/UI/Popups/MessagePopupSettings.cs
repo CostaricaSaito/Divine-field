@@ -130,6 +130,8 @@ public sealed class MessagePopupSettings : ScriptableObject
                 new Color(0.18f, 0.28f, 0.22f, 0.93f), new Color(0.55f, 1f, 0.75f), Color.black),
             Entry(MessagePopupKind.PhoenixBlessing, "\u4e0d\u6b7b\u9ce5\u306e\u52a0\u8b77",
                 new Color(0.85f, 0.35f, 0.08f, 0.94f), new Color(1f, 0.92f, 0.55f), Color.black),
+            Entry(MessagePopupKind.ThiefHoodStoleCard, "\u30ab\u30fc\u30c9\u3092\u76d7\u3093\u3060\uff01",
+                new Color(0.12f, 0.1f, 0.16f, 0.94f), new Color(0.95f, 0.88f, 0.45f), Color.black),
             DisasterEntry(MessagePopupKind.DisasterEruption, "\u4e16\u754c\u304c\u7126\u571f\u306b\u5305\u307e\u308c\u308b",
                 new Color(0.45f, 0.08f, 0.02f, 0.94f), new Color(1f, 0.72f, 0.2f), Color.black),
             DisasterEntry(MessagePopupKind.DisasterSolarEclipse, "\u6697\u9ed2\u306e\u592a\u967d\u304c\u88c1\u304d\u3092\u4e0b\u3059",

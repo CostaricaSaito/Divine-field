@@ -188,6 +188,8 @@ public sealed class BattlePhaseController
         BattleUIManager.I?.SetIntroModeUI(_host.PlayerHand);
         _host.ShouldGrayOutCards = true;
 
+        _host.Manager.TryRollDisadvantageAtStandBy(_host.CurrentTurnOwner);
+
         bool ownerIsCasting = _host.CurrentTurnOwner == PlayerType.Player
             ? _host.PlayerStatus != null && _host.PlayerStatus.IsCastingArchMagic
             : _host.EnemyStatus != null && _host.EnemyStatus.IsCastingArchMagic;

@@ -14,7 +14,21 @@ public class CardDrawTableSO : ScriptableObject
     [Min(0)] public int superRareDefaultWeight = 1;
     [Min(0)] public int ultraRareDefaultWeight = 0;
 
-    public int GetDefaultWeight(CardRarity rarity)
+    [Header("Disadvantage draw weight by rarity (latched underdog only)")]
+    [Min(0)] public int disadvantageCommonWeight = 25;
+    [Min(0)] public int disadvantageUncommonWeight = 10;
+    [Min(0)] public int disadvantageRareWeight = 5;
+    [Min(0)] public int disadvantageSuperRareWeight = 2;
+    [Min(0)] public int disadvantageUltraRareWeight = 1;
+
+    public int GetDefaultWeight(CardRarity rarity, bool disadvantageDraw = false)
+    {
+        if (disadvantageDraw)
+            return GetDisadvantageWeight(rarity);
+        return GetNormalWeight(rarity);
+    }
+
+    public int GetNormalWeight(CardRarity rarity)
     {
         switch (rarity)
         {
@@ -23,6 +37,19 @@ public class CardDrawTableSO : ScriptableObject
             case CardRarity.Rare: return rareDefaultWeight;
             case CardRarity.SuperRare: return superRareDefaultWeight;
             case CardRarity.UltraRare: return ultraRareDefaultWeight;
+            default: return 0;
+        }
+    }
+
+    public int GetDisadvantageWeight(CardRarity rarity)
+    {
+        switch (rarity)
+        {
+            case CardRarity.Common: return disadvantageCommonWeight;
+            case CardRarity.Uncommon: return disadvantageUncommonWeight;
+            case CardRarity.Rare: return disadvantageRareWeight;
+            case CardRarity.SuperRare: return disadvantageSuperRareWeight;
+            case CardRarity.UltraRare: return disadvantageUltraRareWeight;
             default: return 0;
         }
     }
