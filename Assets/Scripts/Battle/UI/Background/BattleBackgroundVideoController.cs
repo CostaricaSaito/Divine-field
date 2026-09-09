@@ -48,6 +48,9 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
     private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
 
+    /// <summary>Additive blend template, shared with full-screen cut-in video overlays.</summary>
+    public Material AdditiveMaterialTemplate => additiveMaterial;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)

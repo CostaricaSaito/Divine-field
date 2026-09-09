@@ -1,113 +1,74 @@
-using DigitalRuby.LightningBolt;
-using System.Collections;
+Ôªøusing System;
+using System.Threading;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 
-
+/// <summary>
+/// Entry point for the battle-start intro, kept on the CutinManager object so the
+/// trigger point inside BattleOpeningCoordinator stays unchanged.
+///
+/// The visuals live in BattleStartIntroPresentation; the two serialized fields only
+/// exist to switch off the legacy scene objects of the previous cut-in.
+/// </summary>
 public class CutInController : MonoBehaviour
 {
-    [Header("CutIn UI")]
-    [SerializeField] private RectTransform cutInTextRect;
+    [Header("Legacy cut-in objects (disabled on startup)")]
     [SerializeField] private TMP_Text cutInText;
-    [SerializeField] private float fontSize = 64f;
-    [SerializeField] private Color fontColor = Color.white;
-    [SerializeField] private AudioSource audioSource;
-    [SerializeField] private AudioClip cutInSE;
+    [SerializeField] private GameObject lightningPrefab;
 
-    [Header("ê›íËÉpÉâÉÅÅ[É^")]
-    [SerializeField] private Vector2 startPos = new Vector2(-1000f, 0);  // âÊñ äOÉXÉ^Å[Ég
-    [SerializeField] private Vector2 endPos = new Vector2(0f, 0);        // íÜâõï\é¶
-    [SerializeField] private Vector2 exitPos = new Vector2(1000f, 0);  // ÅöâEÇ…èoÇƒÇ¢Ç≠à íu
-    [SerializeField] private float pauseDuration = 1f;
-    [SerializeField] private float slideDuration = 1f;                   // éûä‘ÅiïbÅj
-    [SerializeField] private float rotationAngle = -10f;  // Å© í«â¡ÅI
+    /// <summary>Raised when the intro finished, so the opening sequence can continue.</summary>
+    public Action OnCutInComplete;
 
-    [SerializeField] private GameObject lightningPrefab; // Å© InspectorÇ≈PrefabÉAÉTÉCÉì
-    [SerializeField] private AudioClip thunderSE;
+    private CancellationTokenSource _introCts;
 
-    public System.Action OnCutInComplete; // Å©äOïîÇ…í ímÇ∑ÇÈÉCÉxÉìÉg
-
-    void Awake()
+    private void Awake()
     {
-        cutInText.fontSize = fontSize;
-        cutInText.color = fontColor;
+        _introCts = new CancellationTokenSource();
     }
-        void Start()
+
+    private void Start()
     {
-        if (lightningPrefab)
+        if (cutInText != null)
+        {
+            cutInText.text = string.Empty;
+            cutInText.gameObject.SetActive(false);
+        }
+
+        if (lightningPrefab != null)
             lightningPrefab.SetActive(false);
+    }
+
+    private void OnDestroy()
+    {
+        _introCts?.Cancel();
+        _introCts?.Dispose();
+        _introCts = null;
     }
 
     public void PlayCutIn()
     {
-        cutInTextRect.anchoredPosition = startPos;
-        cutInTextRect.localRotation = Quaternion.Euler(0, 0, rotationAngle); // éŒÇﬂï\é¶
-        cutInText.gameObject.SetActive(true);
-        cutInText.text = "BATTLE OF PRIDE.\nå÷ÇËÇÃÇΩÇﬂÇ…Ç¢Ç¥êÌÇ¶ÅI";
-
-        if (audioSource && cutInSE)
-            audioSource.PlayOneShot(cutInSE);
-
-        StartCoroutine(SlideText());
-
-     }
-
-    IEnumerator SlideText()
-    {
-        float elapsed = 0f;
-
-        // STEP 1: ç∂Å®íÜâõÇ…ÉXÉâÉCÉhÉCÉì
-        while (elapsed < slideDuration)
-        {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / slideDuration);
-                float eased = EaseOutExpo(t);
-            cutInTextRect.anchoredPosition = Vector2.Lerp(startPos, endPos, eased);
-            yield return null;
-        }
-
-        // STEP 2: àÍéûí‚é~
-        yield return new WaitForSeconds(pauseDuration);
-
-        if (lightningPrefab)
-        {
-            lightningPrefab.SetActive(true); // ï\é¶
-
-            lightningPrefab.transform.position = Vector3.zero; // âÊñ íÜâõÇ…à⁄ìÆÅiïKóvÇ»ÇÁèCê≥Åj
-
-            audioSource.PlayOneShot(thunderSE); // å¯â âπ
-
-            yield return new WaitForSeconds(0.5f); // 0.5ïbï\é¶
-
-            lightningPrefab.SetActive(false); // îÒï\é¶
-        }
-
-        // STEP 3: íÜâõÅ®âEÇ…ÉXÉâÉCÉhÉAÉEÉg
-        elapsed = 0f;
-        while (elapsed < slideDuration)
-        {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / slideDuration);
-            float eased = EaseInExpo(t);
-            cutInTextRect.anchoredPosition = Vector2.Lerp(endPos, exitPos, eased);
-            yield return null;
-        }
-
-        // STEP 4: îÒï\é¶Ç…Ç∑ÇÈ
-        cutInText.gameObject.SetActive(false);
-
-        // STEP 5: INTROââèoèIóπÇBattleManagerÇ…ÉRÅ[ÉãÉoÉbÉN
-        OnCutInComplete?.Invoke(); // Å©IntroèIóπÇí ím
+        _ = PlayCutInAsync();
     }
 
-    // EaseOutExpoÅiääÇÁÇ©Ç…å∏ë¨Åj
-    float EaseOutExpo(float t)
+    public async Task PlayCutInAsync()
     {
-        return t == 1 ? 1 : 1 - Mathf.Pow(2, -10 * t);
+        var ct = _introCts?.Token ?? CancellationToken.None;
+        try
+        {
+            await BattleStartIntroPresentation.RunAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Scene torn down mid-intro.
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[CutInController] Battle start intro failed: {ex}");
+        }
+        finally
+        {
+            OnCutInComplete?.Invoke();
+        }
     }
-    float EaseInExpo(float t)
-    {
-        return t == 0 ? 0 : Mathf.Pow(2, 10 * (t - 1));
-    }
-
 }
