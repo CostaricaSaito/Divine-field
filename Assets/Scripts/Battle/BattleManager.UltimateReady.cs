@@ -50,7 +50,10 @@
 
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         if (turnOwner == PlayerType.Player)
+        {
             BattleBgmController.Instance?.SyncFromPlayer(playerStatus);
+            HandRevealPresentation.PrewarmSuperRareRevealVideo();
+        }
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

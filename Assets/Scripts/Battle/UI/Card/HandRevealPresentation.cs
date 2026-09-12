@@ -27,6 +27,12 @@ public static class HandRevealPresentation
 
     private static VideoClip _cachedVideoClip;
 
+    /// <summary>Preload the cut-in clip after disadvantage latch so the first SR+ reveal is reliable.</summary>
+    public static void PrewarmSuperRareRevealVideo()
+    {
+        _ = PrewarmSuperRareRevealVideoAsync();
+    }
+
     public static async Task RevealCardAsync(
         CardData card,
         CardUI ui,
@@ -93,6 +99,7 @@ public static class HandRevealPresentation
         if (batch == null || batch.SuperRareVideoPlayed) return false;
         if (card == null || !card.HasPremiumHandPresentation()) return false;
         if (BattleManager.I == null) return false;
+        // Latched disadvantage persists for the battle; HP/MP recovery does not cancel this.
         return DisadvantageRules.IsDisadvantaged(BattleManager.I.GetPlayerStatus());
     }
 
@@ -199,6 +206,22 @@ public static class HandRevealPresentation
         if (renderTexture == null) return;
         renderTexture.Release();
         UnityEngine.Object.Destroy(renderTexture);
+    }
+
+    private static async Task PrewarmSuperRareRevealVideoAsync()
+    {
+        try
+        {
+            await LoadSuperRareVideoClipAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[HandRevealPresentation] SuperRare video prewarm failed: {ex.Message}");
+        }
     }
 
     private static async Task<VideoClip> LoadSuperRareVideoClipAsync(CancellationToken ct)

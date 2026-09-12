@@ -215,6 +215,7 @@ public static class OrdinSlashReflectFlow
             return;
 
         bm.AdHocDefense?.Clear();
+        SuppressPlayerDefenseInputForOrdinReflect(bm);
 
         bm.ClearReflectionAttackTotalDisplay();
         int incomingPower = processor.ComputeReflectionIncomingAttackPower(incomingAttack, enemy, player);
@@ -403,5 +404,21 @@ public static class OrdinSlashReflectFlow
                 list.Add(incomingAttack[i]);
         }
         return list;
+    }
+
+    /// <summary>
+    /// Odin auto-reflect skips manual defense. Lock Use (許す) and hand input immediately.
+    /// </summary>
+    private static void SuppressPlayerDefenseInputForOrdinReflect(BattleManager bm)
+    {
+        if (bm?.PlayerInput != null)
+            bm.PlayerInput.IsProcessingUseButton = true;
+
+        var ui = BattleUIManager.I;
+        if (ui == null) return;
+
+        ui.HideYurusuButton();
+        ui.SetHandClickable(false);
+        ui.SetUseButtonInteractable(false);
     }
 }
