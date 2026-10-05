@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
@@ -50,9 +50,22 @@ public sealed class MainCinemascopeScopeIntroController : MonoBehaviour
                 this);
         }
 
+        RefreshEndPositions();
+        ApplyInitialHiddenState();
+    }
+
+    /// <summary>Re-read rest positions after <see cref="CinemascopeAdaptiveLayout"/> adjusts scopes.</summary>
+    public void RefreshEndPositions()
+    {
+        if (scope2Top == null || scope1Bottom == null)
+            return;
+
+        var layout = CinemascopeAdaptiveLayout.Instance;
+        if (layout != null)
+            layout.ApplyLayout(force: true);
+
         _endTop = scope2Top.anchoredPosition;
         _endBottom = scope1Bottom.anchoredPosition;
-        ApplyInitialHiddenState();
     }
 
     /// <summary>Play 毎回・Enter Play オプション（ドメイン/シーン再読み込みの制御）の影響で、Start だけに依存すると 2 回目以降に再生されないことがあるため、有効化のたびに再生する。</summary>
@@ -111,6 +124,23 @@ public sealed class MainCinemascopeScopeIntroController : MonoBehaviour
     private void PlayIntro()
     {
         if (scope2Top == null || scope1Bottom == null) return;
+
+        RefreshEndPositions();
+        scope2Top.anchoredPosition = _endTop + new Vector2(0f, offscreenOffset);
+        scope1Bottom.anchoredPosition = _endBottom - new Vector2(0f, offscreenOffset);
+
+        if (graphicScope2 != null)
+        {
+            var c2 = graphicScope2.color;
+            c2.a = 0f;
+            graphicScope2.color = c2;
+        }
+        if (graphicScope1 != null)
+        {
+            var c1 = graphicScope1.color;
+            c1.a = 0f;
+            graphicScope1.color = c1;
+        }
 
         CancelScopeTweens();
         LeanTween.init();

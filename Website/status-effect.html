@@ -1,0 +1,195 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Status Effect | 状態異常 | ディヴァインフィールド</title>
+  <meta name="description" content="ディヴァインフィールドの状態異常。">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="images/Favicon.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#status-title">本文へ</a>
+  <header class="site-header">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="ディヴァインフィールド"></a>
+    <ul class="gnav">
+      <li><a href="index.html#news">News</a></li>
+      <li><a href="index.html#story">Story</a></li>
+      <li><a href="howto.html">HowToPlay</a></li>
+      <li><a href="index.html#system">System</a></li>
+      <li><a href="summons.html">Summons</a></li>
+      <li class="has-sub is-current">
+        <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu">Data</button>
+        <ul id="data-menu" class="subnav">
+          <li><a href="cards.html">Cards</a></li>
+          <li><a href="status-effect.html" aria-current="page">Status Effect</a></li>
+          <li><a href="disaster.html">Disaster</a></li>
+        </ul>
+      </li>
+      <li><a href="philosophy.html">Philosophy</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <ul class="sns" aria-label="SNS">
+      <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+      <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+      <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+      <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+      <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+    </ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+  </header>
+  <nav id="menu-panel" class="menu-panel" aria-label="メニュー">
+    <a href="index.html#news">News</a>
+    <a href="index.html#story">Story</a>
+    <a href="howto.html">HowToPlay</a>
+    <a href="index.html#system">System</a>
+    <a href="summons.html">Summons</a>
+    <div class="menu-sub is-current">
+      <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu-sp">Data</button>
+      <div id="data-menu-sp" class="menu-sub-panel">
+        <a href="cards.html">Cards</a>
+        <a href="status-effect.html" aria-current="page">Status Effect</a>
+        <a href="disaster.html">Disaster</a>
+      </div>
+    </div>
+    <a href="philosophy.html">Philosophy</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+
+  <main class="data-page">
+    <h1 id="status-title">Status Effect <span class="data-ja">| 状態異常</span></h1>
+    <p class="data-lead">様々な状態異常で相手を翻弄すれば<br>リアルに体調を悪くさせることもできるーー</p>
+    <div class="table-scroll">
+      <table class="disaster-table status-table">
+        <thead>
+          <tr>
+            <th>画像</th>
+            <th>状態異常名</th>
+            <th>英語名</th>
+            <th>詳細</th>
+            <th>作者によるコメント</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><img src="images/Status/病.jpg" alt="病"></td>
+            <td>病</td>
+            <td>Sickness</td>
+            <td>自分の攻撃フェーズ終了後に、HPに1ポイントダメージを受ける。</br>あるいは、5%の確率で重病に進行する。</td>
+            <td>ユンケルを飲めば出社できるレベル。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/重病.jpg" alt="重病"></td>
+            <td>重病</td>
+            <td>Severe Sickness</td>
+            <td>自分の攻撃フェーズ終了後に、HPに3ポイントダメージを受ける。</br>あるいは、5%の確率で煉獄病に進行する。</td>
+            <td>インフルエンザよりキツい。この状態で出社するのは難しい。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/煉獄病.jpg" alt="煉獄病"></td>
+            <td>煉獄病</td>
+            <td>Hell Sickness</td>
+            <td>自分の攻撃フェーズ終了後に、HPに5ポイントダメージを受ける。</br>あるいは、5%の確率で楽園病に進行する。</td>
+            <td>入院だよゥッ！！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/楽園病.jpg" alt="楽園病"></td>
+            <td>楽園病</td>
+            <td>Paradise Sickness</td>
+            <td>自分の攻撃フェーズ終了後に、HPを5ポイント回復する。</br>あるいは、10%の確率で、残りHP分のダメージを受け、即死する。</td>
+            <td>徹夜し続けると、限界を超えて体調が良くなる時ってありますよね。でも死ぬので気をつけよう。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/衰弱.png" alt="衰弱"></td>
+            <td>衰弱</td>
+            <td>Weakness</td>
+            <td>攻撃カードで与えるダメージが半減する。</td>
+            <td>貧弱貧弱ゥ！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/眼精疲労.jpg" alt="眼精疲労"></td>
+            <td>眼精疲労</td>
+            <td>Eye Strain</td>
+            <td>魔法の消費MPが2倍になる。</td>
+            <td>ブルーライトカット眼鏡をオススメする。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/群発頭痛.jpg" alt="群発頭痛"></td>
+            <td>群発頭痛</td>
+            <td>Cluster Headache</td>
+            <td>魔法が詠唱できない。</td>
+            <td>決闘者は常に頭痛に悩まされている。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/煙幕.jpg" alt="煙幕"></td>
+            <td>煙幕</td>
+            <td>Smoke</td>
+            <td>攻撃カードの命中率が-25%される。</td>
+            <td>猛者はスコープを使わないって？私は大砲よ。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/不運.jpg" alt="不運"></td>
+            <td>不運</td>
+            <td>Misfortune</td>
+            <td>相手の攻撃の命中率が100%になる。</td>
+            <td>踏んだり蹴ったりとはこのことだ。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/凍結.png" alt="凍結"></td>
+            <td>凍結</td>
+            <td>Frozen</td>
+            <td>攻撃フェーズでの攻撃不可となり、ターンをスキップする。</br>（※相手の攻撃への防御は可能）</br>凍結を付与するカードに、持続ターンが記されている。</td>
+            <td>防御できないとゲームバランスが崩壊する。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/濃霧.jpg" alt="濃霧"></td>
+            <td>濃霧</td>
+            <td>Fog</td>
+            <td>お互いのHP/MPと、相手の手札の枚数がわからなくなる。</td>
+            <td>顕現スキルがいつ飛んでくるかわからない恐ろしい状態。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/混乱.jpg" alt="混乱"></td>
+            <td>混乱</td>
+            <td>Confusion</td>
+            <td>攻撃、回復などのアクションの対象が自分と相手でランダムになる。</br>ただし、防御や反射・保護、顕現スキルは対象外。</td>
+            <td>混乱してるからって自分に攻撃するか？普通。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/介入.png" alt="介入"></td>
+            <td>介入</td>
+            <td>Intervention</td>
+            <td>自分の攻撃フェーズ終了後、25%の確率で、ランダムなカードが相手を対象に発動する。</td>
+            <td>奇跡の逆転劇も、最悪のおせっかいもあり得る。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/呪縛.jpg" alt="呪縛"></td>
+            <td>呪縛</td>
+            <td>Cursebind</td>
+            <td>呪縛中、加護スキルは無効化される。</td>
+            <td>――Gott ist tot.</td>
+          </tr>
+          <tr>
+            <td><img src="images/Status/拘束.jpg" alt="拘束"></td>
+            <td>拘束</td>
+            <td>Restrain</td>
+            <td>防御カードを1ターンに1枚しか使えない。</td>
+            <td>身体の動きが鈍いぞ…！鈍いのではない、う、動かん…！</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>AppleおよびAppleロゴは、米国およびその他の国で登録されたApple Inc.の商標です。App StoreはApple Inc.のサービスマークです。</p>
+    <p>Google PlayおよびGoogle Playロゴは、Google LLCの商標です。</p>
+    <p>その他、掲載されている会社名・製品名は、各社の商標または登録商標です。</p>
+    <p class="footer-copy">© 2026 CostaricaGames. All rights reserved.</p>
+  </footer>
+  <script src="js/pinch-fit.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/faq.js"></script>
+</body>
+</html>

@@ -231,7 +231,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -138, y: -873}
+  m_AnchoredPosition: {x: -138, y: -1021}
   m_SizeDelta: {x: 700, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &69280333
@@ -569,7 +569,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 350, y: -870}
+  m_AnchoredPosition: {x: 350, y: -1018}
   m_SizeDelta: {x: 300, y: 85}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &340053591
@@ -905,7 +905,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -218, y: 461}
+  m_AnchoredPosition: {x: -172, y: 279.3}
   m_SizeDelta: {x: 3700, y: 2900}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &407724948
@@ -1358,8 +1358,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 932.1749}
-  m_SizeDelta: {x: 1080, y: 444.3501}
+  m_AnchoredPosition: {x: 0, y: 1100}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &487291649
 MonoBehaviour:
@@ -1479,8 +1479,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -937.8015}
-  m_SizeDelta: {x: 1080, y: 455.603}
+  m_AnchoredPosition: {x: 0, y: -1100}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &592282970
 MonoBehaviour:
@@ -1721,6 +1721,7 @@ GameObject:
   - component: {fileID: 713701639}
   - component: {fileID: 713701638}
   - component: {fileID: 713701637}
+  - component: {fileID: 713701641}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -1821,6 +1822,26 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &713701641
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 713701635}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3d4e5f6a7b8490a1b2c3d4e5f678901, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gameplayCanvas: {fileID: 713701639}
+  scope2Top: {fileID: 487291648}
+  scope1Bottom: {fileID: 592282969}
+  topGapFill: {fileID: 0}
+  bottomGapFill: {fileID: 0}
+  autoCreateOverlay: 1
+  overlayResourcePath: Prefab/CinemascopeOuterGapOverlay
+  overlaySortOrder: 100
 --- !u!1001 &771974491
 PrefabInstance:
   m_ObjectHideFlags: 0

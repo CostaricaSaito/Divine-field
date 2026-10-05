@@ -8463,6 +8463,7 @@ GameObject:
   - component: {fileID: 871309408}
   - component: {fileID: 871309407}
   - component: {fileID: 871309406}
+  - component: {fileID: 871309410}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -8574,6 +8575,26 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &871309410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 871309404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3d4e5f6a7b8490a1b2c3d4e5f678901, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gameplayCanvas: {fileID: 871309408}
+  scope2Top: {fileID: 1391651558}
+  scope1Bottom: {fileID: 1242714206}
+  topGapFill: {fileID: 0}
+  bottomGapFill: {fileID: 0}
+  autoCreateOverlay: 1
+  overlayResourcePath: Prefab/CinemascopeOuterGapOverlay
+  overlaySortOrder: 100
 --- !u!1 &875019026
 GameObject:
   m_ObjectHideFlags: 0
@@ -10061,9 +10082,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleManager: {fileID: 1851136062}
   overridePlayerInitialSummon: 1
-  debugPlayerInitialSummon: {fileID: 11400000, guid: e0bd98fea15dc654eacaf9ade7690c01, type: 2}
+  debugPlayerInitialSummon: {fileID: 11400000, guid: 33571af59a2464f48af1cfcbfd4616b8, type: 2}
   overrideEnemyInitialSummon: 1
-  debugEnemyInitialSummon: {fileID: 11400000, guid: c0cc3516ab6efc948bbf4bd0bf77b577, type: 2}
+  debugEnemyInitialSummon: {fileID: 11400000, guid: b9de673a5808641418867a99e7c1271b, type: 2}
   openingTurnOwnerMode: 1
   showGameStateDebugBox: 0
   gameStatePanelLayout:
@@ -10809,8 +10830,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -1042.4719}
-  m_SizeDelta: {x: 1080, y: 404.944}
+  m_AnchoredPosition: {x: 0, y: -1070.7}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1242714207
 MonoBehaviour:
@@ -10931,8 +10952,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 1035.6772}
-  m_SizeDelta: {x: 1080, y: 362.8448}
+  m_AnchoredPosition: {x: 0, y: 1070.7}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1391651559
 MonoBehaviour:
@@ -12220,7 +12241,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 382.76, y: 907.7}
+  m_AnchoredPosition: {x: 382.76, y: 1013.8301}
   m_SizeDelta: {x: 240, y: 75}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1766972060
@@ -13384,8 +13405,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 2.5, y: 901}
-  m_SizeDelta: {x: 500, y: 63.2689}
+  m_AnchoredPosition: {x: 2.5, y: 1012.99994}
+  m_SizeDelta: {x: 500, y: 75}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1966137403
 MonoBehaviour:
@@ -13536,7 +13557,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -381.06, y: 906.87}
+  m_AnchoredPosition: {x: -381.06, y: 1013}
   m_SizeDelta: {x: 240, y: 75}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2036596106

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ディヴァインフィールド</title>
+  <meta name="description" content="ディヴァインフィールド公式サイト。刮目せよ、神々の戦いを。">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="images/Favicon.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#news">本文へ</a>
+  <header class="site-header">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="ディヴァインフィールド"></a>
+    <ul class="gnav">
+      <li><a href="#news">News</a></li>
+      <li><a href="#story">Story</a></li>
+      <li><a href="howto.html">HowToPlay</a></li>
+      <li><a href="#system">System</a></li>
+      <li><a href="summons.html">Summons</a></li>
+      <li class="has-sub">
+        <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu">Data</button>
+        <ul id="data-menu" class="subnav">
+          <li><a href="cards.html">Cards</a></li>
+          <li><a href="status-effect.html">Status Effect</a></li>
+          <li><a href="disaster.html">Disaster</a></li>
+        </ul>
+      </li>
+      <li><a href="philosophy.html">Philosophy</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <ul class="sns" aria-label="SNS">
+      <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+      <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+      <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+      <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+      <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+    </ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+  </header>
+  <nav id="menu-panel" class="menu-panel" aria-label="メニュー">
+    <a href="#news">News</a>
+    <a href="#story">Story</a>
+    <a href="howto.html">HowToPlay</a>
+    <a href="#system">System</a>
+    <a href="summons.html">Summons</a>
+    <div class="menu-sub">
+      <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu-sp">Data</button>
+      <div id="data-menu-sp" class="menu-sub-panel">
+        <a href="cards.html">Cards</a>
+        <a href="status-effect.html">Status Effect</a>
+        <a href="disaster.html">Disaster</a>
+      </div>
+    </div>
+    <a href="philosophy.html">Philosophy</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+
+  <main>
+    <section class="hero" aria-label="キービジュアル">
+      <div class="hero-stage">
+        <picture>
+          <source media="(max-width: 980px)" srcset="images/Keyvisual_SP.png">
+          <img class="hero-art" src="images/keyvisual.png" alt="">
+        </picture>
+        <h1 class="hero-logo">
+          <img src="images/kv-logo.png" alt="ディヴァインフィールド">
+        </h1>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="hero-video">
+          <iframe width="560" height="315" src="https://www.youtube.com/embed/-T-ik-HH5bU?si=j1ugW4_nYX7zc8qe" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        </div>
+        <ul class="hero-sns" aria-label="SNS">
+          <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+          <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+          <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+          <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+          <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+        </ul>
+        <div class="store-float">
+          <img src="images/AppstoreButton.png" alt="App Store からダウンロード">
+          <img src="images/GooglePlayButton.png" alt="Google Play で手に入れよう">
+        </div>
+      </div>
+    </section>
+
+    <section class="news-band" id="news">
+      <div class="news-layout">
+        <div class="news-col">
+          <h2>News</h2>
+          <ul class="news-list">
+            <li>
+              <div class="news-meta">
+                <time datetime="2026-10-04">2026.10.04</time>
+                <span class="cat">お知らせ</span>
+                <span class="new">NEW</span>
+              </div>
+              <p>公式サイトを公開しました</p>
+            </li>
+            <li>
+              <div class="news-meta">
+                <time datetime="2026-10-02">2026.10.02</time>
+                <span class="cat">お知らせ</span>
+                <span class="new">NEW</span>
+              </div>
+              <p>遊び方のページを準備しています</p>
+            </li>
+            <li>
+              <div class="news-meta">
+                <time datetime="2026-09-28">2026.09.28</time>
+                <span class="cat">お知らせ</span>
+              </div>
+              <p>カード紹介のページを準備しています</p>
+            </li>
+          </ul>
+          <a class="more" href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer">View More</a>
+        </div>
+
+        <div class="side-col">
+          <div class="feature" data-feature>
+            <button class="feature-arrow" type="button" data-prev aria-label="前のニュース"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 8.5 12l6 5.5"/></svg></button>
+            <div class="feature-viewport">
+              <div class="feature-track">
+                <article class="feature-card">
+                  <p>NEWS</p>
+                  <h3>公式サイトを公開しました</h3>
+                  <span>2026.10.04　お知らせ</span>
+                </article>
+                <article class="feature-card">
+                  <p>NEWS</p>
+                  <h3>遊び方のページを準備しています</h3>
+                  <span>2026.10.02　お知らせ</span>
+                </article>
+                <article class="feature-card">
+                  <p>NEWS</p>
+                  <h3>カード紹介のページを準備しています</h3>
+                  <span>2026.09.28　お知らせ</span>
+                </article>
+              </div>
+            </div>
+            <button class="feature-arrow" type="button" data-next aria-label="次のニュース"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5 15.5 12l-6 5.5"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="story" id="story" aria-label="ストーリー">
+      <div class="story-layout">
+        <div class="story-copy">
+          <h2>Story</h2>
+          <p><span class="story-em">神</span>話の時代から伝わる古の戦場<br>それが神域<span class="story-em">【ディヴァインフィールド】</span></p>
+          <p>3000年の沈黙を経て<br>次世代の神を選ぶ<span class="story-em">【魔導大戦】</span>の開始を告げる鐘が響いた</p>
+          <p>その呼び声のもとに、<br>神域には各国から<span class="story-em">魔道士</span>たちが集うーー</p>
+          <p>召喚獣を操り、運命を支配して、<br>新たなる「<span class="story-em">神</span>」の座を掴み取れ！</p>
+          <p class="story-close">あの「伝説の神ゲー」に捧げる、<br>新たな伝説がここに始まる。</p>
+        </div>
+        <div class="story-visual" data-story>
+          <button class="feature-arrow" type="button" data-story-prev aria-label="前のイメージ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 8.5 12l6 5.5"/></svg></button>
+          <div class="story-fade-x">
+            <div class="story-fade-y">
+              <img class="is-on" src="images/PlayerImage/Player1.png" alt="">
+              <img src="images/PlayerImage/Player2.png" alt="">
+              <img src="images/PlayerImage/Player3.png" alt="">
+              <img src="images/PlayerImage/Player4.png" alt="">
+              <img src="images/PlayerImage/Player5.png" alt="">
+              <img src="images/PlayerImage/Player6.png" alt="">
+            </div>
+          </div>
+          <button class="feature-arrow" type="button" data-story-next aria-label="次のイメージ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5 15.5 12l-6 5.5"/></svg></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>AppleおよびAppleロゴは、米国およびその他の国で登録されたApple Inc.の商標です。App StoreはApple Inc.のサービスマークです。</p>
+    <p>Google PlayおよびGoogle Playロゴは、Google LLCの商標です。</p>
+    <p>その他、掲載されている会社名・製品名は、各社の商標または登録商標です。</p>
+    <p class="footer-copy">© 2026 CostaricaGames. All rights reserved.</p>
+  </footer>
+  <script src="js/pinch-fit.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>

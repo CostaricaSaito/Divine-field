@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Summons | ディヴァインフィールド</title>
+  <meta name="description" content="ディヴァインフィールドの召喚獣。">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="images/Favicon.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#summons-title">本文へ</a>
+  <header class="site-header">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="ディヴァインフィールド"></a>
+    <ul class="gnav">
+      <li><a href="index.html#news">News</a></li>
+      <li><a href="index.html#story">Story</a></li>
+      <li><a href="howto.html">HowToPlay</a></li>
+      <li><a href="index.html#system">System</a></li>
+      <li><a href="summons.html" aria-current="page">Summons</a></li>
+      <li class="has-sub">
+        <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu">Data</button>
+        <ul id="data-menu" class="subnav">
+          <li><a href="cards.html">Cards</a></li>
+          <li><a href="status-effect.html">Status Effect</a></li>
+          <li><a href="disaster.html">Disaster</a></li>
+        </ul>
+      </li>
+      <li><a href="philosophy.html">Philosophy</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <ul class="sns" aria-label="SNS">
+      <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+      <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+      <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+      <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+      <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+    </ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+  </header>
+  <nav id="menu-panel" class="menu-panel" aria-label="メニュー">
+    <a href="index.html#news">News</a>
+    <a href="index.html#story">Story</a>
+    <a href="howto.html">HowToPlay</a>
+    <a href="index.html#system">System</a>
+    <a href="summons.html" aria-current="page">Summons</a>
+    <div class="menu-sub">
+      <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu-sp">Data</button>
+      <div id="data-menu-sp" class="menu-sub-panel">
+        <a href="cards.html">Cards</a>
+        <a href="status-effect.html">Status Effect</a>
+        <a href="disaster.html">Disaster</a>
+      </div>
+    </div>
+    <a href="philosophy.html">Philosophy</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+
+  <main class="summons-page">
+    <h1 id="summons-title">Summons</h1>
+    <p class="summons-lead">様々な召喚獣と契約して、戦いを有利に進めろ。<br>どの召喚獣と契約するかで、運命の岐路は大きく変わるーー！</p>
+
+    <section class="summon-stage" aria-label="召喚獣">
+      <div class="summon-copy">
+        <article class="summon-card is-on">
+          <h2 class="summon-name">炎の霊獣イフリート</h2>
+          <p class="summon-desc">火炎を司る召喚獣。<br>恐ろしい怪力と圧倒的な火力を有する。<br>勇敢な戦士には惜しみなく力を与える。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">フレイムオーラ</h3>
+          <p class="skill-body">攻撃カードの攻撃補正を+1ポイント<br>さらに炎属性カードなら+2ポイント</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">メギドフレイム</h3>
+          <p class="skill-body">地獄の業火が敵を包む。<br>炎属性の20ダメージを与える。</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">暴風の女帝ガルーダ</h2>
+          <p class="summon-desc">荒れ狂う風を巻き起こす召喚獣。<br>圧倒的な速度で常に相手の先手を取り、<br>常に相手のペースを上回る連続攻撃を加える。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">追い風</h3>
+          <p class="skill-body">手札が+2枚で開始。5ターンごとにカードを2枚ドローする。</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">アセンダントシェイド</h3>
+          <p class="skill-body">手札を最大枚数までドローし、<br>任意のカードをマリガンする。</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">氷雪の魔女シヴァ</h2>
+          <p class="summon-desc">全てを凍りつかせる冷気を纏う召喚獣。<br>空気中の水分を凍結させ、相手の自由を奪う。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">氷の結界</h3>
+          <p class="skill-body">全ての攻撃に5%の確率で封印状態付与</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">ダイヤモンドダスト</h3>
+          <p class="skill-body">美しき氷結の世界で、全てが凍り付く。<br>相手を2ターン封印状態とする。</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">水の精霊獣リヴァイアサン</h2>
+          <p class="summon-desc">大海原を支配する召喚獣。<br>水は激流となって攻撃から身を守り、<br>暖かな流れで傷を癒やす。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">ウォーターバリア</h3>
+          <p class="skill-body">すべての攻撃の被ダメージを-1ポイント</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">大海の恵み</h3>
+          <p class="skill-body">暖かな暖流が傷を癒やす。<br>HPとMPを20ポイント回復し、すべての状態異常を回復する。</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">怒れる雷帝インドラ</h2>
+          <p class="summon-desc">雷霆を自由に操る召喚獣。<br>強大な電撃で相手の神器を破壊し、<br>その威圧力は他の追随を許さない。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">電磁波動</h3>
+          <p class="skill-body">5ターンごとに相手の手札を1枚破壊する。</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">裁きの雷</h3>
+          <p class="skill-body">天よりの雷撃が傲れるものに裁きを下す。<br>相手の手札の半分を破壊する。</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">剣王オーディン</h2>
+          <p class="summon-desc">誇り高き剣の王。<br>加護を受けた者は剣聖と呼ばれ、剣戟の達人となる。<br>オーディンの持つ斬鉄剣は、すべてを一撃で両断する。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">切り払い</h3>
+          <p class="skill-body">すべての無属性攻撃を5%の確率で跳ね返す</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">斬鉄剣</h3>
+          <p class="skill-body">オーディンの斬鉄剣の前に、いかなる盾も通用しない。<br>次の攻撃は相手の防御カードを無視する</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">暗黒の鬼神ディアボロス</h2>
+          <p class="summon-desc">闇の世界を統べる召喚獣。<br>相手を闇の恐怖で支配し、行動を縛る。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">ダークレディネス</h3>
+          <p class="skill-body">ゲーム開始時に、自分は闇属性攻撃カードを1枚手札に加えた状態でスタート</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">闇の帷が訪れる...</h3>
+          <p class="skill-body">次の攻撃はすべて闇属性になる</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">光輝の騎士アルカディアス</h2>
+          <p class="summon-desc">聖なる光で裁きを与える召喚獣。<br>その輝きは相手を照らし出し、<br>逃げ場のない致命の攻撃を与える。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">曇りなき光</h3>
+          <p class="skill-body">自分の攻撃カードは必ず命中する</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">千年王国</h3>
+          <p class="skill-body">ゲームが続く限り、相手の魔法、<br>および属性攻撃は全て無効になる</p>
+        </article>
+
+        <article class="summon-card">
+          <h2 class="summon-name">破壊の竜バハムート</h2>
+          <p class="summon-desc">圧倒的な破壊力を持つ竜。<br>凶暴な破壊衝動を秘めており、力を貯めれば貯めるほど強力になる光線「メガフレア」が必殺技だ。</p>
+          <img class="skill-banner" src="images/パッシブスキル.png" alt="パッシブスキル">
+          <h3 class="skill-name">メガフレア</h3>
+          <p class="skill-body">50ターン目に、無属性50ダメージを与える。</p>
+          <img class="skill-banner" src="images/アクティブスキル.png" alt="アクティブスキル">
+          <h3 class="skill-name">ギガフレア</h3>
+          <p class="skill-body">身に宿る破壊衝動が荒れ狂い、ほとばしる。<br>ゲームの経過ターン数のダメージを与える。</p>
+        </article>
+      </div>
+
+      <div class="summon-visual" data-summons>
+        <button class="feature-arrow" type="button" data-summon-prev aria-label="前の召喚獣"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 8.5 12l6 5.5"/></svg></button>
+        <div class="summon-fade-x">
+          <div class="summon-fade-y">
+            <img class="summon-art is-on" src="images/Summons/イフリートドット.png" alt="">
+            <img class="summon-art" src="images/Summons/ガルーダドット.png" alt="">
+            <img class="summon-art" src="images/Summons/シヴァドット.png" alt="">
+            <img class="summon-art" src="images/Summons/リヴァイアサンドット.png" alt="">
+            <img class="summon-art" src="images/Summons/インドラドット.png" alt="">
+            <img class="summon-art" src="images/Summons/オーディンドット.png" alt="">
+            <img class="summon-art" src="images/Summons/ディアボロスドット.png" alt="">
+            <img class="summon-art" src="images/Summons/アルカディアスドット.png" alt="">
+            <img class="summon-art" src="images/Summons/バハムートドット.png" alt="">
+          </div>
+        </div>
+        <button class="feature-arrow" type="button" data-summon-next aria-label="次の召喚獣"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5 15.5 12l-6 5.5"/></svg></button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>AppleおよびAppleロゴは、米国およびその他の国で登録されたApple Inc.の商標です。App StoreはApple Inc.のサービスマークです。</p>
+    <p>Google PlayおよびGoogle Playロゴは、Google LLCの商標です。</p>
+    <p>その他、掲載されている会社名・製品名は、各社の商標または登録商標です。</p>
+    <p class="footer-copy">© 2026 CostaricaGames. All rights reserved.</p>
+  </footer>
+  <script src="js/pinch-fit.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/summons.js"></script>
+</body>
+</html>

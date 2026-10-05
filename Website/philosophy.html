@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Philosophy | ディヴァインフィールド</title>
+  <meta name="description" content="ディヴァインフィールドの設計思想。">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="images/Favicon.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#philosophy-title">本文へ</a>
+  <header class="site-header">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="ディヴァインフィールド"></a>
+    <ul class="gnav">
+      <li><a href="index.html#news">News</a></li>
+      <li><a href="index.html#story">Story</a></li>
+      <li><a href="howto.html">HowToPlay</a></li>
+      <li><a href="index.html#system">System</a></li>
+      <li><a href="summons.html">Summons</a></li>
+      <li class="has-sub">
+        <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu">Data</button>
+        <ul id="data-menu" class="subnav">
+          <li><a href="cards.html">Cards</a></li>
+          <li><a href="status-effect.html">Status Effect</a></li>
+          <li><a href="disaster.html">Disaster</a></li>
+        </ul>
+      </li>
+      <li><a href="philosophy.html" aria-current="page">Philosophy</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <ul class="sns" aria-label="SNS">
+      <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+      <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+      <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+      <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+      <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+    </ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+  </header>
+  <nav id="menu-panel" class="menu-panel" aria-label="メニュー">
+    <a href="index.html#news">News</a>
+    <a href="index.html#story">Story</a>
+    <a href="howto.html">HowToPlay</a>
+    <a href="index.html#system">System</a>
+    <a href="summons.html">Summons</a>
+    <div class="menu-sub">
+      <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu-sp">Data</button>
+      <div id="data-menu-sp" class="menu-sub-panel">
+        <a href="cards.html">Cards</a>
+        <a href="status-effect.html">Status Effect</a>
+        <a href="disaster.html">Disaster</a>
+      </div>
+    </div>
+    <a href="philosophy.html" aria-current="page">Philosophy</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+
+  <div class="philosophy-bg" aria-hidden="true"></div>
+  <main class="philosophy-page">
+    <h1 id="philosophy-title">Philosophy</h1>
+    <p class="philosophy-lead">ここでは元ネタゲームとの差異について、設計思想を紹介します。</p>
+    <div class="philosophy-list">
+      <section class="philosophy-item">
+        <h2>経済アクションについて</h2>
+        <ul>
+          <li>今回最も重要な変化です。ゲームの根幹を握る経済アクションはカードとして扱われると、長期戦になればなるほど手札を圧迫して行動がしづらくなりますし、必要な時に使うことが出来ず悩ましい局面が多かったと考えています。</li>
+          <li>また、「売る」の連打で相手を削り殺す戦法は強力で対抗手段がほとんどありません。同様に、「買う」を序盤に複数枚使われると決定的に不利になってしまいます。</li>
+          <li>そのため経済アクションはクールタイム制として、運要素を排除しました。経済アクションカードを引いた分だけ、経済アクションを使えるようにする案もありましたが、現在は5ターンに1度のクールタイム制としています。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>「買う」の拒否について</h2>
+        <ul>
+          <li>基本的に「買う」はリスクがなさすぎます。相手の手札-1、自分の手札+1で合計2枚のアドバンテージを得る行動であり、相応のリスクが必要です。そのため、「買う」は強制的に選択したカードを購入するようにして、リスクを高めました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>熱病について</h2>
+        <ul>
+          <li>風邪-熱病-地獄病のパワーカーブが1-2-5となっているのは、地獄病の扱いが重い状態異常であることを踏まえてもやや不自然です。デフォルトHPの増加に伴い、熱病に相当する「重病」は毎ターンダメージを3とします。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>夢について</h2>
+        <ul>
+          <li>1vs1を旨とする本ゲームにおいて、自力で確実に夢状態を治す手段がなく、戦略性を著しく毀損することや、ゲームのテンポを失うため、削除しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>吸収について</h2>
+        <ul>
+          <li>MP消費が激しく、反射や弾くでのリスクはありますが、吸収の連打戦法は一方的であり、両替機能にいつでもアクセスできる本ゲームにおいては、強すぎると判断し削除しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>財宝について</h2>
+        <ul>
+          <li>「財宝ループ」は強力な戦術ですが、シンプルにゲームが遅延するため、削除しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>全体攻撃について</h2>
+        <ul>
+          <li>元ゲームでは確率付きの攻撃は全体攻撃として扱われていましたが、メインコンテンツである真剣タイマンでは劣化版の単体攻撃でしかない場合がほとんどであり、「煙」や「雪崩」などは存在価値がやや低いものとなっていました。</li>
+          <li>本作では1on1が基本となるため、これらに相当するカードの性能を全体的に見直しています。</li>
+          <li>「蜃気楼」も削除しています。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>土星の指輪について</h2>
+        <ul>
+          <li>強すぎです。さすがにゲームバランスを壊しており、通常攻撃を使うリスクをいたずらに高めているため、弱体化しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>あぶないウス・キネについて</h2>
+        <ul>
+          <li>「キネ」はいいんですが、「ウス」が手札に来ることが問題です。そもそもがほとんど発生しないギミックでありながら、あぶないウスを引くことが多く、ゲーム終了まで手札が１枠少なくなるのはプレイ体験を損ねると判断しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>魔法の使用回数について</h2>
+        <ul>
+          <li>元ゲームにおける奇跡は、連続して使用する奇跡連打戦法があまりにも強力で、「奇跡を引いたもの勝ち」であることは一定否めません。そのため奇跡に相当する魔法カードはその性能に応じて使用回数を定め、連打を制限しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>天変地異について</h2>
+        <ul>
+          <li>そもそも発生する確率が低い割に、発動した側がリスクを背負うイベントが多かったため、基本的には発動した側が有利になるように天変地異を実装しました。</li>
+        </ul>
+      </section>
+      <section class="philosophy-item">
+        <h2>「弾く」と「パリィ」について</h2>
+        <ul>
+          <li>元ゲームでの「弾く」は失敗した際に防御0での直ダメージとなっておりリスクが高すぎると考えています。本作ではパリィ失敗後でも再度防御フェーズに入ることができるため、ノーリスクにして性能を高めています。</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>AppleおよびAppleロゴは、米国およびその他の国で登録されたApple Inc.の商標です。App StoreはApple Inc.のサービスマークです。</p>
+    <p>Google PlayおよびGoogle Playロゴは、Google LLCの商標です。</p>
+    <p>その他、掲載されている会社名・製品名は、各社の商標または登録商標です。</p>
+    <p class="footer-copy">© 2026 CostaricaGames. All rights reserved.</p>
+  </footer>
+  <script src="js/pinch-fit.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/faq.js"></script>
+</body>
+</html>

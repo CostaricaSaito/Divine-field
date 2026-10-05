@@ -470,8 +470,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 970.5732}
-  m_SizeDelta: {x: 1080, y: 261.1466}
+  m_AnchoredPosition: {x: 0, y: 1100}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &210309200
 GameObject:
@@ -1594,8 +1594,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 52.452377, y: -69.092804}
-  m_SizeDelta: {x: 3420.2893, y: 2340.7207}
+  m_AnchoredPosition: {x: 66.8256, y: 0}
+  m_SizeDelta: {x: 3517.7463, y: 2407.4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &750883608
 MonoBehaviour:
@@ -1645,6 +1645,7 @@ GameObject:
   - component: {fileID: 792841065}
   - component: {fileID: 792841064}
   - component: {fileID: 792841068}
+  - component: {fileID: 792841069}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -1792,6 +1793,26 @@ MonoBehaviour:
   useUnscaledTime: 0
   landSoundAddress: "Assets/SE/\u30E1\u30A4\u30F3\u30DC\u30BF\u30F3\u79FB\u52D5.mp3"
   rankMatchPopup: {fileID: 1435393104}
+--- !u!114 &792841069
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 792841063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3d4e5f6a7b8490a1b2c3d4e5f678901, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gameplayCanvas: {fileID: 792841066}
+  scope2Top: {fileID: 198764880}
+  scope1Bottom: {fileID: 1857441304}
+  topGapFill: {fileID: 0}
+  bottomGapFill: {fileID: 0}
+  autoCreateOverlay: 1
+  overlayResourcePath: Prefab/CinemascopeOuterGapOverlay
+  overlaySortOrder: 100
 --- !u!1 &853839244
 GameObject:
   m_ObjectHideFlags: 0
@@ -2874,8 +2895,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -989.45624}
-  m_SizeDelta: {x: 1080, y: 298.9125}
+  m_AnchoredPosition: {x: 0, y: -1100}
+  m_SizeDelta: {x: 1080, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1877424200
 GameObject:
