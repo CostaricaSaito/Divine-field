@@ -40,6 +40,7 @@ public static class NetworkBattleBridge
         ShiningBarrierApplied = 17,  // either -> peer : incoming attack forced to None element
         HandReload = 18,             // either -> peer : hand reload (selected slot indices)
         ThiefHoodEffect = 19,        // host -> client : Thief's Hood steal payload
+        OrbTempestDrawEffect = 20,   // host -> client : Orb of Tempest draw payload
     }
 
     public enum RemoteEconomicKind : byte
@@ -102,6 +103,15 @@ public static class NetworkBattleBridge
         public bool DefenderIsHostPlayer;
         public bool NoEffect;
         public List<string> StolenTemplateNames;
+    }
+
+    /// <summary>Host -> client: Orb of Tempest draws one card for the defender.</summary>
+    public struct OrbTempestDrawEffectSync
+    {
+        public int TurnTag;
+        public bool DrawerIsHostPlayer;
+        public bool Skipped;
+        public string DrawnCardName;
     }
 
     public struct PeerProfile
@@ -209,6 +219,7 @@ public static class NetworkBattleBridge
     static readonly Queue<MagicFountainEffectSync> _magicFountainEffectQueue = new();
     static readonly Queue<ArrowOfIndraEffectSync> _arrowOfIndraEffectQueue = new();
     static readonly Queue<ThiefHoodEffectSync> _thiefHoodEffectQueue = new();
+    static readonly Queue<OrbTempestDrawEffectSync> _orbTempestDrawEffectQueue = new();
 
     static TaskCompletionSource<RemoteAttack> _attackWaiter;
     static TaskCompletionSource<List<string>> _defenseWaiter;
@@ -222,6 +233,7 @@ public static class NetworkBattleBridge
     static TaskCompletionSource<MagicFountainEffectSync> _magicFountainEffectWaiter;
     static TaskCompletionSource<ArrowOfIndraEffectSync> _arrowOfIndraEffectWaiter;
     static TaskCompletionSource<ThiefHoodEffectSync> _thiefHoodEffectWaiter;
+    static TaskCompletionSource<OrbTempestDrawEffectSync> _orbTempestDrawEffectWaiter;
     static TaskCompletionSource<PeerProfile> _helloWaiter;
     static TaskCompletionSource<MatchConfig> _configWaiter;
 
@@ -284,6 +296,7 @@ public static class NetworkBattleBridge
         _magicFountainEffectQueue.Clear();
         _arrowOfIndraEffectQueue.Clear();
         _thiefHoodEffectQueue.Clear();
+        _orbTempestDrawEffectQueue.Clear();
         _attackWaiter?.TrySetCanceled();
         _defenseWaiter?.TrySetCanceled();
         _magicalSwordWaiter?.TrySetCanceled();
@@ -296,6 +309,7 @@ public static class NetworkBattleBridge
         _magicFountainEffectWaiter?.TrySetCanceled();
         _arrowOfIndraEffectWaiter?.TrySetCanceled();
         _thiefHoodEffectWaiter?.TrySetCanceled();
+        _orbTempestDrawEffectWaiter?.TrySetCanceled();
         _helloWaiter?.TrySetCanceled();
         _configWaiter?.TrySetCanceled();
         _attackWaiter = null;
@@ -310,6 +324,7 @@ public static class NetworkBattleBridge
         _magicFountainEffectWaiter = null;
         _arrowOfIndraEffectWaiter = null;
         _thiefHoodEffectWaiter = null;
+        _orbTempestDrawEffectWaiter = null;
         _helloWaiter = null;
         _configWaiter = null;
     }
@@ -754,6 +769,54 @@ public static class NetworkBattleBridge
         }
     }
 
+    /// <summary>Host only: Orb of Tempest draw payload.</summary>
+    public static void SendOrbTempestDrawEffect(int turnTag, OrbTempestDrawEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.OrbTempestDrawEffect);
+        WriteOrbTempestDrawEffectSync(writer, turnTag, sync);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent OrbTempestDrawEffect (tag={turnTag}, skipped={sync.Skipped}, card={sync.DrawnCardName})");
+    }
+
+    /// <summary>Client only: wait for host-authoritative Orb of Tempest draw.</summary>
+    public static async Task<OrbTempestDrawEffectSync> WaitForOrbTempestDrawEffectAsync(
+        int turnTag,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            OrbTempestDrawEffectSync sync;
+            if (_orbTempestDrawEffectQueue.Count > 0)
+            {
+                sync = _orbTempestDrawEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<OrbTempestDrawEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _orbTempestDrawEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] OrbTempestDrawEffect wait timed out");
+                    return new OrbTempestDrawEffectSync { Skipped = true };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.TurnTag >= turnTag || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale OrbTempestDrawEffect (tag={sync.TurnTag})");
+        }
+    }
+
     /// <summary>Notify peer that Shining Barrier stripped incoming attack element.</summary>
     public static void SendShiningBarrierApplied(int turnTag)
     {
@@ -1102,6 +1165,24 @@ public static class NetworkBattleBridge
         return sync;
     }
 
+    static void WriteOrbTempestDrawEffectSync(FastBufferWriter writer, int turnTag, OrbTempestDrawEffectSync sync)
+    {
+        writer.WriteValueSafe(turnTag);
+        writer.WriteValueSafe(sync.DrawerIsHostPlayer);
+        writer.WriteValueSafe(sync.Skipped);
+        writer.WriteValueSafe(sync.DrawnCardName ?? string.Empty);
+    }
+
+    static OrbTempestDrawEffectSync ReadOrbTempestDrawEffectSync(FastBufferReader reader)
+    {
+        var sync = new OrbTempestDrawEffectSync();
+        reader.ReadValueSafe(out sync.TurnTag);
+        reader.ReadValueSafe(out sync.DrawerIsHostPlayer);
+        reader.ReadValueSafe(out sync.Skipped);
+        reader.ReadValueSafe(out sync.DrawnCardName);
+        return sync;
+    }
+
     static void Send(FastBufferWriter writer)
     {
         var nm = NetworkManager.Singleton;
@@ -1288,6 +1369,14 @@ public static class NetworkBattleBridge
                 var sync = ReadThiefHoodEffectSync(reader);
                 Debug.Log($"[NetworkBattleBridge] ThiefHoodEffect received (tag={sync.TurnTag}, noEffect={sync.NoEffect})");
                 Dispatch(_thiefHoodEffectQueue, ref _thiefHoodEffectWaiter, sync);
+                break;
+            }
+
+            case MsgType.OrbTempestDrawEffect:
+            {
+                var sync = ReadOrbTempestDrawEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] OrbTempestDrawEffect received (tag={sync.TurnTag}, skipped={sync.Skipped})");
+                Dispatch(_orbTempestDrawEffectQueue, ref _orbTempestDrawEffectWaiter, sync);
                 break;
             }
 

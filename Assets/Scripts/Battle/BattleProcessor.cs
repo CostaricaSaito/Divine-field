@@ -184,8 +184,21 @@ public class BattleProcessor : MonoBehaviour
                 ? (target ?? user)
                 : target;
             if (recipient != null)
+            {
                 await TryApplyStatusOnCardEffectResolveAsync(
                     card.statusEffectToApply, card.statusEffectChance, recipient, cancellationToken, card.freezeDuration, card);
+                if (card.orbReactionRule is OrbOfLuminanceRuleSO lumRule
+                    && lumRule.additionalStatusOnResolve != StatusEffectType.None)
+                {
+                    await TryApplyStatusOnCardEffectResolveAsync(
+                        lumRule.additionalStatusOnResolve,
+                        card.statusEffectChance,
+                        recipient,
+                        cancellationToken,
+                        card.freezeDuration,
+                        card);
+                }
+            }
         }
 
         ProcessSpecialEffects(card, user, target);
@@ -567,7 +580,7 @@ public class BattleProcessor : MonoBehaviour
             attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
     }
 
-    /// <summary>宝玉反撃：カードの ATK 合計の代わりに <paramref name="forcedBaseSum"/> を基礎に加護・抑制を適用。</summary>
+    /// <summary>宝玉反撃：受けたダメージ由来の基礎に、加護・抑制と物理の与ダメ補正（神無月・衰弱）を適用する。</summary>
     private int CalculateOrbCounterAttackPower(
         List<CardData> attackCards,
         int forcedBaseSum,
@@ -587,9 +600,19 @@ public class BattleProcessor : MonoBehaviour
         if (GodrageRules.IsGodrageDoublingCombo(attackCards))
             totalAttackPower *= 2;
 
-        totalAttackPower = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, attackCards, totalAttackPower);
+        ElementType? elementOverride = null;
+        if (attackCards.Count == 1
+            && attackCards[0] != null
+            && attackCards[0].orbReactionRule != null
+            && attackCards[0].orbReactionRule.CounterAttackIsNoneElement)
+            elementOverride = ElementType.None;
+
+        totalAttackPower = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(
+            attacker, attackCards, totalAttackPower, elementOverride);
         totalAttackPower = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
-            attacker, defender, attackCards, totalAttackPower);
+            attacker, defender, attackCards, totalAttackPower, elementOverride);
+        if (!CardRules.IsMagicClassifiedAttackCombo(attackCards))
+            totalAttackPower = attacker.ApplyOutgoingDamageModifiers(totalAttackPower);
         return totalAttackPower;
     }
 
@@ -1127,6 +1150,21 @@ public class BattleProcessor : MonoBehaviour
             allowRagnarokDisaster: true);
     }
 
+    private static bool IsEitherCombatantDead(PlayerStatus attacker, PlayerStatus defender)
+    {
+        return (attacker != null && attacker.IsDead())
+            || (defender != null && defender.IsDead());
+    }
+
+    private async Task TryReviveNearDeathIfPendingAsync()
+    {
+        var bm = BattleManager.I;
+        if (bm == null || !NearDeathEffectProcessor.HasPendingRevival(bm))
+            return;
+        await NearDeathEffectProcessor.TryReviveDeadPlayersAsync(
+            bm, this, bm.HandRefill, CancellationToken.None);
+    }
+
     /// <summary>
     /// After combat (or miss when attacker HP is already 0 from Tribute Blood etc.), run shared death handling.
     /// Returns true when battle end sequence started (caller should stop turn flow).
@@ -1248,16 +1286,9 @@ public class BattleProcessor : MonoBehaviour
             attacker, defender, firstPhaseDamage, countsAsDirectAttack);
         UpdateStatusDisplay();
 
-        if (defenseCardsForStatusRule != null && attackCards != null)
-        {
-            await ThiefHoodDefenseFlow.TryRunAfterCombatDamageAsync(
-                this,
-                attackCards,
-                defenseCardsForStatusRule,
-                attacker,
-                defender,
-                CancellationToken.None);
-        }
+        // Phoenix revival before orb counters. Counter base stays phase-1 damage, not HP lost.
+        bool lethalBeforeRevival = IsEitherCombatantDead(attacker, defender);
+        await TryReviveNearDeathIfPendingAsync();
 
         if (!skipDefenseOrbReactions
             && firstPhaseDamage > 0
@@ -1277,13 +1308,28 @@ public class BattleProcessor : MonoBehaviour
             }
         }
 
-        if ((attacker != null && attacker.currentHP <= 0)
-            || (defender != null && defender.currentHP <= 0))
+        bool deathConfirmed = IsEitherCombatantDead(attacker, defender)
+            || (BattleManager.I != null && BattleManager.I.IsGameEndTriggered);
+
+        if (!deathConfirmed
+            && defenseCardsForStatusRule != null
+            && attackCards != null)
+        {
+            await ThiefHoodDefenseFlow.TryRunAfterCombatDamageAsync(
+                this,
+                attackCards,
+                defenseCardsForStatusRule,
+                attacker,
+                defender,
+                CancellationToken.None);
+        }
+
+        if (deathConfirmed)
         {
             if (await TryHandleCombatDeathIfAnyAsync(attacker, defender))
                 return;
         }
-        else
+        else if (!lethalBeforeRevival)
         {
             await RagnarokDisasterFlow.TryRunAfterCombatDamageAsync(
                 this,

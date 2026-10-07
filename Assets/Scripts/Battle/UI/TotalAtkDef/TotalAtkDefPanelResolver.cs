@@ -85,7 +85,7 @@ public class TotalAtkDefPanelResolver
             }
             else if (_state.CurrentSequenceType == "防御")
             {
-                if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, true))
+                if (IsDamageCounterOrbSequenceForPanel(battleManager, true))
                     return false;
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, ToMutableList(_state.CurrentSequenceCards)))
                     return !ShouldShowPlayerPanelHeldOutgoingAttack(battleManager);
@@ -191,7 +191,7 @@ public class TotalAtkDefPanelResolver
             }
             else if (_state.CurrentSequenceType == "防御")
             {
-                if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, false))
+                if (IsDamageCounterOrbSequenceForPanel(battleManager, false))
                     return false;
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, ToMutableList(_state.CurrentSequenceCards))) return true;
                 int totalDefense = _power.CalculateTotalDefensePower(ToMutableList(_state.CurrentSequenceCards));
@@ -270,7 +270,7 @@ public class TotalAtkDefPanelResolver
                 return _power.FormatDefensePowerLabel(defCards);
         }
 
-        if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, true))
+        if (IsDamageCounterOrbSequenceForPanel(battleManager, true))
         {
             var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
             if (rc != null && rc.Count > 0)
@@ -381,7 +381,7 @@ public class TotalAtkDefPanelResolver
         var battleManager = BattleManager.I;
         if (battleManager == null) return "";
 
-        if (IsHellfireOrbSequenceWithActiveReflectionForPanel(battleManager, false))
+        if (IsDamageCounterOrbSequenceForPanel(battleManager, false))
         {
             var rc = battleManager.GetReflectionAttackCardsForTotalDisplay();
             if (rc != null && rc.Count > 0)
@@ -751,7 +751,7 @@ public class TotalAtkDefPanelResolver
         return _power.GetDisplayedAttackStrengthWithDefender(cards, blessingAttacker, blessingDefender);
     }
 
-    private bool IsHellfireOrbSequenceWithActiveReflectionForPanel(BattleManager bm, bool forPlayerPanel)
+    private bool IsDamageCounterOrbSequenceForPanel(BattleManager bm, bool forPlayerPanel)
     {
         if (bm == null || !bm.IsReflectionAttackTotalDisplayActive()) return false;
         if (forPlayerPanel != bm.ReflectionAttackTotalOnPlayerSide) return false;
@@ -760,7 +760,7 @@ public class TotalAtkDefPanelResolver
         var wantSide = forPlayerPanel ? Side.Player : Side.Enemy;
         if (_state.SequenceOwnerSide != wantSide) return false;
         var c = _state.CurrentSequenceCards[0];
-        if (c == null || c.orbReactionRule is not OrbOfHellfireRuleSO) return false;
+        if (c == null || !OrbCardRules.IsDamageCounterOrb(c)) return false;
         return true;
     }
 

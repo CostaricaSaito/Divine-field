@@ -10,12 +10,21 @@ public static class ArrowOfIndraLifecycle
 {
     private const int OnlineEffectTimeoutMs = 20000;
 
-    public static async Task RunAsync(
+    public static Task RunAsync(
         BattleManager bm,
         CardData arrowCard,
         PlayerStatus user,
         PlayerStatus effectTarget,
         CancellationToken ct)
+        => RunAsync(bm, arrowCard, user, effectTarget, ct, ArrowOfIndraRules.MaxDestroyCount);
+
+    public static async Task RunAsync(
+        BattleManager bm,
+        CardData arrowCard,
+        PlayerStatus user,
+        PlayerStatus effectTarget,
+        CancellationToken ct,
+        int maxDestroyCount)
     {
         if (bm == null || user == null || effectTarget == null)
             return;
@@ -32,7 +41,7 @@ public static class ArrowOfIndraLifecycle
         {
             if (OnlineMatchContext.IsHost)
             {
-                plan = BuildPlan(victimHand, handOwner);
+                plan = BuildPlan(victimHand, handOwner, maxDestroyCount);
                 NetworkBattleBridge.SendArrowOfIndraEffect(turnTag, new NetworkBattleBridge.ArrowOfIndraEffectSync
                 {
                     VictimIsHostPlayer = ResolveVictimIsHostPlayer(bm, effectTarget),
@@ -50,7 +59,7 @@ public static class ArrowOfIndraLifecycle
         }
         else
         {
-            plan = BuildPlan(victimHand, handOwner);
+            plan = BuildPlan(victimHand, handOwner, maxDestroyCount);
         }
 
         if (ct.IsCancellationRequested) return;
@@ -77,13 +86,17 @@ public static class ArrowOfIndraLifecycle
         }
     }
 
-    private static ArrowOfIndraEffectPlan BuildPlan(List<CardData> victimHand, PlayerType handOwner)
+    private static ArrowOfIndraEffectPlan BuildPlan(
+        List<CardData> victimHand,
+        PlayerType handOwner,
+        int maxDestroyCount)
     {
         var plan = new ArrowOfIndraEffectPlan();
+        int cap = Mathf.Max(0, maxDestroyCount);
         var picks = HandDestroyRules.PickRandomDestroyableCards(
             victimHand,
             handOwner,
-            ArrowOfIndraRules.MaxDestroyCount);
+            cap);
 
         for (int i = 0; i < picks.Count; i++)
         {

@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// 防御側の「宝玉」臨時効果：第1段ダメージ通過かつ
-/// 闇2段・状態異常付与の後。CardDisplay クリア前に SE+点滅し、その後単体表示で効果解決。
+/// 防御側の「宝玉」臨時効果：第1段の通過ダメージが1以上のときのみ（闇2段・状態異常付与の後）。
+/// SE+属性色点滅のあと単体表示で効果解決。
 /// </summary>
 public static class OrbDefenseReactionFlow
 {
@@ -40,6 +40,12 @@ public static class OrbDefenseReactionFlow
             SoundEffectPlayer.I?.Play(OrbGaugeRecoverySe);
 
             if (BattleUIManager.I != null
+                && !BattleUIManager.I.TryGetCardSheetDisplayForCardData(orb, out _))
+            {
+                BattleUIManager.I.ShowCardSheetsVisualOnlyBatch(new List<CardData> { orb }, displaySide);
+            }
+
+            if (BattleUIManager.I != null
                 && BattleUIManager.I.TryGetCardSheetDisplayForCardData(orb, out var sh))
             {
                 Color c = ElementHelper.GetElementColor(orb.element);
@@ -53,37 +59,89 @@ public static class OrbDefenseReactionFlow
                 }
             }
 
-            if (orb.orbReactionRule is OrbOfHellfireRuleSO)
-            {
-                var one = new List<CardData> { orb };
-                int atkDisplay = battleProcessor.GetOrbCounterDisplayedAttackPower(
-                    one, firstPhaseDamageB, originalDefender, originalAttacker);
-                bool totalAtkOnPlayer = ReferenceEquals(originalDefender, bm.GetPlayerStatus());
-                bm.SetReflectionAttackTotalDisplayAfterSlide(
-                    one, totalAtkOnPlayer, originalDefender, originalAttacker, atkDisplay);
-                if (ReferenceEquals(originalDefender, bm.GetPlayerStatus()))
-                    bm.SetSuppressEnemyStaleAttackerInTotalByOrb(true);
-            }
+            bool damageCounter = orb.orbReactionRule.IsDamageCounter;
+            int counterBase = damageCounter
+                ? orb.orbReactionRule.ScaleReceivedDamageToAttackBase(firstPhaseDamageB)
+                : firstPhaseDamageB;
+            bool forceNone = damageCounter && orb.orbReactionRule.CounterAttackIsNoneElement;
+            bool previousForceNone = bm.IncomingAttackForceNoneElement;
+            if (forceNone)
+                bm.SetIncomingAttackForceNoneElement(true);
 
-            // Destroy が同一フレーム内で溜まると古いシートが残るため即時クリア
-            BattleUIManager.I?.ClearAllCardDisplaysAndSelectionImmediate();
-            BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(new List<CardData> { orb }, displaySide);
-            SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-            bm.SetStatsDisplaySequenceCards(new List<CardData> { orb }, "防御", displaySide);
-
-            if (orb.orbReactionRule is OrbOfHellfireRuleSO)
+            try
             {
-                await RunHellfireCounterAsync(
-                    bm, battleProcessor, orb, firstPhaseDamageB, originalAttacker, originalDefender, cancellationToken);
-            }
-            else if (orb.orbReactionRule is OrbOfAquatideRuleSO)
-            {
-                await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
-                if (originalDefender != null)
+                if (damageCounter)
                 {
-                    int heal = Mathf.Min(originalDefender.maxHP, firstPhaseDamageB * 2);
-                    await battleProcessor.ApplyOrbHpRecoveryAsync(orb, originalDefender, heal, cancellationToken);
+                    var one = new List<CardData> { orb };
+                    int atkDisplay = battleProcessor.GetOrbCounterDisplayedAttackPower(
+                        one, counterBase, originalDefender, originalAttacker);
+                    bool totalAtkOnPlayer = ReferenceEquals(originalDefender, bm.GetPlayerStatus());
+                    bm.SetReflectionAttackTotalDisplayAfterSlide(
+                        one, totalAtkOnPlayer, originalDefender, originalAttacker, atkDisplay);
+                    if (ReferenceEquals(originalDefender, bm.GetPlayerStatus()))
+                        bm.SetSuppressEnemyStaleAttackerInTotalByOrb(true);
                 }
+
+                // Destroy が同一フレーム内で溜まると古いシートが残るため即時クリア
+                BattleUIManager.I?.ClearAllCardDisplaysAndSelectionImmediate();
+                BattleUIManager.I?.ShowCardSheetsVisualOnlyBatch(new List<CardData> { orb }, displaySide);
+                SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+                bm.SetStatsDisplaySequenceCards(new List<CardData> { orb }, "防御", displaySide);
+
+                if (damageCounter)
+                {
+                    await RunHellfireCounterAsync(
+                        bm, battleProcessor, orb, counterBase, originalAttacker, originalDefender, cancellationToken);
+                }
+                else if (orb.orbReactionRule is OrbOfAquatideRuleSO)
+                {
+                    await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
+                    if (originalDefender != null)
+                    {
+                        int heal = Mathf.Min(originalDefender.maxHP, firstPhaseDamageB * 2);
+                        await battleProcessor.ApplyOrbHpRecoveryAsync(orb, originalDefender, heal, cancellationToken);
+                    }
+                }
+                else if (orb.orbReactionRule is OrbOfLightningRuleSO)
+                {
+                    await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
+                    if (originalAttacker != null && originalDefender != null)
+                    {
+                        await ArrowOfIndraLifecycle.RunAsync(
+                            bm,
+                            orb,
+                            originalDefender,
+                            originalAttacker,
+                            cancellationToken,
+                            maxDestroyCount: 1);
+                    }
+                }
+                else if (orb.orbReactionRule is OrbOfTempestRuleSO)
+                {
+                    await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
+                    if (originalDefender != null)
+                        await OrbTempestDrawFlow.RunAsync(bm, originalDefender, cancellationToken);
+                }
+                else if (orb.orbReactionRule is OrbOfIceageRuleSO or OrbOfAbyssRuleSO or OrbOfLuminanceRuleSO)
+                {
+                    await Task.Delay(AquatideInterstitialDelayMs, cancellationToken);
+                    if (originalAttacker != null && originalDefender != null)
+                    {
+                        await OrbIceageFreezeFlow.RunAsync(
+                            bm,
+                            battleProcessor,
+                            bm.HandRefill,
+                            orb,
+                            originalDefender,
+                            originalAttacker,
+                            cancellationToken);
+                    }
+                }
+            }
+            finally
+            {
+                if (forceNone)
+                    bm.SetIncomingAttackForceNoneElement(previousForceNone);
             }
 
             BattleUIManager.I?.HideAllCardDetails();
@@ -92,6 +150,10 @@ public static class OrbDefenseReactionFlow
         }
     }
 
+    /// <summary>
+    /// 宝玉反撃。基礎攻撃力は呼び出し側が換算済み（獄炎は等倍、金剛は1.5倍の切り上げ）。
+    /// 対象は元の攻撃者に固定し、混乱では振り直さない。
+    /// </summary>
     private static async Task RunHellfireCounterAsync(
         BattleManager bm,
         BattleProcessor battleProcessor,

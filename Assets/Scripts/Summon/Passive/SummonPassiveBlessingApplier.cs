@@ -9,7 +9,11 @@ public static class SummonPassiveBlessingApplier
     /// 攻撃者の召喚データに加護があれば、カード合計攻撃力に反映する。
     /// Ultimate Skill 攻撃は加護対象外。
     /// </summary>
-    public static int ApplyAttackPowerBonus(PlayerStatus attacker, List<CardData> attackCards, int sumOfCardAttackPower)
+    public static int ApplyAttackPowerBonus(
+        PlayerStatus attacker,
+        List<CardData> attackCards,
+        int sumOfCardAttackPower,
+        ElementType? combinedElementOverride = null)
     {
         if (attacker == null || attackCards == null || attackCards.Count == 0)
             return sumOfCardAttackPower;
@@ -26,7 +30,7 @@ public static class SummonPassiveBlessingApplier
         var blessing = data.GetEffectivePassiveBlessing();
         if (blessing == null) return sumOfCardAttackPower;
 
-        ElementType combined = ElementHelper.GetCombinedElement(attackCards);
+        ElementType combined = combinedElementOverride ?? ElementHelper.GetCombinedElement(attackCards);
         return blessing.ApplyToTotalAttackPower(sumOfCardAttackPower, combined, attacker);
     }
 
@@ -38,7 +42,8 @@ public static class SummonPassiveBlessingApplier
         PlayerStatus attacker,
         PlayerStatus defender,
         List<CardData> attackCards,
-        int attackPowerAfterAttackerSideModifiers)
+        int attackPowerAfterAttackerSideModifiers,
+        ElementType? combinedElementOverride = null)
     {
         if (defender == null || attackCards == null || attackCards.Count == 0)
             return attackPowerAfterAttackerSideModifiers;
@@ -55,7 +60,7 @@ public static class SummonPassiveBlessingApplier
         var blessing = data.GetEffectivePassiveBlessing();
         if (blessing == null) return attackPowerAfterAttackerSideModifiers;
 
-        ElementType combined = ElementHelper.GetCombinedElement(attackCards);
+        ElementType combined = combinedElementOverride ?? ElementHelper.GetCombinedElement(attackCards);
         return blessing.ApplyOpponentAttackPowerSuppression(
             attackPowerAfterAttackerSideModifiers,
             combined,

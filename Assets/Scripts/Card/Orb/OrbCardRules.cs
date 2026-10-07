@@ -5,6 +5,9 @@ public static class OrbCardRules
 {
     public static bool IsOrbCard(CardData c) => c != null && c.orbReactionRule != null;
 
+    public static bool IsDamageCounterOrb(CardData c) =>
+        c != null && c.orbReactionRule != null && c.orbReactionRule.IsDamageCounter;
+
     /// <summary>防御リスト内で選んだ順に、宝玉のカードだけを取り出す。</summary>
     public static List<CardData> CollectOrbsInDefenseOrder(IReadOnlyList<CardData> defenseCards)
     {
