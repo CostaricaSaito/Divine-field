@@ -114,6 +114,8 @@ public static class AttackComboSelectionRules
         if (card.cardType == CardType.ArchMagic) return true;
         if (card.cardType == CardType.Special) return true;
         if (card.cardType == CardType.Ultimate) return true;
+        if (CardRules.IsDefenseUsableAsPhysicalAttack(card))
+            return CardRules.IsUsableInAttackPhase(card);
         return card.cardType == CardType.Attack || CardRules.IsRecoveryCard(card);
     }
 
@@ -154,6 +156,8 @@ public static class AttackComboSelectionRules
         PlayerType handOwner)
     {
         if (card == null || selection == null) return false;
+        if (FreeMagicCastRules.CanAddFreeCastToSelection(card, selection))
+            return true;
         if (!IsAttackCardForComboSelection(card)) return false;
         if (ArchMagicRules.IsArchMagicCard(card)) return false;
 
@@ -210,7 +214,7 @@ public static class AttackComboSelectionRules
                 if (selection[i] != null) test.Add(selection[i]);
             }
             test.Add(card);
-            if (attackerStatus.GetTotalEffectiveMagicMpForCards(test) > attackerStatus.currentMP)
+            if (FreeMagicCastRules.GetEffectiveMagicMpCost(test, attackerStatus) > attackerStatus.currentMP)
                 return false;
         }
 
@@ -298,7 +302,7 @@ public static class AttackComboSelectionRules
         c != null && c.cardType == CardType.Magic && !CardRules.IsRecoveryCard(c);
 
     private static bool IsComboPhysicalAttackCard(CardData c) =>
-        c != null && c.cardType == CardType.Attack;
+        CardRules.CountsAsPhysicalAttackInAttackCombo(c);
 
     private static bool IsFlexibleOrAddOnUseRule(CardData c) =>
         c != null

@@ -209,6 +209,7 @@ public static class ShiningBarrierDefenseFlow
         Debug.Log("[ShiningBarrierDefenseFlow] Re-open defense select after Shining Barrier");
         BattleUIManager.I?.SyncRestraintHeavyOverlay();
 
+        bm.SetGameState(GameState.DefensePhase);
         bm.SetSelectedDefenseCard(null);
         bm.ResetPlayerDefenseUseButtonLocks();
         BattleUIManager.I?.SetHandClickable(true);

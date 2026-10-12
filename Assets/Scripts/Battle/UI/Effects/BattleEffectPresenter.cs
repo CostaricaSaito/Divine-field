@@ -34,6 +34,7 @@ public class BattleEffectPresenter : MonoBehaviour
 
     private GameObject _fullscreenWhiteFlashGo;
     private GameObject _gameSetOverlayGo;
+    private GameObject _sealedExoDionWhiteHoldGo;
 
     private const string GameSetSpriteAddress = "Assets/Images/06_UIパーツ/GAMESET.png";
     private const string PostOjyouGameGongSeAddress = "Assets/SE/試合終了のゴング.mp3";
@@ -91,19 +92,31 @@ public class BattleEffectPresenter : MonoBehaviour
     /// <summary>
     /// 往生アニメ終了直後：反射「弾き返し」と同じ全画面白フラッシュ → 中央に GAMESET 大表示＋ゴング SE。一定時間後に画像を消す。
     /// </summary>
-    public async Task ShowPostOjyouFlashAndGameSetAsync(CancellationToken ct = default)
+    public Task PlayFullscreenWhiteFlashMsAsync(float durationMs, CancellationToken ct = default)
+    {
+        PlayFullscreenWhiteFlashMs(durationMs);
+        int ms = Mathf.Max(1, Mathf.RoundToInt(durationMs));
+        return Task.Delay(ms, ct);
+    }
+
+    public async Task ShowPostOjyouFlashAndGameSetAsync(
+        CancellationToken ct = default,
+        bool skipInitialWhiteFlash = false)
     {
         var canvas = ResolveCanvas();
         if (canvas == null) return;
 
-        PlayFullscreenWhiteFlashMs(50f);
-        try
+        if (!skipInitialWhiteFlash)
         {
-            await Task.Delay(50, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
+            PlayFullscreenWhiteFlashMs(50f);
+            try
+            {
+                await Task.Delay(50, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
 
         if (_gameSetOverlayGo != null)
@@ -225,6 +238,164 @@ public class BattleEffectPresenter : MonoBehaviour
             throw;
         }
         if (canvasGroup != null) canvasGroup.alpha = 0f;
+    }
+
+    /// <summary>
+    /// Sealed EXO-DION alt-win: white flash + armor (2160px tall) at once, siren SE, then zoom + whiteout (BGM fade at whiteout).
+    /// </summary>
+    public Task PlaySealedExoDionVictoryFlashAndCinematicAsync(float whiteFlashMs, CancellationToken ct = default)
+        => PlaySealedExoDionVictoryCinematicAsync(whiteFlashMs, ct);
+
+    /// <summary>
+    /// Sealed EXO-DION alt-win cinematic without the opening flash (legacy entry).
+    /// </summary>
+    public Task PlaySealedExoDionVictoryCinematicAsync(CancellationToken ct = default)
+        => PlaySealedExoDionVictoryCinematicAsync(0f, ct);
+
+    private async Task PlaySealedExoDionVictoryCinematicAsync(float whiteFlashMs, CancellationToken ct = default)
+    {
+        var canvas = ResolveCanvas();
+        if (canvas == null) return;
+
+        const float armorDesignHeight = 2160f;
+        const float zoomDelaySec = 0.5f;
+        const float zoomDurationSec = 3f;
+        const float zoomEndScale = 2.15f;
+        const float whiteoutDelayFromArmorShowSec = 1f;
+        const float whiteoutDurationSec = 3f;
+        const float bgmFadeDurationSec = 5f;
+
+        Sprite sprite = await LoadSpriteAddressableAsync(SealedExoDionVictoryPresentation.ArmorSpriteAddress);
+        if (sprite == null) return;
+
+        var armorGo = new GameObject("SealedExoDionArmorOverlay");
+        armorGo.transform.SetParent(canvas.transform, false);
+        var armorRt = armorGo.AddComponent<RectTransform>();
+        armorRt.anchorMin = new Vector2(0.5f, 0.5f);
+        armorRt.anchorMax = new Vector2(0.5f, 0.5f);
+        armorRt.pivot = new Vector2(0.5f, 0.5f);
+        armorRt.anchoredPosition = Vector2.zero;
+        float aspect = sprite.rect.width / Mathf.Max(1f, sprite.rect.height);
+        armorRt.sizeDelta = new Vector2(aspect * armorDesignHeight, armorDesignHeight);
+        var armorImg = armorGo.AddComponent<Image>();
+        armorImg.sprite = sprite;
+        armorImg.preserveAspect = true;
+        armorImg.raycastTarget = false;
+        armorRt.localScale = Vector3.one;
+        armorGo.transform.SetAsLastSibling();
+
+        if (_sealedExoDionWhiteHoldGo != null)
+            Destroy(_sealedExoDionWhiteHoldGo);
+
+        var whiteGo = new GameObject("SealedExoDionWhiteHold");
+        whiteGo.transform.SetParent(canvas.transform, false);
+        var whiteRt = whiteGo.AddComponent<RectTransform>();
+        whiteRt.anchorMin = Vector2.zero;
+        whiteRt.anchorMax = Vector2.one;
+        whiteRt.offsetMin = Vector2.zero;
+        whiteRt.offsetMax = Vector2.zero;
+        var whiteImg = whiteGo.AddComponent<Image>();
+        whiteImg.color = new Color(1f, 1f, 1f, 0f);
+        whiteImg.raycastTarget = false;
+        _sealedExoDionWhiteHoldGo = whiteGo;
+
+        // Armor first, then flash on top so the opening white flash is visible (same frame as armor show).
+        if (whiteFlashMs > 0f)
+            PlayFullscreenWhiteFlashMs(whiteFlashMs);
+
+        SoundEffectPlayer.I?.Play(SealedExoDionVictoryPresentation.ArmorSirenSeAddress);
+
+        async Task ZoomArmorAsync()
+        {
+            try
+            {
+                await Task.Delay(Mathf.RoundToInt(zoomDelaySec * 1000f), ct);
+                await LeanTweenValueFloatWithEaseAsync(
+                    armorGo,
+                    s => armorRt.localScale = new Vector3(s, s, 1f),
+                    1f, zoomEndScale, zoomDurationSec, LeanTweenType.easeOutCubic, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+        }
+
+        async Task WhiteoutAsync()
+        {
+            try
+            {
+                await Task.Delay(Mathf.RoundToInt(whiteoutDelayFromArmorShowSec * 1000f), ct);
+                _ = BattleBgmController.Instance?.FadeOutBattleBgmAndStopAsync(bgmFadeDurationSec);
+                _ = BattleBackgroundVideoController.Instance?.StopAsync(whiteoutDurationSec, ct);
+                whiteGo.transform.SetAsLastSibling();
+                await LeanTweenValueFloatWithEaseAsync(
+                    whiteGo,
+                    a => whiteImg.color = new Color(1f, 1f, 1f, a),
+                    0f, 1f, whiteoutDurationSec, LeanTweenType.easeInOutQuad, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+        }
+
+        try
+        {
+            await Task.WhenAll(ZoomArmorAsync(), WhiteoutAsync());
+        }
+        catch (OperationCanceledException)
+        {
+            if (armorGo != null) Destroy(armorGo);
+            throw;
+        }
+
+        if (armorGo != null)
+            Destroy(armorGo);
+    }
+
+    public Task PlaySealedExoDionArmorAndWhiteFadeAsync(CancellationToken ct = default)
+        => PlaySealedExoDionVictoryCinematicAsync(ct);
+
+    private static async Task<Sprite> LoadSpriteAddressableAsync(string address)
+    {
+        var h = Addressables.LoadAssetAsync<Sprite>(address);
+        var tcs = new TaskCompletionSource<Sprite>();
+        h.Completed += op =>
+        {
+            if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
+                tcs.TrySetResult(op.Result);
+            else
+                tcs.TrySetResult(null);
+        };
+
+        try { return await tcs.Task; }
+        catch { return null; }
+    }
+
+    public async Task FadeOutSealedExoDionWhiteOverlayAsync(CancellationToken ct = default)
+    {
+        if (_sealedExoDionWhiteHoldGo == null) return;
+        var img = _sealedExoDionWhiteHoldGo.GetComponent<Image>();
+        if (img == null)
+        {
+            Destroy(_sealedExoDionWhiteHoldGo);
+            _sealedExoDionWhiteHoldGo = null;
+            return;
+        }
+
+        float start = img.color.a;
+        try
+        {
+            await LeanTweenValueFloatWithEaseAsync(
+                _sealedExoDionWhiteHoldGo,
+                a => img.color = new Color(1f, 1f, 1f, a),
+                start, 0f, 0.8f, LeanTweenType.easeOutCubic, ct);
+        }
+        catch (OperationCanceledException) { }
+
+        Destroy(_sealedExoDionWhiteHoldGo);
+        _sealedExoDionWhiteHoldGo = null;
     }
 
     /// <summary>LeanTween で float をトゥイーン。easeOut 系は前半の変化が大きく、後半は緩やかに見える。</summary>

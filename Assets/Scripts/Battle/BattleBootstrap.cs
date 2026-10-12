@@ -17,6 +17,12 @@ public sealed class BattleBootstrap
         InitializeMagicPool(host);
         RefreshStartupDisplays(host);
         host.EnsureBattleBgmController();
+        SealedExoDionHandTracker.ClearBattle();
+        if (host.MagicPoolManager != null)
+        {
+            host.MagicPoolManager.ClearPool(PlayerType.Player);
+            host.MagicPoolManager.ClearPool(PlayerType.Enemy);
+        }
         BattleBgmController.Instance?.StartBattleSession();
         BattleBackgroundVideoController.Instance?.StartBattleSession();
         host.BeginOpeningSequence();
@@ -101,7 +107,7 @@ public sealed class BattleBootstrap
             host.CardBackSprite);
         host.BattleProcessor.Initialize(host.PlayerStatus, host.EnemyStatus, host.StatusUI, host.CardDealer);
         DiseaseTurnEndProcessor.BindSettings(host.DiseaseTurnEndSettings);
-        ShivaDirectAttackFreezeFlow.BindSettings(host.ShivaDirectAttackFreezeSettings);
+        ShivaIceBarrierDrawFlow.BindSettings(host.ShivaIceBarrierSettings);
         OrdinSlashReflectFlow.BindSettings(host.OrdinSlashReflectSettings);
         host.BattleProcessor.ConfigureStatusEffects(host.StatusProgressionConfig);
 

@@ -71,4 +71,9 @@ public enum StatusEffectType
     /// Diabolos Diabolic Emission ultimate: next opponent-target hit resolves as Dark element. Indelible until consumed on hit.
     /// </summary>
     DiabolicEmission = 104,
+
+    /// <summary>
+    /// Cyber Exoskeleton: confusion-like targeting + residual Steel DEF5. Not an official ID.
+    /// </summary>
+    CyberPsychosis = 105,
 }

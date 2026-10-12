@@ -24,6 +24,9 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
 
+        if (card.cardUI != null && card.cardUI.IsFaceDown())
+            return false;
+
         if (HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking)
             return false;
 
@@ -33,8 +36,13 @@ public class CardSelectionManager : MonoBehaviour
         if (BattleManager.I != null && BattleManager.I.IsAnySummonSkillFlowRunning)
             return false;
 
+        bool addingFreeCastCatalyst = FreeMagicCastRules.CanAddFreeCastToSelection(card, selectedCards);
+        bool addingMagicOntoFreeCast = FreeMagicCastRules.IsEligibleMagic(card)
+            && FreeMagicCastRules.AllSelectedAreFreeCast(selectedCards);
+
         // ===== 防御フェーズ：拘束中は防御カードを2枚目まで選べない =====
-        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card))
+        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card)
+            && !addingFreeCastCatalyst && !addingMagicOntoFreeCast)
         {
             PlayerStatus defender = BattleManager.I.GetPlayerStatus();
             if (defender != null && defender.HasRestraintEffect())
@@ -58,7 +66,8 @@ public class CardSelectionManager : MonoBehaviour
         }
 
         // ===== 防御：物理／魔法反射は攻撃に応じて他カードと併選不可 =====
-        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card))
+        if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card)
+            && !addingFreeCastCatalyst)
         {
             var incoming = BattleManager.I.GetIncomingAttackSnapshotForDefenseUi();
 
@@ -71,12 +80,13 @@ public class CardSelectionManager : MonoBehaviour
                 return false;
             }
 
-            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(card, incoming))
+            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(card, incoming) && !addingMagicOntoFreeCast)
             {
                 foreach (var sel in selectedCards)
                 {
                     if (sel == null) continue;
                     if (BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
+                    if (FreeMagicCastRules.IsFreeMagicCastCard(sel)) continue;
                     BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射・無効化・打ち払いは他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
                     return false;
                 }
@@ -111,16 +121,10 @@ public class CardSelectionManager : MonoBehaviour
                 return false;
             }
 
-            // MP 合算は使用ボタン側で判定（眼精疲労の倍率・複数魔法対応）。防御フェーズはここでも単体不足を弾く。
+            // MP 合算は使用ボタン側で判定（眼精疲労の倍率・無料詠唱・複数魔法対応）。
             bool defenseMagicContext = BattleManager.I != null
                 && BattleManager.I.IsPlayerDefenseInputActive()
                 && IsDefenseCard(card);
-            if (defenseMagicContext && magicUserStatus != null
-                && !BlockingRules.CanAffordMagicDefenseMp(card, magicUserStatus))
-            {
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
-                return false;
-            }
 
             if (defenseMagicContext && BlockingRules.IsPhysicalBlockingCard(card))
             {
@@ -207,6 +211,27 @@ public class CardSelectionManager : MonoBehaviour
             }
         }
 
+        if (IsAttackSelectionContext()
+            && !CardRules.IsUsableInAttackPhase(card)
+            && !FreeMagicCastRules.CanAddFreeCastToSelection(card, selectedCards))
+        {
+            return false;
+        }
+
+        if (IsDefenseSelectionContext()
+            && !CardRules.IsUsableInDefensePhase(card)
+            && !FreeMagicCastRules.CanAddFreeCastToSelection(card, selectedCards))
+        {
+            return false;
+        }
+
+        if (FreeMagicCastRules.IsFreeMagicCastCard(card)
+            && FreeMagicCastRules.SelectionHasEligibleMagic(selectedCards)
+            && FreeMagicCastRules.SelectionHasFreeCast(selectedCards))
+        {
+            return false;
+        }
+
         // 同じカードが既に選択されている場合は追加しない（参照が別でも同じ SO なら弾く）
         int pickId = card.GetInstanceID();
         foreach (var c in selectedCards)
@@ -234,6 +259,8 @@ public class CardSelectionManager : MonoBehaviour
             removed.Add(card);
 
         removed.AddRange(PruneDependentAttackSelectionsAfterCancel());
+        removed.AddRange(FreeMagicCastRules.PruneInvalidFreeCastSelections(
+            selectedCards, IsAttackSelectionContext(), IsDefenseSelectionContext()));
         return removed;
     }
 
@@ -269,10 +296,8 @@ public class CardSelectionManager : MonoBehaviour
         var attackCards = new List<CardData>();
         foreach (var card in selectedCards)
         {
-            if (IsAttackCard(card))
-            {
+            if (CardRules.ContributesToAttackComboCombat(card, selectedCards))
                 attackCards.Add(card);
-            }
         }
         return attackCards;
     }
@@ -375,7 +400,12 @@ public class CardSelectionManager : MonoBehaviour
             case SelectionRole.Standalone:
             case SelectionRole.Primary:
                 if (selectedCards.Count > 0)
+                {
+                    if (FreeMagicCastRules.IsEligibleMagic(newCard)
+                        && FreeMagicCastRules.AllSelectedAreFreeCast(selectedCards))
+                        break;
                     ClearAllWithUI();
+                }
                 break;
 
             case SelectionRole.Addable:
@@ -398,7 +428,10 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null) return false;
         if (IsAttackSelectionContext())
-            return CardRules.IsUsableInAttackPhase(card);
+        {
+            if (CardRules.IsUsableInAttackPhase(card)) return true;
+            return FreeMagicCastRules.IsCombatCatalyst(card, selectedCards);
+        }
         return CardRules.IsAttackCard(card);
     }
 
@@ -406,7 +439,8 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null || !IsDefenseSelectionContext()) return false;
         if (IsLocalPlayerChantingArchMagic()) return false;
-        return CardRules.IsUsableInDefensePhase(card);
+        if (CardRules.IsUsableInDefensePhase(card)) return true;
+        return FreeMagicCastRules.IsCombatCatalyst(card, selectedCards);
     }
 
     private static bool IsLocalPlayerChantingArchMagic()

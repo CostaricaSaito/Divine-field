@@ -98,10 +98,14 @@ public sealed class GameEndOrchestrator
         catch (OperationCanceledException)
         {
             Debug.Log("[GameEndOrchestrator] Game end sequence cancelled");
+            if (!gameEndPresentationCompleted)
+                _gameEndTriggered = false;
         }
         catch (Exception ex)
         {
             Debug.LogException(ex);
+            if (!gameEndPresentationCompleted)
+                _gameEndTriggered = false;
         }
 
         if (gameEndPresentationCompleted)
@@ -112,6 +116,78 @@ public sealed class GameEndOrchestrator
     /// <summary>
     /// Online opponent forfeit/disconnect: skip HP death, Ojyou, PostDeath, and GAMESET; show Victory result directly.
     /// </summary>
+    /// <summary>
+    /// Sealed EXO-DION counter 3: skip Ojyou/post-death; custom presentation then GAMESET.
+    /// </summary>
+    public void ResetAbortedGameEndTrigger()
+    {
+        _gameEndTriggered = false;
+    }
+
+    public async Task<bool> RunSealedExoDionVictoryEndAsync(
+        SealedExoDionTurnEndLifecycle.EndPhaseResult exo,
+        CancellationToken ct = default)
+    {
+        if (_gameEndTriggered) return false;
+        _gameEndTriggered = true;
+
+        bool playerDead = exo.Stalemate || exo.EnemyReachedWin;
+        bool enemyDead = exo.Stalemate || exo.PlayerReachedWin;
+        bool gameEndPresentationCompleted = false;
+
+        try
+        {
+            await SealedExoDionVictoryPresentation.PlayAsync(ct);
+
+            try
+            {
+                await Task.Delay(SealedExoDionVictoryPresentation.PostWhiteoutDelayBeforeGameSetMs, ct);
+            }
+            catch (OperationCanceledException) { }
+
+            if (BattleUIManager.I != null)
+            {
+                try
+                {
+                    await BattleUIManager.I.ShowPostOjyouFlashAndGameSetAsync(ct, skipInitialWhiteFlash: true);
+                }
+                catch (OperationCanceledException) { }
+            }
+
+            try { await Task.Delay(500, ct); }
+            catch (OperationCanceledException) { }
+
+            BattleUIManager.I?.HideBattleUIForGameEnd();
+            _host.CardStatsDisplay?.HideAllForGameEnd();
+            _host.SetGameState(GameState.BattleEndPhase);
+            gameEndPresentationCompleted = true;
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("[GameEndOrchestrator] Sealed EXO-DION victory cancelled");
+            if (!gameEndPresentationCompleted)
+                _gameEndTriggered = false;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            if (!gameEndPresentationCompleted)
+                _gameEndTriggered = false;
+        }
+
+        if (gameEndPresentationCompleted)
+        {
+            await RunGameResultScreenAsync(playerDead, enemyDead);
+            try
+            {
+                await BattleUIManager.I.FadeOutSealedExoDionWhiteOverlayAsync(ct);
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        return gameEndPresentationCompleted;
+    }
+
     public async Task ForceOpponentForfeitVictoryAsync(CancellationToken ct = default)
     {
         if (_gameEndTriggered) return;

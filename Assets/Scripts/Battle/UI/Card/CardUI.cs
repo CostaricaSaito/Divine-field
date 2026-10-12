@@ -285,7 +285,20 @@ public class CardUI : MonoBehaviour
                 return;
             }
 
+            if (CardRules.IsShivaFrozenHandCard(c))
+            {
+                text.text = "";
+                return;
+            }
+
             text.richText = false;
+            if (FreeMagicCastRules.ShouldShowFreeCastLabel(c, FreeMagicCastRules.GetCurrentSelectionOrEmpty()))
+            {
+                text.text = FreeMagicCastRules.HandLabel;
+                SetAtkDefTextStyle(text, c.element);
+                return;
+            }
+
             if (IsRecoveryByCardData(c))
             {
                 text.text = BuildRecoveryLabel(c);
@@ -296,6 +309,13 @@ public class CardUI : MonoBehaviour
             if (TryGetDefenseReactiveHandLabel(c, incomingForDefenseReactive, out string spec))
             {
                 text.text = spec;
+                SetAtkDefTextStyle(text, c.element);
+                return;
+            }
+
+            if (c.cardType == CardType.Defense && ShouldShowDefenseCardAsAttackLabel(c))
+            {
+                text.text = BuildDefenseAsAttackHandLabel(c);
                 SetAtkDefTextStyle(text, c.element);
                 return;
             }
@@ -427,6 +447,46 @@ public class CardUI : MonoBehaviour
                 return false;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 攻撃フェーズで防御兼攻撃カードを ATK 表記にする（他に攻撃選択あり、または当該カードが攻撃選択中）。
+        /// </summary>
+        public static bool ShouldShowDefenseCardAsAttackLabel(CardData c)
+        {
+            if (!CardRules.IsDefenseUsableAsPhysicalAttack(c)) return false;
+            var bm = BattleManager.I;
+            if (bm == null || bm.IsPlayerDefenseInputActive()) return false;
+            if (bm.CurrentState != GameState.AttackPhase || bm.CurrentTurnOwner != PlayerType.Player)
+                return false;
+
+            var selection = CardSelectionManager.I?.GetSelectedCards();
+            if (selection == null || selection.Count == 0) return false;
+
+            int selfId = c.GetInstanceID();
+            for (int i = 0; i < selection.Count; i++)
+            {
+                var s = selection[i];
+                if (s != null && s.GetInstanceID() == selfId)
+                    return true;
+            }
+
+            for (int i = 0; i < selection.Count; i++)
+            {
+                var s = selection[i];
+                if (s == null || s.GetInstanceID() == selfId) continue;
+                if (FreeMagicCastRules.IsFreeMagicCastCard(s)) continue;
+                if (CardRules.IsUsableInAttackPhase(s))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string BuildDefenseAsAttackHandLabel(CardData c)
+        {
+            if (WantsAtkPlusNotation(c)) return $"ATK+{c.attackPower}";
+            return $"ATK{c.attackPower}";
         }
 
         private static string BuildAttackTypeLabel(CardData c)

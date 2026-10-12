@@ -18,6 +18,8 @@ public static class StatusEffectPresentation
             return "\u5343\u5E74\u738B\u56FD";
         if (type == StatusEffectType.DiabolicEmission)
             return "\u95C7\u306E\u5E37\u304C\u8A2A\u308C\u308B...";
+        if (type == StatusEffectType.CyberPsychosis)
+            return "\u69D8\u5B50\u304C\u304A\u304B\u3057\u3044....";
         int id = StatusEffectCatalog.ToOfficialId(type);
         if (id < 1 || id > 15) return string.Empty;
         return StatusEffectCatalog.OfficialDisplayNames[id - 1];

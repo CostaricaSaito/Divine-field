@@ -3,7 +3,8 @@
 /// </summary>
 public enum MessagePopupKind
 {
-    ShivaFreezeApplied = 0,
+    /// <summary>Unused (was ice-barrier hand message; popup removed).</summary>
+    UnusedReserved0 = 0,
     FreezeCannotMove = 1,
     FreezeMelted = 2,
     DiseaseErodeBody = 3,

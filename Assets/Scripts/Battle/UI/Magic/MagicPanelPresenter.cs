@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,6 +28,11 @@ public class MagicPanelPresenter : MonoBehaviour
         if (magicPanelUI == null || MagicPoolManager.I == null) return;
         magicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries());
     }
+
+    public Task PlaySealedExoDionRightSlotRedTintAsync(float durationSeconds, CancellationToken ct)
+        => magicPanelUI != null
+            ? magicPanelUI.PlayRightSlotSealedExoRedTintAsync(durationSeconds, ct)
+            : Task.CompletedTask;
 
     public void RefreshHitRateDisplays()
     {

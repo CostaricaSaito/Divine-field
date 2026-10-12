@@ -17,9 +17,10 @@ public sealed class EnemyDefenseResolver
 
     public List<CardData> GetDefenseCardsForCombat()
     {
-        if (_host.EnemyAI is RemotePlayerAgent remote
-            && remote.LastDefenseSelection != null && remote.LastDefenseSelection.Count > 0)
-            return new List<CardData>(remote.LastDefenseSelection);
+        if (_host.EnemyAI != null
+            && _host.EnemyAI.LastDefenseSelection != null
+            && _host.EnemyAI.LastDefenseSelection.Count > 0)
+            return new List<CardData>(_host.EnemyAI.LastDefenseSelection);
         if (_host.SelectedDefenseCard != null)
             return new List<CardData> { _host.SelectedDefenseCard };
         return new List<CardData>();
@@ -50,7 +51,8 @@ public sealed class EnemyDefenseResolver
         var defenseCardsForCombat = defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0
             ? defenseCardsToDisplay
             : new List<CardData>();
-        CardData enemyDefenseCard = defenseCardsForCombat.Count > 0 ? defenseCardsForCombat[0] : null;
+        var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(defenseCardsForCombat);
+        CardData enemyDefenseCard = combatDefenseCards.Count > 0 ? combatDefenseCards[0] : null;
 
         var phaseToken = _host.GetPhaseToken();
 
@@ -174,7 +176,15 @@ public sealed class EnemyDefenseResolver
             else if (enemyPhysicalBlock)
             {
                 if (enemyDefenseCard.cardType == CardType.Magic && _host.CardSequenceManager != null)
-                    await _host.CardSequenceManager.ApplyEnemyMagicDefenseFromHandOrPoolAsync(enemyDefenseCard);
+                    await _host.CardSequenceManager.ApplyEnemyMagicDefenseFromHandOrPoolAsync(
+                        enemyDefenseCard, defenseCardsForCombat);
+                foreach (var extra in defenseCardsForCombat)
+                {
+                    if (extra == null || extra.cardType == CardType.Magic) continue;
+                    if (_host.IsOnlineMatch) continue;
+                    _host.HandRefill?.RecordEnemyUse(extra);
+                    _host.BattleProcessor.UseCard(extra, defHand);
+                }
                 await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
                     _host.Manager,
                     _host.BattleProcessor,

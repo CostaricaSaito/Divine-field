@@ -362,7 +362,12 @@ public class PlayerStatus
     public bool HasConfusionEffect()
     {
         foreach (var e in activeEffects)
-            if (e != null && e.EffectType == StatusEffectType.Confusion) return true;
+        {
+            if (e == null) continue;
+            if (e.EffectType == StatusEffectType.Confusion
+                || e.EffectType == StatusEffectType.CyberPsychosis)
+                return true;
+        }
         return false;
     }
 
@@ -467,7 +472,7 @@ public class PlayerStatus
     /// </summary>
     /// <param name="suppressGrantPopupAndSound">true のとき付与ポップアップと SE を出さない（デバッグ付与など）。</param>
     /// <returns>
-    /// result: 強制絶頂が必要な場合は <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>（呼び出し側で非同期処理）。
+    /// result: 楽園病＋病系のとき <see cref="ProgressiveApplyResult.ForcedParadiseEcstasy"/>（呼び出し側で絶頂演出）。
     /// grantPopupFadeSeconds: 付与ポップを出したときの <see cref="DamagePopup.fadeDuration"/>。0 なら寿命待ち不要。
     /// </returns>
     public (ProgressiveApplyResult result, float grantPopupFadeSeconds) TryApplyStatusEffect(
@@ -559,7 +564,8 @@ public class PlayerStatus
         var (result, _) = TryApplyStatusEffect(type, null);
         if (result == ProgressiveApplyResult.ForcedParadiseEcstasy)
         {
-            Debug.LogWarning($"{DisplayName}: 楽園病＋「病」は AddStatusEffect では処理されません。TryApplyStatusEffect の戻り値に応じて強制絶頂を実行してください。");
+            Debug.LogWarning(
+                $"{DisplayName}: 楽園病＋病系は AddStatusEffect では絶頂演出しません。TryApplyStatusEffect の戻り値に応じて ProcessForcedParadiseEcstasyAsync を実行してください。");
         }
     }
 

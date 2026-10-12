@@ -75,14 +75,19 @@ public static class SummonTurnEndLifecycle
             if (drawPlan.Count > 0)
             {
                 var names = new List<string>(drawPlan.Count);
+                var iceOrigins = new List<string>(drawPlan.Count);
                 foreach (var c in drawPlan)
+                {
                     names.Add(c != null ? c.cardName : "");
+                    iceOrigins.Add(ShivaIceBarrierDrawFlow.GetOriginalAssetNameForSync(c));
+                }
 
                 pack.Effects.Add(new SummonTurnEndEffectEntry
                 {
                     Kind = SummonTurnEndEffectKind.GarudaDraw,
                     OwnerIsHostPlayer = ownerIsHostPlayer,
                     DrawnCardNames = names,
+                    DrawIceBarrierOriginalAssetNames = iceOrigins,
                 });
                 pack.GarudaDrawPlans.Add(drawPlan);
             }
@@ -140,7 +145,8 @@ public static class SummonTurnEndLifecycle
                     }
                     else
                     {
-                        drawPlan = SummonGarudaLifecycle.InstantiateDrawPlanFromNames(bm, effect.DrawnCardNames);
+                        drawPlan = SummonGarudaLifecycle.InstantiateDrawPlanFromNames(
+                            bm, effect.DrawnCardNames, effect.DrawIceBarrierOriginalAssetNames);
                     }
 
                     garudaPlanIndex++;

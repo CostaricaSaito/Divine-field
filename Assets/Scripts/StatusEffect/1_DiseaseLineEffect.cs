@@ -2,7 +2,7 @@
 
 /// <summary>
 /// 病・重病・煉獄病・楽園病のいずれか1段階を表す状態異常（相互排他）。
-/// ターン開始ではなく、攻撃フェーズ終了時に <see cref="DiseaseTurnEndProcessor"/> で処理する。
+/// ターン開始ではなく、エンドフェイズで <see cref="DiseaseTurnEndProcessor"/> が処理する。
 /// </summary>
 public sealed class DiseaseLineEffect : IStatusEffect
 {

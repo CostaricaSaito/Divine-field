@@ -204,13 +204,40 @@ public class UseButtonPresenter : MonoBehaviour
         var selectedDefenseCards = BattleUIManager.I != null
             ? BattleUIManager.I.GetSelectedDefenseCards()
             : new List<CardData>();
+        var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedDefenseCards);
 
         List<CardData> incomingAttack = bm.GetIncomingAttackSnapshotForDefenseUi();
 
+        var ps = bm.GetPlayerStatus();
+        if (ps != null && selectedDefenseCards.Count > 0)
+        {
+            bool hasMagic = false;
+            for (int i = 0; i < selectedDefenseCards.Count; i++)
+            {
+                if (FreeMagicCastRules.IsEligibleMagic(selectedDefenseCards[i]))
+                {
+                    hasMagic = true;
+                    break;
+                }
+            }
+            if (hasMagic && ps.IsMagicUseForbidden())
+            {
+                SetUseButtonLabel("魔法使用不可");
+                SetUseButtonInteractable(false);
+                return;
+            }
+            if (FreeMagicCastRules.GetEffectiveMagicMpCost(selectedDefenseCards, ps) > ps.currentMP)
+            {
+                SetUseButtonLabel("MPが足りない");
+                SetUseButtonInteractable(false);
+                return;
+            }
+        }
+
         bool showBounce = incomingAttack != null && incomingAttack.Count > 0
-            && selectedDefenseCards.Count == 1
-            && selectedDefenseCards[0] != null
-            && ReflectionRules.RequiresReflectionExclusiveLock(selectedDefenseCards[0], incomingAttack);
+            && combatDefenseCards.Count == 1
+            && combatDefenseCards[0] != null
+            && ReflectionRules.RequiresReflectionExclusiveLock(combatDefenseCards[0], incomingAttack);
 
         if (showBounce)
         {
@@ -220,9 +247,9 @@ public class UseButtonPresenter : MonoBehaviour
         }
 
         bool showParry = incomingAttack != null && incomingAttack.Count > 0
-            && selectedDefenseCards.Count == 1
-            && selectedDefenseCards[0] != null
-            && ParryRules.RequiresParryExclusiveLock(selectedDefenseCards[0], incomingAttack);
+            && combatDefenseCards.Count == 1
+            && combatDefenseCards[0] != null
+            && ParryRules.RequiresParryExclusiveLock(combatDefenseCards[0], incomingAttack);
 
         if (showParry)
         {
@@ -232,21 +259,12 @@ public class UseButtonPresenter : MonoBehaviour
         }
 
         bool showBlockingNullify = incomingAttack != null && incomingAttack.Count > 0
-            && selectedDefenseCards.Count == 1
-            && selectedDefenseCards[0] != null
-            && BlockingRules.RequiresBlockingExclusiveLock(selectedDefenseCards[0], incomingAttack);
+            && combatDefenseCards.Count == 1
+            && combatDefenseCards[0] != null
+            && BlockingRules.RequiresBlockingExclusiveLock(combatDefenseCards[0], incomingAttack);
 
         if (showBlockingNullify)
         {
-            var ps = bm.GetPlayerStatus();
-            if (ps != null && selectedDefenseCards[0].cardType == CardType.Magic
-                && !BlockingRules.CanAffordMagicDefenseMp(selectedDefenseCards[0], ps))
-            {
-                SetUseButtonLabel("MPが足りない");
-                SetUseButtonInteractable(false);
-                return;
-            }
-
             ApplyBlockingNullifyUseButtonStyle();
             SetUseButtonInteractable(true);
             return;
@@ -328,7 +346,7 @@ public class UseButtonPresenter : MonoBehaviour
             }
         }
 
-        int magicTotal = ps.GetTotalEffectiveMagicMpForCards(selected);
+        int magicTotal = FreeMagicCastRules.GetEffectiveMagicMpCost(selected, ps);
         if (magicTotal > ps.currentMP)
         {
             SetUseButtonLabel("MPが足りない");

@@ -74,7 +74,8 @@ public sealed class PlayerInputController
 
         if (_host.IsPlayerDefenseInputActive())
         {
-            if (!CardRules.IsUsableInDefensePhase(card))
+            if (!CardRules.IsUsableInDefensePhase(card)
+                && !FreeMagicCastRules.CanAddFreeCastToSelection(card, BattleUIManager.I?.GetSelectedCards()))
             {
                 Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
                 return;
@@ -96,7 +97,8 @@ public sealed class PlayerInputController
                 return;
             }
 
-            if (!CardRules.IsUsableInAttackPhase(card))
+            if (!CardRules.IsUsableInAttackPhase(card)
+                && !FreeMagicCastRules.CanAddFreeCastToSelection(card, BattleUIManager.I?.GetSelectedCards()))
             {
                 Debug.LogWarning($"このカードは攻撃フェーズでは使えません: {card.cardName} ({card.cardType})");
                 return;
@@ -143,9 +145,9 @@ public sealed class PlayerInputController
             }
 
             if (card.cardType == CardType.Magic && _host.PlayerStatus != null
-                && !BlockingRules.CanAffordMagicDefenseMp(card, _host.PlayerStatus))
+                && _host.PlayerStatus.IsMagicUseForbidden())
             {
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法が使用できません", new Color(0.95f, 0.22f, 0.2f));
                 return;
             }
         }
@@ -320,7 +322,7 @@ public sealed class PlayerInputController
             return;
         }
 
-        int totalMagicMp = _host.PlayerStatus.GetTotalEffectiveMagicMpForCards(selectedAttackCards);
+        int totalMagicMp = FreeMagicCastRules.GetEffectiveMagicMpCost(selectedAttackCards, _host.PlayerStatus);
         if (totalMagicMp > _host.PlayerStatus.currentMP)
         {
             UnlockUseButton();
@@ -333,9 +335,12 @@ public sealed class PlayerInputController
         if (_host.IsOnlineMatch)
             NetworkBattleBridge.SendAttackSelection(selectedAttackCards, _host.IsPlayerSelfAttackTargetMode);
 
-        if (selectedAttackCards.Count == 1 && CardRules.IsImmediateAction(selectedAttackCards[0]))
+        var combatAttackCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedAttackCards);
+        bool waiveMagicMp = FreeMagicCastRules.WaivesMagicMp(selectedAttackCards);
+        if (FreeMagicCastRules.ShouldUseImmediateAttackSingleCardFlow(selectedAttackCards))
         {
-            var card = selectedAttackCards[0];
+            ConsumePlayerFreeCastCatalysts(selectedAttackCards);
+            var card = combatAttackCards[0];
             int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
 
             bool magicFromMagicPanel = card.cardType == CardType.Magic
@@ -344,7 +349,7 @@ public sealed class PlayerInputController
             if (slotIndex >= 0 && !magicFromMagicPanel)
                 _host.HandRefill?.RecordPlayerUseSlot(slotIndex);
 
-            _ = RunImmediateAttackSingleCardAsync(card, slotIndex);
+            _ = RunImmediateAttackSingleCardAsync(card, slotIndex, waiveMagicMp);
             return;
         }
 
@@ -394,10 +399,11 @@ public sealed class PlayerInputController
             return;
         }
 
+        var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedDefenseCards);
         if (_host.Defender == PlayerType.Player
             && _host.PlayerStatus != null
             && _host.PlayerStatus.HasRestraintEffect()
-            && selectedDefenseCards.Count > 1)
+            && combatDefenseCards.Count > 1)
         {
             BattleUIManager.I?.ShowInfoPopupOnCardPanel("体が重い", new Color(0.22f, 0.24f, 0.38f));
             return;
@@ -420,9 +426,9 @@ public sealed class PlayerInputController
             {
                 if (defCard == null) continue;
                 if (defCard.cardType == CardType.Magic && _host.PlayerStatus != null
-                    && !BlockingRules.CanAffordMagicDefenseMp(defCard, _host.PlayerStatus))
+                    && _host.PlayerStatus.IsMagicUseForbidden())
                 {
-                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("魔法が使用できません", new Color(0.95f, 0.22f, 0.2f));
                     return;
                 }
 
@@ -434,6 +440,14 @@ public sealed class PlayerInputController
                         "無属性の物理攻撃にのみ使えます", new Color(0.85f, 0.25f, 0.2f));
                     return;
                 }
+            }
+
+            if (_host.PlayerStatus != null
+                && FreeMagicCastRules.GetEffectiveMagicMpCost(selectedDefenseCards, _host.PlayerStatus)
+                    > _host.PlayerStatus.currentMP)
+            {
+                BattleUIManager.I?.ShowInfoPopupOnCardPanel("MPが足りない", new Color(0.95f, 0.22f, 0.2f));
+                return;
             }
         }
 
@@ -451,7 +465,21 @@ public sealed class PlayerInputController
         }
     }
 
-    private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex)
+    private void ConsumePlayerFreeCastCatalysts(IReadOnlyList<CardData> selection)
+    {
+        if (selection == null) return;
+        for (int i = 0; i < selection.Count; i++)
+        {
+            var card = selection[i];
+            if (card == null || !FreeMagicCastRules.IsCombatCatalyst(card, selection)) continue;
+            int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
+            if (slotIndex >= 0)
+                _host.HandRefill?.RecordPlayerUseSlot(slotIndex);
+            _host.BattleProcessor?.UseCard(card, _host.PlayerHand);
+        }
+    }
+
+    private async Task RunImmediateAttackSingleCardAsync(CardData card, int slotIndex, bool waiveMagicMp = false)
     {
         PlayerStatus immediateEffectTarget = ComputeImmediateEffectTargetForPlayerAttack(card);
 
@@ -483,7 +511,7 @@ public sealed class PlayerInputController
                     return;
                 }
 
-                if (_host.PlayerStatus != null && card.mpCost > 0)
+                if (!waiveMagicMp && _host.PlayerStatus != null && card.mpCost > 0)
                 {
                     int pay = _host.PlayerStatus.GetEffectiveMagicMpCost(card.mpCost);
                     _host.PlayerStatus.UseMP(pay);

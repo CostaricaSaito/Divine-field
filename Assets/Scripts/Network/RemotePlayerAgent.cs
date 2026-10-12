@@ -16,9 +16,6 @@ using UnityEngine;
 /// </summary>
 public class RemotePlayerAgent : EnemyAI
 {
-    /// <summary>Full defense selection of the last ExecuteDefenseSelectAsync (may be multi-card).</summary>
-    public List<CardData> LastDefenseSelection { get; private set; }
-
     /// <summary>
     /// TOTAL tap toggle state of the remote attacker for the last attack:
     /// attack aimed at the attacker itself / recovery aimed at the opponent.
@@ -157,21 +154,25 @@ public class RemotePlayerAgent : EnemyAI
             foreach (var card in resolved)
             {
                 if (card == null || card.cardType == CardType.Magic) continue;
+                if (FreeMagicCastRules.IsCombatCatalyst(card, resolved)) continue;
                 if (primaryNormal == null) primaryNormal = card;
             }
         }
         else
         {
+            bool waiveMp = FreeMagicCastRules.WaivesMagicMp(resolved);
             foreach (var card in resolved)
             {
                 if (card != null && card.cardType == CardType.Magic)
-                    ApplyRemoteMagicBookkeeping(card, poolSourced.Contains(card), cpuHand, battleProcessor, handRefill, enemyStatus);
+                    ApplyRemoteMagicBookkeeping(
+                        card, poolSourced.Contains(card), cpuHand, battleProcessor, handRefill, enemyStatus, waiveMp);
             }
 
             foreach (var card in resolved)
             {
                 if (card == null || card.cardType == CardType.Magic) continue;
-                if (primaryNormal == null) primaryNormal = card;
+                if (!FreeMagicCastRules.IsCombatCatalyst(card, resolved) && primaryNormal == null)
+                    primaryNormal = card;
                 handRefill?.RecordEnemyUse(card);
                 battleProcessor.UseCard(card, cpuHand);
             }
@@ -239,6 +240,7 @@ public class RemotePlayerAgent : EnemyAI
         if (!InterventionTurnEndProcessor.IsResolving)
         {
             var bm = BattleManager.I;
+            bool waiveMp = FreeMagicCastRules.WaivesMagicMp(resolved);
             foreach (var card in resolved)
             {
                 if (card != null && card.cardType == CardType.Magic)
@@ -246,12 +248,25 @@ public class RemotePlayerAgent : EnemyAI
                         card, poolSourced.Contains(card), cpuHand,
                         bm != null ? bm.battleProcessor : null,
                         bm != null ? bm.HandRefill : null,
-                        bm != null ? bm.GetEnemyStatus() : null);
+                        bm != null ? bm.GetEnemyStatus() : null,
+                        waiveMp);
+            }
+
+            if (waiveMp)
+            {
+                foreach (var card in resolved)
+                {
+                    if (card == null || card.cardType == CardType.Magic) continue;
+                    bm?.HandRefill?.RecordEnemyUse(card);
+                    bm?.battleProcessor?.UseCard(card, cpuHand);
+                }
             }
         }
 
-        Debug.Log($"[RemotePlayerAgent] Remote defense: {resolved[0].cardName} ({resolved.Count} cards)");
-        return resolved[0];
+        var combatDefense = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(resolved);
+        var primaryDefense = combatDefense.Count > 0 ? combatDefense[0] : resolved[0];
+        Debug.Log($"[RemotePlayerAgent] Remote defense: {primaryDefense.cardName} ({resolved.Count} cards)");
+        return primaryDefense;
     }
 
     public override Task<CardData> ExecuteParryRerunDefenseSelectAsync(
@@ -334,11 +349,12 @@ public class RemotePlayerAgent : EnemyAI
         List<CardData> cpuHand,
         BattleProcessor battleProcessor,
         HandRefillService handRefill,
-        PlayerStatus enemyStatus)
+        PlayerStatus enemyStatus,
+        bool waiveMp = false)
     {
         if (card == null) return;
 
-        if (enemyStatus != null && card.mpCost > 0)
+        if (!waiveMp && enemyStatus != null && card.mpCost > 0)
         {
             int pay = enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
             enemyStatus.UseMP(pay);

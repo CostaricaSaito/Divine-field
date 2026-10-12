@@ -89,6 +89,7 @@ public static class MagicFountainLifecycle
         {
             var entry = entries[i];
             if (entry?.cardData == null) continue;
+            if (SealedExoDionRules.IsSealedExoDion(entry.cardData)) continue;
             plan.Entries.Add(new MagicFountainPlanEntry
             {
                 Card = entry.cardData,

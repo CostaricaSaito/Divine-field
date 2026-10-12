@@ -287,17 +287,9 @@ public class BattleProcessor : MonoBehaviour
 
         // 攻撃力・防御力の計算
         int attackPower = CalculateTotalAttackPower(attackCards, attacker, defender);
-        int defensePower = CalculateTotalDefensePower(defenseCard, defender);
-
-        // 属性マッチング: 属性が一致しない防御は無効
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
-        if (attackElement != ElementType.None && defenseCard != null
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
-        {
-            Debug.Log($"[BattleProcessor] 属性不一致: 攻撃={attackElement} vs 防御={defElement} → 防御力0");
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCard, defender, attackElement);
 
         Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
@@ -379,14 +371,9 @@ public class BattleProcessor : MonoBehaviour
         if (defender.IsCastingArchMagic)
             defenseCard = null;
 
-        int defensePower = CalculateTotalDefensePower(defenseCard, defender);
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
-        if (attackElement != ElementType.None && defenseCard != null
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
-        {
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCard, defender, attackElement);
 
         if (!skipHitCheck)
         {
@@ -428,13 +415,9 @@ public class BattleProcessor : MonoBehaviour
         if (defender.IsCastingArchMagic)
             defenseCards = null;
 
-        int defensePower = CalculateTotalDefensePower(defenseCards, defender);
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
-        {
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCards, defender, attackElement);
 
         if (!skipHitCheck)
         {
@@ -474,14 +457,9 @@ public class BattleProcessor : MonoBehaviour
             defenseCard = null;
 
         int attackPower = GetOrbCounterDisplayedAttackPower(attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
-        int defensePower = CalculateTotalDefensePower(defenseCard, counterTarget);
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        ElementType defElement = defenseCard != null ? defenseCard.element : ElementType.None;
-        if (attackElement != ElementType.None && defenseCard != null
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCard))
-        {
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCard, counterTarget, attackElement);
 
         if (!skipHitCheck)
         {
@@ -535,13 +513,9 @@ public class BattleProcessor : MonoBehaviour
 
         int attackPower = GetOrbCounterDisplayedAttackPower(
             attackCards, receivedFirstPhaseDamageAsBase, counterAttacker, counterTarget);
-        int defensePower = CalculateTotalDefensePower(defenseCards, counterTarget);
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
-        {
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCards, counterTarget, attackElement);
 
         if (!skipHitCheck)
         {
@@ -828,48 +802,6 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 防御力を計算する（複数カード対応）
-    /// </summary>
-    private int CalculateTotalDefensePower(CardData card, PlayerStatus defender)
-    {
-        if (card == null || defender == null) return 0;
-        return card.defensePower;
-    }
-
-    /// <summary>
-    /// 防御力を計算する（複数カード対応）
-    /// </summary>
-    private int CalculateTotalDefensePower(List<CardData> cards, PlayerStatus defender)
-    {
-        if (cards == null || cards.Count == 0 || defender == null) return 0;
-        
-        int totalDefense = 0;
-        foreach (var card in cards)
-        {
-            if (card != null)
-            {
-                totalDefense += card.defensePower;
-            }
-        }
-        
-        Debug.Log($"[BattleProcessor] ===== 防御力計算開始 =====");
-        Debug.Log($"[BattleProcessor] 防御者: {defender.DisplayName}");
-        Debug.Log($"[BattleProcessor] 防御カード数: {cards.Count}");
-        
-        for (int i = 0; i < cards.Count; i++)
-        {
-            var card = cards[i];
-            if (card != null)
-            {
-                Debug.Log($"[BattleProcessor] [{i + 1}] {card.cardName}: DEF {card.defensePower} (累計: {totalDefense})");
-            }
-        }
-        
-        Debug.Log($"[BattleProcessor] ===== 最終防御力: {totalDefense} =====");
-        return totalDefense;
-    }
-
-    /// <summary>
     /// 命中判定（Primary の hitRate・防御側の不運・攻撃側の煙幕補正）。
     /// </summary>
     private bool CheckHit(List<CardData> attackCards, PlayerStatus attacker, PlayerStatus defender)
@@ -1118,17 +1050,9 @@ public class BattleProcessor : MonoBehaviour
 
         // 攻撃力・防御力の計算
         int attackPower = CalculateTotalAttackPower(attackCards, attacker, defender);
-        int defensePower = CalculateTotalDefensePower(defenseCards, defender);
-
-        // 属性マッチング: 防御の合算属性が攻撃属性と一致しなければ防御力0
         ElementType attackElement = ElementHelper.GetIncomingAttackElement(attackCards);
-        ElementType defElement = ElementHelper.GetCombinedElement(defenseCards);
-        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
-        {
-            Debug.Log($"[BattleProcessor] 属性不一致: 攻撃={attackElement} vs 防御={defElement} → 防御力0");
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCards, defender, attackElement);
 
         Debug.Log($"[BattleProcessor] 計算結果 - 攻撃力: {attackPower}, 防御力: {defensePower}, 攻撃属性: {attackElement}");
 
@@ -1200,6 +1124,9 @@ public class BattleProcessor : MonoBehaviour
         bool countsAsDirectAttack = true,
         bool allowRagnarokDisaster = true)
     {
+        await BlazingCoatDefenseFlow.TryThawDefenderOnUseAsync(
+            defender, defenseCardsForStatusRule, CancellationToken.None);
+
         if (CardRules.IsStatusOnlyMagicAttackCombo(attackCards) && defenseCardsForStatusRule != null)
         {
             int stripNormalArmor = 0;
@@ -1282,8 +1209,6 @@ public class BattleProcessor : MonoBehaviour
 
         await TryApplyAttackCardStatusEffectsAsync(attackCards, attacker, defender, firstPhaseDamage, defenseCardsForStatusRule);
 
-        await ShivaDirectAttackFreezeFlow.TryApplyFreezeAfterDirectAttackAsync(
-            attacker, defender, firstPhaseDamage, countsAsDirectAttack);
         UpdateStatusDisplay();
 
         // Phoenix revival before orb counters. Counter base stays phase-1 damage, not HP lost.
@@ -1310,6 +1235,14 @@ public class BattleProcessor : MonoBehaviour
 
         bool deathConfirmed = IsEitherCombatantDead(attacker, defender)
             || (BattleManager.I != null && BattleManager.I.IsGameEndTriggered);
+
+        if (!deathConfirmed && defenseCardsForStatusRule != null)
+        {
+            await CyberExoskeletonDefenseFlow.TryGrantCyberPsychosisAfterDefenseAsync(
+                defenseCardsForStatusRule,
+                defender,
+                CancellationToken.None);
+        }
 
         if (!deathConfirmed
             && defenseCardsForStatusRule != null
@@ -1426,18 +1359,8 @@ public class BattleProcessor : MonoBehaviour
 
         int attackPower = effect.fixedAttackPower;
         ElementType attackElement = effect.attackElement;
-        int defensePower = defenseCards != null && defenseCards.Count > 0
-            ? CalculateTotalDefensePower(defenseCards, defender)
-            : 0;
-
-        ElementType defElement = defenseCards != null && defenseCards.Count > 0
-            ? ElementHelper.GetCombinedElement(defenseCards)
-            : ElementType.None;
-        if (attackElement != ElementType.None && defenseCards != null && defenseCards.Count > 0
-            && !ElementHelper.CanDefendAgainst(attackElement, defenseCards))
-        {
-            defensePower = 0;
-        }
+        int defensePower = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+            defenseCards, defender, attackElement);
 
         bool hit = CheckHit(attackCards, attacker, defender);
         if (!hit)

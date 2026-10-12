@@ -60,6 +60,17 @@ public class TotalAtkDefPanelResolver
         if (ShouldShowDefenderDefenseTotalDuringReflectionOverlay(battleManager, forEnemyPanel: false))
             return false;
 
+        if (IsPlayerDefenderDefenseTotalContext(battleManager))
+        {
+            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0
+                && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards))
+                return true;
+            if (HasDefenderDefenseDisplay(battleManager, selectedDefenseCards, battleManager.GetPlayerStatus()))
+                return false;
+            return true;
+        }
+
         if (ShouldHidePlayerPanelForReflectionOverlay(battleManager))
             return true;
 
@@ -89,8 +100,8 @@ public class TotalAtkDefPanelResolver
                     return false;
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, ToMutableList(_state.CurrentSequenceCards)))
                     return !ShouldShowPlayerPanelHeldOutgoingAttack(battleManager);
-                int totalDefense = _power.CalculateTotalDefensePower(ToMutableList(_state.CurrentSequenceCards));
-                if (totalDefense <= 0) return true;
+                var seqDefPlayer = ToMutableList(_state.CurrentSequenceCards);
+                if (!HasDefenderDefenseDisplay(battleManager, seqDefPlayer, battleManager.GetPlayerStatus())) return true;
                 return false;
             }
         }
@@ -133,29 +144,6 @@ public class TotalAtkDefPanelResolver
             }
         }
 
-        if (battleManager.CurrentState == GameState.DefensePhase
-            || battleManager.CurrentState == GameState.DefenseConfirmPhase
-            || (battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender))
-        {
-            var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
-            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
-            {
-                if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards)) return true;
-                if (selectedDefenseCards.Count > 1)
-                {
-                    int totalDefense = _power.CalculateTotalDefensePower(selectedDefenseCards);
-                    if (totalDefense <= 0) return true;
-                    return false;
-                }
-
-                var card = selectedDefenseCards[0];
-                if (card.defensePower <= 0) return true;
-                return false;
-            }
-
-            return true;
-        }
-
         return true;
     }
 
@@ -194,8 +182,8 @@ public class TotalAtkDefPanelResolver
                 if (IsDamageCounterOrbSequenceForPanel(battleManager, false))
                     return false;
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, ToMutableList(_state.CurrentSequenceCards))) return true;
-                int totalDefense = _power.CalculateTotalDefensePower(ToMutableList(_state.CurrentSequenceCards));
-                if (totalDefense <= 0) return true;
+                var seqDef = ToMutableList(_state.CurrentSequenceCards);
+                if (!HasDefenderDefenseDisplay(battleManager, seqDef, battleManager.GetEnemyStatus())) return true;
                 return false;
             }
         }
@@ -242,13 +230,12 @@ public class TotalAtkDefPanelResolver
             if (state == GameState.DefensePhase || state == GameState.DefenseConfirmPhase)
             {
                 var defCards = TotalAtkDefCombatPhaseRules.ResolveEnemyDefenseCardsForDisplay(battleManager);
-                if (defCards != null && defCards.Count > 0)
-                {
-                    if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, defCards)) return true;
-                    if (defCards.Count > 1)
-                        return _power.CalculateTotalDefensePower(defCards) <= 0;
-                    return defCards[0].defensePower <= 0;
-                }
+                if (defCards != null && defCards.Count > 0
+                    && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, defCards))
+                    return true;
+                if (!HasDefenderDefenseDisplay(battleManager, defCards, battleManager.GetEnemyStatus()))
+                    return true;
+                return false;
             }
             return true;
         }
@@ -266,9 +253,12 @@ public class TotalAtkDefPanelResolver
             var defCards = ResolveDefenderDefenseCardsForReflectionOverlay(battleManager, forEnemyPanel: false);
             if (defCards != null && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, defCards))
                 return "";
-            if (defCards != null && defCards.Count > 0)
-                return _power.FormatDefensePowerLabel(defCards);
+            if (defCards != null)
+                return FormatDefenderDefenseLabel(battleManager, defCards, battleManager.GetPlayerStatus());
         }
+
+        if (TryGetPlayerDefenderDefenseDisplayText(battleManager, out string playerDefLabel))
+            return playerDefLabel;
 
         if (IsDamageCounterOrbSequenceForPanel(battleManager, true))
         {
@@ -280,11 +270,10 @@ public class TotalAtkDefPanelResolver
         if (battleManager.IsPostDeathDefenseWaitActive() && battleManager.IsPostDeathPlayerDefender)
         {
             var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
-            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
-            {
-                if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards)) return "";
-                return _power.FormatDefensePowerLabel(selectedDefenseCards);
-            }
+            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0
+                && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards))
+                return "";
+            return FormatDefenderDefenseLabel(battleManager, selectedDefenseCards, battleManager.GetPlayerStatus());
         }
 
         if (TotalAtkDefCombatPhaseRules.TryGetPostDeathChainAttackForPanel(true, out var pdChainCards, out var pdChainAttacker)
@@ -328,7 +317,7 @@ public class TotalAtkDefPanelResolver
                         return heldAtk;
                     return "";
                 }
-                return _power.FormatDefensePowerLabel(seqCards);
+                return FormatDefenderDefenseLabel(battleManager, seqCards, battleManager.GetPlayerStatus());
             }
         }
 
@@ -369,8 +358,8 @@ public class TotalAtkDefPanelResolver
             if (selectedDefenseCards != null && selectedDefenseCards.Count > 0
                 && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, selectedDefenseCards))
                 return "";
-            if (selectedDefenseCards != null && selectedDefenseCards.Count > 0)
-                return _power.FormatDefensePowerLabel(selectedDefenseCards);
+            return FormatDefenderDefenseLabel(
+                battleManager, selectedDefenseCards, battleManager.GetPlayerStatus());
         }
 
         return "";
@@ -393,8 +382,8 @@ public class TotalAtkDefPanelResolver
             var defCards = ResolveDefenderDefenseCardsForReflectionOverlay(battleManager, forEnemyPanel: true);
             if (defCards != null && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, defCards))
                 return "";
-            if (defCards != null && defCards.Count > 0)
-                return _power.FormatDefensePowerLabel(defCards);
+            if (defCards != null)
+                return FormatDefenderDefenseLabel(battleManager, defCards, battleManager.GetEnemyStatus());
         }
 
         if (TotalAtkDefCombatPhaseRules.IsPlayerDefendingAgainstEnemyAttack(battleManager))
@@ -421,7 +410,8 @@ public class TotalAtkDefPanelResolver
             else if (_state.CurrentSequenceType == "防御")
             {
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, ToMutableList(_state.CurrentSequenceCards))) return "";
-                return _power.FormatDefensePowerLabel(ToMutableList(_state.CurrentSequenceCards));
+                return FormatDefenderDefenseLabel(
+                    battleManager, ToMutableList(_state.CurrentSequenceCards), battleManager.GetEnemyStatus());
             }
         }
 
@@ -448,10 +438,10 @@ public class TotalAtkDefPanelResolver
             && battleManager.DefenderPublic == PlayerType.Enemy)
         {
             var defCards = TotalAtkDefCombatPhaseRules.ResolveEnemyDefenseCardsForDisplay(battleManager);
-            if (defCards != null && defCards.Count > 0)
+            if (defCards != null)
             {
                 if (TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(battleManager, defCards)) return "";
-                return _power.FormatDefensePowerLabel(defCards);
+                return FormatDefenderDefenseLabel(battleManager, defCards, battleManager.GetEnemyStatus());
             }
         }
 
@@ -472,8 +462,8 @@ public class TotalAtkDefPanelResolver
             && ShouldShowDefenderDefenseTotalDuringReflectionOverlay(battleManager, forEnemyPanel: false))
         {
             var defCards = ResolveDefenderDefenseCardsForReflectionOverlay(battleManager, forEnemyPanel: false);
-            if (defCards != null && defCards.Count > 0)
-                return ElementHelper.GetCombinedElement(defCards);
+            return ResolveDefenderDefenseCombinedElement(
+                battleManager, defCards, battleManager.GetPlayerStatus());
         }
 
         if (TotalAtkDefCombatPhaseRules.IsEnemyDefendingAgainstPlayerAttack(battleManager))
@@ -488,6 +478,14 @@ public class TotalAtkDefPanelResolver
 
         if (_state.CurrentSequenceCards.Count > 0 && _state.SequenceOwnerSide == Side.Player)
         {
+            if (_state.CurrentSequenceType == "防御" && battleManager != null)
+            {
+                return ResolveDefenderDefenseCombinedElement(
+                    battleManager,
+                    ToMutableList(_state.CurrentSequenceCards),
+                    battleManager.GetPlayerStatus());
+            }
+
             var postDeathCtx = PostDeathCombatContext.Active;
             if (postDeathCtx != null && postDeathCtx.MatchesIncoming(ToMutableList(_state.CurrentSequenceCards)))
                 return postDeathCtx.AttackElement;
@@ -511,11 +509,11 @@ public class TotalAtkDefPanelResolver
             var cards = BattleUIManager.I?.GetSelectedAttackCards();
             if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
         }
-        else if (battleManager.CurrentState == GameState.DefensePhase
-            || battleManager.CurrentState == GameState.DefenseConfirmPhase)
+        else if (IsPlayerDefenderDefenseTotalContext(battleManager))
         {
             var cards = BattleUIManager.I?.GetSelectedDefenseCards();
-            if (cards != null && cards.Count > 0) return ElementHelper.GetCombinedElement(cards);
+            return ResolveDefenderDefenseCombinedElement(
+                battleManager, cards, battleManager.GetPlayerStatus());
         }
         return ElementType.None;
     }
@@ -534,8 +532,8 @@ public class TotalAtkDefPanelResolver
         if (ShouldShowDefenderDefenseTotalDuringReflectionOverlay(battleManager, forEnemyPanel: true))
         {
             var defCards = ResolveDefenderDefenseCardsForReflectionOverlay(battleManager, forEnemyPanel: true);
-            if (defCards != null && defCards.Count > 0)
-                return ElementHelper.GetCombinedElement(defCards);
+            return ResolveDefenderDefenseCombinedElement(
+                battleManager, defCards, battleManager.GetEnemyStatus());
         }
 
         if (TotalAtkDefCombatPhaseRules.IsPlayerDefendingAgainstEnemyAttack(battleManager))
@@ -550,6 +548,14 @@ public class TotalAtkDefPanelResolver
 
         if (_state.CurrentSequenceCards.Count > 0 && _state.SequenceOwnerSide == Side.Enemy)
         {
+            if (_state.CurrentSequenceType == "防御")
+            {
+                return ResolveDefenderDefenseCombinedElement(
+                    battleManager,
+                    ToMutableList(_state.CurrentSequenceCards),
+                    battleManager.GetEnemyStatus());
+            }
+
             var postDeathCtx = PostDeathCombatContext.Active;
             if (postDeathCtx != null && postDeathCtx.MatchesIncoming(ToMutableList(_state.CurrentSequenceCards)))
                 return postDeathCtx.AttackElement;
@@ -578,8 +584,8 @@ public class TotalAtkDefPanelResolver
             && battleManager.DefenderPublic == PlayerType.Enemy)
         {
             var defCards = TotalAtkDefCombatPhaseRules.ResolveEnemyDefenseCardsForDisplay(battleManager);
-            if (defCards != null && defCards.Count > 0)
-                return ElementHelper.GetCombinedElement(defCards);
+            return ResolveDefenderDefenseCombinedElement(
+                battleManager, defCards, battleManager.GetEnemyStatus());
         }
         return ElementType.None;
     }
@@ -701,17 +707,20 @@ public class TotalAtkDefPanelResolver
         if (!showDefOnThisPanel) return false;
 
         var defCards = ResolveDefenderDefenseCardsForReflectionOverlay(bm, forEnemyPanel);
-        if (defCards == null || defCards.Count == 0) return false;
 
         var incoming = TotalAtkDefCombatPhaseRules.GetIncomingAttackSnapshotForDefenseUi(bm);
         if (incoming == null || incoming.Count == 0)
             incoming = bm.GetReflectionAttackCardsForTotalDisplay();
         if (incoming == null || incoming.Count == 0) return false;
 
-        if (BlockingRules.AnyDefenseCardResolvesAsReflectionOrNullify(defCards, incoming))
+        if (defCards != null && defCards.Count > 0
+            && BlockingRules.AnyDefenseCardResolvesAsReflectionOrNullify(defCards, incoming))
             return false;
 
-        return _power.CalculateTotalDefensePower(defCards) > 0;
+        PlayerStatus defender = forEnemyPanel
+            ? bm.GetEnemyStatus()
+            : bm.GetPlayerStatus();
+        return HasDefenderDefenseDisplay(bm, defCards, defender);
     }
 
     private List<CardData> ResolveDefenderDefenseCardsForReflectionOverlay(BattleManager bm, bool forEnemyPanel)
@@ -783,6 +792,68 @@ public class TotalAtkDefPanelResolver
     {
         if (!IsAttackerPanelDuringAttackSequenceReveal(forPlayerPanel)) return false;
         return _state.CurrentSequenceType == "攻撃" && _state.CurrentSequenceCards.Count == 0;
+    }
+
+    private static bool IsPlayerDefenderDefenseTotalContext(BattleManager bm)
+    {
+        if (bm == null) return false;
+        if (!TotalAtkDefCombatPhaseRules.IsPlayerDefendingAgainstEnemyAttack(bm)) return false;
+        return bm.CurrentState == GameState.DefensePhase
+            || bm.CurrentState == GameState.DefenseConfirmPhase
+            || (bm.IsPostDeathDefenseWaitActive() && bm.IsPostDeathPlayerDefender);
+    }
+
+    private bool TryGetPlayerDefenderDefenseDisplayText(BattleManager bm, out string text)
+    {
+        text = "";
+        if (!IsPlayerDefenderDefenseTotalContext(bm)) return false;
+
+        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        if (selectedDefenseCards != null && selectedDefenseCards.Count > 0
+            && TotalAtkDefCombatPhaseRules.IsReflectionOrNullifyDefenseRoute(bm, selectedDefenseCards))
+            return true;
+
+        text = FormatDefenderDefenseLabel(bm, selectedDefenseCards, bm.GetPlayerStatus());
+        return true;
+    }
+
+    private ElementType ResolveIncomingAttackElementForDefenseUi(BattleManager bm)
+    {
+        if (bm == null) return ElementType.None;
+        var incoming = TotalAtkDefCombatPhaseRules.GetIncomingAttackSnapshotForDefenseUi(bm);
+        if (incoming == null || incoming.Count == 0) return ElementType.None;
+        return ElementHelper.GetIncomingAttackElement(incoming);
+    }
+
+    private string FormatDefenderDefenseLabel(
+        BattleManager bm,
+        List<CardData> defenseCards,
+        PlayerStatus defender)
+    {
+        ElementType attackElement = ResolveIncomingAttackElementForDefenseUi(bm);
+        return _power.FormatDefensePowerLabel(defenseCards, defender, attackElement);
+    }
+
+    private bool HasDefenderDefenseDisplay(
+        BattleManager bm,
+        List<CardData> defenseCards,
+        PlayerStatus defender)
+    {
+        if (defender == null) return false;
+        ElementType attackElement = ResolveIncomingAttackElementForDefenseUi(bm);
+        return _power.GetEffectiveDefensePowerForDisplay(defenseCards, defender, attackElement) > 0;
+    }
+
+    private ElementType ResolveDefenderDefenseCombinedElement(
+        BattleManager bm,
+        List<CardData> defenseCards,
+        PlayerStatus defender)
+    {
+        if (defender == null) return ElementType.None;
+        ElementType attackElement = ResolveIncomingAttackElementForDefenseUi(bm);
+        if (_power.GetEffectiveDefensePowerForDisplay(defenseCards, defender, attackElement) <= 0)
+            return ElementType.None;
+        return _power.GetDefenseDisplayCombinedElement(defenseCards, defender);
     }
 
     private static List<CardData> ToMutableList(IReadOnlyList<CardData> cards)

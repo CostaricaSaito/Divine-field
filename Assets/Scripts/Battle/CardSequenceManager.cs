@@ -64,7 +64,7 @@ public class CardSequenceManager : MonoBehaviour
 
         await Task.Delay(300, ct);
 
-        BattleUIManager.I?.ShowCardDetail(card, side);
+        BattleUIManager.I?.ShowCardSheetVisualOnly(card, side);
         cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
         cardStatsDisplay?.UpdateDisplay();
         SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
@@ -533,12 +533,36 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
+            var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedCards);
+            CardData primaryDefenseCard = combatDefenseCards.Count > 0 ? combatDefenseCards[0] : null;
+
             if (CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards)
                 && attackCards != null && attackCards.Count > 0)
             {
-                bool playerReflect = selectedCards.Count == 1
+                bool playerParryFullOnly = combatDefenseCards.Count == 1
                     && battleManager.DefenderPublic == PlayerType.Player
-                    && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards);
+                    && ParryRules.RequiresParryExclusiveLock(primaryDefenseCard, attackCards);
+
+                if (playerParryFullOnly)
+                {
+                    bool skipSharedTail = await ParryFlow.RunPlayerInitiatedAsync(
+                        battleManager,
+                        battleProcessor,
+                        handRefill,
+                        battleManager.GetEnemyAI(),
+                        attackCards,
+                        primaryDefenseCard,
+                        this,
+                        cancellationToken);
+                    if (skipSharedTail)
+                        return;
+                    await RunAfterCombatSharedCleanupAsync(cancellationToken);
+                    return;
+                }
+
+                bool playerReflect = combatDefenseCards.Count == 1
+                    && battleManager.DefenderPublic == PlayerType.Player
+                    && ReflectionRules.CanReflectIncoming(primaryDefenseCard, attackCards);
 
                 if (playerReflect)
                 {
@@ -549,7 +573,7 @@ public class CardSequenceManager : MonoBehaviour
                             battleProcessor,
                             handRefill,
                             attackCards,
-                            selectedCards[0],
+                            primaryDefenseCard,
                             atk,
                             def,
                             cancellationToken,
@@ -563,7 +587,7 @@ public class CardSequenceManager : MonoBehaviour
                             handRefill,
                             battleManager.GetEnemyAI(),
                             attackCards,
-                            selectedCards[0],
+                            primaryDefenseCard,
                             cancellationToken);
                     }
                 }
@@ -576,21 +600,21 @@ public class CardSequenceManager : MonoBehaviour
                 return;
             }
 
-            bool playerPhysicalReflect = selectedCards.Count == 1
+            bool playerPhysicalReflect = combatDefenseCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards)
+                && ReflectionRules.CanReflectIncoming(primaryDefenseCard, attackCards)
                 && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
             bool playerMagicReflect = playerPhysicalReflect;
-            bool playerImmediateReflect = selectedCards.Count == 1
+            bool playerImmediateReflect = combatDefenseCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ReflectionRules.CanReflectIncoming(selectedCards[0], attackCards)
+                && ReflectionRules.CanReflectIncoming(primaryDefenseCard, attackCards)
                 && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
-            bool playerPhysicalBlock = selectedCards.Count == 1
+            bool playerPhysicalBlock = combatDefenseCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && BlockingRules.CanUsePhysicalBlockingAgainstAttack(selectedCards[0], attackCards);
-            bool playerParry = selectedCards.Count == 1
+                && BlockingRules.CanUsePhysicalBlockingAgainstAttack(primaryDefenseCard, attackCards);
+            bool playerParry = combatDefenseCards.Count == 1
                 && battleManager.DefenderPublic == PlayerType.Player
-                && ParryRules.RequiresParryExclusiveLock(selectedCards[0], attackCards);
+                && ParryRules.RequiresParryExclusiveLock(primaryDefenseCard, attackCards);
 
             if (playerParry)
             {
@@ -600,7 +624,7 @@ public class CardSequenceManager : MonoBehaviour
                     handRefill,
                     battleManager.GetEnemyAI(),
                     attackCards,
-                    selectedCards[0],
+                    primaryDefenseCard,
                     this,
                     cancellationToken);
                 if (skipSharedTail)
@@ -613,7 +637,7 @@ public class CardSequenceManager : MonoBehaviour
                     battleProcessor,
                     handRefill,
                     attackCards,
-                    selectedCards[0],
+                    primaryDefenseCard,
                     atk,
                     def,
                     cancellationToken,
@@ -627,7 +651,7 @@ public class CardSequenceManager : MonoBehaviour
                     handRefill,
                     battleManager.GetEnemyAI(),
                     attackCards,
-                    selectedCards[0],
+                    primaryDefenseCard,
                     cancellationToken);
             }
             else if (playerPhysicalBlock)
@@ -635,14 +659,14 @@ public class CardSequenceManager : MonoBehaviour
                 await BlockingNullifyFlow.RunPlayerInitiatedAsync(
                     battleManager,
                     attackCards,
-                    selectedCards[0],
+                    primaryDefenseCard,
                     cancellationToken);
             }
             else
             {
                 // 防御カードの場合、複数防御カード対応（敵の攻撃は既に命中判定済み）
                 bool skipHit = battleManager.AttackerPublic == PlayerType.Enemy;
-                await battleProcessor.ResolveCombatAsync(attackCards, selectedCards, atk, def, defHand, skipHit);
+                await battleProcessor.ResolveCombatAsync(attackCards, combatDefenseCards, atk, def, defHand, skipHit);
             }
         }
 
@@ -735,6 +759,18 @@ public class CardSequenceManager : MonoBehaviour
         CancellationToken cancellationToken,
         int dualBladeStrikeIndex = 0)
     {
+        if (dualBladeStrikeIndex == 0
+            && attackCards != null && attackCards.Count == 1 && attackCards[0] != null
+            && CardRules.IsRecoveryCard(attackCards[0])
+            && !battleManager.IsPlayerSelfAttackTargetMode
+            && ReferenceEquals(atk, battleManager.GetPlayerStatus()))
+        {
+            await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, cancellationToken);
+            await battleProcessor.ResolveImmediateEffectAsync(
+                attackCards[0], atk, atk, cancellationToken);
+            return true;
+        }
+
         var primary = HitRateRules.GetPrimaryForHitRate(attackCards);
         int finalPct = HitRateRules.ComputeFinalHitPercent(
             primary, atk, def, HitRateRules.ShouldApplyAttackerSmokeForCombat(primary));
@@ -1083,6 +1119,9 @@ public class CardSequenceManager : MonoBehaviour
         // 魔法カードと通常カードに分別
         var magicCards = cards.FindAll(c => c.cardType == CardType.Magic);
         var normalCards = cards.FindAll(c => c.cardType != CardType.Magic);
+        var combatNormal = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(cards)
+            .FindAll(c => c != null && c.cardType != CardType.Magic);
+        bool waiveMp = FreeMagicCastRules.WaivesMagicMp(cards);
 
         // 魔法カードのプール処理
         if (!_skipMagicProcessingInProcessCardsBecauseMagicalExplosion)
@@ -1091,7 +1130,7 @@ public class CardSequenceManager : MonoBehaviour
             {
                 bool isFromHand = BattleUIManager.I == null
                     || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
-                await ApplyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
                 Debug.Log($"[CardSequenceManager] 魔法カード {magic.cardName} をプール処理 (fromHand={isFromHand}, combination={magic.isCombinationMagic})");
             }
         }
@@ -1102,16 +1141,19 @@ public class CardSequenceManager : MonoBehaviour
         }
 
         // 攻撃カードの場合は最初のカードを currentAttackCard に設定
-        if (cardType == "攻撃" && normalCards.Count > 0)
+        if (cardType == "攻撃")
         {
-            battleManager.SetCurrentAttackCard(normalCards[0]);
+            if (combatNormal.Count > 0)
+                battleManager.SetCurrentAttackCard(combatNormal[0]);
+            else if (magicCards.Count > 0)
+                battleManager.SetCurrentAttackCard(magicCards[0]);
         }
 
         if (cardType == "防御")
         {
             CardData defPick = null;
-            if (normalCards.Count > 0)
-                defPick = normalCards[0];
+            if (combatNormal.Count > 0)
+                defPick = combatNormal[0];
             else if (magicCards.Count > 0)
                 defPick = magicCards[0];
             battleManager.SetSelectedDefenseCard(defPick);
@@ -1144,7 +1186,7 @@ public class CardSequenceManager : MonoBehaviour
             Debug.Log($"[CardSequenceManager] 魔法カード処理: {card.cardName} (組み合わせ={card.isCombinationMagic})");
             bool isFromHand = BattleUIManager.I == null
                 || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
-            await ApplyMagicCardToPoolAsync(card, isFromHand);
+            await ApplyMagicCardToPoolAsync(card, isFromHand, waiveMp: false);
             if (cardType == "防御")
                 battleManager.SetSelectedDefenseCard(card);
             else
@@ -1176,12 +1218,15 @@ public class CardSequenceManager : MonoBehaviour
     /// 反射連鎖・パリィ再防御など、<see cref="StartCardSequenceAsync"/> を通さない経路で魔法をプールへ載せる。
     /// </summary>
     /// <summary>敵の魔法防御（<<アイアンクラッド>> 等）：MP 消費と手札／プール処理。</summary>
-    public async Task ApplyEnemyMagicDefenseFromHandOrPoolAsync(CardData card)
+    public async Task ApplyEnemyMagicDefenseFromHandOrPoolAsync(
+        CardData card,
+        IReadOnlyList<CardData> fullSelection = null)
     {
         if (card == null || card.cardType != CardType.Magic) return;
         bool isFromHand = BattleUIManager.I == null
             || !BattleUIManager.I.IsEnemyMagicCardUiOnMagicPanel(card);
-        await ApplyEnemyMagicCardToPoolAsync(card, isFromHand);
+        bool waiveMp = fullSelection != null && FreeMagicCastRules.WaivesMagicMp(fullSelection);
+        await ApplyEnemyMagicCardToPoolAsync(card, isFromHand, waiveMp);
     }
 
     public async Task ApplyMagicCardToPoolForReflectionOrParryDefenseAsync(CardData card, CancellationToken cancellationToken = default)
@@ -1190,16 +1235,16 @@ public class CardSequenceManager : MonoBehaviour
         if (cancellationToken.IsCancellationRequested) return;
         bool isFromHand = BattleUIManager.I == null
             || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(card);
-        await ApplyMagicCardToPoolAsync(card, isFromHand);
+        await ApplyMagicCardToPoolAsync(card, isFromHand, waiveMp: false);
     }
 
-    private async System.Threading.Tasks.Task ApplyMagicCardToPoolAsync(CardData card, bool isFromHand)
+    private async System.Threading.Tasks.Task ApplyMagicCardToPoolAsync(CardData card, bool isFromHand, bool waiveMp = false)
     {
         if (card == null) return;
 
         // MP消費（眼精疲労で倍率）— MagicPoolManager の有無に関わらず先に適用
         var playerStatus = battleManager.GetPlayerStatus();
-        if (playerStatus != null && card.mpCost > 0)
+        if (!waiveMp && playerStatus != null && card.mpCost > 0)
         {
             int pay = playerStatus.GetEffectiveMagicMpCost(card.mpCost);
             playerStatus.UseMP(pay);
@@ -1392,10 +1437,22 @@ public class CardSequenceManager : MonoBehaviour
         CardData primaryNormal = null;
         foreach (var c in selectedCards)
         {
-            if (c != null && c.cardType != CardType.Magic)
+            if (c != null && c.cardType != CardType.Magic
+                && !FreeMagicCastRules.IsCombatCatalyst(c, selectedCards))
             {
                 primaryNormal = c;
                 break;
+            }
+        }
+        if (primaryNormal == null)
+        {
+            foreach (var c in selectedCards)
+            {
+                if (c != null && c.cardType == CardType.Magic)
+                {
+                    primaryNormal = c;
+                    break;
+                }
             }
         }
         battleManager.SetCurrentAttackCard(primaryNormal != null ? primaryNormal : selectedCards[0]);
@@ -1416,6 +1473,7 @@ public class CardSequenceManager : MonoBehaviour
 
         var magicCards = cards.FindAll(c => c != null && c.cardType == CardType.Magic);
         var normalCards = cards.FindAll(c => c != null && c.cardType != CardType.Magic);
+        bool waiveMp = FreeMagicCastRules.WaivesMagicMp(cards);
 
         if (!_skipMagicProcessingInProcessCardsBecauseMagicalExplosion)
         {
@@ -1423,7 +1481,7 @@ public class CardSequenceManager : MonoBehaviour
             {
                 bool isFromHand = BattleUIManager.I == null
                     || !BattleUIManager.I.IsEnemyMagicCardUiOnMagicPanel(magic);
-                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
             }
         }
         else
@@ -1438,12 +1496,12 @@ public class CardSequenceManager : MonoBehaviour
         }
     }
 
-    private async Task ApplyEnemyMagicCardToPoolAsync(CardData card, bool isFromHand)
+    private async Task ApplyEnemyMagicCardToPoolAsync(CardData card, bool isFromHand, bool waiveMp = false)
     {
         if (MagicPoolManager.I == null || card == null) return;
 
         var enemyStatus = battleManager.GetEnemyStatus();
-        if (enemyStatus != null && card.mpCost > 0)
+        if (!waiveMp && enemyStatus != null && card.mpCost > 0)
         {
             int pay = enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
             enemyStatus.UseMP(pay);
@@ -1543,15 +1601,16 @@ public class CardSequenceManager : MonoBehaviour
 
         var magicCards = selectedCards.FindAll(c =>
             c != null && c.cardType == CardType.Magic && !MagicalExplosionRules.IsMagicalExplosionCard(c));
+        bool waiveMp = FreeMagicCastRules.WaivesMagicMp(selectedCards);
         foreach (var magic in magicCards)
         {
             bool isFromHand = BattleUIManager.I == null
                 || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
             bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
             if (attackerIsPlayer)
-                await ApplyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
             else
-                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
         }
 
         _skipMagicProcessingInProcessCardsBecauseMagicalExplosion = true;
@@ -1616,15 +1675,16 @@ public class CardSequenceManager : MonoBehaviour
 
         var magicCards = selectedCards.FindAll(c =>
             c != null && c.cardType == CardType.Magic && !MillionDollarBazookaRules.IsMillionDollarBazookaCard(c));
+        bool waiveMp = FreeMagicCastRules.WaivesMagicMp(selectedCards);
         foreach (var magic in magicCards)
         {
             bool isFromHand = BattleUIManager.I == null
                 || !BattleUIManager.I.IsPlayerMagicCardUiOnMagicPanel(magic);
             bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
             if (attackerIsPlayer)
-                await ApplyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
             else
-                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand);
+                await ApplyEnemyMagicCardToPoolAsync(magic, isFromHand, waiveMp);
         }
 
         _skipMagicProcessingInProcessCardsBecauseMagicalExplosion = true;
@@ -2436,14 +2496,9 @@ public class CardSequenceManager : MonoBehaviour
                 var attackCards = new List<CardData>();
                 foreach (var card in selectedCards)
                 {
-                    if (card.cardType == CardType.Attack || card.cardType == CardType.Magic
-                        || card.cardType == CardType.Ultimate
-                        || card.cardType == CardType.ArchMagic
-                        || card.cardType == CardType.Recovery
-                        || card.cardType == CardType.Special)
-                    {
+                    if (card == null) continue;
+                    if (CardRules.ContributesToAttackComboCombat(card, selectedCards))
                         attackCards.Add(card);
-                    }
                 }
                 Debug.Log($"[CardSequenceManager] selectedCardsから取得した攻撃カード数: {attackCards.Count}");
                 return attackCards;

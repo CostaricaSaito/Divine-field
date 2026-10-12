@@ -32,6 +32,14 @@ public static class ReflectionRules
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack)) return false;
+
+        var bm = BattleManager.I;
+        if (bm != null && bm.IncomingAttackForceNoneElement)
+        {
+            if (CardRules.IsMagicOnlyAttackCombo(incomingAttack)) return false;
+            return true;
+        }
+
         if (ElementHelper.GetIncomingAttackElement(incomingAttack) != ElementType.None) return false;
         if (CardRules.IsMagicClassifiedAttackCombo(incomingAttack)) return false;
         return true;

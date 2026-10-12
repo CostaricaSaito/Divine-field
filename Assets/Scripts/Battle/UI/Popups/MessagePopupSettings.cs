@@ -111,8 +111,6 @@ public sealed class MessagePopupSettings : ScriptableObject
     {
         return new[]
         {
-            Entry(MessagePopupKind.ShivaFreezeApplied, "\u8eab\u4f53\u304c\u51cd\u308a\u3064\u304f...!",
-                new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0f, 240f / 255f, 1f), Color.black),
             Entry(MessagePopupKind.FreezeCannotMove, "\u51cd\u308a\u3064\u3044\u3066\u52d5\u3051\u306a\u3044",
                 new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.85f, 1f), Color.black),
             Entry(MessagePopupKind.FreezeMelted, "\u6c37\u304c\u6eb6\u3051\u305f\uff01",

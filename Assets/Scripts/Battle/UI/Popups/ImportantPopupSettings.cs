@@ -144,6 +144,8 @@ public sealed class ImportantPopupSettings : ScriptableObject
                 new Color(0.95f, 0.55f, 0.95f), Color.black),
             DisasterEntry(ImportantPopupKind.DisasterInfection, "\u7149\u7363\u306e\u98a8\u304c\u5439\u304d\u8352\u308c\u308b",
                 new Color(1f, 0.55f, 0.2f), Color.black),
+            Entry(ImportantPopupKind.SealedExoDionUnsealed, "\u88c5\u7532\u9a0e\u795e\u306e\u5c01\u5370\u304c\u89e3\u304b\u308c\u305f",
+                new Color(0.95f, 0.85f, 0.35f), Color.black, "Assets/SE/天変地異/現実改変.wav"),
             Entry(ImportantPopupKind.ArchMagicCast, "\u9b54\u529b\u304c\u5439\u304d\u8352\u308c\u308b",
                 new Color(0.75f, 0.45f, 0.95f), Color.white, null),
             Entry(ImportantPopupKind.ArchMagicFocus, "\u9b54\u529b\u3092\u96c6\u4e2d\u3057\u308d\uff01",

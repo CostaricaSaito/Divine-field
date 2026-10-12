@@ -148,6 +148,60 @@ public static class ElementHelper
     }
 
     /// <summary>
+    /// 属性リストの合算（残存DEF・表示用。カード固有のゴッドレイジ等は含めない）。
+    /// </summary>
+    public static ElementType GetCombinedElementFromElements(IReadOnlyList<ElementType> elements)
+    {
+        if (elements == null || elements.Count == 0) return ElementType.None;
+
+        bool hasNoneElement = false;
+        bool hasNonNoneElement = false;
+        for (int i = 0; i < elements.Count; i++)
+        {
+            ElementType e = elements[i];
+            if (e == ElementType.None)
+                hasNoneElement = true;
+            else
+                hasNonNoneElement = true;
+        }
+
+        if (hasNoneElement && hasNonNoneElement)
+            return ElementType.None;
+
+        ElementType nonLightElement = ElementType.None;
+        bool hasNonLight = false;
+        bool hasLight = false;
+        bool mixed = false;
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            ElementType e = elements[i];
+            if (e == ElementType.None) continue;
+
+            if (e == ElementType.Light)
+            {
+                hasLight = true;
+                continue;
+            }
+
+            if (!hasNonLight)
+            {
+                nonLightElement = e;
+                hasNonLight = true;
+            }
+            else if (e != nonLightElement)
+            {
+                mixed = true;
+            }
+        }
+
+        if (mixed) return ElementType.None;
+        if (hasNonLight) return nonLightElement;
+        if (hasLight) return ElementType.Light;
+        return ElementType.None;
+    }
+
+    /// <summary>
     /// 合算後の防御属性に対する判定（複数枚防御用）。
     /// 攻撃が無属性なら制限なし。攻撃が闇なら任意の防御で可。
     /// 光属性防御は任意の属性攻撃に対応。それ以外は合算属性が攻撃属性と一致するときのみ有効。

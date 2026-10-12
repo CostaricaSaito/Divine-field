@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 攻撃フェーズ終了時（TurnEnd 突入直後）の病系ランダム処理のパラメータ。
+/// エンドフェイズの病系ランダム処理のパラメータ。
 /// </summary>
 [CreateAssetMenu(fileName = "DiseaseTurnEndSettings", menuName = "DivineField/Status/Disease Turn End Settings")]
 public sealed class DiseaseTurnEndSettings : ScriptableObject
@@ -9,7 +9,7 @@ public sealed class DiseaseTurnEndSettings : ScriptableObject
     [Range(0f, 1f)] public float worsenChance = 0.05f;
 
     [Header("デバッグ")]
-    [Tooltip("オン時は自然進行判定を常に成功（悪化100%）。本番ビルド前にオフに戻すこと。")]
+    [Tooltip("オン時は自然進行判定を常に成功（悪化100%）。通常は BattleDebugTools の切替を使うこと。")]
     public bool debugAlwaysWorsenNaturalProgress;
     [Tooltip("楽園病の各ターン終了で絶頂（即死級）になる確率。煉獄病→楽園病へ自然進行した当ターンは振らない。")]
     [Range(0f, 1f)] public float ecstasyChance = 0.10f;

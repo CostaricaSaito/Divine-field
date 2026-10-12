@@ -367,6 +367,7 @@ public static class DisadvantageRules
         {
             case StatusEffectType.PurgatorySickness:
             case StatusEffectType.Confusion:
+            case StatusEffectType.CyberPsychosis:
                 return 10;
             case StatusEffectType.SevereSickness:
             case StatusEffectType.Weaken:

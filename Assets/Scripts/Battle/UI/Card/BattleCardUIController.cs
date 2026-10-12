@@ -425,6 +425,11 @@ public class BattleCardUIController : MonoBehaviour
         foreach (var card in hand)
         {
             if (card?.cardUI == null) continue;
+            if (card.cardUI.IsFaceDown())
+            {
+                SetCardInteractable(card, false);
+                continue;
+            }
             bool canUse = allowedCardUIs.Contains(card.cardUI);
             SetCardInteractable(card, canUse);
         }
@@ -439,10 +444,44 @@ public class BattleCardUIController : MonoBehaviour
     public void RefreshAttackInteractivity(List<CardData> hand, List<CardData> attackableCards)
     {
         var currentAttack = GetSelectedAttackCards();
+        var expanded = attackableCards != null ? new List<CardData>(attackableCards) : new List<CardData>();
+        FreeMagicCastRules.AppendSelectableFreeCastCards(expanded, hand, currentAttack);
         var filtered = AttackComboSelectionRules.FilterAttackChoicesForCurrentSelection(
-            attackableCards, currentAttack);
+            expanded, currentAttack);
+        if (currentAttack != null)
+        {
+            for (int i = 0; i < currentAttack.Count; i++)
+            {
+                var s = currentAttack[i];
+                if (s != null && !FreeMagicCastRules.ContainsInstance(filtered, s))
+                    filtered.Add(s);
+            }
+        }
         UpdateHandInteractivity(hand, filtered);
         BattleUIManager.I.RefreshUseButton();
+        RefreshPlayerAttackSelectionPresentation();
+    }
+
+    public void RefreshPlayerHandStatusText()
+    {
+        var playerHand = BattleManager.I != null ? BattleManager.I.playerHand : null;
+        if (playerHand == null) return;
+        foreach (var c in playerHand)
+        {
+            if (c?.cardUI == null) continue;
+            c.cardUI.RefreshHandStatusText();
+        }
+    }
+
+    public void RefreshPlayerAttackSelectionPresentation()
+    {
+        RefreshPlayerHandStatusText();
+        for (int i = 0; i < activeCardSheets.Count; i++)
+        {
+            var go = activeCardSheets[i];
+            if (go == null) continue;
+            go.GetComponent<CardSheetDisplay>()?.RefreshAtkDefPresentation();
+        }
     }
 
     public void RefreshDefenseInteractivity(List<CardData> hand, List<CardData> defenseCards)

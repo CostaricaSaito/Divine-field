@@ -18,13 +18,31 @@ public class TotalAtkDefPowerCalculator
     public int CalculateTotalDefensePower(List<CardData> defenseCards) =>
         CalculateTotalPower(defenseCards, false);
 
+    public int GetEffectiveDefensePowerForDisplay(
+        List<CardData> defenseCards,
+        PlayerStatus defender,
+        ElementType attackElement)
+    {
+        List<CardData> combat = NormalizeDefenseCardsForCombat(defenseCards);
+        return CombatDefensePowerResolver.ResolveEffectiveDefensePower(combat, defender, attackElement);
+    }
+
+    public ElementType GetDefenseDisplayCombinedElement(
+        List<CardData> defenseCards,
+        PlayerStatus defender)
+    {
+        List<CardData> combat = NormalizeDefenseCardsForCombat(defenseCards);
+        return PermanentDefRules.ResolveDisplayCombinedElement(combat, defender);
+    }
+
     private int CalculateTotalPower(List<CardData> cards, bool isAttack)
     {
         int total = 0;
         foreach (var card in cards)
         {
-            if (card != null)
-                total += isAttack ? card.attackPower : card.defensePower;
+            if (card == null) continue;
+            if (FreeMagicCastRules.IsCombatCatalyst(card, cards)) continue;
+            total += isAttack ? card.attackPower : card.defensePower;
         }
         return total;
     }
@@ -86,9 +104,26 @@ public class TotalAtkDefPowerCalculator
 
     public string FormatDefensePowerLabel(List<CardData> defenseCards)
     {
-        if (defenseCards == null || defenseCards.Count == 0) return "";
-        if (defenseCards.Count == 1) return $"DEF {defenseCards[0].defensePower}";
-        return $"DEF {CalculateTotalDefensePower(defenseCards)}";
+        return FormatDefensePowerLabel(defenseCards, null, ElementType.None);
+    }
+
+    public string FormatDefensePowerLabel(
+        List<CardData> defenseCards,
+        PlayerStatus defender,
+        ElementType attackElement)
+    {
+        List<CardData> combat = NormalizeDefenseCardsForCombat(defenseCards);
+        if (!CombatDefensePowerResolver.TryGetDefenseDisplay(
+                combat, defender, attackElement, out int power, out _))
+            return "";
+        return $"DEF {power}";
+    }
+
+    private static List<CardData> NormalizeDefenseCardsForCombat(List<CardData> defenseCards)
+    {
+        if (defenseCards == null || defenseCards.Count == 0) return null;
+        var combatDefense = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(defenseCards);
+        return combatDefense.Count > 0 ? combatDefense : null;
     }
 
     public string FormatReflectionAttackTotalLabel(BattleManager bm, PlayerStatus fallbackAttacker)

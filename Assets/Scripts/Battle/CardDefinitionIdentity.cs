@@ -29,8 +29,23 @@ public static class CardDefinitionIdentity
         return n;
     }
 
+    /// <summary>手札リロード用：同一定義のうち <see cref="CardRules.CanParticipateInHandReload"/> な枚数。</summary>
+    public static int CountSameInHandForReload(CardData reference, IReadOnlyList<CardData> hand)
+    {
+        if (reference == null || hand == null) return 0;
+        if (!CardRules.CanParticipateInHandReload(reference)) return 0;
+        int n = 0;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            var c = hand[i];
+            if (c != null && CardRules.CanParticipateInHandReload(c) && IsSameDefinition(reference, c))
+                n++;
+        }
+        return n;
+    }
+
     /// <summary>
-    /// いずれかの定義について3枚以上ある（リロードの入口条件）。
+    /// いずれかの定義について3枚以上ある（リロードの入口条件）。氷結（FROZEN）は数えない。
     /// </summary>
     public static bool HandHasAnyTripletOrMore(IReadOnlyList<CardData> hand)
     {
@@ -38,8 +53,8 @@ public static class CardDefinitionIdentity
         for (int i = 0; i < hand.Count; i++)
         {
             var c = hand[i];
-            if (c == null) continue;
-            if (CountSameInHand(c, hand) >= 3)
+            if (c == null || !CardRules.CanParticipateInHandReload(c)) continue;
+            if (CountSameInHandForReload(c, hand) >= 3)
                 return true;
         }
         return false;

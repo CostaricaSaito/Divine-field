@@ -53,6 +53,7 @@ public sealed class PlayerDefenseInteractivityService
         if (attackSource == null || attackSource.Count == 0)
         {
             BattleUIManager.I?.RefreshUseButton();
+            _host.UpdateTotalATKDEFDisplay();
             return;
         }
 
@@ -61,6 +62,7 @@ public sealed class PlayerDefenseInteractivityService
             var defenseChoicesRestricted = CardRules.GetFullOnlyReactiveDefenseChoices(
                 _host.PlayerHand, attackSource);
             var selectedDefenseR = BattleUIManager.I.GetSelectedDefenseCards();
+            IncludeFreeCastDefenseChoices(defenseChoicesRestricted, selectedDefenseR);
             defenseChoicesRestricted = CardRules.ApplyRestraintDefenseFilter(
                 defenseChoicesRestricted,
                 selectedDefenseR,
@@ -68,11 +70,13 @@ public sealed class PlayerDefenseInteractivityService
             BattleUIManager.I.RefreshDefenseInteractivity(_host.PlayerHand, defenseChoicesRestricted);
             BattleUIManager.I.RefreshUseButton();
             RefreshPlayerHandStatusTextForDefenseSnapshot();
+            _host.UpdateTotalATKDEFDisplay();
             return;
         }
 
         var defenseChoices = CardRules.GetDefenseChoicesForIncoming(_host.PlayerHand, attackSource);
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
+        IncludeFreeCastDefenseChoices(defenseChoices, selectedDefense);
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
             selectedDefense,
@@ -81,6 +85,23 @@ public sealed class PlayerDefenseInteractivityService
         BattleUIManager.I.RefreshDefenseInteractivity(_host.PlayerHand, defenseChoices);
         BattleUIManager.I.RefreshUseButton();
         RefreshPlayerHandStatusTextForDefenseSnapshot();
+        _host.UpdateTotalATKDEFDisplay();
+    }
+
+    private void IncludeFreeCastDefenseChoices(List<CardData> defenseChoices, List<CardData> selectedDefense)
+    {
+        if (defenseChoices == null) return;
+        var selection = BattleUIManager.I != null
+            ? BattleUIManager.I.GetSelectedCards()
+            : selectedDefense;
+        FreeMagicCastRules.AppendSelectableFreeCastCards(defenseChoices, _host.PlayerHand, selection);
+        if (selectedDefense == null) return;
+        for (int i = 0; i < selectedDefense.Count; i++)
+        {
+            var s = selectedDefense[i];
+            if (s != null && !FreeMagicCastRules.ContainsInstance(defenseChoices, s))
+                defenseChoices.Add(s);
+        }
     }
 
     public void RefreshPlayerHandStatusTextForDefenseSnapshot()
@@ -107,6 +128,7 @@ public sealed class PlayerDefenseInteractivityService
         {
             var defenseChoicesR = CardRules.GetFullOnlyReactiveDefenseChoices(_host.PlayerHand, attackSnapshot);
             var selectedDefenseR = BattleUIManager.I.GetSelectedDefenseCards();
+            IncludeFreeCastDefenseChoices(defenseChoicesR, selectedDefenseR);
             defenseChoicesR = CardRules.ApplyRestraintDefenseFilter(
                 defenseChoicesR,
                 selectedDefenseR,
@@ -119,6 +141,7 @@ public sealed class PlayerDefenseInteractivityService
 
         var defenseChoices = CardRules.GetDefenseChoicesForIncoming(_host.PlayerHand, attackSnapshot);
         var selectedDefense = BattleUIManager.I.GetSelectedDefenseCards();
+        IncludeFreeCastDefenseChoices(defenseChoices, selectedDefense);
         defenseChoices = CardRules.ApplyRestraintDefenseFilter(
             defenseChoices,
             selectedDefense,
@@ -127,6 +150,7 @@ public sealed class PlayerDefenseInteractivityService
         BattleUIManager.I.RefreshDefenseInteractivity(_host.PlayerHand, defenseChoices);
         BattleUIManager.I.RefreshUseButton();
         RefreshPlayerHandStatusTextForDefenseSnapshot();
+        _host.UpdateTotalATKDEFDisplay();
     }
 
     public bool TryAutoPassPlayerDefenseIfChantingArchMagic()
@@ -161,5 +185,6 @@ public sealed class PlayerDefenseInteractivityService
         BattleUIManager.I.RefreshDefenseInteractivity(_host.PlayerHand, new List<CardData>());
         BattleUIManager.I.RefreshUseButton();
         RefreshPlayerHandStatusTextForDefenseSnapshot();
+        _host.UpdateTotalATKDEFDisplay();
     }
 }

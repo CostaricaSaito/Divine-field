@@ -469,9 +469,12 @@ public static class PhysicalReflectionFlow
 
             if (ParryRules.RequiresParryExclusiveLock(card, incomingAttackCards))
             {
-                int parrySlot = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
-                if (parrySlot >= 0) handRefill?.RecordPlayerUseSlot(parrySlot);
-                battleProcessor.UseCard(card, battleManager.playerHand);
+                ParryCardConsumption.TryConsumeParryDefenseCard(
+                    card,
+                    PlayerType.Player,
+                    battleProcessor,
+                    handRefill,
+                    battleManager.playerHand);
 
                 ShowPlayerDefenseCardPresentation(card);
                 await Task.Delay(500, cancellationToken);

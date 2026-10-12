@@ -97,7 +97,9 @@ public sealed class EnemyTurnRunner
             }
         }
 
-        if (CardRules.IsImmediateAction(attack) && atkList.Count == 1)
+        if (CardRules.IsImmediateAction(attack) && atkList.Count == 1
+            && !CardRules.IsRecoveryCard(attack)
+            && !MagicFountainRules.IsMagicFountainCard(attack))
         {
             Debug.Log($"[EnemyTurn] Immediate card: {attack.cardName}");
             try
@@ -166,6 +168,31 @@ public sealed class EnemyTurnRunner
             _host.UpdateBattleStatusUi();
             _host.CardStatsDisplay.UpdateDisplay();
             await Task.Delay(1000);
+        }
+
+        if (atkList.Count == 1 && attack != null
+            && (CardRules.IsRecoveryCard(attack) || MagicFountainRules.IsMagicFountainCard(attack)))
+        {
+            PlayerStatus recoveryTarget = ResolveCpuImmediateEffectTarget(attack);
+            if (recoveryTarget == _host.EnemyStatus)
+            {
+                await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, token);
+                await _host.BattleProcessor.ResolveImmediateEffectAsync(
+                    attack, _host.EnemyStatus, recoveryTarget);
+                if (_host.CardSequenceManager != null)
+                    await _host.RunAfterCombatSharedCleanupAsync(token);
+                else
+                {
+                    BattleUIManager.I?.HideAllCardDetails();
+                    _host.CardStatsDisplay?.ClearSequenceCards();
+                    _host.CurrentAttackCard = null;
+                    _host.UpdateBattleStatusUi();
+                    _host.UpdateCardStatsDisplay();
+                    _host.SetGameState(GameState.CombatResolvePhase);
+                }
+
+                return;
+            }
         }
 
         bool confusedEnemy = _host.EnemyStatus != null && _host.EnemyStatus.HasConfusionEffect();

@@ -10,6 +10,9 @@ public class EnemyAI
     /// <summary>直近の攻撃コンボ（CPU 単体／オンライン RemotePlayerAgent 共通）。</summary>
     public List<CardData> LastAttackSelection { get; protected set; }
 
+    /// <summary>直近の防御選択（無料詠唱触媒を含む場合あり）。</summary>
+    public List<CardData> LastDefenseSelection { get; protected set; }
+
     /// <summary>
     /// ランダムに敵の召喚データを選択する
     /// </summary>
@@ -120,7 +123,7 @@ public class EnemyAI
         if (arrowOfIndra != null && OpponentHasDestroyableHand())
             return arrowOfIndra;
 
-        var poolMagic = EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
+        var poolMagic = EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus, enemyHand);
         var physical = EnemyMagicAiRules.CollectPhysicalAttackCandidates(enemyHand, handRefill);
 
         CardData primaryPhysical = PickPreferredPhysicalAttack(physical);
@@ -194,7 +197,7 @@ public class EnemyAI
     private static bool OwnPoolHasMagic()
     {
         return MagicPoolManager.I != null
-            && MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy).Count > 0;
+            && MagicPoolManager.I.GetPooledCardDatas(PlayerType.Enemy).Count > 0;
     }
 
     private static CardData FindMagicSealerCard(List<CardData> enemyHand, HandRefillService handRefill)
@@ -214,7 +217,7 @@ public class EnemyAI
     private static bool OpponentHasPooledMagic()
     {
         return MagicPoolManager.I != null
-            && MagicPoolManager.I.GetPoolEntries(PlayerType.Player).Count > 0;
+            && MagicPoolManager.I.GetPooledCardDatas(PlayerType.Player).Count > 0;
     }
 
     private static CardData FindArrowOfIndraCard(List<CardData> enemyHand, HandRefillService handRefill)
@@ -242,7 +245,8 @@ public class EnemyAI
     public CardData SelectAttackFromPool(PlayerStatus enemyStatus, PlayerStatus playerStatus = null)
     {
         playerStatus ??= BattleManager.I?.GetPlayerStatus();
-        var candidates = EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
+        var candidates = EnemyMagicAiRules.CollectUsefulPoolMagic(
+            enemyStatus, playerStatus, BattleManager.I?.cpuHand);
         if (candidates.Count == 0) return null;
         return candidates[Random.Range(0, candidates.Count)];
     }
@@ -301,25 +305,42 @@ public class EnemyAI
         if (choices.Count == 0)
             return null;
 
+        PlayerStatus defender = BattleManager.I?.GetEnemyStatus();
+        CardData best = null;
+        int bestEffectiveDef = -1;
+
+        void Consider(CardData c)
+        {
+            if (c == null) return;
+            int eff = CombatDefensePowerResolver.ResolveEffectiveDefensePower(
+                new List<CardData> { c }, defender, attackElement);
+            if (eff > bestEffectiveDef)
+            {
+                bestEffectiveDef = eff;
+                best = c;
+            }
+        }
+
         foreach (var c in choices)
         {
             if (c != null && CardRules.IsNormalPhysicalDefenseCard(c))
-                return c;
+                Consider(c);
         }
+
+        if (best != null) return best;
 
         foreach (var c in choices)
         {
             if (c != null && CardRules.IsPrimaryDefenseCard(c))
-                return c;
+                Consider(c);
         }
+
+        if (best != null) return best;
 
         foreach (var c in choices)
-        {
-            if (c != null)
-                return c;
-        }
+            Consider(c);
 
-        return null;
+        return best;
     }
 
     /// <summary>
@@ -370,10 +391,13 @@ public class EnemyAI
     }
 
     /// <summary>MagicPool から攻撃可能な魔法候補（無意味な状態異常魔法は除外）。</summary>
-    protected List<CardData> GetPoolAttackCandidates(PlayerStatus enemyStatus, PlayerStatus playerStatus = null)
+    protected List<CardData> GetPoolAttackCandidates(
+        PlayerStatus enemyStatus,
+        PlayerStatus playerStatus = null,
+        List<CardData> enemyHand = null)
     {
         playerStatus ??= BattleManager.I?.GetPlayerStatus();
-        return EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus);
+        return EnemyMagicAiRules.CollectUsefulPoolMagic(enemyStatus, playerStatus, enemyHand);
     }
 
     /// <summary>
@@ -390,10 +414,10 @@ public class EnemyAI
             if (c == null || c.cardType != CardType.Magic) return false;
             if (CardRules.IsRecoveryCard(c))
                 return !EnemyMagicAiRules.IsEnemySelfRecoveryMagicUseful(c, enemyStatus);
-            return !EnemyMagicAiRules.IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus);
+            return !EnemyMagicAiRules.IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus, enemyHand);
         });
 
-        var poolCandidates = GetPoolAttackCandidates(enemyStatus, playerStatus);
+        var poolCandidates = GetPoolAttackCandidates(enemyStatus, playerStatus, enemyHand);
 
         var primary = SelectAttackCard(enemyHand, enemyStatus, playerStatus, handRefill);
         if (primary == null && poolCandidates.Count > 0)
@@ -401,6 +425,9 @@ public class EnemyAI
 
         if (primary == null)
             return null;
+
+        var seed = new List<CardData> { primary };
+        FreeMagicCastRules.AppendSelectableFreeCastCards(handCandidates, enemyHand, seed);
 
         return AttackComboSelectionRules.BuildGreedyAttackCombo(
             handCandidates,
@@ -415,7 +442,13 @@ public class EnemyAI
         if (combo == null || combo.Count == 0) return null;
         foreach (var c in combo)
         {
-            if (c != null && c.cardType != CardType.Magic)
+            if (c != null && c.cardType != CardType.Magic
+                && !FreeMagicCastRules.IsCombatCatalyst(c, combo))
+                return c;
+        }
+        foreach (var c in combo)
+        {
+            if (c != null && c.cardType == CardType.Magic)
                 return c;
         }
         return combo[0];
@@ -435,7 +468,7 @@ public class EnemyAI
             if (card == null || card.cardType != CardType.Magic) continue;
 
             bool isFromPool = MagicPoolManager.I != null && MagicPoolManager.I.IsInPool(card, PlayerType.Enemy);
-            if (enemyStatus != null && card.mpCost > 0)
+            if (enemyStatus != null && card.mpCost > 0 && !FreeMagicCastRules.WaivesMagicMp(combo))
             {
                 int pay = enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
                 enemyStatus.UseMP(pay);
@@ -544,6 +577,7 @@ public class EnemyAI
         List<CardData> incomingForReflection = null)
     {
         Debug.Log($"[EnemyAI] 防御カード選択開始（攻撃属性={attackElement}）");
+        LastDefenseSelection = null;
 
         var enemyStatus = BattleManager.I != null ? BattleManager.I.GetEnemyStatus() : null;
         if (enemyStatus != null && enemyStatus.IsCastingArchMagic)
@@ -654,13 +688,17 @@ public class EnemyAI
                 foreach (var c in cpuHand)
                 {
                     if (!IsEnemyHandCardSelectable(c)) continue;
-                    if (BlockingRules.CanUsePhysicalBlockingAgainstAttack(c, incomingForReflection)
-                        && BlockingRules.CanAffordMagicDefenseMp(c, enemyStatus))
-                    {
-                        defenseCard = c;
-                        Debug.Log($"[EnemyAI] 物理無効を優先: {defenseCard.cardName}");
-                        break;
-                    }
+                    if (!BlockingRules.CanUsePhysicalBlockingAgainstAttack(c, incomingForReflection))
+                        continue;
+                    bool afford = BlockingRules.CanAffordMagicDefenseMp(c, enemyStatus);
+                    CardData catalyst = afford ? null : FreeMagicCastRules.FindAvailableCatalyst(cpuHand);
+                    if (!afford && (catalyst == null || enemyStatus == null || enemyStatus.IsMagicUseForbidden()))
+                        continue;
+                    defenseCard = c;
+                    if (catalyst != null)
+                        LastDefenseSelection = new List<CardData> { c, catalyst };
+                    Debug.Log($"[EnemyAI] 物理無効を優先: {defenseCard.cardName}");
+                    break;
                 }
             }
         }
@@ -678,6 +716,8 @@ public class EnemyAI
 
         if (defenseCard != null)
         {
+            if (LastDefenseSelection == null || LastDefenseSelection.Count == 0)
+                LastDefenseSelection = new List<CardData> { defenseCard };
             Debug.Log($"[EnemyAI] 防御カード選択完了: {defenseCard.cardName}");
         }
         else

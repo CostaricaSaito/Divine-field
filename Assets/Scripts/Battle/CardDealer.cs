@@ -1,6 +1,9 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
@@ -225,7 +228,9 @@ public class CardDealer : MonoBehaviour
                     yield break;
                 }
                 playerHand.Add(playerCardInstance);
+                SealedExoDionHandTracker.RegisterAddedToHand(playerCardInstance, this);
                 cpuHand.Add(enemyCardInstance);
+                SealedExoDionHandTracker.RegisterAddedToHand(enemyCardInstance, this);
                 var ui = CreateCardUIForHand(playerCardInstance);
                 if (ui != null) activeCardUIs.Add(ui);
                 BattleUIManager.I?.UpdateStatus(
@@ -242,6 +247,7 @@ public class CardDealer : MonoBehaviour
                     yield break;
                 }
                 playerHand.Add(playerCardInstance);
+                SealedExoDionHandTracker.RegisterAddedToHand(playerCardInstance, this);
                 var ui = CreateCardUIForHand(playerCardInstance);
                 if (ui != null) activeCardUIs.Add(ui);
                 BattleUIManager.I?.UpdateStatus(
@@ -258,6 +264,7 @@ public class CardDealer : MonoBehaviour
                     yield break;
                 }
                 cpuHand.Add(enemyCardInstance);
+                SealedExoDionHandTracker.RegisterAddedToHand(enemyCardInstance, this);
                 BattleUIManager.I?.UpdateStatus(
                     BattleManager.I?.GetPlayerStatus(),
                     BattleManager.I?.GetEnemyStatus());
@@ -270,9 +277,23 @@ public class CardDealer : MonoBehaviour
             yield return SummonDiabolosOpening.RunAfterDealBeforeRevealRoutine(playerStatus, enemyStatus);
 
         yield return new WaitForSeconds(0.5f);
+
+        IceBarrierHandReveal.PrepareOpeningHandForMassReveal(activeCardUIs);
         foreach (var ui in activeCardUIs)
             ui?.Reveal();
         SoundEffectPlayer.I?.Play("Assets/SE/バトル開始.mp3");
+
+        if (IceBarrierHandReveal.HasAnyOpeningIceBarrierTransformPending())
+            yield return OpeningIceBarrierFollowUpBridge();
+    }
+
+    private static IEnumerator OpeningIceBarrierFollowUpBridge()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        _ = IceBarrierHandReveal.RunOpeningIceBarrierFollowUpAsync(CancellationToken.None)
+            .ContinueWith(t => tcs.TrySetResult(!t.IsFaulted), TaskScheduler.Default);
+        while (!tcs.Task.IsCompleted)
+            yield return null;
     }
 
     //====================================================
@@ -307,6 +328,7 @@ public class CardDealer : MonoBehaviour
         if (DebugForceNextPlayerDrawSuperRarePlus && forSide == PlayerType.Player)
         {
             DebugForceNextPlayerDrawSuperRarePlus = false;
+            ShivaIceBarrierDrawFlow.DebugSkipIceBarrierOnce = true;
             var forced = DrawSuperRarePlusRandomCard(forSide);
             if (forced != null)
             {
@@ -330,10 +352,7 @@ public class CardDealer : MonoBehaviour
             return null;
         }
 
-        var instance = ScriptableObject.Instantiate(template);
-        instance.name = template.name;
-        instance.cardUI = null;
-        return instance;
+        return FinalizeWeightedDraw(template, forSide);
     }
 
     /// <summary>闇属性（<see cref="CardData.element"/> == Dark）のテンプレートから1枚。プールが空なら通常抽選。</summary>
@@ -345,10 +364,16 @@ public class CardDealer : MonoBehaviour
         var template = _darkCardTemplates[BattleRandom.DrawRange(forSide, 0, _darkCardTemplates.Length)];
         if (template == null) return DrawRandomCardInstance(forSide);
 
+        return FinalizeWeightedDraw(template, forSide);
+    }
+
+    private CardData FinalizeWeightedDraw(CardData template, PlayerType forSide)
+    {
+        if (template == null) return null;
         var instance = ScriptableObject.Instantiate(template);
         instance.name = template.name;
         instance.cardUI = null;
-        return instance;
+        return ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
     }
 
     /// <summary>
@@ -380,7 +405,8 @@ public class CardDealer : MonoBehaviour
             return null;
         }
 
-        return InstantiateCardFromTemplate(template);
+        var instance = InstantiateCardFromTemplate(template);
+        return ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
     }
 
     /// <summary>

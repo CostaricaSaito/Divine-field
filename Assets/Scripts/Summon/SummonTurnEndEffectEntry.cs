@@ -21,4 +21,6 @@ public struct SummonTurnEndEffectEntry
     public string CardName;
     public int VictimHandIndex;
     public List<string> DrawnCardNames;
+    /// <summary>Parallel to <see cref="DrawnCardNames"/>: pre-transform template asset name, or empty.</summary>
+    public List<string> DrawIceBarrierOriginalAssetNames;
 }

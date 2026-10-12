@@ -41,6 +41,7 @@ public static class NetworkBattleBridge
         HandReload = 18,             // either -> peer : hand reload (selected slot indices)
         ThiefHoodEffect = 19,        // host -> client : Thief's Hood steal payload
         OrbTempestDrawEffect = 20,   // host -> client : Orb of Tempest draw payload
+        ShivaIceBarrierDrawEffect = 21, // host -> client : ice barrier draw presentation sync
     }
 
     public enum RemoteEconomicKind : byte
@@ -112,6 +113,16 @@ public static class NetworkBattleBridge
         public bool DrawerIsHostPlayer;
         public bool Skipped;
         public string DrawnCardName;
+    }
+
+    /// <summary>Host -> client: Shiva ice barrier transform presentation for one draw.</summary>
+    public struct ShivaIceBarrierDrawEffectSync
+    {
+        public int SequenceId;
+        public bool DrawerIsHostPlayer;
+        public bool Transformed;
+        public string OriginalTemplateAssetName;
+        public string FinalTemplateAssetName;
     }
 
     public struct PeerProfile
@@ -220,6 +231,7 @@ public static class NetworkBattleBridge
     static readonly Queue<ArrowOfIndraEffectSync> _arrowOfIndraEffectQueue = new();
     static readonly Queue<ThiefHoodEffectSync> _thiefHoodEffectQueue = new();
     static readonly Queue<OrbTempestDrawEffectSync> _orbTempestDrawEffectQueue = new();
+    static readonly Queue<ShivaIceBarrierDrawEffectSync> _shivaIceBarrierDrawEffectQueue = new();
 
     static TaskCompletionSource<RemoteAttack> _attackWaiter;
     static TaskCompletionSource<List<string>> _defenseWaiter;
@@ -234,6 +246,7 @@ public static class NetworkBattleBridge
     static TaskCompletionSource<ArrowOfIndraEffectSync> _arrowOfIndraEffectWaiter;
     static TaskCompletionSource<ThiefHoodEffectSync> _thiefHoodEffectWaiter;
     static TaskCompletionSource<OrbTempestDrawEffectSync> _orbTempestDrawEffectWaiter;
+    static TaskCompletionSource<ShivaIceBarrierDrawEffectSync> _shivaIceBarrierDrawEffectWaiter;
     static TaskCompletionSource<PeerProfile> _helloWaiter;
     static TaskCompletionSource<MatchConfig> _configWaiter;
 
@@ -297,6 +310,7 @@ public static class NetworkBattleBridge
         _arrowOfIndraEffectQueue.Clear();
         _thiefHoodEffectQueue.Clear();
         _orbTempestDrawEffectQueue.Clear();
+        _shivaIceBarrierDrawEffectQueue.Clear();
         _attackWaiter?.TrySetCanceled();
         _defenseWaiter?.TrySetCanceled();
         _magicalSwordWaiter?.TrySetCanceled();
@@ -310,6 +324,7 @@ public static class NetworkBattleBridge
         _arrowOfIndraEffectWaiter?.TrySetCanceled();
         _thiefHoodEffectWaiter?.TrySetCanceled();
         _orbTempestDrawEffectWaiter?.TrySetCanceled();
+        _shivaIceBarrierDrawEffectWaiter?.TrySetCanceled();
         _helloWaiter?.TrySetCanceled();
         _configWaiter?.TrySetCanceled();
         _attackWaiter = null;
@@ -325,6 +340,7 @@ public static class NetworkBattleBridge
         _arrowOfIndraEffectWaiter = null;
         _thiefHoodEffectWaiter = null;
         _orbTempestDrawEffectWaiter = null;
+        _shivaIceBarrierDrawEffectWaiter = null;
         _helloWaiter = null;
         _configWaiter = null;
     }
@@ -817,6 +833,54 @@ public static class NetworkBattleBridge
         }
     }
 
+    /// <summary>Host only: Shiva ice barrier draw presentation sync.</summary>
+    public static void SendShivaIceBarrierDrawEffect(ShivaIceBarrierDrawEffectSync sync)
+    {
+        using var writer = new FastBufferWriter(256, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.ShivaIceBarrierDrawEffect);
+        WriteShivaIceBarrierDrawEffectSync(writer, sync);
+        Send(writer);
+        Debug.Log($"[NetworkBattleBridge] Sent ShivaIceBarrierDrawEffect (seq={sync.SequenceId}, transformed={sync.Transformed})");
+    }
+
+    /// <summary>Client only: wait for host ice barrier draw presentation sync.</summary>
+    public static async Task<ShivaIceBarrierDrawEffectSync> WaitForShivaIceBarrierDrawEffectAsync(
+        int sequenceId,
+        CancellationToken ct,
+        int timeoutMs = 20000)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            ShivaIceBarrierDrawEffectSync sync;
+            if (_shivaIceBarrierDrawEffectQueue.Count > 0)
+            {
+                sync = _shivaIceBarrierDrawEffectQueue.Dequeue();
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<ShivaIceBarrierDrawEffectSync>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _shivaIceBarrierDrawEffectWaiter = tcs;
+                ct.Register(() => tcs.TrySetCanceled());
+
+                var waitTask = tcs.Task;
+                var finished = await Task.WhenAny(waitTask, Task.Delay(timeoutMs, ct));
+                if (finished != waitTask || ct.IsCancellationRequested)
+                {
+                    Debug.LogWarning("[NetworkBattleBridge] ShivaIceBarrierDrawEffect wait timed out");
+                    return new ShivaIceBarrierDrawEffectSync { SequenceId = sequenceId };
+                }
+
+                sync = await waitTask;
+            }
+
+            if (sync.SequenceId >= sequenceId || attempt >= 3)
+                return sync;
+
+            Debug.Log($"[NetworkBattleBridge] Discarding stale ShivaIceBarrierDrawEffect (seq={sync.SequenceId})");
+        }
+    }
+
     /// <summary>Notify peer that Shining Barrier stripped incoming attack element.</summary>
     public static void SendShiningBarrierApplied(int turnTag)
     {
@@ -1064,6 +1128,7 @@ public static class NetworkBattleBridge
         writer.WriteValueSafe(entry.CardName ?? "");
         writer.WriteValueSafe(entry.VictimHandIndex);
         WriteStringList(writer, entry.DrawnCardNames);
+        WriteStringList(writer, entry.DrawIceBarrierOriginalAssetNames);
     }
 
     static SummonTurnEndEffectsSync ReadSummonTurnEndEffectsSync(FastBufferReader reader)
@@ -1086,7 +1151,28 @@ public static class NetworkBattleBridge
         reader.ReadValueSafe(out entry.CardName);
         reader.ReadValueSafe(out entry.VictimHandIndex);
         entry.DrawnCardNames = ReadStringList(reader);
+        entry.DrawIceBarrierOriginalAssetNames = ReadStringList(reader);
         return entry;
+    }
+
+    static void WriteShivaIceBarrierDrawEffectSync(FastBufferWriter writer, ShivaIceBarrierDrawEffectSync sync)
+    {
+        writer.WriteValueSafe(sync.SequenceId);
+        writer.WriteValueSafe(sync.DrawerIsHostPlayer);
+        writer.WriteValueSafe(sync.Transformed);
+        writer.WriteValueSafe(sync.OriginalTemplateAssetName ?? string.Empty);
+        writer.WriteValueSafe(sync.FinalTemplateAssetName ?? string.Empty);
+    }
+
+    static ShivaIceBarrierDrawEffectSync ReadShivaIceBarrierDrawEffectSync(FastBufferReader reader)
+    {
+        var sync = new ShivaIceBarrierDrawEffectSync();
+        reader.ReadValueSafe(out sync.SequenceId);
+        reader.ReadValueSafe(out sync.DrawerIsHostPlayer);
+        reader.ReadValueSafe(out sync.Transformed);
+        reader.ReadValueSafe(out sync.OriginalTemplateAssetName);
+        reader.ReadValueSafe(out sync.FinalTemplateAssetName);
+        return sync;
     }
 
     static void WriteMagicSealerEffectSync(FastBufferWriter writer, int turnTag, MagicSealerEffectSync sync)
@@ -1377,6 +1463,14 @@ public static class NetworkBattleBridge
                 var sync = ReadOrbTempestDrawEffectSync(reader);
                 Debug.Log($"[NetworkBattleBridge] OrbTempestDrawEffect received (tag={sync.TurnTag}, skipped={sync.Skipped})");
                 Dispatch(_orbTempestDrawEffectQueue, ref _orbTempestDrawEffectWaiter, sync);
+                break;
+            }
+
+            case MsgType.ShivaIceBarrierDrawEffect:
+            {
+                var sync = ReadShivaIceBarrierDrawEffectSync(reader);
+                Debug.Log($"[NetworkBattleBridge] ShivaIceBarrierDrawEffect received (seq={sync.SequenceId}, transformed={sync.Transformed})");
+                Dispatch(_shivaIceBarrierDrawEffectQueue, ref _shivaIceBarrierDrawEffectWaiter, sync);
                 break;
             }
 

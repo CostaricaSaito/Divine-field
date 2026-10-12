@@ -112,8 +112,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     [Header("状態異常（ScriptableObject）")]
     [SerializeField] private StatusProgressionConfig statusProgressionConfig;
     [SerializeField] private DiseaseTurnEndSettings diseaseTurnEndSettings;
-    [SerializeField, FormerlySerializedAs("shivaDirectAttackSealSettings")]
-    private ShivaDirectAttackFreezeSettings shivaDirectAttackFreezeSettings;
+    [SerializeField, FormerlySerializedAs("shivaDirectAttackFreezeSettings")]
+    private ShivaIceBarrierSettings shivaIceBarrierSettings;
     [SerializeField] private OrdinSlashReflectSettings ordinSlashReflectSettings;
 
     [Header("UI/演出")]
@@ -660,8 +660,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     SummonSkillButton IBattleBootstrapHost.EnemySummonSkillButton => enemySummonSkillButton;
     StatusProgressionConfig IBattleBootstrapHost.StatusProgressionConfig => statusProgressionConfig;
     DiseaseTurnEndSettings IBattleBootstrapHost.DiseaseTurnEndSettings => diseaseTurnEndSettings;
-    ShivaDirectAttackFreezeSettings IBattleBootstrapHost.ShivaDirectAttackFreezeSettings
-        => shivaDirectAttackFreezeSettings;
+    ShivaIceBarrierSettings IBattleBootstrapHost.ShivaIceBarrierSettings => shivaIceBarrierSettings;
 
     OrdinSlashReflectSettings IBattleBootstrapHost.OrdinSlashReflectSettings
         => ordinSlashReflectSettings;
@@ -767,8 +766,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         IReadOnlyList<CardData> attackerLastSelection = null;
         if (Attacker == PlayerType.Enemy && enemyAI != null)
             attackerLastSelection = enemyAI.LastAttackSelection;
-        return _combatSnapshots.ResolveAttackCardsForCombat(
+        var resolved = _combatSnapshots.ResolveAttackCardsForCombat(
             Attacker, uiAttackCards, attackerLastSelection);
+        return FreeMagicCastRules.ExcludeCatalystsFromCombatStats(resolved);
     }
 
     public void RefreshSummonSkillButtonInteractables()

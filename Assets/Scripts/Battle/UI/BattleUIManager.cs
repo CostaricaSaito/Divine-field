@@ -540,8 +540,38 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 往生アニメ終了直後：反射「弾き返し」と同じ全画面白フラッシュ → 中央に GAMESET 大表示＋ゴング SE。一定時間後に画像を消す。
     /// </summary>
-    public Task ShowPostOjyouFlashAndGameSetAsync(CancellationToken ct = default)
-        => effectPresenter != null ? effectPresenter.ShowPostOjyouFlashAndGameSetAsync(ct) : Task.CompletedTask;
+    public Task ShowPostOjyouFlashAndGameSetAsync(CancellationToken ct = default, bool skipInitialWhiteFlash = false)
+        => effectPresenter != null
+            ? effectPresenter.ShowPostOjyouFlashAndGameSetAsync(ct, skipInitialWhiteFlash)
+            : Task.CompletedTask;
+
+    public Task PlayFullscreenWhiteFlashMsAsync(float durationMs, CancellationToken ct = default)
+        => effectPresenter != null
+            ? effectPresenter.PlayFullscreenWhiteFlashMsAsync(durationMs, ct)
+            : Task.CompletedTask;
+
+    public Task PlaySealedExoDionMagicPanelRedTintAsync(float durationSeconds, CancellationToken ct = default)
+        => magicPanelPresenter != null
+            ? magicPanelPresenter.PlaySealedExoDionRightSlotRedTintAsync(durationSeconds, ct)
+            : Task.CompletedTask;
+
+    public Task PlaySealedExoDionVictoryCinematicAsync(CancellationToken ct = default)
+        => effectPresenter != null
+            ? effectPresenter.PlaySealedExoDionVictoryCinematicAsync(ct)
+            : Task.CompletedTask;
+
+    public Task PlaySealedExoDionVictoryFlashAndCinematicAsync(float whiteFlashMs, CancellationToken ct = default)
+        => effectPresenter != null
+            ? effectPresenter.PlaySealedExoDionVictoryFlashAndCinematicAsync(whiteFlashMs, ct)
+            : Task.CompletedTask;
+
+    public Task PlaySealedExoDionArmorAndWhiteFadeAsync(CancellationToken ct = default)
+        => PlaySealedExoDionVictoryCinematicAsync(ct);
+
+    public Task FadeOutSealedExoDionWhiteOverlayAsync(CancellationToken ct = default)
+        => effectPresenter != null
+            ? effectPresenter.FadeOutSealedExoDionWhiteOverlayAsync(ct)
+            : Task.CompletedTask;
 
     /// <summary>介入発動時のメッセージ（病系処理より前）。</summary>
     public void ShowInterventionIntroPopup(PlayerStatus attackerStatus)

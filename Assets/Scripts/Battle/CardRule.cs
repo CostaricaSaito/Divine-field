@@ -6,9 +6,25 @@ public static class CardRules
     /// <summary>
     /// 手札に保持するだけのパッシブカード（道連れ・不死鳥等）。いかなるフェーズでも手動使用不可。
     /// </summary>
+    /// <summary>Shiva ice barrier hand token (<c>FROZEN</c> asset). No hand status line label.</summary>
+    public static bool IsShivaFrozenHandCard(CardData c)
+    {
+        if (c == null) return false;
+        return c.name == IceBarrierTransformRegistry.FrozenTemplateAssetName;
+    }
+
+    /// <summary>手札リロード（3枚同種）の対象外。</summary>
+    public static bool CanParticipateInHandReload(CardData c)
+    {
+        if (c == null) return false;
+        return !IsShivaFrozenHandCard(c);
+    }
+
     public static bool IsPassiveHandOnly(CardData c)
     {
         if (c == null) return false;
+        if (IsShivaFrozenHandCard(c)) return true;
+        if (SealedExoDionRules.IsSealedExoDion(c)) return true;
         if (c.passiveHandOnly) return true;
         if (c.postDeathCardEffect != null) return true;
         if (c.nearDeathCardEffect != null) return true;
@@ -56,6 +72,15 @@ public static class CardRules
     public static bool IsUsableInDefensePhase(CardData c)
     {
         if (c == null) return false;
+        if (c.cardUI != null && c.cardUI.IsFaceDown()) return false;
+        var handRefill = BattleManager.I?.HandRefill;
+        if (handRefill != null && handRefill.IsPlayerCardUsedThisTurn(c))
+        {
+            bool magicParryStillInPool = c.cardType == CardType.Magic
+                && MagicPoolManager.I != null
+                && MagicPoolManager.I.GetRemainingUses(c) > 0;
+            if (!magicParryStillInPool) return false;
+        }
         if (IsPassiveHandOnly(c)) return false;
         if (c.cardType == CardType.Disaster) return false;
         if (c.usableInDefensePhase) return true;
@@ -213,6 +238,39 @@ public static class CardRules
     {
         if (c == null) return false;
         return IsUsableInDefensePhase(c) && !IsUsableInAttackPhase(c);
+    }
+
+    /// <summary>防御タイプだが攻撃フェーズでも物理攻撃として使えるカード（魔竜の装甲籠手等）。</summary>
+    public static bool IsDefenseUsableAsPhysicalAttack(CardData c)
+    {
+        return c != null
+            && c.cardType == CardType.Defense
+            && c.usableInAttackPhase
+            && c.attackPower > 0;
+    }
+
+    /// <summary>攻撃コンボ内で物理攻撃として扱うカード（魔法 Primary との併用判定に使用）。</summary>
+    public static bool CountsAsPhysicalAttackInAttackCombo(CardData c)
+    {
+        if (c == null || FreeMagicCastRules.IsFreeMagicCastCard(c)) return false;
+        if (c.cardType == CardType.Attack) return true;
+        return IsDefenseUsableAsPhysicalAttack(c);
+    }
+
+    /// <summary>
+    /// 攻撃シーケンスの戦闘解決・TOTALATKDEF 用。魔竜の装甲兜／靴など攻撃フェーズ後乗り防具を含む。
+    /// </summary>
+    public static bool ContributesToAttackComboCombat(CardData c, IReadOnlyList<CardData> fullSelection)
+    {
+        if (c == null) return false;
+        if (fullSelection != null && FreeMagicCastRules.IsCombatCatalyst(c, fullSelection)) return false;
+        if (IsDefenseUsableAsPhysicalAttack(c)) return true;
+        return c.cardType == CardType.Attack
+            || c.cardType == CardType.Magic
+            || c.cardType == CardType.Ultimate
+            || c.cardType == CardType.ArchMagic
+            || c.cardType == CardType.Recovery
+            || c.cardType == CardType.Special;
     }
 
     /// <summary>Ultimate Skill カードで回復・全治癒効果を持つか。</summary>

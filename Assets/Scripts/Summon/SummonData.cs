@@ -126,9 +126,9 @@ public class SummonData : ScriptableObject
     }
 
     /// <summary>
-    /// Whether Shiva direct-attack freeze passive applies.
+    /// Whether Shiva ice barrier (opponent draw → FROZEN) passive applies.
     /// </summary>
-    public bool IsShivaDirectAttackFreeze()
+    public bool IsShivaIceBarrier()
     {
         if (passiveBlessingMode == SummonPassiveBlessingMode.Shiva) return true;
         return name == "Siva" || StableSummonId == "siva";

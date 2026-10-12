@@ -288,6 +288,7 @@ public sealed class BattlePhaseController
                 BattleUIManager.I?.SetHandClickable(true);
                 _host.RefreshPlayerDefensePhaseInteractivity();
                 BattleUIManager.I?.RefreshMagicCardInteractivity(_host.PlayerHand);
+                _host.UpdateTotalATKDEFDisplay();
                 _host.TryAutoPassPlayerDefenseIfChantingArchMagic();
             }
         }
@@ -484,6 +485,49 @@ public sealed class BattlePhaseController
             await RevealFaceDownCardsAsync();
 
             if (_host.CurrentState != GameState.EndPhase) return;
+
+            if (_host.Manager != null && _host.GameEnd != null && !_host.GameEnd.IsGameEndTriggered)
+            {
+                try
+                {
+                    var exoResult = await SealedExoDionTurnEndLifecycle.ProcessEndPhaseAsync(_host.Manager);
+                    int playerExo = MagicPoolManager.I != null
+                        ? MagicPoolManager.I.GetSealedExoDionCounter(PlayerType.Player)
+                        : 0;
+                    int enemyExo = MagicPoolManager.I != null
+                        ? MagicPoolManager.I.GetSealedExoDionCounter(PlayerType.Enemy)
+                        : 0;
+                    bool playerExoWin = playerExo >= SealedExoDionRules.WinStackCount;
+                    bool enemyExoWin = enemyExo >= SealedExoDionRules.WinStackCount;
+                    if (playerExoWin || enemyExoWin)
+                    {
+                        exoResult.PlayerReachedWin = playerExoWin;
+                        exoResult.EnemyReachedWin = enemyExoWin;
+                        exoResult.Stalemate = playerExoWin && enemyExoWin;
+                        bool ended = await _host.GameEnd.RunSealedExoDionVictoryEndAsync(
+                            exoResult, CancellationToken.None);
+                        if (ended) return;
+                        _host.GameEnd.ResetAbortedGameEndTrigger();
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    Debug.Log("[BattlePhaseController] SealedExoDionTurnEnd: cancelled");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex);
+                }
+            }
+
+            if (_host.CurrentState != GameState.EndPhase) return;
+
+            if (_host.GameEnd != null && _host.GameEnd.IsGameEndTriggered)
+            {
+                Debug.LogWarning(
+                    "[BattlePhaseController] EndPhase: aborted game-end flag cleared to resume turn flow.");
+                _host.GameEnd.ResetAbortedGameEndTrigger();
+            }
 
             BattleUIManager.I?.UpdateStatus(_host.PlayerStatus, _host.EnemyStatus);
             BattleUIManager.I?.SetIntroModeUI(_host.PlayerHand);

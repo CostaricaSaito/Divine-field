@@ -101,6 +101,8 @@ public sealed class StatusEffectPopupSettings : ScriptableObject
                 new Color(0.22f, 0.22f, 0.28f, 0.93f), new Color(0.95f, 0.95f, 1f)),
             Entry(StatusEffectType.RandomOneAilment,
                 new Color(0.22f, 0.12f, 0.32f, 0.93f), new Color(0.95f, 0.65f, 1f)),
+            Entry(StatusEffectType.CyberPsychosis,
+                new Color(0.28f, 0.12f, 0.38f, 0.93f), new Color(0.45f, 0.95f, 0.55f)),
         };
     }
 

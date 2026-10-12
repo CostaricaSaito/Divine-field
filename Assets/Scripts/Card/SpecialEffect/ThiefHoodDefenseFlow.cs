@@ -177,6 +177,7 @@ public static class ThiefHoodDefenseFlow
             if (instance == null) continue;
 
             hand.Add(instance);
+            SealedExoDionHandTracker.RegisterAddedToHand(instance, bm.cardDealer);
             added.Add(instance);
 
             if (plan.DefenderIsLocalPlayer && bm.cardDealer != null)

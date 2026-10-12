@@ -252,6 +252,10 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     public bool usableInAttackPhase = false;
     public bool usableInDefensePhase = false;
 
+    [Header("魔法無料詠唱")]
+    [Tooltip("魔法と同時選択するとその魔法の消費MPを0にする。ATK/DEFは加算せず、カードは触媒として消費される。大魔法は対象外。")]
+    public bool enablesFreeMagicCast = false;
+
     [SerializeField, HideInInspector, FormerlySerializedAs("isPrimaryDefense")]
     private bool _legacyIsPrimaryDefense;
     [SerializeField, HideInInspector, FormerlySerializedAs("isCounterAttack")]

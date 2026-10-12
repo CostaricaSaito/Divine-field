@@ -26,4 +26,7 @@ public enum ImportantPopupKind
 
     /// <summary>Bahamut passive Mega Flare announcement.</summary>
     MegaFlare = 40,
+
+    /// <summary>Sealed EXO-DION alt-win: armor god unsealed.</summary>
+    SealedExoDionUnsealed = 50,
 }

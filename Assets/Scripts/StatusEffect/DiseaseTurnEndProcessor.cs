@@ -1,14 +1,21 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// 攻撃フェーズ終了時（TurnEnd 突入直後）に、攻撃側の病系状態異常を処理する。
+/// エンドフェイズ（<see cref="GameState.EndPhase"/>）で、ターン攻撃側の病系状態異常を処理する。
 /// 数値は <see cref="DiseaseTurnEndSettings"/>（Inspector）で変更する。
 /// </summary>
 public static class DiseaseTurnEndProcessor
 {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>オン時は自然進行（悪化）判定を常に成功。BattleDebugTools から切替。</summary>
+    public static bool DebugForceDiseaseNaturalWorsen100 { get; set; }
+#else
+    public static bool DebugForceDiseaseNaturalWorsen100 => false;
+#endif
+
     private static DiseaseTurnEndSettings _settings;
 
     /// <summary>バトル開始時に BattleManager などから登録。null のときはランタイム既定値。</summary>
@@ -53,7 +60,8 @@ public static class DiseaseTurnEndProcessor
         bool diseaseNaturalProgressionOccurred = false;
 
         bool worsenRoll =
-            s.debugAlwaysWorsenNaturalProgress
+            DebugForceDiseaseNaturalWorsen100
+            || s.debugAlwaysWorsenNaturalProgress
             || BattleRandom.Value < s.worsenChance;
 
         if (stage != StatusEffectType.ParadiseSickness && worsenRoll)
@@ -123,6 +131,9 @@ public static class DiseaseTurnEndProcessor
             ct);
     }
 
+    /// <summary>
+    /// 楽園病中に病系が付与されたとき（①）。エンドフェイズの10%絶頂判定（②）とは別タイミング。
+    /// </summary>
     public static async Task ProcessForcedParadiseEcstasyAsync(PlayerStatus attacker, CancellationToken ct)
     {
         if (attacker == null) return;
@@ -133,21 +144,7 @@ public static class DiseaseTurnEndProcessor
             return;
         }
 
-        var s = Active;
-        await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
-        await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
-
-        float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-        await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
-
-        int lethal = attacker.currentHP;
-        ApplyHpLossIgnoringCardModifiers(attacker, lethal);
-        float lethalFade = ui.ShowDamagePopup(lethal, attacker);
-        RefreshStatuses();
-        await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
-
-        if (BattleManager.I != null)
-            await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
+        await RunParadiseEcstasySequenceAsync(attacker, ui, ct);
     }
 
     private static StatusEffectType FindDiseaseStage(PlayerStatus status)
@@ -229,20 +226,7 @@ public static class DiseaseTurnEndProcessor
         var s = Active;
         if (!skipEcstasyRoll && BattleRandom.Value < s.ecstasyChance)
         {
-            await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
-            await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
-
-            float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
-            await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
-
-            int lethal = attacker.currentHP;
-            ApplyHpLossIgnoringCardModifiers(attacker, lethal);
-            float lethalFade = ui.ShowDamagePopup(lethal, attacker);
-            RefreshStatuses();
-            await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
-
-            if (BattleManager.I != null)
-                await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
+            await RunParadiseEcstasySequenceAsync(attacker, ui, ct);
             return;
         }
 
@@ -262,6 +246,29 @@ public static class DiseaseTurnEndProcessor
         RefreshStatuses();
         if (healed > 0)
             await DamagePopup.WaitAfterPopupLifetimeAsync(healFade, ct);
+    }
+
+    /// <summary>絶頂（残りHP相当・被ダメ軽減なし）演出と死亡処理。①付与時・②エンドフェイズ10%の共通シーケンス。</summary>
+    private static async Task RunParadiseEcstasySequenceAsync(
+        PlayerStatus attacker,
+        BattleUIManager ui,
+        CancellationToken ct)
+    {
+        var s = Active;
+        await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
+        await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
+
+        float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
+        await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
+
+        int lethal = attacker.currentHP;
+        ApplyHpLossIgnoringCardModifiers(attacker, lethal);
+        float lethalFade = ui.ShowDamagePopup(lethal, attacker);
+        RefreshStatuses();
+        await DamagePopup.WaitAfterPopupLifetimeAsync(lethalFade, ct);
+
+        if (BattleManager.I != null)
+            await BattleManager.I.TryHandleDeathIfAnyAsync(ct);
     }
 
     private static void RefreshStatuses()

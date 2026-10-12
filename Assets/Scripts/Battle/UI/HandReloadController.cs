@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -205,7 +205,7 @@ public class HandReloadController : MonoBehaviour
         {
             var h = BattleManager.I.playerHand;
             var basis = _reloadSelection.Count > 0 ? _reloadSelection[0] : card;
-            int maxSame = CardDefinitionIdentity.CountSameInHand(basis, h);
+            int maxSame = CardDefinitionIdentity.CountSameInHandForReload(basis, h);
             if (_reloadSelection.Count >= maxSame)
                 return;
             _reloadSelection.Add(card);
@@ -490,8 +490,9 @@ public class HandReloadController : MonoBehaviour
     {
         var h = BattleManager.I?.playerHand;
         if (h == null || card == null) return false;
+        if (!CardRules.CanParticipateInHandReload(card)) return false;
         if (_reloadSelection.Count == 0)
-            return CardDefinitionIdentity.CountSameInHand(card, h) >= 3;
+            return CardDefinitionIdentity.CountSameInHandForReload(card, h) >= 3;
         return CardDefinitionIdentity.IsSameDefinition(card, _reloadSelection[0]);
     }
 

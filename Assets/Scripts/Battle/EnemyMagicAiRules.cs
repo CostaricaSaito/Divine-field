@@ -12,30 +12,41 @@ public static class EnemyMagicAiRules
         return card.attackPower > 0;
     }
 
-    public static bool CanEnemyAffordMagic(CardData card, PlayerStatus enemyStatus)
+    public static bool CanEnemyAffordMagic(
+        CardData card,
+        PlayerStatus enemyStatus,
+        IReadOnlyList<CardData> handForFreeCast = null)
     {
         if (card == null || enemyStatus == null) return false;
         if (enemyStatus.IsMagicUseForbidden()) return false;
         if (card.mpCost <= 0) return true;
-        return enemyStatus.currentMP >= enemyStatus.GetEffectiveMagicMpCost(card.mpCost);
+        if (enemyStatus.currentMP >= enemyStatus.GetEffectiveMagicMpCost(card.mpCost)) return true;
+        return FreeMagicCastRules.HandHasAvailableCatalyst(handForFreeCast);
     }
 
-    public static bool CanEnemyAddHandMagicToPool(CardData card, PlayerStatus enemyStatus, HandRefillService handRefill)
+    public static bool CanEnemyAddHandMagicToPool(
+        CardData card,
+        PlayerStatus enemyStatus,
+        HandRefillService handRefill,
+        IReadOnlyList<CardData> enemyHand = null)
     {
         if (card == null || card.cardType != CardType.Magic) return false;
         if (!EnemyAI.IsEnemyHandCardAvailable(card, handRefill)) return false;
         if (!CardRules.IsUsableInAttackPhaseForHandRespectingMagicPool(card, PlayerType.Enemy)) return false;
-        if (!CanEnemyAffordMagic(card, enemyStatus)) return false;
+        if (!CanEnemyAffordMagic(card, enemyStatus, enemyHand)) return false;
         if (MagicPoolManager.I == null) return true;
         if (MagicPoolManager.I.IsInPool(card, PlayerType.Enemy)) return false;
         return MagicPoolManager.I.CanAddToPool(card, PlayerType.Enemy);
     }
 
-    public static bool CanEnemyUsePoolMagic(CardData card, PlayerStatus enemyStatus)
+    public static bool CanEnemyUsePoolMagic(
+        CardData card,
+        PlayerStatus enemyStatus,
+        IReadOnlyList<CardData> enemyHand = null)
     {
         if (card == null || !CardRules.IsUsableInAttackPhase(card)) return false;
         if (MagicPoolManager.I == null || !MagicPoolManager.I.IsInPool(card, PlayerType.Enemy)) return false;
-        return CanEnemyAffordMagic(card, enemyStatus);
+        return CanEnemyAffordMagic(card, enemyStatus, enemyHand);
     }
 
     /// <summary>相手に状態異常付与魔法を使っても効果があるか（病・眼精疲労の重ねがけは例外）。</summary>
@@ -92,12 +103,16 @@ public static class EnemyMagicAiRules
     }
 
     /// <summary>相手を対象とする攻撃フェーズ魔法が有用か（回復魔法は常に false）。</summary>
-    public static bool IsEnemyMagicUsefulAgainstOpponent(CardData card, PlayerStatus enemyStatus, PlayerStatus playerStatus)
+    public static bool IsEnemyMagicUsefulAgainstOpponent(
+        CardData card,
+        PlayerStatus enemyStatus,
+        PlayerStatus playerStatus,
+        IReadOnlyList<CardData> enemyHand = null)
     {
         if (card == null || playerStatus == null) return false;
         if (!CardRules.IsUsableInAttackPhase(card)) return false;
         if (CardRules.IsRecoveryCard(card)) return false;
-        if (!CanEnemyAffordMagic(card, enemyStatus)) return false;
+        if (!CanEnemyAffordMagic(card, enemyStatus, enemyHand)) return false;
 
         if (CardRules.IsAttackMagic(card))
         {
@@ -131,8 +146,8 @@ public static class EnemyMagicAiRules
         foreach (var c in enemyHand)
         {
             if (!IsPrioritizedHandAttackMagic(c)) continue;
-            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill)) continue;
-            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus)) continue;
+            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill, enemyHand)) continue;
+            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus, enemyHand)) continue;
             result.Add(c);
         }
 
@@ -152,8 +167,8 @@ public static class EnemyMagicAiRules
         {
             if (c == null || !CardRules.IsAttackMagic(c)) continue;
             if (IsPrioritizedHandAttackMagic(c)) continue;
-            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill)) continue;
-            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus)) continue;
+            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill, enemyHand)) continue;
+            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus, enemyHand)) continue;
             result.Add(c);
         }
 
@@ -171,7 +186,7 @@ public static class EnemyMagicAiRules
         foreach (var c in enemyHand)
         {
             if (c == null || !CardRules.IsRecoveryCard(c)) continue;
-            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill)) continue;
+            if (!CanEnemyAddHandMagicToPool(c, enemyStatus, handRefill, enemyHand)) continue;
             if (!IsEnemySelfRecoveryMagicUseful(c, enemyStatus)) continue;
             result.Add(c);
         }
@@ -181,17 +196,19 @@ public static class EnemyMagicAiRules
 
     public static List<CardData> CollectUsefulPoolMagic(
         PlayerStatus enemyStatus,
-        PlayerStatus playerStatus)
+        PlayerStatus playerStatus,
+        IReadOnlyList<CardData> enemyHand = null)
     {
         var result = new List<CardData>();
         if (MagicPoolManager.I == null) return result;
 
         foreach (var entry in MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy))
         {
+            if (entry == null) continue;
             var c = entry.cardData;
             if (c == null) continue;
-            if (!CanEnemyUsePoolMagic(c, enemyStatus)) continue;
-            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus)) continue;
+            if (!CanEnemyUsePoolMagic(c, enemyStatus, enemyHand)) continue;
+            if (!IsEnemyMagicUsefulAgainstOpponent(c, enemyStatus, playerStatus, enemyHand)) continue;
             result.Add(c);
         }
 

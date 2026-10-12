@@ -55,13 +55,17 @@ public static class SummonGarudaLifecycle
     /// <summary>
     /// Instantiate drawn cards from synced names (online client).
     /// </summary>
-    public static List<CardData> InstantiateDrawPlanFromNames(BattleManager bm, IReadOnlyList<string> names)
+    public static List<CardData> InstantiateDrawPlanFromNames(
+        BattleManager bm,
+        IReadOnlyList<string> names,
+        IReadOnlyList<string> iceBarrierOriginalAssetNames = null)
     {
         var result = new List<CardData>();
         if (bm?.cardDealer == null || names == null) return result;
 
-        foreach (var name in names)
+        for (int i = 0; i < names.Count; i++)
         {
+            var name = names[i];
             if (string.IsNullOrEmpty(name)) continue;
             var template = bm.cardDealer.FindTemplateByName(name);
             if (template == null)
@@ -71,8 +75,16 @@ public static class SummonGarudaLifecycle
             }
 
             var instance = bm.cardDealer.InstantiateCardFromTemplate(template);
-            if (instance != null)
-                result.Add(instance);
+            if (instance == null) continue;
+
+            if (iceBarrierOriginalAssetNames != null
+                && i < iceBarrierOriginalAssetNames.Count
+                && !string.IsNullOrEmpty(iceBarrierOriginalAssetNames[i]))
+            {
+                IceBarrierTransformRegistry.Register(instance, iceBarrierOriginalAssetNames[i]);
+            }
+
+            result.Add(instance);
         }
 
         return result;

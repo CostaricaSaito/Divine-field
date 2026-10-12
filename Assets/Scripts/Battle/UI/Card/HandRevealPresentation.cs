@@ -33,7 +33,16 @@ public static class HandRevealPresentation
         _ = PrewarmSuperRareRevealVideoAsync();
     }
 
-    public static async Task RevealCardAsync(
+    public static Task RevealCardAsync(
+        CardData card,
+        CardUI ui,
+        HandRevealBatchContext batch,
+        CancellationToken ct,
+        bool enableInteractable = true,
+        PlayerType drawerSide = PlayerType.Player)
+        => IceBarrierHandReveal.RevealCardAsync(card, ui, batch, ct, enableInteractable, drawerSide);
+
+    public static async Task RevealCardCoreAsync(
         CardData card,
         CardUI ui,
         HandRevealBatchContext batch,

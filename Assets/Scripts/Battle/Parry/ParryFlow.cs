@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -25,6 +25,13 @@ public static class ParryFlow
     {
         if (battleManager == null || battleProcessor == null || incomingAttackCards == null || incomingAttackCards.Count == 0)
             return false;
+
+        ParryCardConsumption.TryConsumeParryDefenseCard(
+            playerParryDefenseCard,
+            PlayerType.Player,
+            battleProcessor,
+            handRefill,
+            battleManager.playerHand);
 
         battleManager.ClearReflectionAttackTotalDisplay();
 
@@ -131,11 +138,12 @@ public static class ParryFlow
         var player = battleManager.GetPlayerStatus();
         var enemy = battleManager.GetEnemyStatus();
 
-        if (enemyParryDefenseCard != null)
-        {
-            handRefill?.RecordEnemyUse(enemyParryDefenseCard);
-            battleProcessor.UseCard(enemyParryDefenseCard, battleManager.cpuHand);
-        }
+        ParryCardConsumption.TryConsumeParryDefenseCard(
+            enemyParryDefenseCard,
+            PlayerType.Enemy,
+            battleProcessor,
+            handRefill,
+            battleManager.cpuHand);
 
         int incomingPower = battleProcessor.ComputeReflectionIncomingAttackPower(
             incomingPlayerAttackCards, player, enemy);

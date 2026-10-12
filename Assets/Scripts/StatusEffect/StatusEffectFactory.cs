@@ -59,6 +59,9 @@ public static class StatusEffectFactory
             case StatusEffectType.DiabolicEmission:
                 return new DiabolicEmissionEffect();
 
+            case StatusEffectType.CyberPsychosis:
+                return new CyberPsychosisEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

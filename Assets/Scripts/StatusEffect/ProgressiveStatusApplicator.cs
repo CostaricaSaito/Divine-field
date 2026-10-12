@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 段階型・排他型の状態異常を <see cref="PlayerStatus"/> に付与する（単純な重複チェックはここに含めない）。
@@ -9,7 +9,7 @@ public enum ProgressiveApplyResult
     Applied,
     /// <summary>病系が「病」付与で段階が進んだ</summary>
     DiseaseProgressed,
-    /// <summary>楽園病＋病：呼び出し側で強制絶頂演出を実行すること</summary>
+    /// <summary>楽園病中に病系が付与された：呼び出し側で <see cref="DiseaseTurnEndProcessor.ProcessForcedParadiseEcstasyAsync"/> を実行</summary>
     ForcedParadiseEcstasy,
     /// <summary>既に同じ段階・付与不要など</summary>
     NoChange,
@@ -121,10 +121,9 @@ public static class ProgressiveStatusApplicator
     {
         StatusEffectType cur = FindDiseaseStage(target);
 
-        if (cur == StatusEffectType.ParadiseSickness
-            && config.paradisePlusSicknessForcesEcstasy)
+        if (cur == StatusEffectType.ParadiseSickness)
         {
-            // 楽園病中のいかなる病系付与も「進行」扱いで強制絶頂（病・重病・煉獄・楽園・ランダムで病が当たった場合を含む）
+            // 楽園病中のいかなる病系付与も強制絶頂（段階は変えない）。10%エンドフェイズ判定とは別経路。
             return ProgressiveApplyResult.ForcedParadiseEcstasy;
         }
 

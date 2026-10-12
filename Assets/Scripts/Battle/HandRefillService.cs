@@ -34,6 +34,20 @@ public class HandRefillService : MonoBehaviour
         return false;
     }
 
+    /// <summary>同一ターン内にプレイヤーが既に使用した手札か（裏向きスロット記録）。</summary>
+    public bool IsPlayerCardUsedThisTurn(CardData card)
+    {
+        if (card == null) return false;
+        int id = card.GetInstanceID();
+        for (int i = 0; i < _playerBackSlotsThisTurn.Count; i++)
+        {
+            var used = _playerBackSlotsThisTurn[i].usedCard;
+            if (used != null && used.GetInstanceID() == id)
+                return true;
+        }
+        return false;
+    }
+
     // ---- 設定（インスペクターから、または手動） ----
     public void Initialize(Transform handPanel, GameObject cardUIPrefab, Sprite back, CardDealer dealer)
     {
@@ -334,6 +348,7 @@ public class HandRefillService : MonoBehaviour
         }
 
         hand.Add(newCard);
+        SealedExoDionHandTracker.RegisterAddedToHand(newCard, cardDealer);
         return newCard;
     }
 
@@ -358,6 +373,7 @@ public class HandRefillService : MonoBehaviour
         }
 
         hand.Add(newCard);
+        SealedExoDionHandTracker.RegisterAddedToHand(newCard, cardDealer);
         Debug.Log($"[HandRefillService] カードドロー: {newCard.cardName}");
 
         var ui = cardDealer.CreateCardUIForHand(newCard);
@@ -373,6 +389,32 @@ public class HandRefillService : MonoBehaviour
             await Task.Delay(trailingDelayMs);
 
         return newCard;
+    }
+
+    /// <summary>
+    /// Sealed EXO-DION moved to magic panel at EndPhase: restore hand size (+1). New EXO-DION registers for another move in the same EndPhase.
+    /// </summary>
+    public async Task DrawOneAfterSealedExoDionPanelMoveAsync(
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        PlayerType owner,
+        CancellationToken ct = default)
+    {
+        if (owner == PlayerType.Player)
+        {
+            if (playerHand == null) return;
+            var drawn = await DrawCardAsync(playerHand, trailingDelayMs: 200, playSoundOnDraw: true);
+            if (drawn != null)
+                await RevealDrawnCardAfterCombatAsync(drawn, ct);
+            BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
+            BattleUIManager.I?.SetIntroModeUI(playerHand);
+            return;
+        }
+
+        if (enemyHand == null) return;
+        DrawCardDataOnly(enemyHand, PlayerType.Enemy);
+        if (!ct.IsCancellationRequested)
+            await Task.Delay(50, ct);
     }
 
     /// <summary>

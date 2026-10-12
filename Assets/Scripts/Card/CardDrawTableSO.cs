@@ -8,18 +8,18 @@
 public class CardDrawTableSO : ScriptableObject
 {
     [Header("Default draw weight by rarity (higher = more common)")]
-    [Min(0)] public int commonDefaultWeight = 30;
-    [Min(0)] public int uncommonDefaultWeight = 10;
-    [Min(0)] public int rareDefaultWeight = 3;
-    [Min(0)] public int superRareDefaultWeight = 1;
-    [Min(0)] public int ultraRareDefaultWeight = 0;
+    [Min(0)] public int commonDefaultWeight = 40;
+    [Min(0)] public int uncommonDefaultWeight = 35;
+    [Min(0)] public int rareDefaultWeight = 19;
+    [Min(0)] public int superRareDefaultWeight = 5;
+    [Min(0)] public int ultraRareDefaultWeight = 1;
 
     [Header("Disadvantage draw weight by rarity (latched underdog only)")]
-    [Min(0)] public int disadvantageCommonWeight = 25;
-    [Min(0)] public int disadvantageUncommonWeight = 10;
-    [Min(0)] public int disadvantageRareWeight = 5;
-    [Min(0)] public int disadvantageSuperRareWeight = 2;
-    [Min(0)] public int disadvantageUltraRareWeight = 1;
+    [Min(0)] public int disadvantageCommonWeight = 20;
+    [Min(0)] public int disadvantageUncommonWeight = 30;
+    [Min(0)] public int disadvantageRareWeight = 35;
+    [Min(0)] public int disadvantageSuperRareWeight = 10;
+    [Min(0)] public int disadvantageUltraRareWeight = 5;
 
     public int GetDefaultWeight(CardRarity rarity, bool disadvantageDraw = false)
     {

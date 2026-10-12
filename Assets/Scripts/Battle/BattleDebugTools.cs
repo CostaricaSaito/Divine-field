@@ -37,7 +37,9 @@ public class BattleDebugPanelLayout
     public float positionX = 8f;
     [Tooltip("Custom: 左上 Y。TopRight: 上端からの余白。")]
     public float positionY = 8f;
-    [Range(8, 48)] public int fontSize = 18;
+    [Range(8, 64)] public int fontSize = 18;
+    [Tooltip("最小化ボタンのサイズ倍率（手札チートなどタッチしやすくする）。")]
+    [Range(1f, 2.5f)] public float minimizeButtonScale = 1f;
 }
 
 /// <summary>
@@ -105,11 +107,12 @@ public class BattleDebugTools : MonoBehaviour
     [SerializeField] private BattleDebugPanelLayout cardCheatPanelLayout = new BattleDebugPanelLayout
     {
         placement = BattleDebugPanelPlacement.Center,
-        width = 780f,
-        height = 1000f,
+        width = 960f,
+        height = 1120f,
         positionX = 0f,
         positionY = 0f,
-        fontSize = 22,
+        fontSize = 30,
+        minimizeButtonScale = 1.75f,
     };
 
     [Header("敵手札リアルタイム（Editor / Development・再生中）")]
@@ -124,9 +127,6 @@ public class BattleDebugTools : MonoBehaviour
         positionY = 200f,
         fontSize = 22,
     };
-
-    [Tooltip("Inspector から1枚指定してコンテキストメニューで即追加")]
-    [SerializeField] private CardData cheatCardTemplateForContextMenu;
 
     private Vector2 _ailmentScroll;
     private Vector2 _disasterScroll;
@@ -171,8 +171,10 @@ public class BattleDebugTools : MonoBehaviour
     private bool _showCardCheatPanelCacheInitialized;
     private bool _showAilmentDebugPanelCacheInitialized;
     private bool _showDisasterDebugPanelCacheInitialized;
+    /// <summary>手札チートを画面中央へ置く（Screen サイズ確定後の OnGUI で適用）。</summary>
+    private bool _cardCheatPendingCenterSnap;
 
-    [ContextMenu("デバッグ：プレイヤー HP10 / MP0 / GP0 に設定")]
+    [ContextMenu("デバッグ：プレイヤーHP10")]
     public void SetPlayerHp10Mp0Gp0()
     {
         if (!Application.isPlaying || battleManager == null)
@@ -205,7 +207,7 @@ public class BattleDebugTools : MonoBehaviour
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-    [ContextMenu("Debug: Force player disadvantage latch")]
+    [ContextMenu("デバッグ：プレイヤー劣勢状態")]
     public void DebugForcePlayerDisadvantageLatch()
     {
         if (!EnsurePlaying()) return;
@@ -214,7 +216,7 @@ public class BattleDebugTools : MonoBehaviour
     }
 #endif
 
-    [ContextMenu("デバッグ：次のプレイヤードローを SuperRare+ に固定")]
+    [ContextMenu("デバッグ：次のプレイヤードローをスーパーレア固定")]
     public void DebugArmNextDrawSuperRarePlus()
     {
         if (!EnsurePlaying()) return;
@@ -254,6 +256,7 @@ public class BattleDebugTools : MonoBehaviour
         _showCardCheatPanelCacheInitialized = false;
         _showAilmentDebugPanelCacheInitialized = false;
         _showDisasterDebugPanelCacheInitialized = false;
+        _cardCheatPendingCenterSnap = true;
         _debugPanelWindowStates.Clear();
     }
 
@@ -261,7 +264,7 @@ public class BattleDebugTools : MonoBehaviour
     private void OnValidate()
     {
         HandleDebugPanelToggle(ref showCardCheatPanel, ref _showCardCheatPanelCached,
-            ref _showCardCheatPanelCacheInitialized, cardCheatPanelLayout, ref _cardCheatWindowRect);
+            ref _showCardCheatPanelCacheInitialized, cardCheatPanelLayout, ref _cardCheatWindowRect, centerOnScreen: true);
         HandleDebugPanelToggle(ref showAilmentDebugPanel, ref _showAilmentDebugPanelCached,
             ref _showAilmentDebugPanelCacheInitialized, ailmentPanelLayout, ref _ailmentWindowRect);
         HandleDebugPanelToggle(ref showDisasterDebugPanel, ref _showDisasterDebugPanelCached,
@@ -275,7 +278,7 @@ public class BattleDebugTools : MonoBehaviour
             return;
 
         HandleDebugPanelToggle(ref showCardCheatPanel, ref _showCardCheatPanelCached,
-            ref _showCardCheatPanelCacheInitialized, cardCheatPanelLayout, ref _cardCheatWindowRect);
+            ref _showCardCheatPanelCacheInitialized, cardCheatPanelLayout, ref _cardCheatWindowRect, centerOnScreen: true);
         HandleDebugPanelToggle(ref showAilmentDebugPanel, ref _showAilmentDebugPanelCached,
             ref _showAilmentDebugPanelCacheInitialized, ailmentPanelLayout, ref _ailmentWindowRect);
         HandleDebugPanelToggle(ref showDisasterDebugPanel, ref _showDisasterDebugPanelCached,
@@ -341,9 +344,24 @@ public class BattleDebugTools : MonoBehaviour
         _gameStateWindowRect = ComputeInitialRect(gameStatePanelLayout);
         _ailmentWindowRect = ComputeInitialRect(ailmentPanelLayout);
         _disasterWindowRect = ComputeInitialRect(disasterPanelLayout);
-        _cardCheatWindowRect = ComputeInitialRect(cardCheatPanelLayout);
+        _cardCheatPendingCenterSnap = true;
         _enemyHandWindowRect = ComputeInitialRect(enemyHandPanelLayout);
         _debugPanelRectsInitialized = true;
+    }
+
+    private static bool IsScreenSizeReadyForDebugPanel()
+        => Screen.width > 64 && Screen.height > 64;
+
+    private void SnapCardCheatWindowToScreenCenter(ref Rect windowRect, float width, float height)
+    {
+        float screenW = Screen.width;
+        float screenH = Screen.height;
+        float w = Mathf.Clamp(width, 50f, screenW - 8f);
+        float h = Mathf.Clamp(height, 50f, screenH - 8f);
+        windowRect.width = w;
+        windowRect.height = h;
+        windowRect.x = (screenW - w) * 0.5f;
+        windowRect.y = (screenH - h) * 0.5f;
     }
 
     private void HandleDebugPanelToggle(
@@ -351,7 +369,8 @@ public class BattleDebugTools : MonoBehaviour
         ref bool cachedShowPanel,
         ref bool cacheInitialized,
         BattleDebugPanelLayout layout,
-        ref Rect windowRect)
+        ref Rect windowRect,
+        bool centerOnScreen = false)
     {
         if (!cacheInitialized)
         {
@@ -363,7 +382,10 @@ public class BattleDebugTools : MonoBehaviour
         if (showPanel == cachedShowPanel)
             return;
 
-        windowRect = ComputeInitialRect(layout);
+        if (centerOnScreen)
+            _cardCheatPendingCenterSnap = true;
+        else
+            windowRect = ComputeInitialRect(layout);
         cachedShowPanel = showPanel;
     }
 
@@ -386,7 +408,8 @@ public class BattleDebugTools : MonoBehaviour
         if (state.ExpandedHeight < layoutH * 0.5f)
             state.ExpandedHeight = layoutH;
 
-        float btnSize = Mathf.Clamp(titleBarH - 4f, 18f, 30f);
+        float btnScale = Mathf.Max(1f, layout.minimizeButtonScale);
+        float btnSize = Mathf.Clamp((titleBarH + 6f) * btnScale, 32f, 64f);
         float minimizedTotalH = titleBarH + btnSize + 6f;
         float expandedMinH = titleBarH + 8f;
 
@@ -396,8 +419,18 @@ public class BattleDebugTools : MonoBehaviour
         float targetH = state.Minimized
             ? minimizedTotalH
             : Mathf.Max(expandedMinH, state.ExpandedHeight);
-        windowRect.width = w;
-        windowRect.height = targetH;
+
+        if (windowId == WindowIdCardCheat && _cardCheatPendingCenterSnap && IsScreenSizeReadyForDebugPanel())
+        {
+            SnapCardCheatWindowToScreenCenter(ref windowRect, w, targetH);
+            _cardCheatPendingCenterSnap = false;
+        }
+        else
+        {
+            windowRect.width = w;
+            windowRect.height = targetH;
+        }
+
         _debugPanelWindowStates[windowId] = state;
 
         windowRect = GUI.Window(windowId, windowRect, id =>
@@ -531,9 +564,16 @@ public class BattleDebugTools : MonoBehaviour
             InterventionTurnEndProcessor.DebugForceInterventionChance100,
             "介入発生率100%（デバッグ）");
 
+        DiseaseTurnEndProcessor.DebugForceDiseaseNaturalWorsen100 = GUILayout.Toggle(
+            DiseaseTurnEndProcessor.DebugForceDiseaseNaturalWorsen100,
+            "病進行率100%（デバッグ）");
+
         OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100 = GUILayout.Toggle(
             OrdinSlashReflectFlow.DebugForceOrdinSlashReflect100,
             "オーディン切り払い100%（デバッグ）");
+
+        GUILayout.Space(6f);
+        DrawShivaIceBarrierChanceDebugControls();
 
         GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
     }
@@ -627,9 +667,9 @@ public class BattleDebugTools : MonoBehaviour
 
     private void DrawCardCheatDebugWindow(int windowId)
     {
-        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 12, 48);
-        float rowH = Mathf.Max(40f, fs * 1.85f);
-        float btnW = Mathf.Max(80f, fs * 3.2f);
+        int fs = Mathf.Clamp(cardCheatPanelLayout.fontSize, 14, 64);
+        float rowH = Mathf.Max(52f, fs * 2.15f);
+        float btnW = Mathf.Max(104f, fs * 3.8f);
         float dragTitleH = DebugPanelDragTitleHeight(fs + 6);
 
         GUILayout.Label("手札チート", _debugPanelHeaderStyle);
@@ -648,21 +688,7 @@ public class BattleDebugTools : MonoBehaviour
                 _debugPanelLineStyle);
         }
 
-        GUILayout.Space(6f);
-        GUILayout.Label("ドロー抽選（デバッグ）", _debugPanelLineStyle);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        bool superRareDrawArmed = CardDealer.DebugForceNextPlayerDrawSuperRarePlus;
-        GUILayout.Label(
-            superRareDrawArmed ? "次ドロー: SuperRare+ 固定（待機中）" : "次ドロー: 通常抽選",
-            _debugPanelLineStyle);
-        if (GUILayout.Button(
-                superRareDrawArmed ? "SuperRare+ 固定（待機中・再設定）" : "次ドロー SuperRare+ 固定",
-                _debugPanelButtonStyle))
-            DebugArmNextDrawSuperRarePlus();
-#else
-        GUILayout.Label("Editor / Development ビルドでのみ利用できます", _debugPanelLineStyle);
-#endif
-
+        GUILayout.Space(8f);
         _cardCheatFilter = GUILayout.TextField(_cardCheatFilter ?? "", _debugPanelTextFieldStyle, GUILayout.ExpandWidth(true));
         GUILayout.Label("フィルタ（カード名・asset名の部分一致）", _debugPanelLineStyle);
 
@@ -748,7 +774,7 @@ public class BattleDebugTools : MonoBehaviour
     }
 
     private float GetCardCheatScrollViewHeight(bool online, int fontSize)
-        => GetDebugPanelScrollViewHeight(cardCheatPanelLayout, fontSize, online ? 230f : 220f);
+        => GetDebugPanelScrollViewHeight(cardCheatPanelLayout, fontSize, online ? 148f : 138f);
 
     private static void HandleDebugPanelScrollWheel(ref Vector2 scrollPos, Rect guiRect, float contentHeight, float visibleHeight)
     {
@@ -776,6 +802,7 @@ public class BattleDebugTools : MonoBehaviour
             fontSize = fontSize,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
+            padding = new RectOffset(8, 8, 6, 6),
         };
 
         _debugPanelRowLabelStyle = new GUIStyle(_debugPanelButtonStyle)
@@ -818,10 +845,10 @@ public class BattleDebugTools : MonoBehaviour
         _debugPanelMinimizeButtonStyle = new GUIStyle(GUI.skin.button)
         {
             font = _debugPanelButtonStyle.font,
-            fontSize = Mathf.Max(10, fontSize - 2),
+            fontSize = Mathf.Max(16, fontSize + 2),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            padding = new RectOffset(0, 0, 0, 0),
+            padding = new RectOffset(2, 2, 2, 2),
         };
 
         _debugPanelStyleFontCached = fontSize;
@@ -869,46 +896,6 @@ public class BattleDebugTools : MonoBehaviour
         GUI.DragWindow(new Rect(0f, 0f, 10000f, dragTitleH));
     }
 
-#if UNITY_EDITOR
-    [ContextMenu("デバッグ：ウィンドウ位置・サイズを Inspector に書き戻し（再生中）")]
-    private void WriteBackDebugWindowLayoutsToInspector()
-    {
-        if (!Application.isPlaying)
-            return;
-
-        gameStatePanelLayout.placement = BattleDebugPanelPlacement.Custom;
-        gameStatePanelLayout.positionX = _gameStateWindowRect.x;
-        gameStatePanelLayout.positionY = _gameStateWindowRect.y;
-        gameStatePanelLayout.width = _gameStateWindowRect.width;
-        gameStatePanelLayout.height = _gameStateWindowRect.height;
-
-        ailmentPanelLayout.placement = BattleDebugPanelPlacement.Custom;
-        ailmentPanelLayout.positionX = _ailmentWindowRect.x;
-        ailmentPanelLayout.positionY = _ailmentWindowRect.y;
-        ailmentPanelLayout.width = _ailmentWindowRect.width;
-        ailmentPanelLayout.height = _ailmentWindowRect.height;
-
-        disasterPanelLayout.placement = BattleDebugPanelPlacement.Custom;
-        disasterPanelLayout.positionX = _disasterWindowRect.x;
-        disasterPanelLayout.positionY = _disasterWindowRect.y;
-        disasterPanelLayout.width = _disasterWindowRect.width;
-        disasterPanelLayout.height = _disasterWindowRect.height;
-
-        cardCheatPanelLayout.placement = BattleDebugPanelPlacement.Custom;
-        cardCheatPanelLayout.positionX = _cardCheatWindowRect.x;
-        cardCheatPanelLayout.positionY = _cardCheatWindowRect.y;
-        cardCheatPanelLayout.width = _cardCheatWindowRect.width;
-        cardCheatPanelLayout.height = _cardCheatWindowRect.height;
-
-        enemyHandPanelLayout.placement = BattleDebugPanelPlacement.Custom;
-        enemyHandPanelLayout.positionX = _enemyHandWindowRect.x;
-        enemyHandPanelLayout.positionY = _enemyHandWindowRect.y;
-        enemyHandPanelLayout.width = _enemyHandWindowRect.width;
-        enemyHandPanelLayout.height = _enemyHandWindowRect.height;
-
-        UnityEditor.EditorUtility.SetDirty(this);
-    }
-#endif
 #endif
 
     /// <summary>
@@ -975,7 +962,19 @@ public class BattleDebugTools : MonoBehaviour
         Debug.Log("[BattleDebugTools] 敵召喚をガルーダに設定しました。");
     }
 
-    [ContextMenu("デバッグ：介入(13) 発生率100%をトグル")]
+    [ContextMenu("デバッグ：病進行率100%")]
+    public void DebugToggleDiseaseNaturalWorsen100()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        DiseaseTurnEndProcessor.DebugForceDiseaseNaturalWorsen100 =
+            !DiseaseTurnEndProcessor.DebugForceDiseaseNaturalWorsen100;
+        Debug.Log($"[BattleDebugTools] 病進行率100%: {DiseaseTurnEndProcessor.DebugForceDiseaseNaturalWorsen100}");
+#else
+        Debug.LogWarning("[BattleDebugTools] 病進行デバッグは Editor / Development ビルドでのみ利用できます。");
+#endif
+    }
+
+    [ContextMenu("デバッグ：介入発生率100%")]
     public void DebugToggleInterventionChance100()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -987,7 +986,7 @@ public class BattleDebugTools : MonoBehaviour
 #endif
     }
 
-    [ContextMenu("デバッグ：オーディン切り払い100%をトグル")]
+    [ContextMenu("デバッグ：オーディン切り払い100%")]
     public void DebugToggleOrdinSlashReflect100()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -998,6 +997,44 @@ public class BattleDebugTools : MonoBehaviour
         Debug.LogWarning("[BattleDebugTools] オーディンデバッグは Editor / Development ビルドでのみ利用できます。");
 #endif
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    void DrawShivaIceBarrierChanceDebugControls()
+    {
+        GUILayout.Label(
+            $"シヴァ氷結界 相手ドロー氷結率: {ShivaIceBarrierDrawFlow.DebugIceBarrierChanceOverrideLabel()}",
+            _debugPanelLineStyle);
+        GUILayout.Label(
+            "シヴァ設定側のみ有効。両者シヴァなら同じ設定が双方の相手ドローに適用",
+            _debugPanelLineStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("デフォルト", _debugPanelButtonStyle))
+            SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.UseSettings);
+        if (GUILayout.Button("50%", _debugPanelButtonStyle))
+            SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.Force50Percent);
+        if (GUILayout.Button("100%", _debugPanelButtonStyle))
+            SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.Force100Percent);
+        GUILayout.EndHorizontal();
+    }
+
+    void SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode mode)
+    {
+        ShivaIceBarrierDrawFlow.DebugIceBarrierChanceOverride = mode;
+        Debug.Log($"[BattleDebugTools] シヴァ氷結ドロー率: {ShivaIceBarrierDrawFlow.DebugIceBarrierChanceOverrideLabel()}");
+    }
+
+    [ContextMenu("デバッグ：シヴァ氷結ドロー率変更/デフォルト")]
+    public void DebugShivaIceBarrierChanceUseSettings()
+        => SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.UseSettings);
+
+    [ContextMenu("デバッグ：シヴァ氷結ドロー率変更/50%")]
+    public void DebugShivaIceBarrierChance50() =>
+        SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.Force50Percent);
+
+    [ContextMenu("デバッグ：シヴァ氷結ドロー率変更/100%")]
+    public void DebugShivaIceBarrierChance100() =>
+        SetShivaIceBarrierChanceDebugOverride(ShivaIceBarrierDrawFlow.DebugIceBarrierChanceMode.Force100Percent);
+#endif
 
     /// <summary>
     /// <see cref="StatusEffectFactory"/> で実体が作れるものは <see cref="PlayerStatus.TryApplyStatusEffect"/>。
@@ -1083,14 +1120,6 @@ public class BattleDebugTools : MonoBehaviour
         return _cachedAllCardsFromResources;
     }
 
-    /// <summary>Resources を再スキャンしたい場合（カード追加後など）。</summary>
-    [ContextMenu("デバッグ：手札チート用カード一覧キャッシュをクリア")]
-    public void ClearCheatCardCatalogCache()
-    {
-        _cachedAllCardsFromResources = null;
-        Debug.Log("[BattleDebugTools] 手札チートのカード一覧キャッシュをクリアしました。");
-    }
-
     private static string ResolveCheatCardNetworkId(CardData template)
     {
         if (template == null) return "";
@@ -1146,6 +1175,7 @@ public class BattleDebugTools : MonoBehaviour
         }
 
         battleManager.playerHand.Add(instance);
+        SealedExoDionHandTracker.RegisterAddedToHand(instance, battleManager.cardDealer);
         battleManager.cardDealer.CreateCardUIForHand(instance);
         // 通常のドローは裏面から始まり Reveal で表向け。デバッグ入手は最初から表向きにする。
         if (instance.cardUI != null)
@@ -1230,10 +1260,5 @@ public class BattleDebugTools : MonoBehaviour
         }
     }
 
-    [ContextMenu("デバッグ：Inspector の cheatCardTemplate を手札に追加")]
-    private void ContextMenuAddInspectorCheatCardToHand()
-    {
-        TryAddCheatCardToPlayerHand(cheatCardTemplateForContextMenu);
-    }
 #endif
 }

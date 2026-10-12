@@ -1,4 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -44,14 +46,11 @@ public class MagicPanelUI : MonoBehaviour
     {
         for (int i = 0; i < slots.Count; i++)
         {
-            if (i < entries.Count)
-            {
-                slots[i].Show(entries[i], cardBackSprite, currentInteractable);
-            }
+            MagicCardEntry entry = entries != null && i < entries.Count ? entries[i] : null;
+            if (entry != null && entry.cardData != null)
+                slots[i].Show(entry, cardBackSprite, currentInteractable);
             else
-            {
                 slots[i].Hide();
-            }
         }
     }
 
@@ -81,9 +80,11 @@ public class MagicPanelUI : MonoBehaviour
             var card = slot.GetCardData();
             bool slotOk = panelEnabled && card != null;
             if (slotOk && BlockingRules.IsPhysicalBlockingCard(card))
-                slotOk = BlockingRules.CanPlayerSelectPhysicalBlockingDefense(card, incomingAttack, defender);
+                slotOk = BlockingRules.CanUsePhysicalBlockingAgainstAttack(card, incomingAttack);
+            else if (slotOk && SealedExoDionRules.IsSealedExoDion(card))
+                slotOk = false;
             else if (slotOk && card.cardType == CardType.Magic)
-                slotOk = BlockingRules.CanAffordMagicDefenseMp(card, defender);
+                slotOk = defender == null || !defender.IsMagicUseForbidden();
             slot.SetInteractable(slotOk);
         }
     }
@@ -130,6 +131,14 @@ public class MagicPanelUI : MonoBehaviour
         if (slots == null) return;
         for (int i = 0; i < slots.Count; i++)
             slots[i]?.RefreshHitRateDisplay();
+    }
+
+    /// <summary>Sealed EXO-DION alt-win: jewel red flash on right-slot card art before Important popup.</summary>
+    public async Task PlayRightSlotSealedExoRedTintAsync(float durationSeconds, CancellationToken ct)
+    {
+        int index = SealedExoDionRules.RightSlotIndex;
+        if (slots == null || index < 0 || index >= slots.Count) return;
+        await slots[index].PlayUnsealRedTintAsync(durationSeconds, ct);
     }
 }
 
@@ -222,7 +231,9 @@ public class MagicCardSlot
 
             if (cardUI.button != null)
             {
-                cardUI.button.interactable = interactable;
+                bool slotOk = interactable
+                    && !SealedExoDionRules.IsSealedExoDion(entry.cardData);
+                cardUI.button.interactable = slotOk;
             }
 
             // プール表示中の CardData は Magic スロットの CardUI を指す（手札側参照のままだと発動が手札登録扱いになる）
@@ -239,7 +250,7 @@ public class MagicCardSlot
             }
         }
 
-        UpdateUsesText(entry.remainingUses);
+        UpdateUsesText(entry);
         isSetUp = true;
     }
 
@@ -285,6 +296,37 @@ public class MagicCardSlot
     public CardData GetCardData() => currentEntry?.cardData;
     public CardUI GetCardUI() => cardUI;
 
+    /// <summary>宝玉のように一瞬全面赤→元の色に戻す。</summary>
+    public async Task PlayUnsealRedTintAsync(float durationSeconds, CancellationToken ct)
+    {
+        if (cardUI?.cardImage == null) return;
+        var img = cardUI.cardImage;
+        Color from = img.color;
+        Color peak = new Color(1f, 0.05f, 0.05f, from.a);
+        float dur = Mathf.Max(0.01f, durationSeconds);
+        float half = dur * 0.5f;
+        float elapsed = 0f;
+        while (elapsed < dur)
+        {
+            ct.ThrowIfCancellationRequested();
+            elapsed += Time.unscaledDeltaTime;
+            if (elapsed <= half)
+            {
+                float t = Mathf.Clamp01(elapsed / half);
+                img.color = Color.Lerp(from, peak, t);
+            }
+            else
+            {
+                float t = Mathf.Clamp01((elapsed - half) / Mathf.Max(0.0001f, dur - half));
+                img.color = Color.Lerp(peak, from, t);
+            }
+
+            await Task.Yield();
+        }
+
+        img.color = from;
+    }
+
     public void RefreshHitRateDisplay()
     {
         cardUI?.RefreshHandStatusText();
@@ -318,17 +360,28 @@ public class MagicCardSlot
         return null;
     }
 
-    private void UpdateUsesText(int uses)
+    private void UpdateUsesText(MagicCardEntry entry)
     {
-        if (usesText != null)
+        if (usesText == null || entry == null) return;
+        usesText.text = entry.remainingUses.ToString();
+        if (entry.usesSealedExoDionCounterStyle
+            || (entry.cardData != null && SealedExoDionRules.IsSealedExoDion(entry.cardData)))
         {
-            usesText.text = uses.ToString();
+            usesText.color = Color.red;
+            usesText.outlineWidth = 0.25f;
+            usesText.outlineColor = Color.white;
+        }
+        else
+        {
+            usesText.color = Color.white;
+            usesText.outlineWidth = 0f;
         }
     }
 
     private void OnClick()
     {
         if (currentEntry == null || BattleManager.I == null) return;
+        if (SealedExoDionRules.IsSealedExoDion(currentEntry.cardData)) return;
         BattleManager.I.SelectMagicPoolCard(currentEntry.cardData);
     }
 }

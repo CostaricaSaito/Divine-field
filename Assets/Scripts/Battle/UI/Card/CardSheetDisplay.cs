@@ -191,19 +191,28 @@ public class CardSheetDisplay : MonoBehaviour
             return;
         }
 
+        bool defenseAsAttack = CardUI.CardHandStatusText.ShouldShowDefenseCardAsAttackLabel(currentCardData);
         bool atkLineLikeAttack = currentCardData.cardType == CardType.Attack
             || currentCardData.cardType == CardType.Ultimate
-            || currentCardData.cardType == CardType.Disaster;
+            || currentCardData.cardType == CardType.Disaster
+            || defenseAsAttack;
         bool showHitRate = HitRateRules.ShouldDisplayHitRateLabelForSheet(
             currentCardData, _ownerForDisplay, _sheetContext);
         int hitRate = HitRateRules.GetDisplayedHitRatePercentForSheet(
             currentCardData, _ownerForDisplay, _sheetContext);
+        int defenseForLine = defenseAsAttack ? 0 : _displayDefense;
         atkDefText.text = FormatAtkDefLine(
             _displayAttack,
-            _displayDefense,
+            defenseForLine,
             atkLineLikeAttack,
             hitRate,
             showHitRate);
+    }
+
+    /// <summary>攻撃選択の変化後、防御兼攻撃カードの ATK/DEF 行を再適用する。</summary>
+    public void RefreshAtkDefPresentation()
+    {
+        RefreshHitRateLineOnAtkDefText();
     }
 
     /// <summary>マジカルエクスプロージョン演出など：ATK 行のみ差し替え。</summary>

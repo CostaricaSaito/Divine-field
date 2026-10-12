@@ -60,7 +60,7 @@ public static class MagicSealerLifecycle
 
         if (ct.IsCancellationRequested) return;
 
-        MagicPoolManager.I.ClearPool(victimPoolOwner);
+        MagicPoolManager.I.ClearPoolForMagicSealer(victimPoolOwner);
         BattleUIManager.I?.RefreshMagicCardInteractivity(bm.playerHand);
     }
 
@@ -72,6 +72,7 @@ public static class MagicSealerLifecycle
         {
             var card = entries[i]?.cardData;
             if (card == null) continue;
+            if (SealedExoDionRules.IsSealedExoDion(card)) continue;
             plan.Cards.Add(card);
             plan.CardNames.Add(card.cardName);
         }

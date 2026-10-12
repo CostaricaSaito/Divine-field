@@ -7,10 +7,10 @@ public static class EnemyDefenseSelectionHelper
 {
     public static List<CardData> GetDefensePicks(EnemyAI enemyAI, CardData fallback)
     {
-        if (enemyAI is RemotePlayerAgent remote
-            && remote.LastDefenseSelection != null
-            && remote.LastDefenseSelection.Count > 0)
-            return new List<CardData>(remote.LastDefenseSelection);
+        if (enemyAI != null
+            && enemyAI.LastDefenseSelection != null
+            && enemyAI.LastDefenseSelection.Count > 0)
+            return new List<CardData>(enemyAI.LastDefenseSelection);
         if (fallback != null)
             return new List<CardData> { fallback };
         return new List<CardData>();

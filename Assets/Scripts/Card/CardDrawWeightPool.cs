@@ -32,6 +32,7 @@ public static class CardDrawWeightPool
         {
             if (template == null || template.cardType == CardType.Ultimate
                 || template.cardType == CardType.Disaster) continue;
+            if (template.name == IceBarrierTransformRegistry.FrozenTemplateAssetName) continue;
 
             int weight = ResolveDrawWeight(template, table, disadvantageDraw);
             for (int i = 0; i < weight; i++)
@@ -57,6 +58,7 @@ public static class CardDrawWeightPool
             if (template == null || template.cardType == CardType.Ultimate
                 || template.cardType == CardType.Disaster) continue;
             if (template.rarity < CardRarity.SuperRare) continue;
+            if (template.name == IceBarrierTransformRegistry.FrozenTemplateAssetName) continue;
 
             int weight = ResolveDrawWeight(template, table, disadvantageDraw);
             for (int i = 0; i < weight; i++)
