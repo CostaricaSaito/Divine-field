@@ -136,6 +136,35 @@ public static class CardDestroyPresentation
     }
 
     /// <summary>
+    /// Show on card panel, dissolve, then remove from hand (discard flows).
+    /// </summary>
+    public static async Task PlayRevealAndDissolveFromHandAsync(
+        BattleManager bm,
+        List<CardData> hand,
+        CardData card,
+        bool isPlayerHand,
+        Side displaySide,
+        CancellationToken ct,
+        int preDissolveHoldMs = 500)
+    {
+        var ui = BattleUIManager.I;
+        if (ui == null || bm == null || card == null) return;
+
+        ui.ClearCardDisplayPanelImmediate(displaySide);
+        ui.ShowCardSheetVisualOnly(card, displaySide);
+        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
+
+        if (preDissolveHoldMs > 0)
+        {
+            await Task.Delay(preDissolveHoldMs, ct);
+            if (ct.IsCancellationRequested) return;
+        }
+
+        await PlayDissolveOnPanelSheetAsync(card, displaySide, ct, 0);
+        RemoveFromHand(bm, hand, card, isPlayerHand);
+    }
+
+    /// <summary>
     /// Dissolve a card sheet already on the display panel, then destroy the sheet instance.
     /// Does not touch hand lists.
     /// </summary>

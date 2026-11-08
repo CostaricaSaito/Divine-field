@@ -459,17 +459,19 @@ public class BattleUIManager : MonoBehaviour
     public float ShowStyledImportantPopup(
         ImportantPopupKind kind,
         string messageOverride,
-        Side cardPanelSide)
+        Side cardPanelSide,
+        bool playShowSound = true)
         => popupPresenter != null
-            ? popupPresenter.ShowStyledImportantPopup(kind, messageOverride, cardPanelSide)
+            ? popupPresenter.ShowStyledImportantPopup(kind, messageOverride, cardPanelSide, playShowSound)
             : 0f;
 
     public ImportantPopup SpawnImportantPopup(
         ImportantPopupKind kind,
         string messageOverride,
-        Side cardPanelSide)
+        Side cardPanelSide,
+        bool playShowSound = true)
         => popupPresenter != null
-            ? popupPresenter.SpawnImportantPopup(kind, messageOverride, cardPanelSide)
+            ? popupPresenter.SpawnImportantPopup(kind, messageOverride, cardPanelSide, playShowSound)
             : null;
 
     /// <summary>重要メッセージ用。</summary>

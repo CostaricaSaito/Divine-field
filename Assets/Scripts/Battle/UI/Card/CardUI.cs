@@ -365,14 +365,14 @@ public class CardUI : MonoBehaviour
             if (c.cardType == CardType.Recovery) return true;
             if (c.cardType == CardType.Magic || c.cardType == CardType.ArchMagic)
             {
-                return c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects;
+                return c.healsHP || c.healsMP || c.healsGP || c.HasStatusEffectCure();
             }
             return false;
         }
 
         private static string BuildRecoveryLabel(CardData c)
         {
-            if (c.cureAllStatusEffects) return "CURE";
+            if (c.HasStatusEffectCure()) return "CURE";
 
             int nHealKinds = (c.healsHP ? 1 : 0) + (c.healsMP ? 1 : 0) + (c.healsGP ? 1 : 0);
             if (nHealKinds >= 2) return $"HP+{c.recoveryAmount}";

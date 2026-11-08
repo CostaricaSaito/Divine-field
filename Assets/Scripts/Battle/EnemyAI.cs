@@ -361,10 +361,12 @@ public class EnemyAI
         }
 
         Debug.Log("[EnemyAI] Parry rerun defense select");
+        LastDefenseSelection = null;
 
         CardData normal = SelectDefenseCard(cpuHand, attackElement, incomingAttack, usedParryCard);
         if (normal != null)
         {
+            LastDefenseSelection = new List<CardData> { normal };
             await Task.Delay(500);
             return normal;
         }
@@ -379,6 +381,7 @@ public class EnemyAI
                 if (ParryRules.RequiresParryExclusiveLock(c, incomingAttack))
                 {
                     Debug.Log($"[EnemyAI] Parry rerun: another parry card {c.cardName}");
+                    LastDefenseSelection = new List<CardData> { c };
                     await Task.Delay(500);
                     return c;
                 }
@@ -386,6 +389,7 @@ public class EnemyAI
         }
 
         Debug.Log("[EnemyAI] Parry rerun: no defense, accept damage");
+        LastDefenseSelection = null;
         await Task.Delay(500);
         return null;
     }

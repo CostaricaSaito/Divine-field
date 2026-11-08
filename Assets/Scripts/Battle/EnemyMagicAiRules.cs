@@ -80,12 +80,14 @@ public static class EnemyMagicAiRules
         return !TargetHasEffectType(target, type);
     }
 
-    public static bool HasCurableStatusEffects(PlayerStatus status)
+    public static bool HasCurableStatusEffects(PlayerStatus status, StatusEffectCureScope scope)
     {
-        if (status?.activeEffects == null) return false;
+        if (status?.activeEffects == null || scope == StatusEffectCureScope.None) return false;
         foreach (var e in status.activeEffects)
         {
-            if (e != null && e.EffectType != StatusEffectType.None && !StatusEffectRules.IsIndelible(e.EffectType))
+            if (e != null
+                && e.EffectType != StatusEffectType.None
+                && StatusEffectRules.IsCurableBy(e.EffectType, scope))
                 return true;
         }
         return false;
@@ -98,7 +100,9 @@ public static class EnemyMagicAiRules
         if (card.healsHP && enemyStatus.currentHP < enemyStatus.maxHP) return true;
         if (card.healsMP && enemyStatus.currentMP < enemyStatus.maxMP) return true;
         if (card.healsGP && enemyStatus.currentGP < enemyStatus.maxGP) return true;
-        if (card.cureAllStatusEffects && HasCurableStatusEffects(enemyStatus)) return true;
+        var cureScope = card.GetStatusEffectCureScope();
+        if (cureScope != StatusEffectCureScope.None && HasCurableStatusEffects(enemyStatus, cureScope))
+            return true;
         return false;
     }
 

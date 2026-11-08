@@ -88,7 +88,10 @@ public class TotalAtkDefPowerCalculator
         }
         int plain = CalculateTotalPower(attackCards, true);
         if (attackerForMeRule != null && !_state.AttackDisplaySuppressMagicalSwordBonus)
+        {
             plain += MagicalSwordRules.GetActivePowerBonus(attackCards, attackerForMeRule);
+            plain += GigaFlareRules.GetActivePowerBonus(attackCards, attackerForMeRule);
+        }
         return plain;
     }
 
@@ -160,7 +163,8 @@ public class TotalAtkDefPowerCalculator
         if (rawCombo <= 0)
         {
             if (HammadnessRules.ContainsHammadness(cards) || TributeBloodRules.ContainsTributeBlood(cards)
-                || MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards))
+                || MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards)
+                || GigaFlareRules.ContainsGigaFlare(cards))
                 return "ATK 0";
             return "";
         }
@@ -384,17 +388,23 @@ public class TotalAtkDefPowerCalculator
         var bm = BattleManager.I;
         int savePlayer = 0;
         int saveEnemy = 0;
+        int saveGigaPlayer = 0;
+        int saveGigaEnemy = 0;
         bool atkIsPlayer = bm != null && ReferenceEquals(atk, bm.GetPlayerStatus());
         bool atkIsEnemy = bm != null && ReferenceEquals(atk, bm.GetEnemyStatus());
         if (bm != null && atkIsPlayer)
         {
             savePlayer = bm.MagicalSwordAttackPowerBonus;
+            saveGigaPlayer = bm.GigaFlareAttackPowerBonus;
             bm.SetMagicalSwordAttackPowerBonus(0);
+            bm.SetGigaFlareAttackPowerBonus(0);
         }
         else if (bm != null && atkIsEnemy)
         {
             saveEnemy = bm.MagicalSwordEnemyAttackPowerBonus;
+            saveGigaEnemy = bm.GigaFlareEnemyAttackPowerBonus;
             bm.SetMagicalSwordEnemyAttackPowerBonus(0);
+            bm.SetGigaFlareEnemyAttackPowerBonus(0);
         }
         try
         {
@@ -403,9 +413,15 @@ public class TotalAtkDefPowerCalculator
         finally
         {
             if (bm != null && atkIsPlayer)
+            {
                 bm.SetMagicalSwordAttackPowerBonus(savePlayer);
+                bm.SetGigaFlareAttackPowerBonus(saveGigaPlayer);
+            }
             if (bm != null && atkIsEnemy)
+            {
                 bm.SetMagicalSwordEnemyAttackPowerBonus(saveEnemy);
+                bm.SetGigaFlareEnemyAttackPowerBonus(saveGigaEnemy);
+            }
         }
     }
 

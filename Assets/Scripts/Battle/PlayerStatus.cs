@@ -27,7 +27,7 @@ public class PlayerStatus
     public int maxGP = 99;
 
     public int currentHP = 50;
-    public int currentMP = 50;
+    public int currentMP = 20;
     public int currentGP = 10;
 
     public SummonData summonData;
@@ -191,11 +191,6 @@ public class PlayerStatus
     }
 #endif
 
-    // ===== Bahamut Mega Flare (1 per battle, independent of ultimate skill) =====
-    public bool hasUsedMegaFlare { get; private set; }
-
-    public void MarkMegaFlareUsed() => hasUsedMegaFlare = true;
-
     /// <summary>
     /// UI 用：現在かかっている状態異常の種類（重複なし・公式ID順）。
     /// </summary>
@@ -334,6 +329,22 @@ public class PlayerStatus
         return false;
     }
 
+    /// <summary>神無月（攻撃力2倍）が付与されているか。</summary>
+    public bool HasKannadukiEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Kannaduki) return true;
+        return false;
+    }
+
+    /// <summary>無限の魔力（魔法MP0・使用回数無限）が付与されているか。</summary>
+    public bool HasInfiniteManasourceEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.InfiniteManasource) return true;
+        return false;
+    }
+
     /// <summary>凍結効果の実体。なければ null。</summary>
     public FreezeEffect GetFreezeEffect()
     {
@@ -450,6 +461,7 @@ public class PlayerStatus
     {
         if (baseMpCost <= 0) return 0;
         if (HasClusterHeadacheEffect()) return baseMpCost;
+        if (HasInfiniteManasourceEffect()) return 0;
         if (HasEyeStrainEffect()) return baseMpCost * 2;
         return baseMpCost;
     }

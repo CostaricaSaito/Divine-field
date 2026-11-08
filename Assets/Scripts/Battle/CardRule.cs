@@ -35,7 +35,7 @@ public static class CardRules
     public static bool HasRecoveryEffect(CardData c)
     {
         if (c == null) return false;
-        return c.healsHP || c.healsMP || c.healsGP || c.cureAllStatusEffects;
+        return c.healsHP || c.healsMP || c.healsGP || c.HasStatusEffectCure();
     }
 
     /// <summary>通常防具・防御専用魔法など（反射/打ち払い攻撃カードは含まない）。AI・レイアウト用。</summary>
@@ -74,12 +74,17 @@ public static class CardRules
         if (c == null) return false;
         if (c.cardUI != null && c.cardUI.IsFaceDown()) return false;
         var handRefill = BattleManager.I?.HandRefill;
-        if (handRefill != null && handRefill.IsPlayerCardUsedThisTurn(c))
+        if (handRefill != null)
         {
-            bool magicParryStillInPool = c.cardType == CardType.Magic
-                && MagicPoolManager.I != null
-                && MagicPoolManager.I.GetRemainingUses(c) > 0;
-            if (!magicParryStillInPool) return false;
+            if (handRefill.IsPlayerCardUsedThisTurn(c))
+            {
+                bool magicParryStillInPool = c.cardType == CardType.Magic
+                    && MagicPoolManager.I != null
+                    && MagicPoolManager.I.GetRemainingUses(c) > 0;
+                if (!magicParryStillInPool) return false;
+            }
+
+            if (handRefill.IsEnemyCardUsedThisTurn(c)) return false;
         }
         if (IsPassiveHandOnly(c)) return false;
         if (c.cardType == CardType.Disaster) return false;
@@ -98,7 +103,7 @@ public static class CardRules
         if (c == null) return false;
         if (IsPassiveHandOnly(c)) return false;
         if (IsRecoveryCard(c)) return true;
-        if (c.cureAllStatusEffects
+        if (c.HasStatusEffectCure()
             && (c.cardType == CardType.Recovery || c.cardType == CardType.Magic || c.cardType == CardType.Ultimate))
             return true;
         if (c.cardType == CardType.Special && c.specialCardEffect != null && c.postDeathCardEffect == null)
@@ -309,12 +314,36 @@ public static class CardRules
         return DiabolosUltimateRules.IsDiabolicEmissionCard(c);
     }
 
+    /// <summary>Ultimate Skill カードでギガフレア（ターン数×2の攻撃力）か。</summary>
+    public static bool IsGigaFlareUltimateSkillCard(CardData c) => GigaFlareRules.IsGigaFlareCard(c);
+
+    /// <summary>Ultimate Skill カードでグレイシャルダイアモンド（無限の魔力）か。</summary>
+    public static bool IsGlacialDiamondUltimateSkillCard(CardData c) => ShivaUltimateRules.IsGlacialDiamondCard(c);
+
     // 回復カードかどうか
     public static bool IsRecoveryCard(CardData c)
     {
         if (c == null) return false;
         if (IsUltimateRecoverySkillCard(c)) return true;
         return c.cardType == CardType.Recovery || (c.cardType == CardType.Magic && HasRecoveryEffect(c));
+    }
+
+    /// <summary>
+    /// TOTAL 赤トグル時の効果対象（<see cref="TotalAtkDefCombatPhaseRules.FormatEffectTargetToggleLabel"/> と同じ）。
+    /// 回復・魔泉は赤＝相手／通常は赤＝自分。
+    /// </summary>
+    public static PlayerStatus ResolvePlayerAttackPhaseEffectTarget(
+        PlayerStatus player,
+        PlayerStatus enemy,
+        bool selfAttackTargetModeRed,
+        CardData primaryCombatCard)
+    {
+        if (player == null) return enemy;
+        bool invertedTargetToggle = primaryCombatCard != null
+            && (IsRecoveryCard(primaryCombatCard) || MagicFountainRules.IsMagicFountainCard(primaryCombatCard));
+        if (invertedTargetToggle)
+            return selfAttackTargetModeRed ? enemy : player;
+        return selfAttackTargetModeRed ? player : enemy;
     }
 
     /// <summary>
@@ -365,7 +394,23 @@ public static class CardRules
     public static List<CardData> GetAttackChoices(List<CardData> hand, PlayerType handOwner = PlayerType.Player)
     {
         if (hand == null) return new List<CardData>();
-        return hand.FindAll(c => IsUsableInAttackPhaseForHandRespectingMagicPool(c, handOwner));
+        return hand.FindAll(c =>
+            IsUsableInAttackPhaseForHandRespectingMagicPool(c, handOwner)
+            && !FreeMagicCastRules.IsCatalystOnlyCard(c));
+    }
+
+    /// <summary>無料詠唱触媒専用カードは単体では攻撃フェーズに出さない（魔法併用時のみ <see cref="FreeMagicCastRules"/>）。</summary>
+    public static bool IsUsableInAttackPhaseStandalone(CardData c)
+    {
+        if (FreeMagicCastRules.IsCatalystOnlyCard(c)) return false;
+        return IsUsableInAttackPhase(c);
+    }
+
+    /// <summary>無料詠唱触媒専用カードは単体では防御フェーズに出さない。</summary>
+    public static bool IsUsableInDefensePhaseStandalone(CardData c)
+    {
+        if (FreeMagicCastRules.IsCatalystOnlyCard(c)) return false;
+        return IsUsableInDefensePhase(c);
     }
 
     public static bool IsUsableInAttackPhaseForHandRespectingMagicPool(CardData c, PlayerType handOwner)
@@ -378,7 +423,8 @@ public static class CardRules
         }
         return IsUsableInAttackPhase(c);
     }
-    public static List<CardData> GetDefenseChoices(List<CardData> hand) => hand.FindAll(IsUsableInDefensePhase);
+    public static List<CardData> GetDefenseChoices(List<CardData> hand) =>
+        hand.FindAll(c => IsUsableInDefensePhaseStandalone(c));
 
     /// <summary>
     /// 攻撃属性を考慮した防御候補を返す。

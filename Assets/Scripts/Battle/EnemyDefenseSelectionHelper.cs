@@ -16,6 +16,15 @@ public static class EnemyDefenseSelectionHelper
         return new List<CardData>();
     }
 
+    /// <summary>
+    /// 打ち払い失敗後の再防御用。消費済みパリィが <see cref="EnemyAI.LastDefenseSelection"/> に残ることがあるため fallback のみを使う。
+    /// </summary>
+    public static List<CardData> GetParryRerunDefensePicks(CardData selected)
+    {
+        if (selected == null) return new List<CardData>();
+        return new List<CardData> { selected };
+    }
+
     public static void ConsumeEnemyDefenseCards(
         List<CardData> cards,
         BattleManager battleManager,

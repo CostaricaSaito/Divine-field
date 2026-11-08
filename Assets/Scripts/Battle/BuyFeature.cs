@@ -90,8 +90,7 @@ public class BuyFeature
         // 0.5秒インターバル（承諾後の待機）
         await Task.Delay(500);
 
-        // 相手のカード表示ゾーンに表示
-        BattleUIManager.I?.ShowCardDetail(targetBuyCard, Side.Enemy);
+        EnsurePurchaseCardSheetOnSellerPanel(targetBuyCard, buyerIsPlayer: true);
 
         // 経済アクション用のダミー攻撃カードを設定
         var dummyCard = EconomicActionNames.CreateBuyDummy();
@@ -122,7 +121,7 @@ public class BuyFeature
 
         targetBuyCard = targetInDefenderHand;
         isBuyModeActive = true;
-        BattleUIManager.I?.ShowCardDetail(targetInDefenderHand, Side.Player);
+        EnsurePurchaseCardSheetOnSellerPanel(targetInDefenderHand, buyerIsPlayer: false);
         battleManager.SetCurrentAttackCard(EconomicActionNames.CreateBuyDummy());
         return true;
     }
@@ -157,6 +156,7 @@ public class BuyFeature
 
             if (cardPurchaseAnimation != null && BattleUIManager.I != null)
             {
+                EnsurePurchaseCardSheetOnSellerPanel(targetBuyCard, buyerIsPlayer);
                 var fromPanel = buyerIsPlayer
                     ? BattleUIManager.I.GetEnemyCardDisplayPanel()
                     : BattleUIManager.I.GetPlayerCardDisplayPanel();
@@ -261,6 +261,19 @@ public class BuyFeature
     }
 
     public bool IsBuyProcessActive() => isBuyModeActive || isProcessingBuy;
+
+    /// <summary>
+    /// 購入演出用に売り手側 CardDisplay に対象カードのシートを出す（手札選択を介さない）。
+    /// </summary>
+    private static void EnsurePurchaseCardSheetOnSellerPanel(CardData card, bool buyerIsPlayer)
+    {
+        if (card == null || BattleUIManager.I == null) return;
+        if (BattleUIManager.I.TryGetCardSheetDisplayForCardData(card, out _))
+            return;
+
+        Side sellerSide = buyerIsPlayer ? Side.Enemy : Side.Player;
+        BattleUIManager.I.ShowCardSheetVisualOnly(card, sellerSide);
+    }
 
     private void ResetBuyProcessState()
     {

@@ -7,17 +7,21 @@ using UnityEngine;
     menuName = "DivineField/Disaster Effects/Mana Stream (マナの奔流)")]
 public sealed class ManaStreamDisasterEffectSO : DisasterCardEffectSO
 {
-    private const int MpRecover = 50;
-
-    public override async Task ResolveAsync(DisasterResolveContext context, CancellationToken cancellationToken)
+    public override Task ResolveAsync(DisasterResolveContext context, CancellationToken cancellationToken)
     {
-        if (context?.TriggerOwner == null || context.BattleProcessor == null)
-            return;
+        if (context?.BattleManager == null)
+            return Task.CompletedTask;
 
-        await context.BattleProcessor.ApplyDisasterTriggerOwnerRecoveryAsync(
-            context.TriggerOwner,
-            hpRecover: 0,
-            mpRecover: MpRecover,
-            cancellationToken);
+        var bm = context.BattleManager;
+        var player = bm.GetPlayerStatus();
+        var enemy = bm.GetEnemyStatus();
+        if (player == null || enemy == null)
+            return Task.CompletedTask;
+
+        InfiniteManasourceRules.TryGrant(player);
+        InfiniteManasourceRules.TryGrant(enemy);
+
+        BattleUIManager.I?.UpdateStatus(player, enemy);
+        return Task.CompletedTask;
     }
 }

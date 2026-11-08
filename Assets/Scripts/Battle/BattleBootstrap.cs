@@ -110,6 +110,10 @@ public sealed class BattleBootstrap
         ShivaIceBarrierDrawFlow.BindSettings(host.ShivaIceBarrierSettings);
         OrdinSlashReflectFlow.BindSettings(host.OrdinSlashReflectSettings);
         host.BattleProcessor.ConfigureStatusEffects(host.StatusProgressionConfig);
+        StatusEffectRules.BindClassification(
+            host.StatusEffectClassificationConfig != null
+                ? host.StatusEffectClassificationConfig
+                : StatusEffectClassificationConfig.GetRuntimeFallback());
 
         if (host.HandRefill != null)
             host.HandRefill.Initialize(host.HandPanel, host.CardUiPrefab, host.CardBackSprite, host.CardDealer);

@@ -4,13 +4,13 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// Garuda: opening hand +2, own turn end at 5/10/15… draws up to 2 cards (cap 18).
+/// Garuda: opening hand +1, own turn end at 5/10/15… draws up to 1 card (cap 18).
 /// Turn-end orchestration: <see cref="SummonTurnEndLifecycle"/>.
 /// </summary>
 public static class SummonGarudaLifecycle
 {
     public const int DefaultOpeningHand = 10;
-    public const int GarudaOpeningHand = 12;
+    public const int GarudaOpeningHand = 11;
 
     public const string TurnEndBonusMessage = "風が手札を増やす";
     public const string TurnEndBonusSeAddress = "Assets/SE/ジャンプ.mp3";
@@ -37,7 +37,7 @@ public static class SummonGarudaLifecycle
 
         int cap = isPlayerHand ? bm.GetHandMaxCount() : bm.GetEnemyHandCapacity();
         int space = Mathf.Max(0, cap - hand.Count);
-        int toDraw = Mathf.Min(2, space);
+        int toDraw = Mathf.Min(1, space);
         if (toDraw <= 0) return result;
 
         for (int i = 0; i < toDraw; i++)

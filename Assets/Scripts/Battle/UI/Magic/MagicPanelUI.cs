@@ -363,7 +363,7 @@ public class MagicCardSlot
     private void UpdateUsesText(MagicCardEntry entry)
     {
         if (usesText == null || entry == null) return;
-        usesText.text = entry.remainingUses.ToString();
+        usesText.text = MagicCardEntry.FormatRemainingUsesForDisplay(entry.remainingUses);
         if (entry.usesSealedExoDionCounterStyle
             || (entry.cardData != null && SealedExoDionRules.IsSealedExoDion(entry.cardData)))
         {

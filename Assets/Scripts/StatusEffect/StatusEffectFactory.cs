@@ -62,6 +62,9 @@ public static class StatusEffectFactory
             case StatusEffectType.CyberPsychosis:
                 return new CyberPsychosisEffect();
 
+            case StatusEffectType.InfiniteManasource:
+                return new InfiniteManasourceEffect();
+
             default:
                 Debug.LogWarning($"未実装の状態異常: {type}");
                 return null;

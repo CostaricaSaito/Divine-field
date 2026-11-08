@@ -50,26 +50,36 @@ public sealed class EnemyCurrentMagicPopupView : MonoBehaviour
     {
         EnsureHierarchyBound();
 
-        bool empty = entries == null || entries.Count == 0;
-        if (_nothingLabel != null) _nothingLabel.SetActive(empty);
+        int activeCount = CountActiveEntries(entries);
+        bool none = activeCount == 0;
+        if (_nothingLabel != null) _nothingLabel.SetActive(none);
 
         for (int i = 0; i < _slots.Count; i++)
         {
-            if (empty || i >= entries.Count)
-            {
+            MagicCardEntry entry = entries != null && i < entries.Count ? entries[i] : null;
+            if (entry?.cardData != null)
+                ShowSlot(_slots[i], entry, cardBackSprite);
+            else
                 HideSlot(_slots[i]);
-                continue;
-            }
-
-            ShowSlot(_slots[i], entries[i], cardBackSprite);
         }
+    }
+
+    private static int CountActiveEntries(IReadOnlyList<MagicCardEntry> entries)
+    {
+        if (entries == null) return 0;
+        int n = 0;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (entries[i]?.cardData != null) n++;
+        }
+        return n;
     }
 
     private static void HideSlot(SlotBinding slot)
     {
         if (slot == null) return;
         slot.LastCardName = null;
-        if (slot.PlaceholderRoot != null) slot.PlaceholderRoot.SetActive(true);
+        if (slot.PlaceholderRoot != null) slot.PlaceholderRoot.SetActive(false);
         if (slot.CardUi != null) slot.CardUi.gameObject.SetActive(false);
         if (slot.UsesText != null) slot.UsesText.gameObject.SetActive(false);
     }
@@ -82,7 +92,7 @@ public sealed class EnemyCurrentMagicPopupView : MonoBehaviour
         if (slot.UsesText != null)
         {
             slot.UsesText.gameObject.SetActive(true);
-            slot.UsesText.text = entry.remainingUses.ToString();
+            slot.UsesText.text = MagicCardEntry.FormatRemainingUsesForDisplay(entry.remainingUses);
         }
 
         if (slot.CardUi == null) return;

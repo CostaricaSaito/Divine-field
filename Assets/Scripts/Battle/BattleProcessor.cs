@@ -174,8 +174,9 @@ public class BattleProcessor : MonoBehaviour
                 await ApplyRecoveryAsync(card, recoveryRecipient, cancellationToken);
         }
 
-        if (card.cureAllStatusEffects && target != null)
-            await ApplyAllStatusAilmentsClearAsync(target, cancellationToken);
+        var statusCureScope = card.GetStatusEffectCureScope();
+        if (statusCureScope != StatusEffectCureScope.None && target != null)
+            await ApplyStatusAilmentsClearAsync(target, statusCureScope, cancellationToken);
 
         if (card.canApplyStatusEffect && card.statusEffectToApply != StatusEffectType.None
             && card.statusEffectApplyTiming == StatusEffectApplyTiming.OnCardEffectResolve)
@@ -598,7 +599,7 @@ public class BattleProcessor : MonoBehaviour
     }
 
     /// <summary>
-    /// 天変地異（奇跡の船出・マナの奔流等）：発動者の状態異常を除去し、指定量だけ HP/MP を回復する。
+    /// 天変地異（奇跡の船出等）：発動者の状態異常を除去し、指定量だけ HP/MP を回復する。
     /// </summary>
     public async Task ApplyDisasterTriggerOwnerRecoveryAsync(
         PlayerStatus target,
@@ -772,6 +773,7 @@ public class BattleProcessor : MonoBehaviour
                 }
             }
             totalAttackPower += MagicalSwordRules.GetActivePowerBonus(attackCards, attacker);
+            totalAttackPower += GigaFlareRules.GetActivePowerBonus(attackCards, attacker);
         }
 
         if (GodrageRules.IsGodrageDoublingCombo(attackCards))
@@ -904,12 +906,18 @@ public class BattleProcessor : MonoBehaviour
     /// 状態異常を一括除去し、異常が無ければ無傷ポップ、あれば回復魔法SE＋重ねポップ演出。
     /// 除去は演出より前に完了する。
     /// </summary>
-    private async Task ApplyAllStatusAilmentsClearAsync(PlayerStatus target, CancellationToken ct)
+    private async Task ApplyAllStatusAilmentsClearAsync(PlayerStatus target, CancellationToken ct) =>
+        await ApplyStatusAilmentsClearAsync(target, StatusEffectCureScope.AllCure, ct);
+
+    private async Task ApplyStatusAilmentsClearAsync(
+        PlayerStatus target,
+        StatusEffectCureScope scope,
+        CancellationToken ct)
     {
         if (target == null) return;
 
         var snapshot = target.GetActiveAilmentTypesOrdered();
-        snapshot.RemoveAll(StatusEffectRules.IsIndelible);
+        snapshot.RemoveAll(t => !StatusEffectRules.IsCurableBy(t, scope));
         foreach (var t in snapshot)
             target.RemoveStatusEffectsOfType(t);
 
@@ -1238,8 +1246,10 @@ public class BattleProcessor : MonoBehaviour
 
         if (!deathConfirmed && defenseCardsForStatusRule != null)
         {
-            await CyberExoskeletonDefenseFlow.TryGrantCyberPsychosisAfterDefenseAsync(
+            await DefenseIncludedPostDamageFlow.RunAllAfterCombatDamageAsync(
+                this,
                 defenseCardsForStatusRule,
+                attacker,
                 defender,
                 CancellationToken.None);
         }

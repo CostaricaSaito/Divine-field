@@ -88,9 +88,11 @@ public static class PhysicalReflectionFlow
         if (playerReflectionDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(playerReflectionDefenseCard);
 
+        var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+            battleManager, incomingAttackCards);
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
+                slideAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
             incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy, incomingPower);
@@ -160,9 +162,11 @@ public static class PhysicalReflectionFlow
         if (enemyReflectionDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(enemyReflectionDefenseCard);
 
+        var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+            battleManager, incomingPlayerAttackCards);
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
+                slideAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
             incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player, incomingPower);
@@ -277,9 +281,11 @@ public static class PhysicalReflectionFlow
 
                     BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(primary, Side.Enemy);
 
+                    var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+                        battleManager, incomingAttackCards);
                     if (BattleUIManager.I != null)
                         await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                            incomingAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
+                            slideAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
                     SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                     battleManager.SetReflectionAttackTotalDisplayAfterSlide(
                         incomingAttackCards, totalAtkOnPlayerSide: false, reflectionBlessingAttacker, reflectionBlessingDefender, incomingPower);
@@ -427,9 +433,11 @@ public static class PhysicalReflectionFlow
 
                 DestroyPlayerDefenseSheetIfSafe(card, incomingAttackCards);
 
+                var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+                    battleManager, incomingAttackCards);
                 if (BattleUIManager.I != null)
                     await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                        incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
+                        slideAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
                 SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
                 battleManager.SetReflectionAttackTotalDisplayAfterSlide(
                     incomingAttackCards, totalAtkOnPlayerSide: true, reflectionBlessingAttacker, reflectionBlessingDefender, incomingPower);

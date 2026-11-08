@@ -90,9 +90,11 @@ public static class ParryFlow
         if (playerParryDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetForCardData(playerParryDefenseCard);
 
+        var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+            battleManager, incomingAttackCards);
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                incomingAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
+                slideAttackCards, slideTowardPlayer: true, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
             incomingAttackCards, totalAtkOnPlayerSide: true, enemy, enemy, incomingPower);
@@ -174,7 +176,7 @@ public static class ParryFlow
             ElementType atkEl = ElementHelper.GetCombinedElement(incomingPlayerAttackCards);
             CardData second = await enemyAI.ExecuteParryRerunDefenseSelectAsync(
                 battleManager.cpuHand, atkEl, incomingPlayerAttackCards, enemyParryDefenseCard);
-            var secondPicks = EnemyDefenseSelectionHelper.GetDefensePicks(enemyAI, second);
+            var secondPicks = EnemyDefenseSelectionHelper.GetParryRerunDefensePicks(second);
 
             if (secondPicks.Count == 1
                 && ParryRules.RequiresParryExclusiveLock(secondPicks[0], incomingPlayerAttackCards))
@@ -228,9 +230,11 @@ public static class ParryFlow
         if (enemyParryDefenseCard != null)
             BattleUIManager.I?.DestroyCardSheetsForCardDataOnPanel(enemyParryDefenseCard, Side.Enemy);
 
+        var slideAttackCards = FreeMagicCastRules.ResolveIncomingAttackCardsForReflectionSlide(
+            battleManager, incomingPlayerAttackCards);
         if (BattleUIManager.I != null)
             await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                incomingPlayerAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
+                slideAttackCards, slideTowardPlayer: false, SlideDurationSec, cancellationToken);
         SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
         battleManager.SetReflectionAttackTotalDisplayAfterSlide(
             incomingPlayerAttackCards, totalAtkOnPlayerSide: false, player, player, incomingPower);

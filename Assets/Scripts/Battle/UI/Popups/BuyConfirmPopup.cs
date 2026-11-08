@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System;
@@ -16,6 +16,7 @@ public class BuyConfirmPopup : MonoBehaviour
 
     private Action onConfirm;
     private Action onCancel;
+    private bool _closed;
 
     private void Awake()
     {
@@ -47,31 +48,42 @@ public class BuyConfirmPopup : MonoBehaviour
 
     private void OnConfirmClicked()
     {
-        // 承諾時の音効果
         SoundEffectPlayer.I?.Play("Assets/SE/「お金を入れてね」.mp3");
-        
-        onConfirm?.Invoke();
+
+        var confirm = onConfirm;
+        MarkClosedAndClearCallbacks();
+        confirm?.Invoke();
     }
 
     private void OnCancelClicked()
     {
-        // キャンセル時の音効果
         SoundEffectPlayer.I?.Play("Assets/SE/キャンセル4.mp3");
-        
+
         Debug.Log("[BuyConfirmPopup] やめとくボタンが押されました");
-        onCancel?.Invoke();
+        var cancel = onCancel;
+        MarkClosedAndClearCallbacks();
+        cancel?.Invoke();
+    }
+
+    private void MarkClosedAndClearCallbacks()
+    {
+        _closed = true;
+        onConfirm = null;
+        onCancel = null;
     }
 
     private void OnDestroy()
     {
-        // イベントをクリア
         if (confirmButton != null)
             confirmButton.onClick.RemoveAllListeners();
-        
+
         if (cancelButton != null)
             cancelButton.onClick.RemoveAllListeners();
 
-        // ポップアップが破棄された場合の安全策としてキャンセル処理を実行
-        onCancel?.Invoke();
+        if (!_closed)
+            onCancel?.Invoke();
+
+        onConfirm = null;
+        onCancel = null;
     }
 }

@@ -212,14 +212,14 @@ public class CardSelectionManager : MonoBehaviour
         }
 
         if (IsAttackSelectionContext()
-            && !CardRules.IsUsableInAttackPhase(card)
+            && !CardRules.IsUsableInAttackPhaseStandalone(card)
             && !FreeMagicCastRules.CanAddFreeCastToSelection(card, selectedCards))
         {
             return false;
         }
 
         if (IsDefenseSelectionContext()
-            && !CardRules.IsUsableInDefensePhase(card)
+            && !CardRules.IsUsableInDefensePhaseStandalone(card)
             && !FreeMagicCastRules.CanAddFreeCastToSelection(card, selectedCards))
         {
             return false;
@@ -429,7 +429,7 @@ public class CardSelectionManager : MonoBehaviour
         if (card == null) return false;
         if (IsAttackSelectionContext())
         {
-            if (CardRules.IsUsableInAttackPhase(card)) return true;
+            if (CardRules.IsUsableInAttackPhaseStandalone(card)) return true;
             return FreeMagicCastRules.IsCombatCatalyst(card, selectedCards);
         }
         return CardRules.IsAttackCard(card);
@@ -439,7 +439,8 @@ public class CardSelectionManager : MonoBehaviour
     {
         if (card == null || !IsDefenseSelectionContext()) return false;
         if (IsLocalPlayerChantingArchMagic()) return false;
-        if (CardRules.IsUsableInDefensePhase(card)) return true;
+        if (CardRules.IsUsableInDefensePhaseStandalone(card)) return true;
+        if (FreeMagicCastRules.IsEligibleMagic(card)) return true;
         return FreeMagicCastRules.IsCombatCatalyst(card, selectedCards);
     }
 

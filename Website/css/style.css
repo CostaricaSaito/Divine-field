@@ -1268,12 +1268,39 @@ a { font-family: inherit; }
 
 .status-table td:nth-child(2) { white-space: nowrap; }
 
+.magic-table { min-width: 1280px; }
+
+.magic-table td:nth-child(2),
+.magic-table td:nth-child(3),
+.magic-table td:nth-child(4),
+.magic-table td:nth-child(5),
+.magic-table td:nth-child(6),
+.magic-table td:nth-child(7),
+.magic-table td:nth-child(8) {
+  white-space: nowrap;
+}
+
+.magic-table td:nth-child(9),
+.magic-table td:nth-child(10) {
+  min-width: 12em;
+}
+
+.rainbow-word {
+  font-weight: 700;
+  background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #c56cf0, #ff6b6b);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @media (max-width: 980px) {
   .data-page { width: min(100% - 32px, 1280px); padding: 100px 0 64px; }
   .data-page > h1 { font-size: 32px; }
   .data-lead { font-size: 17px; }
   .disaster-table { font-size: 14px; }
   .disaster-table img { width: 56px; height: 56px; }
+  .magic-table { font-size: 13px; }
 }
 
 body:has(.howto-dock) { padding-top: 88px; }

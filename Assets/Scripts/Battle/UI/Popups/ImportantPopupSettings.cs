@@ -152,6 +152,9 @@ public sealed class ImportantPopupSettings : ScriptableObject
                 new Color(0.55f, 0.7f, 0.95f), Color.white, null),
             Entry(ImportantPopupKind.ArchMagicRelease, string.Empty,
                 new Color(0.95f, 0.85f, 0.3f), Color.black, null),
+            Entry(ImportantPopupKind.BahamutMaelstromAwakening,
+                "\u30d0\u30cf\u30e0\u30fc\u30c8\u306e\u6012\u308a\u304c\u76ee\u899a\u3081\u308b",
+                new Color(0.9f, 0.35f, 0.1f), Color.white, null),
         };
     }
 

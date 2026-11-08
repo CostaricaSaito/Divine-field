@@ -32,6 +32,9 @@ public sealed class CombatSnapshotStore
     private int _magicalSwordEnemyAttackPowerBonus;
     private bool _magicalSwordEnemyPreMeRampVisualDone;
 
+    private int _gigaFlareAttackPowerBonus;
+    private int _gigaFlareEnemyAttackPowerBonus;
+
     private bool _tributeBloodHpPaidSnapActive;
     private int _tributeBloodPlayerHpPaid;
     private int _tributeBloodEnemyHpPaid;
@@ -278,6 +281,20 @@ public sealed class CombatSnapshotStore
         _magicalSwordEnemyAttackPowerBonus = 0;
         _magicalSwordEnemyPreMeRampVisualDone = false;
     }
+
+    public int GigaFlareAttackPowerBonus => _gigaFlareAttackPowerBonus;
+
+    public void SetGigaFlareAttackPowerBonus(int value)
+        => _gigaFlareAttackPowerBonus = Mathf.Max(0, value);
+
+    public int GigaFlareEnemyAttackPowerBonus => _gigaFlareEnemyAttackPowerBonus;
+
+    public void SetGigaFlareEnemyAttackPowerBonus(int value)
+        => _gigaFlareEnemyAttackPowerBonus = Mathf.Max(0, value);
+
+    public void ClearGigaFlarePlayerAttackState() => _gigaFlareAttackPowerBonus = 0;
+
+    public void ClearGigaFlareEnemyAttackState() => _gigaFlareEnemyAttackPowerBonus = 0;
 
     public void SetTributeBloodPlayerHpPaidSnapshot(int hpPaid)
     {

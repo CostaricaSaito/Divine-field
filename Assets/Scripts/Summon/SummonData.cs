@@ -150,7 +150,7 @@ public class SummonData : ScriptableObject
         return name == "Ordin" || StableSummonId == "ordin";
     }
 
-    /// <summary>Whether Bahamut Mega Flare / dual-skill popup rules apply.</summary>
+    /// <summary>Whether Bahamut Maelstrom passive lifecycle applies.</summary>
     public bool IsBahamut() => BahamutRules.IsBahamut(this);
 
     public void ApplyStyleTo(TMPro.TMP_Text text, SummonTextStyle style)

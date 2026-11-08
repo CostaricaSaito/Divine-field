@@ -163,6 +163,26 @@ public sealed class BattlePhaseController
         BattleUIManager.I?.HideYurusuButton();
         BattleUIManager.I?.RefreshTurnCountDisplay(_host.SummonTurnCounters, _host.CurrentTurnOwner);
 
+        if (BahamutRules.ShouldPlayMaelstromAwakeningAtStandBy(
+                _host.CurrentTurnOwner,
+                _host.PlayerStatus,
+                _host.EnemyStatus,
+                _host.SummonTurnCounters))
+        {
+            var maelstromSummoner = BahamutRules.ResolveTurnOwner(
+                _host.CurrentTurnOwner,
+                _host.PlayerStatus,
+                _host.EnemyStatus);
+            try
+            {
+                await BahamutMaelstromPresentation.PlayAsync(maelstromSummoner, phaseToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
         if (_host.CurrentTurnOwner == PlayerType.Player)
             SoundEffectPlayer.I.Play("Assets/SE/決定ボタンを押す13.mp3");
 

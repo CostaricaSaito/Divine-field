@@ -46,10 +46,6 @@ public interface ISummonSkillHost
 
     SummonSkillButton EnemySummonButton { get; }
 
-    GameObject BahamutPopupPrefab { get; }
-
-
-
     bool IsEconomicActionInProgress();
 
     bool IsHandReloadPopupOpen();

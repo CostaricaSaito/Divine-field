@@ -27,4 +27,5 @@ public enum MessagePopupKind
     DisasterChaosAttractor = 19,
     DisasterInfection = 20,
     ThiefHoodStoleCard = 21,
+    AntigravityHandRenew = 22,
 }

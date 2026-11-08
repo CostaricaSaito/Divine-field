@@ -243,9 +243,20 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
     public bool healsHP = false;
     public bool healsMP = false;
     public bool healsGP = false;
-    [Tooltip("Cure ALL Status Effect: 解決時に全状態異常を除去。")]
-    [FormerlySerializedAs("clearsAllStatusAilmentsOnUse")]
-    public bool cureAllStatusEffects = false;
+    [Tooltip("PartialCure=軽症のみ / AllCure=軽症+重症。特殊はいずれも対象外。")]
+    public StatusEffectCureScope statusEffectCureScope = StatusEffectCureScope.None;
+
+    [SerializeField, HideInInspector, FormerlySerializedAs("cureAllStatusEffects")]
+    private bool _legacyCureAllStatusEffects;
+
+    [SerializeField, HideInInspector]
+    private bool _legacyCureAllStatusImported;
+
+    /// <summary>有効な状態異常解除範囲。</summary>
+    public StatusEffectCureScope GetStatusEffectCureScope() => statusEffectCureScope;
+
+    /// <summary>状態異常解除効果を持つか。</summary>
+    public bool HasStatusEffectCure() => statusEffectCureScope != StatusEffectCureScope.None;
 
     [Header("使用可能なフェーズ")]
     [Tooltip("攻撃フェーズ手札で選べるか。Magic では false のとき AttackPhaseUseRule に関わらずグレーアウト（防御専用魔法など）。")]
@@ -448,6 +459,14 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
         if (cardType == CardType.ArchMagic || cardType == CardType.Ultimate)
             attackPhaseUseRule = AttackPhaseUseRule.Standalone;
 
+        if (!_legacyCureAllStatusImported)
+        {
+            if (_legacyCureAllStatusEffects && statusEffectCureScope == StatusEffectCureScope.None)
+                statusEffectCureScope = StatusEffectCureScope.AllCure;
+            _legacyCureAllStatusEffects = false;
+            _legacyCureAllStatusImported = true;
+        }
+
         if (!_legacyActionClassImported)
         {
             if (_legacyIsPrimaryDefense)
@@ -504,6 +523,7 @@ public class CardData : ScriptableObject, ISerializationCallbackReceiver
                 $"[{name}] canApplyStatusEffect is enabled but statusEffectChance is 0 — the effect will never apply.",
                 this);
         }
+
     }
 #endif
 }

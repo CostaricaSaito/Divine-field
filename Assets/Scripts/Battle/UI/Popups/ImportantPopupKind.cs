@@ -24,8 +24,8 @@ public enum ImportantPopupKind
     ArchMagicFocus = 31,
     ArchMagicRelease = 32,
 
-    /// <summary>Bahamut passive Mega Flare announcement.</summary>
-    MegaFlare = 40,
+    /// <summary>Bahamut passive Maelstrom awakening (turn 50+, first own StandBy).</summary>
+    BahamutMaelstromAwakening = 40,
 
     /// <summary>Sealed EXO-DION alt-win: armor god unsealed.</summary>
     SealedExoDionUnsealed = 50,

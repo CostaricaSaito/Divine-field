@@ -90,6 +90,22 @@ public partial class BattleManager
     public void ClearMagicalSwordEnemyAttackState()
         => _combatSnapshots.ClearMagicalSwordEnemyAttackState();
 
+    public int GigaFlareAttackPowerBonus => _combatSnapshots.GigaFlareAttackPowerBonus;
+
+    public void SetGigaFlareAttackPowerBonus(int value)
+        => _combatSnapshots.SetGigaFlareAttackPowerBonus(value);
+
+    public int GigaFlareEnemyAttackPowerBonus => _combatSnapshots.GigaFlareEnemyAttackPowerBonus;
+
+    public void SetGigaFlareEnemyAttackPowerBonus(int value)
+        => _combatSnapshots.SetGigaFlareEnemyAttackPowerBonus(value);
+
+    public void ClearGigaFlarePlayerAttackState()
+        => _combatSnapshots.ClearGigaFlarePlayerAttackState();
+
+    public void ClearGigaFlareEnemyAttackState()
+        => _combatSnapshots.ClearGigaFlareEnemyAttackState();
+
     public void SetTributeBloodPlayerHpPaidSnapshot(int hpPaid)
         => _combatSnapshots.SetTributeBloodPlayerHpPaidSnapshot(hpPaid);
 

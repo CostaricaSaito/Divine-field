@@ -111,6 +111,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     [Header("状態異常（ScriptableObject）")]
     [SerializeField] private StatusProgressionConfig statusProgressionConfig;
+    [SerializeField] private StatusEffectClassificationConfig statusEffectClassificationConfig;
     [SerializeField] private DiseaseTurnEndSettings diseaseTurnEndSettings;
     [SerializeField, FormerlySerializedAs("shivaDirectAttackFreezeSettings")]
     private ShivaIceBarrierSettings shivaIceBarrierSettings;
@@ -120,8 +121,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     public SummonSkillButton summonSkillButton;
     [Tooltip("PvP：相手側召喚アイコン用。未設定なら片側のみ。")]
     [SerializeField] private SummonSkillButton enemySummonSkillButton;
-    [Tooltip("未設定時は Resources.Load(\"Prefab/BahamutPopup\")")]
-    [SerializeField] private GameObject bahamutPopupPrefab;
     public CardPurchaseAnimation cardPurchaseAnimation;
     [SerializeField] private CardSellAnimation cardSellAnimation;
 
@@ -185,9 +184,9 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     /// <summary>Resources の SummonSkillPopup が開いている間、手札・経済・重複表示を防ぐ。</summary>
     public bool IsSummonSkillPopupOpen => _summonSkills?.IsPopupOpen ?? false;
 
-    /// <summary>Ultimate Skill / Mega Flare 等、召喚スキル演出が走っている間。</summary>
+    /// <summary>Ultimate Skill 等、召喚スキル演出が走っている間。</summary>
     public bool IsAnySummonSkillFlowRunning =>
-        _summonSkills != null && (_summonSkills.IsUltimateSkillFlowRunning || _summonSkills.IsMegaFlareFlowRunning);
+        _summonSkills != null && _summonSkills.IsAnySummonFlowRunning;
 
     /// <summary>攻撃フェーズでプレイヤーが「自分自身」を攻撃対象にするモード（TotalATK/DEF タップで切替）。</summary>
     private bool _playerSelfAttackTargetMode;
@@ -517,6 +516,22 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         return GetAttackCardsForCombat();
     }
 
+    /// <summary>
+    /// 反射／パリィの CardDisplay スライド用（無料詠唱触媒など、戦闘数値から除外するカードも含む確定コンボ）。
+    /// </summary>
+    public List<CardData> GetAttackCardsForReflectionSlide()
+    {
+        var uiAttackCards = BattleUIManager.I?.GetSelectedAttackCards() ?? new List<CardData>();
+        IReadOnlyList<CardData> attackerLastSelection = null;
+        if (Attacker == PlayerType.Enemy && enemyAI != null)
+            attackerLastSelection = enemyAI.LastAttackSelection;
+        var resolved = _combatSnapshots.ResolveAttackCardsForCombat(
+            Attacker, uiAttackCards, attackerLastSelection);
+        if (resolved == null || resolved.Count == 0)
+            return new List<CardData>();
+        return FreeMagicCastRules.OrderCardsForRevealSequence(resolved);
+    }
+
     /// <summary>デバッグ UI 用：Layer1 Turn（手番の短い表記）。</summary>
     public string GetBattleTurnDebugLabel()
     {
@@ -659,6 +674,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     SummonSkillButton IBattleBootstrapHost.SummonSkillButton => summonSkillButton;
     SummonSkillButton IBattleBootstrapHost.EnemySummonSkillButton => enemySummonSkillButton;
     StatusProgressionConfig IBattleBootstrapHost.StatusProgressionConfig => statusProgressionConfig;
+    StatusEffectClassificationConfig IBattleBootstrapHost.StatusEffectClassificationConfig =>
+        statusEffectClassificationConfig;
     DiseaseTurnEndSettings IBattleBootstrapHost.DiseaseTurnEndSettings => diseaseTurnEndSettings;
     ShivaIceBarrierSettings IBattleBootstrapHost.ShivaIceBarrierSettings => shivaIceBarrierSettings;
 
@@ -712,7 +729,8 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     /// <summary>手札リロードのポップアップ表示中、またはリロード演出シーケンス中。経済・魔法パネル等のブロックに使用。</summary>
     public bool IsHandReloadPopupOpen =>
         (HandReloadController.I != null && HandReloadController.I.IsHandReloadUiBlocking)
-        || UltimateReloadFlow.IsUiBlocking;
+        || UltimateReloadFlow.IsUiBlocking
+        || HandDiscardSelectionFlow.IsUiBlocking;
 
     /// <summary>
     /// プレイヤーが buy/sell/exchange を新規開始できる AttackSelect（MainActionSelect）か。
@@ -774,12 +792,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     public void RefreshSummonSkillButtonInteractables()
         => _summonSkills.RefreshButtonInteractables();
 
-    public bool CanActivateBahamutSummonButton(bool isLocalPlayerSide)
-    {
-        var self = isLocalPlayerSide ? playerStatus : enemyStatus;
-        return _summonSkills != null && _summonSkills.CanActivateBahamutSummonButton(self, isLocalPlayerSide);
-    }
-
     public bool TryOpenSummonSkillPopup(PlayerStatus summoner, PlayerStatus opponent)
         => _summonSkills.TryOpenPopup(summoner, opponent);
 
@@ -798,7 +810,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     PlayerStatus ISummonSkillHost.EnemyStatus => enemyStatus;
     PlayerType ISummonSkillHost.Defender => Defender;
     SummonTurnCounterState ISummonSkillHost.SummonTurnCounters => _summonTurnCounters;
-    GameObject ISummonSkillHost.BahamutPopupPrefab => bahamutPopupPrefab;
 
     bool ISummonSkillHost.IsHandReloadPopupOpen() => IsHandReloadPopupOpen;
 

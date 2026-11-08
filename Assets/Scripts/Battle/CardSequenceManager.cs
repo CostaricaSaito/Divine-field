@@ -492,8 +492,11 @@ public class CardSequenceManager : MonoBehaviour
             && battleManager.IsPlayerSelfAttackTargetMode)
         {
             atk = player;
-            def = player;
-            defHand = battleManager.playerHand;
+            var combatSel = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedCards);
+            CardData primaryCombat = combatSel.Count > 0 ? combatSel[0] : null;
+            def = CardRules.ResolvePlayerAttackPhaseEffectTarget(
+                player, enemy, true, primaryCombat);
+            defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
         }
         else
         {
@@ -701,6 +704,8 @@ public class CardSequenceManager : MonoBehaviour
         battleManager.ClearHammadnessRollSnapshot();
         battleManager.ClearMagicalSwordPlayerAttackState();
         battleManager.ClearMagicalSwordEnemyAttackState();
+        battleManager.ClearGigaFlarePlayerAttackState();
+        battleManager.ClearGigaFlareEnemyAttackState();
         battleManager.ClearPlayerAttackComboForCombat();
         battleManager.ClearRagnarokDisasterTriggeredThisAttack();
     }
@@ -727,7 +732,7 @@ public class CardSequenceManager : MonoBehaviour
         bool attackerIsPlayer = ReferenceEquals(atk, battleManager.GetPlayerStatus());
         Side displaySide = attackerIsPlayer ? Side.Player : Side.Enemy;
 
-        var full = battleManager.GetAttackCardsForCombatPublic();
+        var full = battleManager.GetAttackCardsForReflectionSlide();
         if (full == null || full.Count == 0)
         {
             full = new List<CardData>(attackCards.Count);
@@ -762,12 +767,18 @@ public class CardSequenceManager : MonoBehaviour
         if (dualBladeStrikeIndex == 0
             && attackCards != null && attackCards.Count == 1 && attackCards[0] != null
             && CardRules.IsRecoveryCard(attackCards[0])
-            && !battleManager.IsPlayerSelfAttackTargetMode
             && ReferenceEquals(atk, battleManager.GetPlayerStatus()))
         {
+            var player = battleManager.GetPlayerStatus();
+            var enemy = battleManager.GetEnemyStatus();
+            PlayerStatus recoveryTarget = CardRules.ResolvePlayerAttackPhaseEffectTarget(
+                player,
+                enemy,
+                battleManager.IsPlayerSelfAttackTargetMode,
+                attackCards[0]);
             await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, cancellationToken);
             await battleProcessor.ResolveImmediateEffectAsync(
-                attackCards[0], atk, atk, cancellationToken);
+                attackCards[0], atk, recoveryTarget, cancellationToken);
             return true;
         }
 
@@ -794,6 +805,8 @@ public class CardSequenceManager : MonoBehaviour
             battleManager.ClearTributeBloodHpPaidSnapshot();
             battleManager.ClearHammadnessRollSnapshot();
             battleManager.ClearMagicalSwordPlayerAttackState();
+            battleManager.ClearGigaFlarePlayerAttackState();
+            battleManager.ClearGigaFlareEnemyAttackState();
             return false;
         }
 
@@ -1159,13 +1172,14 @@ public class CardSequenceManager : MonoBehaviour
             battleManager.SetSelectedDefenseCard(defPick);
         }
 
-        // 通常カードのみ UseCard で手札から除去
+        // 非魔法カード（攻撃・防御・無料詠唱触媒など）を手札から除去
         foreach (var card in normalCards)
         {
-            if (card?.cardUI == null) continue;
+            if (card == null) continue;
 
-            int slotIndex = card.cardUI.transform.GetSiblingIndex();
-            handRefill?.RecordPlayerUseSlot(slotIndex);
+            int slotIndex = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
+            if (slotIndex >= 0)
+                handRefill?.RecordPlayerUseSlot(slotIndex);
             battleProcessor.UseCard(card, battleManager.playerHand);
             Debug.Log($"[CardSequenceManager] {cardType}カード処理: {card.cardName} (スロット: {slotIndex})");
         }
@@ -2182,6 +2196,18 @@ public class CardSequenceManager : MonoBehaviour
             return;
         }
 
+        if (CardRules.IsGigaFlareUltimateSkillCard(card))
+        {
+            await RunGigaFlareUltimateSequenceAsync(card, summoner, opponent, side, CancellationToken.None);
+            return;
+        }
+
+        if (CardRules.IsGlacialDiamondUltimateSkillCard(card))
+        {
+            await RunGlacialDiamondUltimateSequenceAsync(card, summoner, side, CancellationToken.None);
+            return;
+        }
+
         BattleUIManager.I?.ShowInterventionAttackSheet(card, side);
         BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
         cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
@@ -2204,6 +2230,98 @@ public class CardSequenceManager : MonoBehaviour
         else
         {
             await battleManager.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(attackCards, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Glacial Diamond: card sheet, Infinite Manasource buff + popup, then cleanup.
+    /// </summary>
+    private async Task RunGlacialDiamondUltimateSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(card);
+
+        ShivaUltimateRules.ApplyInfiniteManasourceBuff(summoner);
+        BattleUIManager.I?.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
+
+        float fadeSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowMessagePopupForTarget(
+                summoner, ShivaUltimateRules.ActivationMessage, ShivaUltimateRules.ActivationMessageColor)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(fadeSec, cancellationToken);
+
+        battleManager.SetCurrentAttackCard(null);
+        battleManager.ClearPlayerSelfAttackTargetMode();
+
+        if (battleManager.IsGameEndTriggered) return;
+        await RunAfterCombatSharedCleanupAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Giga Flare: sheet at ATK 0, ramp to turn*2 (Magical Sword style), then normal combat.
+    /// </summary>
+    private async Task RunGigaFlareUltimateSequenceAsync(
+        CardData card,
+        PlayerStatus summoner,
+        PlayerStatus opponent,
+        Side side,
+        CancellationToken cancellationToken)
+    {
+        if (battleManager == null || card == null || summoner == null || opponent == null) return;
+
+        bool summonerIsPlayer = side == Side.Player;
+        if (summonerIsPlayer)
+            battleManager.ClearGigaFlarePlayerAttackState();
+        else
+            battleManager.ClearGigaFlareEnemyAttackState();
+
+        cardStatsDisplay?.BeginAttackSequenceReveal(side);
+        await PlayUltimateSkillCardPresentationAsync(card, side, cancellationToken);
+        battleManager.SetCurrentAttackCard(card);
+
+        var attackCards = new List<CardData> { card };
+        int boost = GigaFlareRules.ComputeTurnScaledAttackPower(battleManager.SummonTurnCounters);
+
+        if (cardStatsDisplay != null && boost > 0)
+        {
+            if (summonerIsPlayer)
+                battleManager.SetGigaFlareAttackPowerBonus(boost);
+            else
+                battleManager.SetGigaFlareEnemyAttackPowerBonus(boost);
+
+            await cardStatsDisplay.PlayMagicalSwordAttackRampAsync(
+                attackCards,
+                summoner,
+                opponent,
+                card,
+                boost,
+                0.2f,
+                cancellationToken);
+
+            if (summonerIsPlayer)
+                battleManager.SetMagicalSwordPlayerPreMeRampVisualDone(true);
+            else
+                battleManager.SetMagicalSwordEnemyPreMeRampVisualDone(true);
+        }
+
+        if (cancellationToken.IsCancellationRequested) return;
+
+        if (side == Side.Player)
+        {
+            bool finished = await ResolvePlayerAttackCombatAsync(
+                attackCards, summoner, opponent, battleManager.cpuHand, cancellationToken);
+            battleManager.ClearPlayerSelfAttackTargetMode();
+            if (!finished || battleManager.IsGameEndTriggered) return;
+            await RunAfterCombatSharedCleanupAsync(cancellationToken);
+        }
+        else
+        {
+            await battleManager.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(attackCards, cancellationToken);
         }
     }
 
@@ -2420,65 +2538,6 @@ public class CardSequenceManager : MonoBehaviour
 
         if (battleManager.IsGameEndTriggered) return;
         await RunAfterCombatSharedCleanupAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Bahamut Mega Flare: 0.5s → ImportantPopup → 0.5s → white flash → card sheet → attack resolve.
-    /// </summary>
-    public async Task RunMegaFlareSequenceAsync(
-        PlayerStatus summoner,
-        PlayerStatus opponent,
-        CancellationToken cancellationToken)
-    {
-        if (battleManager == null || summoner == null || opponent == null) return;
-
-        var template = BahamutRules.GetMegaFlareTemplate();
-        if (template == null)
-        {
-            Debug.LogWarning("[CardSequenceManager] MegaFlare template not found");
-            return;
-        }
-
-        Side side = ReferenceEquals(summoner, battleManager.GetPlayerStatus()) ? Side.Player : Side.Enemy;
-
-        await Task.Delay(500, cancellationToken);
-
-        if (BattleUIManager.I != null)
-            BattleUIManager.I.ShowStyledImportantPopup(ImportantPopupKind.MegaFlare, null, side);
-
-        await Task.Delay(500, cancellationToken);
-
-        var card = battleManager.cardDealer != null
-            ? battleManager.cardDealer.InstantiateCardFromTemplate(template)
-            : null;
-        if (card == null) return;
-
-        BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
-
-        // Hand-not-in-deck card: ShowCardDetail → AddCardSelection fails while summon flow is active.
-        BattleUIManager.I?.ShowCardSheetVisualOnly(card, side);
-        cardStatsDisplay?.SetSequenceCards(new List<CardData> { card }, "攻撃", side);
-        cardStatsDisplay?.UpdateDisplay();
-        SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
-        battleManager.SetCurrentAttackCard(card);
-
-        await Task.Delay(1000, cancellationToken);
-
-        var attackCards = new List<CardData> { card };
-
-        if (side == Side.Player)
-        {
-            bool finished = await ResolvePlayerAttackCombatAsync(
-                attackCards, summoner, opponent, battleManager.cpuHand, cancellationToken);
-            battleManager.ClearPlayerSelfAttackTargetMode();
-            if (!finished || battleManager.IsGameEndTriggered) return;
-            await RunAfterCombatSharedCleanupAsync(cancellationToken);
-        }
-        else
-        {
-            await battleManager.PresentEnemyUltimateSkillAttackToPlayerDefenseAsync(
-                attackCards, cancellationToken);
-        }
     }
 
     /// <summary>

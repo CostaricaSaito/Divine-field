@@ -14,7 +14,7 @@ public static class EconomicActionNames
 
     public static CardData CreateBuyDummy()
     {
-        var dummy = new CardData();
+        var dummy = ScriptableObject.CreateInstance<CardData>();
         dummy.cardName = Buy;
         dummy.cardType = CardType.Attack;
         return dummy;

@@ -935,4 +935,126 @@ public class HandRefillService : MonoBehaviour
         if (bm != null)
             BattleUIManager.I?.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
     }
+
+    /// <summary>
+    /// Antigravity Skateblade: face down all, resize hand to <paramref name="targetCount"/>,
+    /// replace every slot with a new random draw, then reveal left-to-right (player UI only).
+    /// </summary>
+    public async Task RunDefenseIncludedHandRenewalToCountAsync(
+        List<CardData> hand,
+        PlayerStatus popupTarget,
+        bool isPlayerHand,
+        int targetCount,
+        PlayerType drawSide,
+        CancellationToken ct)
+    {
+        if (hand == null || targetCount <= 0 || cardDealer == null) return;
+
+        if (isPlayerHand)
+            _playerBackSlotsThisTurn.Clear();
+        else
+            _enemyUsedCardsThisTurn.Clear();
+
+        BattleUIManager.I?.SetHandClickable(false);
+
+        if (isPlayerHand)
+        {
+            for (int i = 0; i < hand.Count; i++)
+            {
+                var card = hand[i];
+                if (card?.cardUI != null && !card.cardUI.IsFaceDown())
+                    card.cardUI.HideToBack();
+            }
+        }
+
+        while (hand.Count > targetCount)
+        {
+            int last = hand.Count - 1;
+            var removed = hand[last];
+            hand.RemoveAt(last);
+            if (isPlayerHand && removed?.cardUI != null)
+            {
+                Object.Destroy(removed.cardUI.gameObject);
+                removed.cardUI = null;
+            }
+
+            DestroyCardDataInstance(removed);
+        }
+
+        while (hand.Count < targetCount)
+        {
+            var added = DrawRandomCard(drawSide);
+            if (added == null)
+            {
+                Debug.LogWarning("[HandRefillService] Hand renewal: draw failed while expanding hand");
+                break;
+            }
+
+            hand.Add(added);
+            if (isPlayerHand)
+            {
+                var ui = cardDealer.CreateCardUIForHand(added);
+                if (ui != null && !ui.IsFaceDown())
+                    ui.HideToBack();
+            }
+        }
+
+        if (!isPlayerHand)
+        {
+            for (int i = 0; i < hand.Count; i++)
+            {
+                if (ct.IsCancellationRequested) return;
+                var old = hand[i];
+                var neu = DrawRandomCard(drawSide);
+                if (neu == null) continue;
+                hand[i] = neu;
+                DestroyCardDataInstance(old);
+            }
+
+            BattleUIManager.I?.SetHandClickable(true);
+            BattleManager.I?.UpdateTotalATKDEFDisplay();
+            return;
+        }
+
+        var work = new List<HandReloadSlotWork>(targetCount);
+        for (int i = 0; i < hand.Count; i++)
+        {
+            var old = hand[i];
+            var neu = DrawRandomCard(drawSide);
+            if (neu == null)
+            {
+                Debug.LogWarning("[HandRefillService] Hand renewal: draw failed at replace");
+                continue;
+            }
+
+            var ui = old?.cardUI;
+            hand[i] = neu;
+            neu.cardUI = ui;
+            if (old != null && old != neu)
+                DestroyCardDataInstance(old);
+
+            if (ui != null)
+            {
+                ui.Setup(neu, cardBackSprite, playerHandRareBackPresentation: true);
+                if (ui.button != null) ui.button.interactable = false;
+                if (!ui.IsFaceDown())
+                    ui.HideToBack();
+            }
+            else
+            {
+                ui = cardDealer.CreateCardUIForHand(neu);
+                if (ui != null && !ui.IsFaceDown())
+                    ui.HideToBack();
+            }
+
+            work.Add(new HandReloadSlotWork { HandIndex = i, NewCard = neu, Ui = ui });
+        }
+
+        await Task.Delay(HandReloadAfterPopupWaitMs, ct);
+        await RevealHandReloadSlotsSequentially(work, ct);
+
+        BattleUIManager.I?.SetHandClickable(true);
+        BattleUIManager.I?.RefreshMagicCardInteractivity(hand);
+        BattleManager.I?.UpdateTotalATKDEFDisplay();
+    }
 }

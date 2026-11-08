@@ -274,19 +274,18 @@ public class EconomicUIHandler : MonoBehaviour
         button.interactable = interactable;
         button.image.color = interactable ? Color.white : Color.gray;
         if (cooldownText != null)
+        {
             cooldownText.text = cooldown > 0 ? cooldown.ToString() : "";
+            cooldownText.color = Color.white;
+        }
 
-        SetButtonLabelColor(button, cooldownText, Color.white);
+        SetButtonLabelColor(button, color: Color.white);
     }
 
-    private static void SetButtonLabelColor(Button button, TMP_Text cooldownText, Color color)
+    private static void SetButtonLabelColor(Button button, Color color)
     {
         var texts = button.GetComponentsInChildren<TMP_Text>(true);
         for (int i = 0; i < texts.Length; i++)
-        {
-            var t = texts[i];
-            if (t == cooldownText) continue;
-            t.color = color;
-        }
+            texts[i].color = color;
     }
 }

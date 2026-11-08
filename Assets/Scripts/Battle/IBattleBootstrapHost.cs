@@ -36,6 +36,7 @@ public interface IBattleBootstrapHost
     SummonSkillButton EnemySummonSkillButton { get; }
 
     StatusProgressionConfig StatusProgressionConfig { get; }
+    StatusEffectClassificationConfig StatusEffectClassificationConfig { get; }
     DiseaseTurnEndSettings DiseaseTurnEndSettings { get; }
     ShivaIceBarrierSettings ShivaIceBarrierSettings { get; }
     OrdinSlashReflectSettings OrdinSlashReflectSettings { get; }

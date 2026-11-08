@@ -201,7 +201,7 @@ public class CardDealer : MonoBehaviour
     }
 
     /// <summary>
-    /// 開幕手札を配る。プレイヤー／CPU で枚数が違ってもよい（ガルーダで 12 vs 10 など）。
+    /// 開幕手札を配る。プレイヤー／CPU で枚数が違ってもよい（ガルーダで 11 vs 10 など）。
     /// すべて配り終えてから一斉表向け・バトル開始 SE を行う。
     /// </summary>
     public IEnumerator DealOpeningHands(List<CardData> playerHand, List<CardData> cpuHand, int playerTarget, int cpuTarget)

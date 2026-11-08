@@ -35,26 +35,6 @@ public sealed class EnemyTurnRunner
             return;
         }
 
-        if (!_host.IsOnlineMatch
-            && BahamutRules.ShouldEnemyUseMegaFlareNow(
-                _host.EnemyStatus,
-                _host.Manager.SummonTurnCounters,
-                _host.CurrentState,
-                _host.Manager.CurrentTurnOwner))
-        {
-            var megaToken = _host.GetPhaseToken();
-            try
-            {
-                await _host.Manager.SummonSkills.TryRunEnemyMegaFlareAsync(megaToken);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            return;
-        }
-
         var attack = await _host.EnemyAI.ExecuteAttackTurnAsync(
             _host.CpuHand, _host.BattleProcessor, _host.HandRefill, _host.EnemyStatus);
 

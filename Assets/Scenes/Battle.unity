@@ -10082,7 +10082,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleManager: {fileID: 1851136062}
   overridePlayerInitialSummon: 1
-  debugPlayerInitialSummon: {fileID: 11400000, guid: 33571af59a2464f48af1cfcbfd4616b8, type: 2}
+  debugPlayerInitialSummon: {fileID: 11400000, guid: 3a5d1102ab4baec478e38391a31798b7, type: 2}
   overrideEnemyInitialSummon: 1
   debugEnemyInitialSummon: {fileID: 11400000, guid: b9de673a5808641418867a99e7c1271b, type: 2}
   openingTurnOwnerMode: 1
@@ -12557,12 +12557,12 @@ MonoBehaviour:
   cardDealer: {fileID: 1707344934}
   battleProcessor: {fileID: 1424129652}
   statusProgressionConfig: {fileID: 11400000, guid: 83a07ae610160724580a19a5879d8264, type: 2}
+  statusEffectClassificationConfig: {fileID: 11400000, guid: f6a7b8c9d0e1432590a1b2c3d4e5f706, type: 2}
   diseaseTurnEndSettings: {fileID: 11400000, guid: 7d22aef61a60098428916f4ffe8f5d28, type: 2}
   shivaIceBarrierSettings: {fileID: 11400000, guid: c5f9a2b3d4e5678901abcdef12345678, type: 2}
   ordinSlashReflectSettings: {fileID: 11400000, guid: e5b6c7d8e9f0499094a5b6c7d8e9f005, type: 2}
   summonSkillButton: {fileID: 1904038048}
   enemySummonSkillButton: {fileID: 30631432}
-  bahamutPopupPrefab: {fileID: 0}
   cardPurchaseAnimation: {fileID: 830370672}
   cardSellAnimation: {fileID: 1376425099}
   gameResultPrefab: {fileID: 45535123951503131, guid: 3fcb4c72a397aeb4dab0988f528c4b52, type: 3}

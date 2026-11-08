@@ -9,24 +9,19 @@ using UnityEngine;
 public sealed class SummonSkillCoordinator
 {
     private readonly ISummonSkillHost _host;
-    private readonly BahamutSummonCoordinator _bahamut;
     private GameObject _popupRoot;
     private bool _ultimateSkillFlowRunning;
 
     public SummonSkillCoordinator(ISummonSkillHost host)
     {
         _host = host;
-        _bahamut = new BahamutSummonCoordinator(host, this);
     }
 
-    public bool IsPopupOpen => _popupRoot != null || _bahamut.IsPopupOpen;
+    public bool IsPopupOpen => _popupRoot != null;
 
     public bool IsUltimateSkillFlowRunning => _ultimateSkillFlowRunning;
 
-    public bool IsMegaFlareFlowRunning => _bahamut.IsMegaFlareFlowRunning;
-
-    public bool IsAnySummonFlowRunning =>
-        _ultimateSkillFlowRunning || _bahamut.IsMegaFlareFlowRunning;
+    public bool IsAnySummonFlowRunning => _ultimateSkillFlowRunning;
 
     public static SummonData ResolveRandomEnemySummon()
     {
@@ -46,31 +41,20 @@ public sealed class SummonSkillCoordinator
         _host.EnemySummonButton?.RefreshInteractable();
     }
 
-    public bool CanActivateBahamutSummonButton(PlayerStatus self, bool isLocalPlayerSide)
-        => _bahamut.CanActivateSummonButton(self, isLocalPlayerSide);
-
     public bool TryOpenPopup(PlayerStatus summoner, PlayerStatus opponent)
     {
-        if (_popupRoot != null || _bahamut.IsPopupOpen || summoner == null || opponent == null)
+        if (_popupRoot != null || summoner == null || opponent == null)
             return false;
         if (_host.IsEconomicActionInProgress()) return false;
-
-        if (BahamutRules.IsBahamut(summoner.summonData))
-            return _bahamut.TryOpenPopup(summoner, opponent);
 
         return TryOpenUltimateSkillPopup(summoner, opponent);
     }
 
     public void DismissPopupIfOpen()
     {
-        if (_bahamut.IsPopupOpen)
-            _bahamut.DismissPopupIfOpen();
         if (_popupRoot != null)
             OnPopupCancelClicked();
     }
-
-    public async Task TryRunEnemyMegaFlareAsync(CancellationToken cancellationToken)
-        => await _bahamut.TryRunEnemyMegaFlareAsync(cancellationToken);
 
     internal void BeginUltimateSkillActivation(PlayerStatus summoner, PlayerStatus opponent)
     {

@@ -14,6 +14,8 @@ public static class ParryCardConsumption
         if (card == null) return true;
         if (card.cardType == CardType.Magic) return false;
 
+        handRefill ??= BattleManager.I?.HandRefill;
+
         if (owner == PlayerType.Player)
         {
             if (card.cardUI != null && card.cardUI.IsFaceDown()) return true;
@@ -36,6 +38,8 @@ public static class ParryCardConsumption
     {
         if (card == null || battleProcessor == null || hand == null) return;
         if (card.cardType == CardType.Magic) return;
+
+        handRefill ??= BattleManager.I?.HandRefill;
         if (IsParryDefenseCardConsumed(card, owner, handRefill)) return;
 
         if (owner == PlayerType.Player)
@@ -43,6 +47,8 @@ public static class ParryCardConsumption
             int slotIndex = card.cardUI != null ? card.cardUI.transform.GetSiblingIndex() : -1;
             if (slotIndex >= 0)
                 handRefill?.RecordPlayerUseSlot(slotIndex);
+            else
+                Debug.LogWarning($"[ParryCardConsumption] Player parry card has no hand slot: {card.cardName}");
             battleProcessor.UseCard(card, hand);
             return;
         }

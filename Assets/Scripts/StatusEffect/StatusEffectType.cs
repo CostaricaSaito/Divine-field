@@ -76,4 +76,9 @@ public enum StatusEffectType
     /// Cyber Exoskeleton: confusion-like targeting + residual Steel DEF5. Not an official ID.
     /// </summary>
     CyberPsychosis = 105,
+
+    /// <summary>
+    /// Shiva Glacial Diamond ultimate: magic costs 0 MP and infinite uses (hand + pool) until match end.
+    /// </summary>
+    InfiniteManasource = 106,
 }

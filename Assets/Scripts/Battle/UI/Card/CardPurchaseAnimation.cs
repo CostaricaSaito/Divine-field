@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -33,8 +33,7 @@ public class CardPurchaseAnimation : MonoBehaviour
 
         Debug.Log($"[CardPurchaseAnimation] 購入アニメーション開始 - カード: {cardData.cardName}, 金額: {paymentAmount}GP");
 
-        // 相手のカード表示エリアからカードオブジェクトを取得
-        var cardObject = GetCardObjectFromDisplayArea(enemyCardDisplayArea, cardData);
+        GameObject cardObject = ResolveCardSheetObject(enemyCardDisplayArea, cardData);
         if (cardObject == null)
         {
             Debug.LogWarning("[CardPurchaseAnimation] カードオブジェクトが見つかりません");
@@ -105,40 +104,39 @@ public class CardPurchaseAnimation : MonoBehaviour
         Debug.Log("[CardPurchaseAnimation] 購入アニメーション完了");
     }
 
-    /// <summary>
-    /// カード表示エリアからカードオブジェクトを取得
-    /// </summary>
-    private GameObject GetCardObjectFromDisplayArea(Transform displayArea, CardData cardData)
+    private static GameObject ResolveCardSheetObject(Transform displayArea, CardData cardData)
     {
-        Debug.Log($"[CardPurchaseAnimation] カードオブジェクト検索開始 - エリア: {displayArea.name}, カード: {cardData.cardName}");
-        
-        // カード表示エリアの子オブジェクトから該当するカードを検索
-        for (int i = 0; i < displayArea.childCount; i++)
+        if (cardData == null) return null;
+
+        if (BattleUIManager.I != null
+            && BattleUIManager.I.TryGetCardSheetDisplayForCardData(cardData, out var tracked))
+            return tracked.gameObject;
+
+        if (displayArea == null) return null;
+
+        int targetId = cardData.GetInstanceID();
+        var sheets = displayArea.GetComponentsInChildren<CardSheetDisplay>(true);
+        for (int i = sheets.Length - 1; i >= 0; i--)
         {
-            var child = displayArea.GetChild(i);
-            Debug.Log($"[CardPurchaseAnimation] 子オブジェクト確認: {child.name}");
-            
-            // CardSheetDisplayコンポーネントを確認
-            var cardSheetDisplay = child.GetComponent<CardSheetDisplay>();
-            if (cardSheetDisplay != null)
-            {
-                Debug.Log($"[CardPurchaseAnimation] CardSheetDisplay発見: {child.name}");
-                if (cardSheetDisplay.GetCardData() == cardData)
-                {
-                    Debug.Log($"[CardPurchaseAnimation] CardSheetDisplayでカードオブジェクト発見: {child.name}");
-                    return child.gameObject;
-                }
-            }
-            
-            // CardUIコンポーネントも確認（念のため）
-            var cardUI = child.GetComponent<CardUI>();
-            if (cardUI != null && cardUI.GetCardData() == cardData)
-            {
-                Debug.Log($"[CardPurchaseAnimation] CardUIでカードオブジェクト発見: {child.name}");
-                return child.gameObject;
-            }
+            var sheet = sheets[i];
+            if (sheet == null) continue;
+            var data = sheet.GetCurrentCardData();
+            if (data == null) continue;
+            if (ReferenceEquals(data, cardData) || data.GetInstanceID() == targetId)
+                return sheet.gameObject;
         }
-        
+
+        var cardUIs = displayArea.GetComponentsInChildren<CardUI>(true);
+        for (int i = cardUIs.Length - 1; i >= 0; i--)
+        {
+            var ui = cardUIs[i];
+            if (ui == null) continue;
+            var data = ui.GetCardData();
+            if (data == null) continue;
+            if (ReferenceEquals(data, cardData) || data.GetInstanceID() == targetId)
+                return ui.gameObject;
+        }
+
         Debug.LogWarning($"[CardPurchaseAnimation] カードオブジェクトが見つかりませんでした: {cardData.cardName}");
         return null;
     }

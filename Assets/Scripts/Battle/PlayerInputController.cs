@@ -72,9 +72,15 @@ public sealed class PlayerInputController
             return;
         }
 
+        if (HandDiscardSelectionFlow.IsPopupOpen)
+        {
+            HandDiscardSelectionFlow.OnHandCardClicked(card);
+            return;
+        }
+
         if (_host.IsPlayerDefenseInputActive())
         {
-            if (!CardRules.IsUsableInDefensePhase(card)
+            if (!CardRules.IsUsableInDefensePhaseStandalone(card)
                 && !FreeMagicCastRules.CanAddFreeCastToSelection(card, BattleUIManager.I?.GetSelectedCards()))
             {
                 Debug.LogWarning($"このカードは防御フェーズでは使えません: {card.cardName} ({card.cardType})");
@@ -97,7 +103,7 @@ public sealed class PlayerInputController
                 return;
             }
 
-            if (!CardRules.IsUsableInAttackPhase(card)
+            if (!CardRules.IsUsableInAttackPhaseStandalone(card)
                 && !FreeMagicCastRules.CanAddFreeCastToSelection(card, BattleUIManager.I?.GetSelectedCards()))
             {
                 Debug.LogWarning($"このカードは攻撃フェーズでは使えません: {card.cardName} ({card.cardType})");
@@ -287,8 +293,11 @@ public sealed class PlayerInputController
 
     private void HandleAttackUse()
     {
-        var selectedAttackCards = BattleUIManager.I?.GetSelectedAttackCards();
-        if (selectedAttackCards == null || selectedAttackCards.Count == 0)
+        var handPicks = BattleUIManager.I?.GetSelectedCards() ?? new List<CardData>();
+        var confirmSelection = FreeMagicCastRules.BuildPlayerAttackConfirmSelection(handPicks);
+        var combatAttackCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(confirmSelection);
+
+        if (combatAttackCards.Count == 0)
         {
             if (PrayerFlow.IsEligibleHand(_host.PlayerHand))
             {
@@ -301,7 +310,7 @@ public sealed class PlayerInputController
             return;
         }
 
-        foreach (var c in selectedAttackCards)
+        foreach (var c in confirmSelection)
         {
             if (c != null && c.cardType == CardType.Magic && _host.PlayerStatus.IsMagicUseForbidden())
             {
@@ -313,7 +322,7 @@ public sealed class PlayerInputController
             }
         }
 
-        if (!AttackComboSelectionRules.IsValidAttackSelection(selectedAttackCards))
+        if (!AttackComboSelectionRules.IsValidAttackSelection(combatAttackCards))
         {
             UnlockUseButton();
             BattleUIManager.I?.ShowInfoPopupOnCardPanel("先に攻撃カードを選んでください", new Color(0.85f, 0.35f, 0.15f));
@@ -322,7 +331,7 @@ public sealed class PlayerInputController
             return;
         }
 
-        int totalMagicMp = FreeMagicCastRules.GetEffectiveMagicMpCost(selectedAttackCards, _host.PlayerStatus);
+        int totalMagicMp = FreeMagicCastRules.GetEffectiveMagicMpCost(confirmSelection, _host.PlayerStatus);
         if (totalMagicMp > _host.PlayerStatus.currentMP)
         {
             UnlockUseButton();
@@ -333,13 +342,12 @@ public sealed class PlayerInputController
         }
 
         if (_host.IsOnlineMatch)
-            NetworkBattleBridge.SendAttackSelection(selectedAttackCards, _host.IsPlayerSelfAttackTargetMode);
+            NetworkBattleBridge.SendAttackSelection(confirmSelection, _host.IsPlayerSelfAttackTargetMode);
 
-        var combatAttackCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedAttackCards);
-        bool waiveMagicMp = FreeMagicCastRules.WaivesMagicMp(selectedAttackCards);
-        if (FreeMagicCastRules.ShouldUseImmediateAttackSingleCardFlow(selectedAttackCards))
+        bool waiveMagicMp = FreeMagicCastRules.WaivesMagicMp(confirmSelection);
+        if (FreeMagicCastRules.ShouldUseImmediateAttackSingleCardFlow(confirmSelection))
         {
-            ConsumePlayerFreeCastCatalysts(selectedAttackCards);
+            ConsumePlayerFreeCastCatalysts(confirmSelection);
             var card = combatAttackCards[0];
             int slotIndex = (card.cardUI != null) ? card.cardUI.transform.GetSiblingIndex() : -1;
 
@@ -355,7 +363,7 @@ public sealed class PlayerInputController
 
         if (_host.CardSequenceManager != null)
         {
-            if (_host.CardStatsDisplay != null && !ArchMagicRules.ContainsArchMagic(selectedAttackCards))
+            if (_host.CardStatsDisplay != null && !ArchMagicRules.ContainsArchMagic(confirmSelection))
             {
                 PlayerAttackTotalDisplayFlow.ResetAttackSequenceDisplayLocks(_host.CardStatsDisplay);
                 _host.CardStatsDisplay.BeginAttackSequenceReveal(Side.Player);
@@ -363,7 +371,8 @@ public sealed class PlayerInputController
                 _host.CardStatsDisplay.UpdateDisplay();
             }
 
-            _ = RunPlayerAttackCardSequenceSafelyAsync(selectedAttackCards, _host.GetPhaseToken());
+            var revealOrder = FreeMagicCastRules.OrderCardsForRevealSequence(confirmSelection);
+            _ = RunPlayerAttackCardSequenceSafelyAsync(revealOrder, _host.GetPhaseToken());
         }
         else
         {
@@ -388,7 +397,8 @@ public sealed class PlayerInputController
             return;
         }
 
-        var selectedDefenseCards = BattleUIManager.I?.GetSelectedDefenseCards();
+        var handPicks = BattleUIManager.I?.GetSelectedCards() ?? new List<CardData>();
+        var selectedDefenseCards = FreeMagicCastRules.BuildPlayerDefenseConfirmSelection(handPicks);
         if (selectedDefenseCards == null || selectedDefenseCards.Count == 0)
         {
             if (_host.IsOnlineMatch)
@@ -457,7 +467,8 @@ public sealed class PlayerInputController
         if (_host.CardSequenceManager != null)
         {
             _playerDefenseCombatResolving = true;
-            _ = RunPlayerDefenseCardSequenceAsync(selectedDefenseCards);
+            var revealOrder = FreeMagicCastRules.OrderCardsForRevealSequence(selectedDefenseCards);
+            _ = RunPlayerDefenseCardSequenceAsync(revealOrder);
         }
         else
         {
@@ -678,11 +689,11 @@ public sealed class PlayerInputController
     {
         if (_host.PlayerStatus != null && _host.PlayerStatus.HasConfusionEffect())
             return BattleRandom.Range(0, 2) == 0 ? _host.PlayerStatus : _host.EnemyStatus;
-        bool recoverOrFountain = card != null
-            && (CardRules.IsRecoveryCard(card) || MagicFountainRules.IsMagicFountainCard(card));
-        if (recoverOrFountain)
-            return _host.IsPlayerSelfAttackTargetMode ? _host.EnemyStatus : _host.PlayerStatus;
-        return _host.IsPlayerSelfAttackTargetMode ? _host.PlayerStatus : _host.EnemyStatus;
+        return CardRules.ResolvePlayerAttackPhaseEffectTarget(
+            _host.PlayerStatus,
+            _host.EnemyStatus,
+            _host.IsPlayerSelfAttackTargetMode,
+            card);
     }
 
     private async Task RunPlayerPrayerAsync()

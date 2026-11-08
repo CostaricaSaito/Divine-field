@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// BottomStatusPanel summon icon: Ultimate Skill popup (or Bahamut dual-skill popup).
+/// BottomStatusPanel summon icon: Ultimate Skill popup.
 /// </summary>
 public class SummonSkillButton : MonoBehaviour
 {
@@ -37,33 +37,17 @@ public class SummonSkillButton : MonoBehaviour
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == (isLocalPlayerSide ? PlayerType.Player : PlayerType.Enemy);
 
-        bool can;
-        if (_self != null && BahamutRules.IsBahamut(_self.summonData))
-        {
-            can = turnOk
-                && BattleManager.I != null
-                && BattleManager.I.CanActivateBahamutSummonButton(isLocalPlayerSide)
-                && !_self.IsCastingArchMagic
-                && !_self.HasFreezeEffect()
-                && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
-                && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
-                && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
-                && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen);
-        }
-        else
-        {
-            can = _self != null
-                && UltimateReadyRules.IsAvailable(_self)
-                && turnOk
-                && !_self.IsCastingArchMagic
-                && !_self.HasFreezeEffect()
-                && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
-                && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
-                && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
-                && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
-                && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0)
-                && (BattleManager.I == null || !BattleManager.I.ShouldDeferPlayerSummonGlow(_self) || !isLocalPlayerSide);
-        }
+        bool can = _self != null
+            && UltimateReadyRules.IsAvailable(_self)
+            && turnOk
+            && !_self.IsCastingArchMagic
+            && !_self.HasFreezeEffect()
+            && (BattleManager.I == null || !BattleManager.I.IsSummonSkillPopupOpen)
+            && (BattleManager.I == null || !BattleManager.I.IsAnySummonSkillFlowRunning)
+            && (BattleManager.I == null || !BattleManager.I.IsEconomicActionInProgress())
+            && (BattleManager.I == null || !BattleManager.I.IsHandReloadPopupOpen)
+            && (CardSelectionManager.I == null || CardSelectionManager.I.SelectedCardCount == 0)
+            && (BattleManager.I == null || !BattleManager.I.ShouldDeferPlayerSummonGlow(_self) || !isLocalPlayerSide);
 
         _button.interactable = can;
     }

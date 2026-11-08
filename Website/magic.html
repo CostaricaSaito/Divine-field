@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic | 魔法 | ディヴァインフィールド</title>
+  <meta name="description" content="ディヴァインフィールドの魔法カード。">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="images/Favicon.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#magic-title">本文へ</a>
+  <header class="site-header">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="ディヴァインフィールド"></a>
+    <ul class="gnav">
+      <li><a href="index.html#news">News</a></li>
+      <li><a href="index.html#story">Story</a></li>
+      <li><a href="howto.html">HowToPlay</a></li>
+      <li><a href="index.html#system">System</a></li>
+      <li><a href="summons.html">Summons</a></li>
+      <li class="has-sub is-current">
+        <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu">Data</button>
+        <ul id="data-menu" class="subnav">
+          <li><a href="cards.html">Cards</a></li>
+          <li><a href="magic.html" aria-current="page">Magic</a></li>
+          <li><a href="status-effect.html">Status Effect</a></li>
+          <li><a href="disaster.html">Disaster</a></li>
+        </ul>
+      </li>
+      <li><a href="philosophy.html">Philosophy</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <ul class="sns" aria-label="SNS">
+      <li><a href="https://www.tiktok.com/@divinefield_official" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/Tiktok.png" alt=""></a></li>
+      <li><a href="https://x.com/CostaRicaSaito" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h3.2l4.1 5.7L16.2 4H20l-6.3 7.6L20.4 20h-3.2l-4.5-6.2L7.6 20H4l6.7-8.1L4 4z"/></svg></a></li>
+      <li><a href="https://note.com/divinefield" target="_blank" rel="noopener noreferrer" aria-label="note"><img src="images/Note.svg" alt=""></a></li>
+      <li><a href="https://www.youtube.com/@%E3%82%B3%E3%82%B9%E3%82%BF%E3%83%AA%E3%82%AB%E6%96%8E%E8%97%A4" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg></a></li>
+      <li><span class="is-blank" title="準備中" aria-label="Instagram 準備中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5zm8 1.8H8A3.2 3.2 0 0 0 4.8 8v8A3.2 3.2 0 0 0 8 19.2h8a3.2 3.2 0 0 0 3.2-3.2V8A3.2 3.2 0 0 0 16 4.8zM12 8.2A3.8 3.8 0 1 1 8.2 12 3.8 3.8 0 0 1 12 8.2zm0 1.6A2.2 2.2 0 1 0 14.2 12 2.2 2.2 0 0 0 12 9.8zM17.4 6.4a1 1 0 1 1-1 1 1 1 0 0 1 1-1z"/></svg></span></li>
+    </ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+  </header>
+  <nav id="menu-panel" class="menu-panel" aria-label="メニュー">
+    <a href="index.html#news">News</a>
+    <a href="index.html#story">Story</a>
+    <a href="howto.html">HowToPlay</a>
+    <a href="index.html#system">System</a>
+    <a href="summons.html">Summons</a>
+    <div class="menu-sub is-current">
+      <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="data-menu-sp">Data</button>
+      <div id="data-menu-sp" class="menu-sub-panel">
+        <a href="cards.html">Cards</a>
+        <a href="magic.html" aria-current="page">Magic</a>
+        <a href="status-effect.html">Status Effect</a>
+        <a href="disaster.html">Disaster</a>
+      </div>
+    </div>
+    <a href="philosophy.html">Philosophy</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+
+  <main class="data-page">
+    <h1 id="magic-title">Magic <span class="data-ja">| 魔法</span></h1>
+    <p class="data-lead">強力な魔法が勢揃い。<br>だが気をつけろ、MP切れと、<span class="rainbow-word">使用回数</span>切れには...！</p>
+    <div class="table-scroll">
+      <table class="disaster-table magic-table">
+        <thead>
+          <tr>
+            <th>画像</th>
+            <th>魔法名</th>
+            <th>英語名</th>
+            <th>攻撃力</th>
+            <th>属性</th>
+            <th>命中率</th>
+            <th>消費MP</th>
+            <th>使用回数</th>
+            <th>詳細</th>
+            <th>作者によるコメント</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><img src="images/Magic/ChaosOrb.jpg" alt="混沌の球"></td>
+            <td>混沌の球</td>
+            <td>Chaos Orb</td>
+            <td>8</td>
+            <td>無</td>
+            <td>—</td>
+            <td>8</td>
+            <td>3</td>
+            <td>ランダムな状態異常を与える。</td>
+            <td>カオスをこえて終末が近づく</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/轟音の衝撃.jpg" alt="轟音の衝撃"></td>
+            <td>轟音の衝撃</td>
+            <td>Sound Bazooka</td>
+            <td>24</td>
+            <td>無</td>
+            <td>—</td>
+            <td>12</td>
+            <td>4</td>
+            <td>相手に12ダメージを与える。</td>
+            <td>音響性魔法（大嘘）</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/火炎旋風.jpg" alt="火炎旋風"></td>
+            <td>火炎旋風</td>
+            <td>Fire Prominence</td>
+            <td>10</td>
+            <td>炎</td>
+            <td>—</td>
+            <td>5</td>
+            <td>3</td>
+            <td>相手に炎属性10ダメージを与える。</td>
+            <td>炎よ、敵を貫け...！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/水遁.jpg" alt="水遁"></td>
+            <td>水遁</td>
+            <td>Waterflood</td>
+            <td>8</td>
+            <td>水</td>
+            <td>—</td>
+            <td>4</td>
+            <td>4</td>
+            <td>相手に水属性8ダメージを与える。</td>
+            <td>水龍弾の術！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/鼬鼠風.jpg" alt="ウィンドシア"></td>
+            <td>ウィンドシア</td>
+            <td>Windsheer</td>
+            <td>6</td>
+            <td>風</td>
+            <td>—</td>
+            <td>5</td>
+            <td>5</td>
+            <td>相手に風属性6ダメージを与える。</td>
+            <td>疾風の一撃、飛行機も墜落する</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/アイスジャベリン.jpg" alt="アイスジャベリン"></td>
+            <td>アイスジャベリン</td>
+            <td>Ice Javelin</td>
+            <td>5</td>
+            <td>氷</td>
+            <td>—</td>
+            <td>4</td>
+            <td>6</td>
+            <td>相手に氷属性5ダメージを与える。</td>
+            <td>エミリアもよく使う。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/サンダーボルト.jpg" alt="サンダーボルト"></td>
+            <td>サンダーボルト</td>
+            <td>ThunderBolt</td>
+            <td>5</td>
+            <td>雷</td>
+            <td>—</td>
+            <td>3</td>
+            <td>7</td>
+            <td>相手に雷属性5ダメージを与える。</td>
+            <td>雷雷ラ雷 雷雷ラ雷神</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/鋼の紋章.jpg" alt="鋼の紋章"></td>
+            <td>鋼の紋章</td>
+            <td>MetalCrest</td>
+            <td>2</td>
+            <td>鋼</td>
+            <td>—</td>
+            <td>2</td>
+            <td>10</td>
+            <td>相手に鋼属性3ダメージを与える。</td>
+            <td>ハルドメルグ大歓喜</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/闇.jpg" alt="暗黒"></td>
+            <td>暗黒</td>
+            <td>Darkness</td>
+            <td>5</td>
+            <td>闇</td>
+            <td>—</td>
+            <td>5</td>
+            <td>5</td>
+            <td>相手に闇属性5ダメージを与える。</td>
+            <td>K○Fでいう白羅。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/光輪.jpg" alt="光輪"></td>
+            <td>光輪</td>
+            <td>Shining Ray</td>
+            <td>10</td>
+            <td>光</td>
+            <td>—</td>
+            <td>10</td>
+            <td>3</td>
+            <td>相手に光属性10ダメージを与える。</td>
+            <td>Find Your Brand New Way…</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/ゴッドレイジ.jpg" alt="ゴッドレイジ"></td>
+            <td>ゴッドレイジ</td>
+            <td>God Rage</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>6</td>
+            <td>3</td>
+            <td>次のカードの威力を2倍にする。</td>
+            <td>大声で叫びたくなる魔法No.1</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/エリスの癒し.jpg" alt="エリスの癒し"></td>
+            <td>エリスの癒し</td>
+            <td>ElisCure</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>2</td>
+            <td>自分のHPを10回復する。</td>
+            <td>エリスって誰？</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/プリズム.jpg" alt="プリズム"></td>
+            <td>プリズム</td>
+            <td>Prism</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>3</td>
+            <td>全ての状態異常を回復する。</td>
+            <td>プリズムの輝き…</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/アイアンクラッド.jpg" alt="アイアンクラッド"></td>
+            <td>アイアンクラッド</td>
+            <td>Ironclad</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>7</td>
+            <td>3</td>
+            <td>物理攻撃を無効化する。</td>
+            <td>効かないねェ、ゴムだから</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/ホワイトウィンド.jpg" alt="ホワイトウィンド"></td>
+            <td>ホワイトウィンド</td>
+            <td>WhiteWind</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>7</td>
+            <td>3</td>
+            <td>魔法攻撃を打ち払う。</td>
+            <td>打ち払う（打ち払えるとは言っていない）</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/病.jpg" alt="病"></td>
+            <td>病</td>
+            <td>Sickness</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>5</td>
+            <td>相手を&lt;病&gt;状態にする。すでに病状態の場合は、重病・煉獄病・楽園病と悪化する。楽園病の相手は、即死する。</td>
+            <td>自然治癒なんて甘い話はない。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/衰弱.png" alt="衰弱"></td>
+            <td>衰弱</td>
+            <td>Weaken</td>
+            <td>—</td>
+            <td>—</td>
+            <td>75%</td>
+            <td>5</td>
+            <td>2</td>
+            <td>相手を&lt;衰弱&gt;状態にする。</td>
+            <td>衰弱無双ッ！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/眼精疲労.jpg" alt="疲労"></td>
+            <td>疲労</td>
+            <td>Eye Strain</td>
+            <td>—</td>
+            <td>—</td>
+            <td>75%</td>
+            <td>5</td>
+            <td>3</td>
+            <td>指定したプレイヤーを＜眼精疲労＞状態にする。すでに眼精疲労状態の場合は、＜群発頭痛＞状態にする。</td>
+            <td>この開発が一番疲れた。群発頭痛は頭痛外来へ行け</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/介入.png" alt="介入"></td>
+            <td>介入</td>
+            <td>Intervention</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>10</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;介入&gt;状態にする。</td>
+            <td>日頃から神社や教会に行くと効果が高まるらしい</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/呪縛.jpg" alt="呪縛の手"></td>
+            <td>呪縛の手</td>
+            <td>Cursebind</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;呪縛&gt;状態にする。</td>
+            <td>インビジブル・プロミネンス！</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/煙幕.jpg" alt="煙幕弾"></td>
+            <td>煙幕弾</td>
+            <td>Smokebomb</td>
+            <td>—</td>
+            <td>—</td>
+            <td>50%</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;煙幕&gt;状態にする。</td>
+            <td>スモークを焚いて、敵を困惑する。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/不運.jpg" alt="不運"></td>
+            <td>不運</td>
+            <td>Misfortune</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;不運&gt;状態にする。</td>
+            <td>実はかなりヤバい状態異常と噂。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/濃霧.jpg" alt="濃霧"></td>
+            <td>濃霧</td>
+            <td>Fog</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;濃霧&gt;状態にする。</td>
+            <td>また幻術なのか…？画面がウザすぎる</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/混乱.jpg" alt="混乱"></td>
+            <td>混乱</td>
+            <td>Confusion</td>
+            <td>—</td>
+            <td>—</td>
+            <td>25%</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;混乱&gt;状態にする。</td>
+            <td>そういう本でも使えそう。DF薄い本待ってます。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/拘束.jpg" alt="拘束"></td>
+            <td>拘束</td>
+            <td>Restrained</td>
+            <td>—</td>
+            <td>—</td>
+            <td>25%</td>
+            <td>5</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;拘束&gt;状態にする。</td>
+            <td>縛法　土蜘蛛　ツッ</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/楽園の歌.png" alt="楽園の唄"></td>
+            <td>楽園の唄</td>
+            <td>Heavensfeel</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>25</td>
+            <td>2</td>
+            <td>指定したプレイヤーを&lt;楽園病&gt;状態にする。</td>
+            <td>最強の魔法。2回かければ相手は死ぬ。</td>
+          </tr>
+          <tr>
+            <td><img src="images/Magic/ファイアアロー.png" alt="ファイアアロー"></td>
+            <td>ファイアアロー</td>
+            <td>Fire Arrow</td>
+            <td>+2</td>
+            <td>火</td>
+            <td>—</td>
+            <td>3</td>
+            <td>4</td>
+            <td></td>
+            <td>本体はダメージではなくドローカードにある。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>AppleおよびAppleロゴは、米国およびその他の国で登録されたApple Inc.の商標です。App StoreはApple Inc.のサービスマークです。</p>
+    <p>Google PlayおよびGoogle Playロゴは、Google LLCの商標です。</p>
+    <p>その他、掲載されている会社名・製品名は、各社の商標または登録商標です。</p>
+    <p class="footer-copy">© 2026 CostaricaGames. All rights reserved.</p>
+  </footer>
+  <script src="js/pinch-fit.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/faq.js"></script>
+</body>
+</html>

@@ -627,9 +627,10 @@ public class BattlePopupPresenter : MonoBehaviour
     public float ShowStyledImportantPopup(
         ImportantPopupKind kind,
         string messageOverride,
-        Side cardPanelSide)
+        Side cardPanelSide,
+        bool playShowSound = true)
     {
-        var popup = SpawnImportantPopup(kind, messageOverride, cardPanelSide);
+        var popup = SpawnImportantPopup(kind, messageOverride, cardPanelSide, playShowSound);
         return popup != null ? popup.SequenceLifetimeSeconds : 0f;
     }
 
@@ -643,11 +644,12 @@ public class BattlePopupPresenter : MonoBehaviour
     public ImportantPopup SpawnImportantPopup(
         ImportantPopupKind kind,
         string messageOverride,
-        Side cardPanelSide)
+        Side cardPanelSide,
+        bool playShowSound = true)
     {
         var settings = ResolveImportantPopupSettings();
         var entry = settings.GetEntryOrDefault(kind);
-        if (!string.IsNullOrEmpty(entry.showSoundAddress))
+        if (playShowSound && !string.IsNullOrEmpty(entry.showSoundAddress))
             SoundEffectPlayer.I?.Play(entry.showSoundAddress);
 
         return SpawnImportantPopupWithEntry(entry, messageOverride, cardPanelSide, settings);

@@ -55,6 +55,7 @@ public class MagicPoolManager : MonoBehaviour
     {
         if (card == null || status == null) return false;
         if (status.IsMagicUseForbidden()) return false;
+        if (status.HasInfiniteManasourceEffect()) return true;
         return status.currentMP >= status.GetEffectiveMagicMpCost(card.mpCost);
     }
 
@@ -63,13 +64,22 @@ public class MagicPoolManager : MonoBehaviour
     {
         if (card == null || card.cardType != CardType.Magic) return false;
 
+        bool infinite = OwnerHasInfiniteManasource(owner);
         var slots = GetSlots(owner);
         var existing = FindEntry(card, slots);
         if (existing != null)
         {
-            int addUses = Mathf.Max(card.maxUses - 1, 0);
-            existing.remainingUses += addUses;
-            Debug.Log($"[MagicPoolManager] 同種魔法カード使用({owner}): {card.cardName} +{addUses} → 残り {existing.remainingUses}");
+            if (infinite)
+            {
+                existing.remainingUses = MagicCardEntry.InfiniteRemainingUses;
+                Debug.Log($"[MagicPoolManager] 同種魔法カード使用({owner}): {card.cardName} (infinite uses)");
+            }
+            else
+            {
+                int addUses = Mathf.Max(card.maxUses - 1, 0);
+                existing.remainingUses += addUses;
+                Debug.Log($"[MagicPoolManager] 同種魔法カード使用({owner}): {card.cardName} +{addUses} → 残り {existing.remainingUses}");
+            }
 
             if (hand != null && hand.Count < handMax)
             {
@@ -84,12 +94,14 @@ public class MagicPoolManager : MonoBehaviour
         int empty = FindFirstEmptySlot(slots);
         if (empty >= 0)
         {
-            int initialUses = Mathf.Max(card.maxUses - 1, 0);
+            int initialUses = infinite
+                ? MagicCardEntry.InfiniteRemainingUses
+                : Mathf.Max(card.maxUses - 1, 0);
             var entry = new MagicCardEntry(card, initialUses);
             slots[empty] = entry;
             Debug.Log($"[MagicPoolManager] 新規登録({owner}) slot={empty}: {card.cardName} 使用回数={initialUses}");
 
-            if (initialUses <= 0)
+            if (!infinite && initialUses <= 0)
             {
                 slots[empty] = null;
                 Debug.Log($"[MagicPoolManager] 使用回数0のため即削除({owner}): {card.cardName}");
@@ -105,6 +117,8 @@ public class MagicPoolManager : MonoBehaviour
 
     public void ConsumeUse(CardData card, PlayerType owner = PlayerType.Player)
     {
+        if (OwnerHasInfiniteManasource(owner)) return;
+
         var slots = GetSlots(owner);
         int idx = FindEntrySlotIndex(card, slots);
         if (idx < 0)
@@ -114,6 +128,8 @@ public class MagicPoolManager : MonoBehaviour
         }
 
         var entry = slots[idx];
+        if (entry.remainingUses == MagicCardEntry.InfiniteRemainingUses) return;
+
         entry.remainingUses--;
         Debug.Log($"[MagicPoolManager] 使用回数消費({owner}): {card.cardName} 残り={entry.remainingUses}");
 
@@ -121,6 +137,20 @@ public class MagicPoolManager : MonoBehaviour
             slots[idx] = null;
 
         NotifyPoolChanged(owner);
+    }
+
+    public void ApplyInfiniteManasourceToPool(PlayerType owner)
+    {
+        var slots = GetSlots(owner);
+        bool changed = false;
+        for (int i = 0; i < MaxPoolSize; i++)
+        {
+            if (slots[i] == null) continue;
+            slots[i].remainingUses = MagicCardEntry.InfiniteRemainingUses;
+            changed = true;
+        }
+
+        if (changed) NotifyPoolChanged(owner);
     }
 
     /// <summary>
@@ -309,11 +339,22 @@ public class MagicPoolManager : MonoBehaviour
     public bool IsPoolFull() => IsPoolFull(PlayerType.Player);
     public bool CanUseMagicCard(CardData card) => CanUseMagicCard(card, PlayerType.Player);
     public List<CardData> GetPooledCardDatas() => GetPooledCardDatas(PlayerType.Player);
+
+    private static bool OwnerHasInfiniteManasource(PlayerType owner)
+    {
+        var bm = BattleManager.I;
+        if (bm == null) return false;
+        var ps = owner == PlayerType.Player ? bm.GetPlayerStatus() : bm.GetEnemyStatus();
+        return ps != null && ps.HasInfiniteManasourceEffect();
+    }
 }
 
 [System.Serializable]
 public class MagicCardEntry
 {
+    public const int InfiniteRemainingUses = -1;
+    public const string InfiniteUsesDisplay = "\u221E";
+
     public CardData cardData;
     public int remainingUses;
     public bool usesSealedExoDionCounterStyle;
@@ -323,4 +364,7 @@ public class MagicCardEntry
         cardData = data;
         remainingUses = uses;
     }
+
+    public static string FormatRemainingUsesForDisplay(int remainingUses)
+        => remainingUses == InfiniteRemainingUses ? InfiniteUsesDisplay : remainingUses.ToString();
 }
