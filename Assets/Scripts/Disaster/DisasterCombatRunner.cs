@@ -236,6 +236,7 @@ public static class DisasterCombatRunner
 
         if (defenseCards.Count == 0)
         {
+            SoundEffectCatalogSO.Get()?.PlayYurusu();
             await processor.ResolveCombatAsync(
                 atkList, (CardData)null, enemy, enemy, bm.cpuHand, skipHitCheck: true);
         }

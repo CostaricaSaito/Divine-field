@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -230,6 +230,7 @@ public sealed class PlayerInputController
         _playerDefenseCombatResolving = true;
         BattleUIManager.I?.SetHandClickable(false);
         BattleUIManager.I?.SetUseButtonInteractable(false);
+        SoundEffectCatalogSO.Get()?.PlayYurusu();
 
         var token = _host.GetPhaseToken();
 
@@ -536,25 +537,23 @@ public sealed class PlayerInputController
 
                 if (fromMagicPanel)
                 {
+                    int poolSlotIndex = MagicPoolManager.I.GetPlayerPoolSlotIndex(card);
                     MagicPoolManager.I.ConsumeUse(card);
                     var drawn = await _host.DrawOneCardAsync(trailingDelayMs: 0, playSoundOnDraw: false);
-                    if (drawn != null && _host.HandRefill != null)
-                        await _host.HandRefill.RevealDrawnCardAfterCombatAsync(drawn, tok);
+                    if (drawn != null)
+                    {
+                        if (poolSlotIndex >= 0 && BattleUIManager.I != null)
+                            await BattleUIManager.I.PlayMagicFlyPanelToHandAsync(poolSlotIndex, drawn, tok);
+                        if (_host.HandRefill != null)
+                            await _host.HandRefill.RevealDrawnCardAfterCombatAsync(drawn, tok);
+                    }
                 }
                 else
                 {
-                    RectTransform handRt = null;
-                    if (card.cardUI != null)
-                    {
-                        handRt = card.cardUI.cardImage != null
-                            ? card.cardUI.cardImage.rectTransform
-                            : card.cardUI.transform as RectTransform;
-                    }
-
-                    if (handRt != null && BattleUIManager.I != null && card.cardImage != null)
+                    if (card.cardUI != null && BattleUIManager.I != null && card.cardImage != null)
                     {
                         int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
-                        await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, handRt, slot);
+                        await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, slot);
                     }
 
                     _host.BattleProcessor.UseCard(card, _host.PlayerHand);

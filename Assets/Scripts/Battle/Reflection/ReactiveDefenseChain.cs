@@ -261,6 +261,12 @@ public static class ReactiveDefenseChain
             if (picks == null || picks.Count == 0) return;
 
             var ui = BattleUIManager.I;
+            if (DefenderIsPlayer && _bm.Sequences != null)
+            {
+                await _bm.Sequences.PlayReflectionChainDefenseRevealAsync(picks, ct);
+                return;
+            }
+
             if (ui != null)
             {
                 if (DefenderIsPlayer)

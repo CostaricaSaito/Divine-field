@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -144,11 +144,8 @@ public static class SealedExoDionTurnEndLifecycle
         {
             if (cardUi != null && BattleUIManager.I != null && card.cardImage != null)
             {
-                RectTransform handFlyRt = cardUi.cardImage != null
-                    ? cardUi.cardImage.rectTransform
-                    : cardUi.transform as RectTransform;
                 await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(
-                    card, handFlyRt, SealedExoDionRules.RightSlotIndex);
+                    card, SealedExoDionRules.RightSlotIndex, restoreHandSlotAfterFly: false);
             }
 
             if (cardUi != null)

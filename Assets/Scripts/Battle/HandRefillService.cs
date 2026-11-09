@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,6 +91,9 @@ public partial class HandRefillService : MonoBehaviour
             existingUI.Setup(null, cardBackSprite, playerHandRareBackPresentation: false);
             existingUI.button.interactable = false;
             _playerBackSlotsThisTurn.Add(new BackSlot { index = siblingIndex, ui = existingUI, usedCard = usedCard });
+
+            if (!HandSortCoordinator.IsBatchSuppressActive)
+                HandSortCoordinator.I?.ScheduleSortAfterFaceDownUse();
         }
         else
         {
@@ -426,6 +429,9 @@ public partial class HandRefillService : MonoBehaviour
 
         var batch = new HandRevealBatchContext();
         await HandRevealPresentation.RevealCardAsync(card, card.cardUI, batch, ct);
+
+        if (!HandSortCoordinator.IsBatchSuppressActive)
+            await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: false, ct);
     }
 
     /// <summary>手札リロード：DamagePopup 寿命後の追加インターバル（ms）。</summary>
@@ -533,6 +539,24 @@ public partial class HandRefillService : MonoBehaviour
     {
         if (playerHand == null || enemyHand == null || cardDealer == null) return;
 
+        var sortSuppress = HandSortCoordinator.PushBatchSuppress();
+        try
+        {
+            await RunRealityBendingCoreAsync(playerHand, enemyHand, ct);
+        }
+        finally
+        {
+            sortSuppress.Dispose();
+        }
+
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: false, ct);
+    }
+
+    private async Task RunRealityBendingCoreAsync(
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        CancellationToken ct)
+    {
         _playerBackSlotsThisTurn.Clear();
         _enemyUsedCardsThisTurn.Clear();
 
@@ -633,6 +657,24 @@ public partial class HandRefillService : MonoBehaviour
         if (playerHand == null || enemyHand == null || cardDealer == null)
             return;
 
+        var sortSuppress = HandSortCoordinator.PushBatchSuppress();
+        try
+        {
+            await RunChaosAttractorCoreAsync(playerHand, enemyHand, ct);
+        }
+        finally
+        {
+            sortSuppress.Dispose();
+        }
+
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: false, ct);
+    }
+
+    private async Task RunChaosAttractorCoreAsync(
+        List<CardData> playerHand,
+        List<CardData> enemyHand,
+        CancellationToken ct)
+    {
         _playerBackSlotsThisTurn.Clear();
         _enemyUsedCardsThisTurn.Clear();
 
@@ -871,19 +913,29 @@ public partial class HandRefillService : MonoBehaviour
         var targets = CollectHandDiscardRestartTargets(playerHand, excludeCard);
         if (targets.Count == 0) return;
 
-        var work = BeginHandReloadReplaceAllFaceDown(targets, playerHand, PlayerType.Player);
-        if (work == null || work.Count == 0) return;
+        var sortSuppress = HandSortCoordinator.PushBatchSuppress();
+        try
+        {
+            var work = BeginHandReloadReplaceAllFaceDown(targets, playerHand, PlayerType.Player);
+            if (work == null || work.Count == 0) return;
 
-        RemovePlayerBackSlotsAtHandIndices(work);
+            RemovePlayerBackSlotsAtHandIndices(work);
 
-        BattleUIManager.I?.SetHandClickable(false);
+            BattleUIManager.I?.SetHandClickable(false);
 
-        float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowHandDiscardRestartPopup(popupTarget)
-            : 0f;
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
-        await Task.Delay(HandReloadAfterPopupWaitMs, ct);
-        await RevealHandReloadSlotsSequentially(work, ct);
+            float fade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowHandDiscardRestartPopup(popupTarget)
+                : 0f;
+            await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
+            await Task.Delay(HandReloadAfterPopupWaitMs, ct);
+            await RevealHandReloadSlotsSequentially(work, ct);
+        }
+        finally
+        {
+            sortSuppress.Dispose();
+        }
+
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: true, ct);
 
         BattleUIManager.I?.SetHandClickable(true);
         BattleUIManager.I?.RefreshMagicCardInteractivity(playerHand);
@@ -949,6 +1001,10 @@ public partial class HandRefillService : MonoBehaviour
         CancellationToken ct)
     {
         if (hand == null || targetCount <= 0 || cardDealer == null) return;
+
+        HandSortCoordinator.HandSortBatchScope sortSuppress = null;
+        if (isPlayerHand)
+            sortSuppress = HandSortCoordinator.PushBatchSuppress();
 
         if (isPlayerHand)
             _playerBackSlotsThisTurn.Clear();
@@ -1052,6 +1108,9 @@ public partial class HandRefillService : MonoBehaviour
 
         await Task.Delay(HandReloadAfterPopupWaitMs, ct);
         await RevealHandReloadSlotsSequentially(work, ct);
+
+        sortSuppress?.Dispose();
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: false, ct);
 
         BattleUIManager.I?.SetHandClickable(true);
         BattleUIManager.I?.RefreshMagicCardInteractivity(hand);

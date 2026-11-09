@@ -12,7 +12,10 @@ public sealed class YurusuDisplayScope : IDisposable
     {
         _shown = show;
         if (_shown)
+        {
+            SoundEffectCatalogSO.Get()?.PlayYurusu();
             BattleUIManager.I?.ShowYurusuDisplay();
+        }
     }
 
     public static YurusuDisplayScope ShowIf(bool condition) => new YurusuDisplayScope(condition);

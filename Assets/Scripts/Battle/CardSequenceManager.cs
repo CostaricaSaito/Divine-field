@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,6 +92,77 @@ public class CardSequenceManager : MonoBehaviour
         SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
 
         await Task.Delay(500, ct);
+    }
+
+    /// <summary>
+    /// 反射・打ち払い連鎖の再防御：使用決定後、攻撃シートは残したまま防御を順次掲出（戦闘解決は行わない）。
+    /// 通常防御の <see cref="StartCardSequenceAsync"/> ①〜② と同じテンポ。
+    /// </summary>
+    public async Task PlayReflectionChainDefenseRevealAsync(
+        IReadOnlyList<CardData> selectedCards,
+        CancellationToken cancellationToken)
+    {
+        if (selectedCards == null || selectedCards.Count == 0) return;
+
+        var ui = BattleUIManager.I;
+        if (ui == null) return;
+
+        var ordered = FreeMagicCastRules.OrderCardsForRevealSequence(selectedCards);
+
+        cardStatsDisplay?.SetSequenceCards(new List<CardData>(), "防御", Side.Player);
+        ui.ClearAllSelections();
+
+        foreach (var card in ordered)
+        {
+            if (card != null)
+                ui.DestroyCardSheetsForCardDataOnPanel(card, Side.Player);
+        }
+
+        try
+        {
+            await Task.Delay(300, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        // ShowCardDetail requires defense selection context; after ad-hoc submit it is false
+        // (see PhysicalReflectionFlow). Use visual-only sequential reveal like PostDeath defense.
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var partial = new List<CardData>(i + 1);
+            for (int j = 0; j <= i; j++)
+            {
+                if (ordered[j] != null)
+                    partial.Add(ordered[j]);
+            }
+
+            if (partial.Count == 0)
+                continue;
+
+            foreach (var c in ordered)
+            {
+                if (c != null)
+                    ui.DestroyCardSheetsForCardDataOnPanel(c, Side.Player);
+            }
+
+            ui.ShowCardSheetsVisualOnlyBatch(partial, Side.Player);
+            battleManager?.SetStatsDisplaySequenceCards(partial, "防御", Side.Player);
+            cardStatsDisplay?.UpdateDisplay();
+            SoundEffectPlayer.I?.Play("Assets/SE/普通カード.mp3");
+
+            try
+            {
+                await Task.Delay(500, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -1143,21 +1214,17 @@ public class CardSequenceManager : MonoBehaviour
 
         if (isFromHand)
         {
-            // 飛行演出と同時に手札枠は通常攻撃と同様に裏面表示（Record→Use の順を厳守）
+            if (card.cardUI != null && BattleUIManager.I != null && card.cardImage != null)
+            {
+                int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
+                await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, slot);
+            }
+
             if (card.cardUI != null)
             {
                 int slotIndex = card.cardUI.transform.GetSiblingIndex();
                 handRefill?.RecordPlayerUseSlot(slotIndex);
                 battleProcessor.UseCard(card, battleManager.playerHand);
-            }
-
-            if (card.cardUI != null && BattleUIManager.I != null && card.cardImage != null)
-            {
-                int slot = MagicPoolManager.I.GetPredictedPlayerSlotIndex(card);
-                RectTransform handFlyRt = card.cardUI.cardImage != null
-                    ? card.cardUI.cardImage.rectTransform
-                    : card.cardUI.transform as RectTransform;
-                await BattleUIManager.I.PlayMagicFlyHandToPanelAsync(card, handFlyRt, slot);
             }
 
             var drawCallback = GetDrawCardCallback();
@@ -1170,13 +1237,18 @@ public class CardSequenceManager : MonoBehaviour
         }
         else
         {
-            // ① MagicPanel から使用を確定 → ② 直後に裏面で 1 枚追加（③ 表向けは ResolveCombat 後）
+            int poolSlotIndex = MagicPoolManager.I.GetPlayerPoolSlotIndex(card);
             MagicPoolManager.I.ConsumeUse(card);
             Debug.Log($"[CardSequenceManager] ConsumeUse: {card.cardName}");
 
             var drawn = await battleManager.DrawOneCardAsync(trailingDelayMs: 0, playSoundOnDraw: false);
             if (drawn != null)
+            {
+                if (poolSlotIndex >= 0 && BattleUIManager.I != null)
+                    await BattleUIManager.I.PlayMagicFlyPanelToHandAsync(poolSlotIndex, drawn, CancellationToken.None);
                 _magicPanelBonusDrawsPendingReveal.Add(drawn);
+            }
+
             Debug.Log("[CardSequenceManager] MagicPanel使用による手札1枚追加（裏面・戦闘後に表向け）");
         }
     }

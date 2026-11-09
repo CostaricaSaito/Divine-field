@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -232,6 +232,13 @@ public class MagicPoolManager : MonoBehaviour
             return FindEntrySlotIndex(card, slots);
         int empty = FindFirstEmptySlot(slots);
         return empty >= 0 ? empty : MaxPoolSize - 1;
+    }
+
+    /// <summary>プレイヤープール上のスロット index。未登録なら -1。</summary>
+    public int GetPlayerPoolSlotIndex(CardData card)
+    {
+        if (card == null) return -1;
+        return FindEntrySlotIndex(card, playerSlots);
     }
 
     public List<CardData> GetPooledCardDatas(PlayerType owner = PlayerType.Player)

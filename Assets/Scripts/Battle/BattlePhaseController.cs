@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -503,6 +503,10 @@ public sealed class BattlePhaseController
             if (_host.CurrentState != GameState.EndPhase) return;
 
             await RevealFaceDownCardsAsync();
+
+            if (_host.CurrentState != GameState.EndPhase) return;
+
+            await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: true, phaseToken);
 
             if (_host.CurrentState != GameState.EndPhase) return;
 

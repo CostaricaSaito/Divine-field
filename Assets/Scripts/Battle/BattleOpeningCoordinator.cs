@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -27,6 +27,10 @@ public sealed class BattleOpeningCoordinator
         SummonGarudaLifecycle.GetOpeningHandTargets(
             _host.PlayerStatus, _host.EnemyStatus, out int openingPlayer, out int openingCpu);
         await RunOpeningDealAsync(openingPlayer, openingCpu);
+
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(
+            waitForAnimation: false,
+            preDelayMs: 500);
 
         _host.UpdateBattleStatusUi();
 

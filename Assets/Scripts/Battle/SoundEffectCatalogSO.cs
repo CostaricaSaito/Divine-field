@@ -19,6 +19,9 @@ public sealed class SoundEffectCatalogSO : ScriptableObject
     [Header("Prayer")]
     [SerializeField] private Entry prayer;
 
+    [Header("Yurusu (defense with no cards)")]
+    [SerializeField] private Entry yurusu;
+
     [Header("Paradise disease")]
     [SerializeField] private Entry paradiseEcstasy;
     [SerializeField] private Entry paradiseHeavenState;
@@ -35,6 +38,7 @@ public sealed class SoundEffectCatalogSO : ScriptableObject
     }
 
     public void PlayPrayer() => PlayEntry(prayer, nameof(prayer));
+    public void PlayYurusu() => PlayEntry(yurusu, nameof(yurusu));
     public void PlayParadiseEcstasy() => PlayEntry(paradiseEcstasy, nameof(paradiseEcstasy));
     public void PlayParadiseHeavenState() => PlayEntry(paradiseHeavenState, nameof(paradiseHeavenState));
 

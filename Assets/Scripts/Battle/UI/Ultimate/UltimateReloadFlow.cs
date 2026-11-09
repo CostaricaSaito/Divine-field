@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -129,33 +129,43 @@ public static class UltimateReloadFlow
         BattleUIManager.I?.SetHandClickable(false);
 
         IReadOnlyList<HandRefillService.HandReloadSlotWork> work;
+        var sortSuppress = HandSortCoordinator.PushBatchSuppress();
         try
         {
-            work = handRefill.BeginHandReloadReplaceAllFaceDown(toReplace, bm.playerHand);
+            try
+            {
+                work = handRefill.BeginHandReloadReplaceAllFaceDown(toReplace, bm.playerHand);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                _sequenceRunning = false;
+                BattleUIManager.I?.SetHandClickable(true);
+                return;
+            }
+
+            if (work == null || work.Count == 0)
+            {
+                _sequenceRunning = false;
+                BattleUIManager.I?.SetHandClickable(true);
+                return;
+            }
+
+            float fade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowHandReloadPopup(bm.GetPlayerStatus())
+                : 0f;
+
+            await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
+            await Task.Delay(HandRefillService.HandReloadAfterPopupWaitMs, ct);
+
+            await handRefill.RevealHandReloadSlotsSequentially(work, ct);
         }
-        catch (Exception e)
+        finally
         {
-            Debug.LogException(e);
-            _sequenceRunning = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            return;
+            sortSuppress.Dispose();
         }
 
-        if (work == null || work.Count == 0)
-        {
-            _sequenceRunning = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            return;
-        }
-
-        float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowHandReloadPopup(bm.GetPlayerStatus())
-            : 0f;
-
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
-        await Task.Delay(HandRefillService.HandReloadAfterPopupWaitMs, ct);
-
-        await handRefill.RevealHandReloadSlotsSequentially(work, ct);
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: true, ct);
 
         _sequenceRunning = false;
         BattleUIManager.I?.SetHandClickable(true);

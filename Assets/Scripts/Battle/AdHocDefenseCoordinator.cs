@@ -117,6 +117,8 @@ public sealed class AdHocDefenseCoordinator
     public void CompleteSubmit(List<CardData> selectedDefenseCards)
     {
         if (!IsWaitActive()) return;
+        if (selectedDefenseCards == null || selectedDefenseCards.Count == 0)
+            SoundEffectCatalogSO.Get()?.PlayYurusu();
         _session.SubmitTcs.TrySetResult(new List<CardData>(selectedDefenseCards));
     }
 

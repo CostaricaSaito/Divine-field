@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -350,36 +350,46 @@ public class HandReloadController : MonoBehaviour
         BattleUIManager.I?.SetHandClickable(false);
 
         IReadOnlyList<HandRefillService.HandReloadSlotWork> work;
+        var sortSuppress = HandSortCoordinator.PushBatchSuppress();
         try
         {
-            work = bm.HandRefill.BeginHandReloadReplaceAllFaceDown(toReplace, bm.playerHand);
+            try
+            {
+                work = bm.HandRefill.BeginHandReloadReplaceAllFaceDown(toReplace, bm.playerHand);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                _sequenceRunning = false;
+                BattleUIManager.I?.SetHandClickable(true);
+                bm.RefreshUIFromHandReloadClose();
+                return;
+            }
+
+            if (work == null || work.Count == 0)
+            {
+                _sequenceRunning = false;
+                BattleUIManager.I?.SetHandClickable(true);
+                bm.RefreshUIFromHandReloadClose();
+                return;
+            }
+
+            float fade = BattleUIManager.I != null
+                ? BattleUIManager.I.ShowHandReloadPopup(bm.GetPlayerStatus())
+                : 0f;
+
+            await DamagePopup.WaitAfterPopupLifetimeAsync(fade, CancellationToken.None);
+            await Task.Delay(HandRefillService.HandReloadAfterPopupWaitMs, CancellationToken.None);
+
+            if (bm.HandRefill != null)
+                await bm.HandRefill.RevealHandReloadSlotsSequentially(work, CancellationToken.None);
         }
-        catch (Exception e)
+        finally
         {
-            Debug.LogException(e);
-            _sequenceRunning = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            bm.RefreshUIFromHandReloadClose();
-            return;
+            sortSuppress.Dispose();
         }
 
-        if (work == null || work.Count == 0)
-        {
-            _sequenceRunning = false;
-            BattleUIManager.I?.SetHandClickable(true);
-            bm.RefreshUIFromHandReloadClose();
-            return;
-        }
-
-        float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowHandReloadPopup(bm.GetPlayerStatus())
-            : 0f;
-
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, CancellationToken.None);
-        await Task.Delay(HandRefillService.HandReloadAfterPopupWaitMs, CancellationToken.None);
-
-        if (bm.HandRefill != null)
-            await bm.HandRefill.RevealHandReloadSlotsSequentially(work, CancellationToken.None);
+        await BattleUIManager.I?.SortPlayerHandAfterRevealAsync(waitForAnimation: true, CancellationToken.None);
 
         _sequenceRunning = false;
         BattleUIManager.I?.SetHandClickable(true);

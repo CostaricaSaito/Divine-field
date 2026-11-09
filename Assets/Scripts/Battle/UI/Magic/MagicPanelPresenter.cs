@@ -1,17 +1,12 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 魔法パネル（使用中のプール表示）と、手札→魔法パネルへの飛行アニメを司るサブマネージャ。
-///
-/// 【主な責務】
-/// - <see cref="MagicPoolManager"/> のプール内容を <see cref="MagicPanelUI"/> に同期
-/// - プレイヤー魔法 CardUI がプールスロット側にあるか判定
-/// - 魔法カード選択時の「手札 → プールスロット」への飛行演出
-/// - プレイヤーが魔法パネルから選べる局面（攻撃ターン・防御側の防御／介入防御など）でパネルをインタラクティブ化
+/// 魔法パネル（使用中のプール表示）と、手札⇔MagicPanel の飛行アニメを司るサブマネージャ。
 /// </summary>
 public class MagicPanelPresenter : MonoBehaviour
 {
@@ -20,7 +15,7 @@ public class MagicPanelPresenter : MonoBehaviour
     [Tooltip("未設定なら相手プールはデータのみ（BattleManager のスナップショット）。設定時は相手のチャージ魔法を表示更新する。")]
     [SerializeField] private MagicPanelUI enemyMagicPanelUI;
 
-    [Header("魔法：手札→MagicPanel 飛行アニメ")]
+    [Header("魔法：手札⇔MagicPanel 飛行アニメ")]
     [SerializeField] private float magicHandToPanelDuration = 0.2f;
 
     public void UpdatePanel()
@@ -40,17 +35,12 @@ public class MagicPanelPresenter : MonoBehaviour
         enemyMagicPanelUI?.RefreshHitRateDisplaysOnSlots();
     }
 
-    /// <summary>相手側 MagicPool を UI に反映（<see cref="enemyMagicPanelUI"/> がある場合のみ）。</summary>
     public void UpdateEnemyPanel()
     {
         if (enemyMagicPanelUI == null || MagicPoolManager.I == null) return;
         enemyMagicPanelUI.Refresh(MagicPoolManager.I.GetPoolEntries(PlayerType.Enemy));
     }
 
-    /// <summary>
-    /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。
-    /// 手札に同種カードが残っていても、スロットに載っている参照と一致する場合のみ true（プールからの発動）。
-    /// </summary>
     public bool IsPlayerMagicCardUiOnMagicPanel(CardData card)
     {
         if (card == null || card.cardType != CardType.Magic || magicPanelUI == null) return false;
@@ -58,9 +48,6 @@ public class MagicPanelPresenter : MonoBehaviour
         return poolSlotUi != null && card.cardUI != null && ReferenceEquals(card.cardUI, poolSlotUi);
     }
 
-    /// <summary>
-    /// 敵魔法の <see cref="CardData.cardUI"/> が相手用 MagicPanel スロットの CardUI か。
-    /// </summary>
     public bool IsEnemyMagicCardUiOnMagicPanel(CardData card)
     {
         if (card == null || card.cardType != CardType.Magic || enemyMagicPanelUI == null) return false;
@@ -69,29 +56,29 @@ public class MagicPanelPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 手札の魔法カードが MagicPanel のスロットへ直線移動する演出（プール登録は呼び出し側）。
-    /// 非アクティブの Placeholder では <see cref="RectTransform.rect"/> / TransformPoint が未レイアウトのままになり
-    /// 着地点が画面外座標（例: -400,-600 付近）にずれる。まずスロットを有効化し、
-    /// ワールド 4 角の中心 + Canvas ローカル補間（<c>moveLocal</c>）で RectTransform との相性を取る。
+    /// 手札の <see cref="CardUI"/> ルート（ATK/DEF 含む）を MagicPanel スロットへ移動する。
     /// </summary>
-    public async Task PlayFlyHandToPanelAsync(CardData card, RectTransform handCardRt, int slotIndex)
+  /// <param name="restoreHandSlotAfterFly">false のとき着陸後に手札へ戻さない（EXO-DION 等で UI を破棄する経路）</param>
+    public async Task PlayFlyHandToPanelAsync(
+        CardData card,
+        int slotIndex,
+        bool restoreHandSlotAfterFly = true)
     {
-        if (card == null || handCardRt == null || magicPanelUI == null || card.cardImage == null)
+        if (card == null || card.cardUI == null || magicPanelUI == null)
         {
             await Task.CompletedTask;
             return;
         }
 
-        Canvas canvas = BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
-        if (canvas == null) canvas = handCardRt.GetComponentInParent<Canvas>();
-        if (canvas == null)
+        CardUI handUi = card.cardUI;
+        var handRt = handUi.transform as RectTransform;
+        if (handRt == null)
         {
             await Task.CompletedTask;
             return;
         }
 
-        RectTransform canvasRt = canvas.transform as RectTransform;
-        if (canvasRt == null)
+        if (!TryGetCanvasRect(out RectTransform canvasRt))
         {
             await Task.CompletedTask;
             return;
@@ -108,34 +95,133 @@ public class MagicPanelPresenter : MonoBehaviour
             return;
         }
 
-        var fly = new GameObject("MagicHandToPanelFly");
-        var flyRt = fly.AddComponent<RectTransform>();
-        flyRt.SetParent(canvasRt, false);
-        flyRt.SetAsLastSibling();
-        var img = fly.AddComponent<Image>();
-        img.sprite = card.cardImage;
-        img.preserveAspect = true;
-        img.raycastTarget = false;
-        flyRt.sizeDelta = new Vector2(handCardRt.rect.width, handCardRt.rect.height);
+        Transform handPanel = handRt.parent;
+        int savedSibling = handRt.GetSiblingIndex();
+        var handLayout = handPanel != null ? handPanel.GetComponent<LayoutGroup>() : null;
+        bool handLayoutWasOn = handLayout != null && handLayout.enabled;
 
-        Vector3 startWorld = GetRectTransformWorldCenter(handCardRt);
+        Vector3 startWorld = GetRectTransformWorldCenter(handRt);
         Vector3 endWorld = GetRectTransformWorldCenter(slotRt);
         endWorld.z = startWorld.z;
-
-        Vector3 startLocal = canvasRt.InverseTransformPoint(startWorld);
         Vector3 endLocal = canvasRt.InverseTransformPoint(endWorld);
-        endLocal.z = startLocal.z;
-        flyRt.localPosition = startLocal;
+        endLocal.z = canvasRt.InverseTransformPoint(startWorld).z;
 
-        // world 補間は Canvas 拡大率・RectTransform 駆動と干渉しやすい。親（Canvas）のローカル空間で移動する
-        LeanTween.moveLocal(fly, endLocal, magicHandToPanelDuration).setEase(LeanTweenType.easeOutCubic);
+        if (handLayout != null)
+            handLayout.enabled = false;
+
+        handRt.SetParent(canvasRt, true);
+        handRt.SetAsLastSibling();
+
+        LeanTween.cancel(handRt.gameObject);
+        LeanTween.moveLocal(handRt.gameObject, endLocal, magicHandToPanelDuration)
+            .setEase(LeanTweenType.easeOutCubic);
 
         int ms = Mathf.Max(1, Mathf.RoundToInt(magicHandToPanelDuration * 1000f));
         await Task.Delay(ms);
 
         SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す42.mp3");
 
-        if (fly != null) Destroy(fly);
+        if (restoreHandSlotAfterFly && handPanel != null)
+        {
+            handRt.SetParent(handPanel, false);
+            handRt.SetSiblingIndex(savedSibling);
+            if (handLayout != null)
+                handLayout.enabled = handLayoutWasOn;
+            if (handPanel is RectTransform handPanelRt)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(handPanelRt);
+        }
+    }
+
+    /// <summary>
+    /// 魔法パネルスロットから手札の新規カード <see cref="CardUI"/> へ飛行（裏向きのまま移動可）。
+    /// </summary>
+    public async Task PlayFlyPanelToHandAsync(int slotIndex, CardData drawn, CancellationToken ct = default)
+    {
+        if (drawn?.cardUI == null || magicPanelUI == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        var handRt = drawn.cardUI.transform as RectTransform;
+        if (handRt == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        if (!TryGetCanvasRect(out RectTransform canvasRt))
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var panelRt = magicPanelUI.transform as RectTransform;
+        if (panelRt != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(panelRt);
+
+        if (!magicPanelUI.TryGetSlotTargetRect(slotIndex, out RectTransform slotRt) || slotRt == null)
+        {
+            await Task.CompletedTask;
+            return;
+        }
+
+        Transform handPanel = handRt.parent;
+        var handLayout = handPanel != null ? handPanel.GetComponent<LayoutGroup>() : null;
+        bool handLayoutWasOn = handLayout != null && handLayout.enabled;
+        Vector2 savedAnchored = handRt.anchoredPosition;
+        int savedSibling = handRt.GetSiblingIndex();
+
+        Vector3 endWorld = GetRectTransformWorldCenter(handRt);
+        Vector3 startWorld = GetRectTransformWorldCenter(slotRt);
+        startWorld.z = endWorld.z;
+
+        Vector3 startLocal = canvasRt.InverseTransformPoint(startWorld);
+        Vector3 endLocal = canvasRt.InverseTransformPoint(endWorld);
+        endLocal.z = startLocal.z;
+
+        if (handLayout != null)
+            handLayout.enabled = false;
+
+        handRt.SetParent(canvasRt, true);
+        handRt.SetAsLastSibling();
+        handRt.localPosition = startLocal;
+
+        LeanTween.cancel(handRt.gameObject);
+        LeanTween.moveLocal(handRt.gameObject, endLocal, magicHandToPanelDuration)
+            .setEase(LeanTweenType.easeOutCubic);
+
+        int ms = Mathf.Max(1, Mathf.RoundToInt(magicHandToPanelDuration * 1000f));
+        try
+        {
+            await Task.Delay(ms, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            LeanTween.cancel(handRt.gameObject);
+            throw;
+        }
+
+        if (handPanel != null)
+        {
+            handRt.SetParent(handPanel, false);
+            handRt.SetSiblingIndex(savedSibling);
+            handRt.anchoredPosition = savedAnchored;
+            if (handLayout != null)
+                handLayout.enabled = handLayoutWasOn;
+            if (handPanel is RectTransform handPanelRt)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(handPanelRt);
+        }
+    }
+
+    private bool TryGetCanvasRect(out RectTransform canvasRt)
+    {
+        canvasRt = null;
+        Canvas canvas = BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
+        if (canvas == null) return false;
+        canvasRt = canvas.transform as RectTransform;
+        return canvasRt != null;
     }
 
     private static Vector3 GetRectTransformWorldCenter(RectTransform rt)
@@ -151,8 +237,6 @@ public class MagicPanelPresenter : MonoBehaviour
         if (magicPanelUI == null) return;
         bool handBlocked = BattleUIManager.I != null && BattleUIManager.I.IsHandInputBlocked;
         var bm = BattleManager.I;
-        // 攻撃フェーズに限らず、プレイヤーが防御側で魔法（<<アイアンクラッド>> 等）をパネルから選べるフェーズでも
-        // インタラクティブにする。Button.interactable=false だと無効カラーで絵が透明に見えるため。
         bool allowMagicPanel = bm != null && !handBlocked && !bm.IsHandReloadPopupOpen
             && (
             (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)

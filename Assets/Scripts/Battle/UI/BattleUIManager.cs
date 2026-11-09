@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,7 +94,26 @@ public class BattleUIManager : MonoBehaviour
 
         if (archMagicBarrierPresenter != null && statusUI != null)
             archMagicBarrierPresenter.BindNameAnchors(statusUI.playerNameText, statusUI.enemyNameText);
+
+        if (GetComponent<HandSortCoordinator>() == null)
+            gameObject.AddComponent<HandSortCoordinator>();
     }
+
+    public Task SortPlayerHandAfterFaceDownUseAsync(CancellationToken ct = default)
+        => HandSortCoordinator.I != null
+            ? HandSortCoordinator.I.SortAfterFaceDownUseAsync(ct)
+            : Task.CompletedTask;
+
+    public void SchedulePlayerHandSortAfterFaceDownUse()
+        => HandSortCoordinator.I?.ScheduleSortAfterFaceDownUse();
+
+    public Task SortPlayerHandAfterRevealAsync(
+        bool waitForAnimation,
+        CancellationToken ct = default,
+        int preDelayMs = 0)
+        => HandSortCoordinator.I != null
+            ? HandSortCoordinator.I.SortAfterRevealAsync(waitForAnimation, preDelayMs, ct)
+            : Task.CompletedTask;
 
     /// <summary>
     /// <see cref="SummonTurnCounterState"/> に基づき「ターンN」を表示。
@@ -694,9 +713,15 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 手札の魔法カードが MagicPanel のスロットへ直線移動する演出（プール登録は呼び出し側）
     /// </summary>
-    public Task PlayMagicFlyHandToPanelAsync(CardData card, RectTransform handCardRt, int slotIndex)
+    public Task PlayMagicFlyHandToPanelAsync(CardData card, int slotIndex, bool restoreHandSlotAfterFly = true)
         => magicPanelPresenter != null
-            ? magicPanelPresenter.PlayFlyHandToPanelAsync(card, handCardRt, slotIndex)
+            ? magicPanelPresenter.PlayFlyHandToPanelAsync(card, slotIndex, restoreHandSlotAfterFly)
+            : Task.CompletedTask;
+
+    /// <summary>魔法パネル使用後の手札ドロー：使用スロットから手札 CardUI へ飛行。</summary>
+    public Task PlayMagicFlyPanelToHandAsync(int slotIndex, CardData drawn, CancellationToken ct = default)
+        => magicPanelPresenter != null
+            ? magicPanelPresenter.PlayFlyPanelToHandAsync(slotIndex, drawn, ct)
             : Task.CompletedTask;
 
     public void RefreshMagicCardInteractivity(List<CardData> hand)
