@@ -341,6 +341,8 @@ public sealed class PlayerInputController
             return;
         }
 
+        _host.CommitPlayerAttackEffectTargetForCombat();
+
         if (_host.IsOnlineMatch)
             NetworkBattleBridge.SendAttackSelection(confirmSelection, _host.IsPlayerSelfAttackTargetMode);
 
@@ -692,10 +694,14 @@ public sealed class PlayerInputController
     {
         if (_host.PlayerStatus != null && _host.PlayerStatus.HasConfusionEffect())
             return BattleRandom.Range(0, 2) == 0 ? _host.PlayerStatus : _host.EnemyStatus;
+        var bm = BattleManager.I;
+        bool effectTargetRed = bm != null
+            ? bm.GetPlayerAttackEffectTargetToggleRedForCombat()
+            : _host.IsPlayerSelfAttackTargetMode;
         return CardRules.ResolvePlayerAttackPhaseEffectTarget(
             _host.PlayerStatus,
             _host.EnemyStatus,
-            _host.IsPlayerSelfAttackTargetMode,
+            effectTargetRed,
             card);
     }
 

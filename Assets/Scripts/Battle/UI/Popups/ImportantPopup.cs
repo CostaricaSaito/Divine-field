@@ -161,10 +161,13 @@ public class ImportantPopup : MonoBehaviour
         messageText.overflowMode = TextOverflowModes.Overflow;
         messageText.enableAutoSizing = false;
         messageText.alignment = TextAlignmentOptions.Center;
-        if (fontSize > 0.01f)
-            messageText.fontSize = fontSize;
-
-        MessagePopup.ApplySingleLineHorizontalFit(messageText, _maxTextWidthPx);
+        float fontMax = fontSize > 0.01f ? fontSize : 160f;
+        TmpOutlineMaterialHelper.ApplyBannerOutlineBeforeLayout(messageText, outlineColor);
+        MessagePopup.ApplyFixedBannerLayout(
+            messageText,
+            new Vector2(_maxTextWidthPx, MessagePopup.PanelHeightPx),
+            fontMax);
+        TmpOutlineMaterialHelper.RetuneOutlineAfterHorizontalLayout(messageText, outlineColor);
     }
 
     private void InitializeEntranceFromLayout()

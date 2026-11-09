@@ -488,15 +488,24 @@ public class CardSequenceManager : MonoBehaviour
             }
         }
         else if (cardType == "攻撃"
-            && battleManager.AttackerPublic == PlayerType.Player
-            && battleManager.IsPlayerSelfAttackTargetMode)
+            && battleManager.AttackerPublic == PlayerType.Player)
         {
-            atk = player;
-            var combatSel = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedCards);
-            CardData primaryCombat = combatSel.Count > 0 ? combatSel[0] : null;
-            def = CardRules.ResolvePlayerAttackPhaseEffectTarget(
-                player, enemy, true, primaryCombat);
-            defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
+            bool effectTargetRed = battleManager.GetPlayerAttackEffectTargetToggleRedForCombat();
+            if (effectTargetRed)
+            {
+                atk = player;
+                var combatSel = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(selectedCards);
+                CardData primaryCombat = combatSel.Count > 0 ? combatSel[0] : null;
+                def = CardRules.ResolvePlayerAttackPhaseEffectTarget(
+                    player, enemy, effectTargetRed, primaryCombat);
+                defHand = ReferenceEquals(def, player) ? battleManager.playerHand : battleManager.cpuHand;
+            }
+            else
+            {
+                atk = battleManager.AttackerPublic == PlayerType.Player ? player : enemy;
+                def = battleManager.DefenderPublic == PlayerType.Player ? player : enemy;
+                defHand = battleManager.DefenderPublic == PlayerType.Player ? battleManager.playerHand : battleManager.cpuHand;
+            }
         }
         else
         {
@@ -670,7 +679,7 @@ public class CardSequenceManager : MonoBehaviour
             PlayerStatus recoveryTarget = CardRules.ResolvePlayerAttackPhaseEffectTarget(
                 player,
                 enemy,
-                battleManager.IsPlayerSelfAttackTargetMode,
+                battleManager.GetPlayerAttackEffectTargetToggleRedForCombat(),
                 attackCards[0]);
             await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, cancellationToken);
             await battleProcessor.ResolveImmediateEffectAsync(

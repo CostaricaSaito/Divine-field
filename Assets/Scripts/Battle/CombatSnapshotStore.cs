@@ -14,6 +14,9 @@ public sealed class CombatSnapshotStore
     private List<CardData> _enemyAttackComboForCombat;
     private List<CardData> _playerAttackComboForCombat;
 
+    private bool _playerAttackEffectTargetModeRedSnapActive;
+    private bool _playerAttackEffectTargetModeRedSnap;
+
     private bool _confusionAttackTargetResolved;
     private bool _confusionAttackTargetsSelf;
 
@@ -96,7 +99,32 @@ public sealed class CombatSnapshotStore
             ? new List<CardData>(cards)
             : null;
 
-    public void ClearPlayerAttackComboForCombat() => _playerAttackComboForCombat = null;
+    public void ClearPlayerAttackComboForCombat()
+    {
+        _playerAttackComboForCombat = null;
+        ClearPlayerAttackEffectTargetModeRedSnapshot();
+    }
+
+    public void SetPlayerAttackEffectTargetModeRedSnapshot(bool red)
+    {
+        _playerAttackEffectTargetModeRedSnapActive = true;
+        _playerAttackEffectTargetModeRedSnap = red;
+    }
+
+    public bool TryGetPlayerAttackEffectTargetModeRedSnapshot(out bool red)
+    {
+        if (_playerAttackEffectTargetModeRedSnapActive)
+        {
+            red = _playerAttackEffectTargetModeRedSnap;
+            return true;
+        }
+
+        red = false;
+        return false;
+    }
+
+    public void ClearPlayerAttackEffectTargetModeRedSnapshot()
+        => _playerAttackEffectTargetModeRedSnapActive = false;
 
     /// <summary>
     /// Resolves attack cards for combat from UI selection, stored combos, and current attack card.

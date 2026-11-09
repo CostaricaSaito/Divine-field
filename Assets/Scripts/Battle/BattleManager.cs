@@ -247,8 +247,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
             return;
         }
 
-        if (cardStatsDisplay != null && cardStatsDisplay.IsPlayerAttackSelectionNumericAtkZero(cards))
-            ClearPlayerSelfAttackTargetMode();
     }
 
     /// <summary>Records near-death card consumption for the next host ResolveState sync.</summary>
@@ -1234,6 +1232,7 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
     Task<bool> IPlayerInputHost.TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(CancellationToken ct)
         => TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(ct);
     void IPlayerInputHost.ClearPlayerSelfAttackTargetMode() => ClearPlayerSelfAttackTargetMode();
+    void IPlayerInputHost.CommitPlayerAttackEffectTargetForCombat() => CommitPlayerAttackEffectTargetForCombat();
     Task IPlayerInputHost.PlayAttackConfirmPresentationAsync(CardData card, Side side, CancellationToken ct)
         => cardSequenceManager.PlayAttackConfirmPresentationAsync(card, side, ct);
     void IPlayerInputHost.SetStatsDisplaySequenceCards(List<CardData> cards, string cardType, Side ownerSide)

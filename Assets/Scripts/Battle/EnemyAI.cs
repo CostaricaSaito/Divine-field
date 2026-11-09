@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -521,9 +522,25 @@ public class EnemyAI
 
         await Task.Delay(500);
 
+        if (PrayerFlow.IsPrayOnlyAttackMode(cpuHand))
+        {
+            Debug.Log("[EnemyAI] 祈りを優先（攻撃以外の選択肢なし）");
+            await PrayerFlow.RunCpuPrayerAsync(enemyStatus, cpuHand, handRefill, CancellationToken.None);
+            LastAttackSelection = null;
+            return null;
+        }
+
         LastAttackSelection = SelectAttackCombo(cpuHand, enemyStatus, handRefill);
         if (LastAttackSelection == null || LastAttackSelection.Count == 0)
         {
+            if (PrayerFlow.IsEligibleHand(cpuHand))
+            {
+                Debug.Log("[EnemyAI] 攻撃不可のため祈り");
+                await PrayerFlow.RunCpuPrayerAsync(enemyStatus, cpuHand, handRefill, CancellationToken.None);
+                LastAttackSelection = null;
+                return null;
+            }
+
             Debug.Log("[EnemyAI] 攻撃カードが見つからないため、ターン終了");
             return null;
         }

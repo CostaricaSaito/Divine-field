@@ -87,7 +87,10 @@ public class SoundEffectPlayer : MonoBehaviour
     /// 4. エラー時は警告ログを出力
     /// </summary>
     /// <param name="addressKey">音声ファイルのアドレスキー</param>
-    public void Play(string addressKey)
+    public void Play(string addressKey) => Play(addressKey, 1f);
+
+    /// <param name="volumeMultiplier">SE 個別の倍率（設定 SE 音量に乗算）。</param>
+    public void Play(string addressKey, float volumeMultiplier)
     {
         if (string.IsNullOrEmpty(addressKey))
         {
@@ -95,10 +98,12 @@ public class SoundEffectPlayer : MonoBehaviour
             return;
         }
 
+        float oneShotVolume = _oneShotVolumeScale * Mathf.Max(0f, volumeMultiplier);
+
         // キャッシュから検索
         if (clipCache.TryGetValue(addressKey, out AudioClip cachedClip))
         {
-            seSource.PlayOneShot(cachedClip, _oneShotVolumeScale);
+            seSource.PlayOneShot(cachedClip, oneShotVolume);
             return;
         }
 
@@ -116,7 +121,7 @@ public class SoundEffectPlayer : MonoBehaviour
                     if (clip != null)
                     {
                         clipCache[addressKey] = clip;
-                        seSource.PlayOneShot(clip, _oneShotVolumeScale);
+                        seSource.PlayOneShot(clip, oneShotVolume);
                     }
                     else
                     {
@@ -136,14 +141,18 @@ public class SoundEffectPlayer : MonoBehaviour
     }
 
     /// <summary>Inspector などで参照した <see cref="AudioClip"/> をそのまま再生（ワンショット）。</summary>
-    public void Play(AudioClip clip)
+    public void Play(AudioClip clip) => Play(clip, 1f);
+
+    /// <param name="volumeMultiplier">SE 個別の倍率（設定 SE 音量に乗算）。</param>
+    public void Play(AudioClip clip, float volumeMultiplier)
     {
         if (clip == null)
         {
             Debug.LogWarning("[SoundEffectPlayer] AudioClip が null です");
             return;
         }
-        seSource.PlayOneShot(clip, _oneShotVolumeScale);
+        float oneShotVolume = _oneShotVolumeScale * Mathf.Max(0f, volumeMultiplier);
+        seSource.PlayOneShot(clip, oneShotVolume);
     }
 
     /// <summary>ループ用 SE。事前に <see cref="StartLoopingAsync"/> するか、キャッシュ済みキー用。</summary>

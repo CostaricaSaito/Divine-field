@@ -231,13 +231,6 @@ public class DamagePopup : MonoBehaviour
         if (t != null)
             t.richText = false;
         ShowMessageLayout(text, entry.textColor, entry.outlineColor);
-        if (t != null)
-        {
-            if (t.fontSharedMaterial == null && t.font != null)
-                t.fontSharedMaterial = t.font.material;
-            float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.22f;
-            ApplyOutlinedMaterialInstance(t, entry.outlineColor, ow);
-        }
     }
 
     /// <summary>数値ダメージ用：DamageValue を表示し Message は隠す（ラベルは呼び出し側で「ダメージ」時に表示）。</summary>
@@ -278,28 +271,10 @@ public class DamagePopup : MonoBehaviour
         target.margin = Vector4.zero;
         ApplyFillAndOutline(target, fill, outlineColor);
 
-        float fontSize = messageFontSizeMax;
-        target.fontSize = fontSize;
-
-        float maxH = messageBannerExtents.y * 0.98f;
-        Vector2 measured = target.GetPreferredValues(text, fontSize, 0f);
-        if (measured.y > maxH && measured.y > 0.001f)
-        {
-            fontSize *= maxH / measured.y;
-            target.fontSize = fontSize;
-        }
-
-        var rt = target.rectTransform;
-        rt.sizeDelta = messageBannerExtents;
-        rt.localRotation = Quaternion.identity;
-        rt.localScale = Vector3.one;
-
-        target.ForceMeshUpdate(true);
-
-        float maxW = messageBannerExtents.x * messageBannerWidthFill;
-        float prefW = target.preferredWidth;
-        if (prefW > 0.001f && prefW > maxW)
-            rt.localScale = new Vector3(maxW / prefW, 1f, 1f);
+        TmpOutlineMaterialHelper.ApplyBannerOutlineBeforeLayout(target, outlineColor);
+        MessagePopup.ApplyFixedBannerLayout(
+            target, messageBannerExtents, messageFontSizeMax, messageBannerWidthFill);
+        TmpOutlineMaterialHelper.RetuneOutlineAfterHorizontalLayout(target, outlineColor);
     }
 
     private void Start()
@@ -449,11 +424,8 @@ public class DamagePopup : MonoBehaviour
         if (t == null) return;
 
         t.richText = false;
+        t.outlineWidth = 0.28f;
         ApplyFixedBannerMessageLayout(t, text, fill, outline);
-        if (t.font != null)
-            t.fontSharedMaterial = t.font.material;
-        float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.28f;
-        ApplyOutlinedMaterialInstance(t, outline, ow);
     }
 
     private void ApplyReflectionRainbowBackground()
@@ -475,13 +447,7 @@ public class DamagePopup : MonoBehaviour
         ShowMessageLayout(text, entry.textColor, entry.outlineColor);
         var t = messageText != null ? messageText : valueText;
         if (t != null)
-        {
             t.richText = false;
-            if (t.fontSharedMaterial == null && t.font != null)
-                t.fontSharedMaterial = t.font.material;
-            float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.22f;
-            ApplyOutlinedMaterialInstance(t, entry.outlineColor, ow);
-        }
     }
 
     private void SetupRainbowMessage(string message, Color outlineColor)
@@ -505,7 +471,7 @@ public class DamagePopup : MonoBehaviour
         target.alignment = TextAlignmentOptions.Center;
         target.fontStyle = FontStyles.Bold;
         float ow = target.outlineWidth >= 0.08f ? target.outlineWidth : 0.22f;
-        ApplyOutlinedMaterialInstance(target, outlineColor, ow);
+        TmpOutlineMaterialHelper.ApplyOutlinedMaterialInstance(target, outlineColor, ow);
     }
 
     /// <summary>物理無効など：黒背景・灰色字・白縁の「護身」。</summary>
@@ -528,32 +494,6 @@ public class DamagePopup : MonoBehaviour
             t.richText = false;
 
         ShowMessageLayout(text, entry.textColor, entry.outlineColor);
-        if (t != null)
-        {
-            if (t.fontSharedMaterial == null && t.font != null)
-                t.fontSharedMaterial = t.font.material;
-            float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.22f;
-            ApplyOutlinedMaterialInstance(t, entry.outlineColor, ow);
-        }
-    }
-
-    /// <summary>
-    /// SDF で <see cref="TMP_Text.outlineColor"/> だけでは縁が白のままになることがあるため、
-    /// マテリアルに <see cref="ShaderUtilities"/> でアウトラインを書く（文字の塗りは <see cref="TMP_Text.color"/>／リッチテキストに任せる）。
-    /// </summary>
-    private static void ApplyOutlinedMaterialInstance(TMP_Text t, Color outlineColor, float outlineWidth)
-    {
-        if (t == null || t.fontSharedMaterial == null) return;
-
-        var mat = Instantiate(t.fontSharedMaterial);
-        t.fontMaterial = mat;
-        if (mat.HasProperty(ShaderUtilities.ID_OutlineColor))
-            mat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
-        if (mat.HasProperty(ShaderUtilities.ID_OutlineWidth))
-            mat.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
-
-        t.outlineWidth = outlineWidth;
-        t.outlineColor = outlineColor;
     }
 
     private static string BuildRainbowRichText(string s)

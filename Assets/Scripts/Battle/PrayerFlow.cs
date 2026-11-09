@@ -16,6 +16,18 @@ public static class PrayerFlow
     public static bool IsEligibleHand(IReadOnlyList<CardData> hand) =>
         !CardRules.HasAttackTypeCardInHand(hand);
 
+    /// <summary>プレイヤー UI の「祈り専用」モードと同じ（攻撃カード以外の選択肢も無い）。</summary>
+    public static bool IsPrayOnlyAttackMode(IReadOnlyList<CardData> hand)
+    {
+        if (!IsEligibleHand(hand)) return false;
+        var choices = hand is List<CardData> list
+            ? CardRules.GetAttackChoices(list)
+            : CardRules.GetAttackChoices(new List<CardData>(hand));
+        return choices == null || choices.Count == 0;
+    }
+
+    public static void PlayPrayerSe() => SoundEffectCatalogSO.Get()?.PlayPrayer();
+
     /// <summary>攻撃フェーズ開始時の手札 UI（魔法のみ残る場合は選択可、それ以外は祈り専用 UI）。</summary>
     public static void RefreshPlayerAttackPhaseHandUi(List<CardData> playerHand, bool shouldGrayOutCards)
     {
@@ -44,12 +56,18 @@ public static class PrayerFlow
     {
         if (host?.PlayerStatus == null || host.HandRefill == null) return;
 
-        float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowMessagePopupForTarget(host.PlayerStatus, Message, MessageColor)
-            : 0f;
-        await DamagePopup.WaitAfterPopupLifetimeAsync(fade, cancellationToken);
-
+        await PresentPrayerPopupAsync(host.PlayerStatus, cancellationToken);
         await host.DrawOneCardAsync(trailingDelayMs: 200, playSoundOnDraw: true);
+    }
+
+    /// <summary>CPU：条件を満たすとき攻撃の代わりに祈り（1枚ドロー）してターン終了。</summary>
+    public static async Task RunCpuPrayerAsync(
+        PlayerStatus enemyStatus,
+        List<CardData> cpuHand,
+        HandRefillService handRefill,
+        CancellationToken cancellationToken)
+    {
+        await RunOwnerPrayerDrawDataOnlyAsync(enemyStatus, cpuHand, handRefill, cancellationToken);
     }
 
     /// <summary>
@@ -62,12 +80,27 @@ public static class PrayerFlow
         HandRefillService handRefill,
         CancellationToken cancellationToken)
     {
-        if (prayingOwner == null || ownerHand == null || handRefill == null) return;
+        await RunOwnerPrayerDrawDataOnlyAsync(prayingOwner, ownerHand, handRefill, cancellationToken);
+    }
 
+    private static async Task PresentPrayerPopupAsync(PlayerStatus owner, CancellationToken cancellationToken)
+    {
+        PlayPrayerSe();
         float fade = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowMessagePopupForTarget(prayingOwner, Message, MessageColor)
+            ? BattleUIManager.I.ShowMessagePopupForTarget(owner, Message, MessageColor)
             : 0f;
         await DamagePopup.WaitAfterPopupLifetimeAsync(fade, cancellationToken);
+    }
+
+    private static async Task RunOwnerPrayerDrawDataOnlyAsync(
+        PlayerStatus owner,
+        List<CardData> ownerHand,
+        HandRefillService handRefill,
+        CancellationToken cancellationToken)
+    {
+        if (owner == null || ownerHand == null || handRefill == null) return;
+
+        await PresentPrayerPopupAsync(owner, cancellationToken);
 
         var drawn = handRefill.DrawCardDataOnly(ownerHand, PlayerType.Enemy);
         if (drawn != null)

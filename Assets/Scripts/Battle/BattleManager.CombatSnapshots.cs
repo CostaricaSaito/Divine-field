@@ -15,10 +15,24 @@ public partial class BattleManager
     public void ClearOnlineEnemyAttackCombo() => _combatSnapshots.ClearOnlineEnemyAttackCombo();
 
     public void SetPlayerAttackComboForCombat(List<CardData> cards)
-        => _combatSnapshots.SetPlayerAttackComboForCombat(cards);
+    {
+        _combatSnapshots.SetPlayerAttackComboForCombat(cards);
+        _combatSnapshots.SetPlayerAttackEffectTargetModeRedSnapshot(_playerSelfAttackTargetMode);
+    }
 
     public void ClearPlayerAttackComboForCombat()
         => _combatSnapshots.ClearPlayerAttackComboForCombat();
+
+    /// <summary>Use 確定時点の TOTAL 赤トグル（攻撃演出中も有効）。</summary>
+    public void CommitPlayerAttackEffectTargetForCombat()
+        => _combatSnapshots.SetPlayerAttackEffectTargetModeRedSnapshot(_playerSelfAttackTargetMode);
+
+    public bool GetPlayerAttackEffectTargetToggleRedForCombat()
+    {
+        if (_combatSnapshots.TryGetPlayerAttackEffectTargetModeRedSnapshot(out bool red))
+            return red;
+        return _playerSelfAttackTargetMode;
+    }
 
     public void SetConfusionAttackTargetResolvedForDisplay(bool targetsSelf)
         => _combatSnapshots.SetConfusionAttackTargetResolvedForDisplay(targetsSelf);

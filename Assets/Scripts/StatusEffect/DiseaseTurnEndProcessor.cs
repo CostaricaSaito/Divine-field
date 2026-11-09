@@ -233,6 +233,7 @@ public static class DiseaseTurnEndProcessor
         if (showPurgatoryToParadiseProgressionIntro)
             await RunDiseaseNaturalProgressIntroAsync(attacker, ui, MessagePopupKind.DiseasePoisonFlipped, ct);
 
+        SoundEffectCatalogSO.Get()?.PlayParadiseHeavenState();
         float heavenMsgFade = ui.ShowStyledMessagePopup(attacker, MessagePopupKind.ParadiseHeavenState);
         await MessagePopup.WaitAfterPopupLifetimeAsync(heavenMsgFade, ct);
 
@@ -258,6 +259,7 @@ public static class DiseaseTurnEndProcessor
         await Task.Delay(s.paradiseEcstasyShatterDelayMs, ct);
         await ShatterPlaceholderAsync(s.paradiseEcstasyShatterDurationMs, ct);
 
+        SoundEffectCatalogSO.Get()?.PlayParadiseEcstasy();
         float ecstasyMsgFade = ui.ShowMessagePopupForTarget(attacker, "絶頂", new Color(0.9f, 0.1f, 0.1f));
         await DamagePopup.WaitAfterPopupLifetimeAsync(ecstasyMsgFade, ct);
 

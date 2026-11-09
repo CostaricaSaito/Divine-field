@@ -22,6 +22,11 @@ public sealed class MessagePopup : MonoBehaviour
     [SerializeField] private float floatSpeed = 30f;
     [SerializeField] private float fadeDuration = 1f;
 
+    [Header("Message banner layout")]
+    [SerializeField] private Vector2 messageBannerExtents = new Vector2(MaxTextWidthPx, PanelHeightPx);
+    [SerializeField] [Range(40f, 200f)] private float messageFontSizeMax = 160f;
+    [SerializeField] [Range(0.7f, 1f)] private float messageBannerWidthFill = 0.94f;
+
     private MessagePopupSettings _boundSettings;
     private CanvasGroup _canvasGroup;
     private float _timer;
@@ -140,27 +145,66 @@ public sealed class MessagePopup : MonoBehaviour
         messageText.text = StripLineBreaks(message);
         messageText.fontStyle = FontStyles.Bold;
         messageText.color = textColor;
-        messageText.outlineWidth = Mathf.Max(messageText.outlineWidth, 0.22f);
+        messageText.outlineWidth = TmpOutlineMaterialHelper.DefaultBannerOutlineWidth;
         messageText.outlineColor = outlineColor;
         messageText.enableWordWrapping = false;
         messageText.overflowMode = TextOverflowModes.Overflow;
         messageText.enableAutoSizing = false;
         messageText.alignment = TextAlignmentOptions.Center;
+        messageText.margin = Vector4.zero;
 
-        ApplySingleLineHorizontalFit(messageText, MaxTextWidthPx);
+        TmpOutlineMaterialHelper.ApplyBannerOutlineBeforeLayout(messageText, outlineColor);
+        ApplyFixedBannerLayout(messageText, messageBannerExtents, messageFontSizeMax, messageBannerWidthFill);
+        TmpOutlineMaterialHelper.RetuneOutlineAfterHorizontalLayout(messageText, outlineColor);
     }
 
+    /// <summary>
+    /// Fixed banner rect: keep vertical size at <paramref name="fontSizeMax"/>; squeeze width via <see cref="RectTransform.localScale"/> X only.
+    /// </summary>
+    public static void ApplyFixedBannerLayout(
+        TMP_Text target,
+        Vector2 bannerExtents,
+        float fontSizeMax,
+        float widthFill = 0.94f)
+    {
+        if (target == null) return;
+
+        string text = target.text ?? string.Empty;
+        target.enableWordWrapping = false;
+        target.overflowMode = TextOverflowModes.Overflow;
+        target.enableAutoSizing = false;
+        target.alignment = TextAlignmentOptions.Center;
+        target.margin = Vector4.zero;
+
+        float fontSize = fontSizeMax;
+        target.fontSize = fontSize;
+
+        float maxH = bannerExtents.y * 0.98f;
+        Vector2 measured = target.GetPreferredValues(text, fontSize, 0f);
+        if (measured.y > maxH && measured.y > 0.001f)
+        {
+            fontSize *= maxH / measured.y;
+            target.fontSize = fontSize;
+        }
+
+        var rt = target.rectTransform;
+        rt.sizeDelta = bannerExtents;
+        rt.localRotation = Quaternion.identity;
+        rt.localScale = Vector3.one;
+
+        target.ForceMeshUpdate(true);
+
+        float maxW = bannerExtents.x * widthFill;
+        float prefW = target.preferredWidth;
+        if (prefW > 0.001f && prefW > maxW)
+            rt.localScale = new Vector3(maxW / prefW, 1f, 1f);
+    }
+
+    /// <summary>Legacy width-only helper; uses <see cref="PanelHeightPx"/> and font size 160.</summary>
     public static void ApplySingleLineHorizontalFit(TMP_Text text, float maxWidthPx)
     {
         if (text == null) return;
-
-        var rt = text.rectTransform;
-        rt.localScale = Vector3.one;
-        text.ForceMeshUpdate();
-
-        float preferred = text.preferredWidth;
-        if (preferred > maxWidthPx && preferred > 0.01f)
-            rt.localScale = new Vector3(maxWidthPx / preferred, 1f, 1f);
+        ApplyFixedBannerLayout(text, new Vector2(maxWidthPx, PanelHeightPx), 160f);
     }
 
     public Task BeginDiseaseWorsenPhase1AndGetTask(MessagePopupStyleEntry entry, float phase1FloatSeconds)

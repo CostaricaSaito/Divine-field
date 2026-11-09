@@ -27,7 +27,7 @@ RectTransform:
   m_GameObject: {fileID: 3556543056165794173}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.36, y: 1, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7691540123798902395}
@@ -211,7 +211,7 @@ MonoBehaviour:
   m_FillClockwise: 1
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 0.2
+  m_PixelsPerUnitMultiplier: 0.3
 --- !u!225 &2253938911
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -240,3 +240,6 @@ MonoBehaviour:
   backgroundImage: {fileID: 8643409831082905273}
   floatSpeed: 30
   fadeDuration: 1
+  messageBannerExtents: {x: 450, y: 200}
+  messageFontSizeMax: 160
+  messageBannerWidthFill: 0.94

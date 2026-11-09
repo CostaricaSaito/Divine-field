@@ -46,6 +46,7 @@ public interface IPlayerInputHost
     Task<bool> TryPreparePlayerDualBladeSecondDefenseIfNeededAsync(CancellationToken ct);
 
     void ClearPlayerSelfAttackTargetMode();
+    void CommitPlayerAttackEffectTargetForCombat();
 
     Task PlayAttackConfirmPresentationAsync(CardData card, Side side, CancellationToken ct);
     void SetStatsDisplaySequenceCards(List<CardData> cards, string cardType, Side ownerSide);
