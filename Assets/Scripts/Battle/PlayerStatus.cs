@@ -252,6 +252,16 @@ public class PlayerStatus
     /// </summary>
     public int ApplyOutgoingDamageModifiers(int amount)
     {
+        if (HasKannadukiEffect())
+        {
+            foreach (var effect in activeEffects)
+            {
+                if (effect != null && effect.EffectType == StatusEffectType.Kannaduki)
+                    return effect.ModifyOutgoingDamage(amount);
+            }
+            return amount;
+        }
+
         int m = amount;
         foreach (var effect in activeEffects)
         {
@@ -334,6 +344,14 @@ public class PlayerStatus
     {
         foreach (var e in activeEffects)
             if (e != null && e.EffectType == StatusEffectType.Kannaduki) return true;
+        return false;
+    }
+
+    /// <summary>衰弱が付与されているか（神無月と同時には適用されない）。</summary>
+    public bool HasWeakenEffect()
+    {
+        foreach (var e in activeEffects)
+            if (e != null && e.EffectType == StatusEffectType.Weaken) return true;
         return false;
     }
 

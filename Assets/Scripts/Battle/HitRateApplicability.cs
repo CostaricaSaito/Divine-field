@@ -94,6 +94,8 @@ public static class HitRateApplicability
         if (ReflectionRules.IsReflectionCard(card)) return false;
         if (ParryRules.IsParryCard(card)) return false;
         if (BlockingRules.IsPhysicalBlockingCard(card)) return false;
+        if (LightningRodRules.CanNullifyIncoming(card, bm.GetIncomingAttackSnapshotForDefenseUi()))
+            return false;
         if (CardRules.IsPrimaryDefenseCard(card)) return false;
         if (CardRules.IsUsableInDefensePhase(card) && CardRules.IsUsableInAttackPhase(card))
             return false;

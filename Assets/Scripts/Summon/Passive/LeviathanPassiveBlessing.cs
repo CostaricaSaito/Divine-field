@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 水の召喚獣リヴァイアサンの加護：相手の合計攻撃力を -1、合算攻撃属性が無属性以外ならさらに -1（防御・ダメージ計算の前段）。
+/// 水の召喚獣リヴァイアサンの加護：相手の合計攻撃力を -1、属性攻撃なら -3（防御・ダメージ計算の前段）。
 /// 状態異常ターン処理などカード戦闘外は <see cref="BattleProcessor"/> の攻撃力計算を経由しない。
 /// </summary>
 [Serializable]
@@ -23,9 +23,7 @@ public sealed class LeviathanPassiveBlessing : SummonPassiveBlessing
         if (defender == null || attacker == null) return attackPowerAfterAttackerSideModifiers;
         if (ReferenceEquals(attacker, defender)) return attackPowerAfterAttackerSideModifiers;
 
-        int reduction = 1;
-        if (combinedAttackElement != ElementType.None)
-            reduction += 1;
+        int reduction = combinedAttackElement != ElementType.None ? 3 : 1;
 
         return Mathf.Max(0, attackPowerAfterAttackerSideModifiers - reduction);
     }

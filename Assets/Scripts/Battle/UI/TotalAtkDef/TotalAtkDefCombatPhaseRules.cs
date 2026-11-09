@@ -36,7 +36,6 @@ public static class TotalAtkDefCombatPhaseRules
         if (bm == null || bm.CurrentState == GameState.EndPhase) return false;
         if (IsPostDeathChainCombatTotalActive(bm)) return false;
         if (!HasConfirmedOutgoingAttackCards(bm)) return false;
-        if (bm.IsReflectionAttackTotalDisplayActive()) return true;
 
         switch (bm.CurrentState)
         {

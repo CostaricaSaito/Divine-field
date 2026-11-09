@@ -152,19 +152,13 @@ public partial class BattleManager
         UpdateTotalATKDEFDisplay();
     }
 
-    public void SetReflectionAttackTotalDisplayAfterSlide(
-        List<CardData> attackCards,
-        bool totalAtkOnPlayerSide,
-        PlayerStatus reflectionBlessingsAttacker,
-        PlayerStatus reflectionBlessingsDefender,
-        int? displayStrengthOverride = null)
+    /// <summary>
+    /// Reflection / parry / orb counter TOTAL: ATK shown only on <paramref name="onPlayerSide"/> panel
+    /// (the panel holding the attack sheets). Call again after every slide.
+    /// </summary>
+    public void SetReflectionAttackTotalDisplay(List<CardData> attackCards, bool onPlayerSide, int attackPower)
     {
-        _combatSnapshots.SetReflectionAttackTotalDisplayAfterSlide(
-            attackCards,
-            totalAtkOnPlayerSide,
-            reflectionBlessingsAttacker,
-            reflectionBlessingsDefender,
-            displayStrengthOverride);
+        _combatSnapshots.SetReflectionAttackTotalDisplay(attackCards, onPlayerSide, attackPower);
         UpdateTotalATKDEFDisplay();
     }
 
@@ -174,26 +168,19 @@ public partial class BattleManager
         UpdateTotalATKDEFDisplay();
     }
 
-    public int? GetReflectionAttackDisplayStrengthOverride()
-        => _combatSnapshots.GetReflectionAttackDisplayStrengthOverride();
-
     public bool IsSuppressingEnemyStaleAttackerInTotalByOrb()
         => _combatSnapshots.IsSuppressingEnemyStaleAttackerInTotalByOrb();
 
     public void SetSuppressEnemyStaleAttackerInTotalByOrb(bool v)
         => _combatSnapshots.SetSuppressEnemyStaleAttackerInTotalByOrb(v);
 
-    public PlayerStatus GetReflectionAttackBlessingAttacker()
-        => _combatSnapshots.GetReflectionAttackBlessingAttacker();
-
-    public PlayerStatus GetReflectionAttackBlessingDefender()
-        => _combatSnapshots.GetReflectionAttackBlessingDefender();
-
     public bool IsReflectionAttackTotalDisplayActive()
         => _combatSnapshots.IsReflectionAttackTotalDisplayActive();
 
     public bool ReflectionAttackTotalOnPlayerSide
         => _combatSnapshots.ReflectionAttackTotalOnPlayerSide;
+
+    public int ReflectionAttackPower => _combatSnapshots.ReflectionAttackPower;
 
     public List<CardData> GetReflectionAttackCardsForTotalDisplay()
         => _combatSnapshots.GetReflectionAttackCardsForTotalDisplay();

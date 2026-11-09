@@ -219,6 +219,12 @@ public static class CardRules
                 defenseChoices.Add(c);
         }
 
+        foreach (var c in hand)
+        {
+            if (c != null && LightningRodRules.CanNullifyIncoming(c, incomingAttack) && !defenseChoices.Contains(c))
+                defenseChoices.Add(c);
+        }
+
         if (incomingAttack != null && ShiningBarrierRules.CanUseAgainstIncoming(incomingAttack))
         {
             foreach (var c in hand)
@@ -509,12 +515,15 @@ public static class CardRules
 
     /// <summary>
     /// 魔法単体攻撃に相当する分類（魔法コンボ、または単独の Ultimate Skill カード）。反射・衰弱除外などに使用。
+    /// 無料詠唱触媒は <see cref="FreeMagicCastRules.ExcludeCatalystsFromCombatStats"/> で除いてから判定する。
     /// </summary>
     public static bool IsMagicClassifiedAttackCombo(IReadOnlyList<CardData> cards)
     {
         if (cards == null || cards.Count == 0) return false;
-        if (IsMagicOnlyAttackCombo(cards)) return true;
-        return cards.Count == 1 && cards[0] != null && cards[0].cardType == CardType.Ultimate;
+        var combatCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(cards);
+        if (combatCards.Count == 0) return false;
+        if (IsMagicOnlyAttackCombo(combatCards)) return true;
+        return combatCards.Count == 1 && combatCards[0] != null && combatCards[0].cardType == CardType.Ultimate;
     }
 
     /// <summary>

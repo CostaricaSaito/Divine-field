@@ -89,147 +89,62 @@ public static class DeadlyChainFlow
     {
         bool attackerIsPlayer = ReferenceEquals(attacker, battleManager.GetPlayerStatus());
 
-        while (true)
+        List<CardData> defenseCards = await SelectDefenseAsync(
+            attackCards, defender, attackerIsPlayer, battleManager, enemyAI, cancellationToken)
+            ?? new List<CardData>();
+        CardData primaryDef = defenseCards.Count > 0 ? defenseCards[0] : null;
+        var reactiveKind = ReactiveDefenseRules.Classify(defenseCards, attackCards);
+
+        if (ReactiveDefenseRules.StartsChain(reactiveKind))
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            await ReactiveDefenseChain.RunAsync(
+                battleManager,
+                attackCards,
+                attackerIsPlayer ? PlayerType.Player : PlayerType.Enemy,
+                ReactiveDefenseResponse.FromPicks(defenseCards, alreadyConsumed: false),
+                cancellationToken,
+                (chainAttack, chainDefense, chainAttacker, chainDefender, chainDefHand, ct) =>
+                    battleProcessor.ResolvePostDeathDeadlyChainCombatAsync(
+                        chainAttack, chainDefense ?? new List<CardData>(), chainAttacker, chainDefender,
+                        chainDefHand, effect, ct));
+            return;
+        }
 
-            List<CardData> defenseCards = await SelectDefenseAsync(
-                attackCards, defender, attackerIsPlayer, battleManager, enemyAI, cancellationToken);
-
-            CardData primaryDef = defenseCards != null && defenseCards.Count > 0 ? defenseCards[0] : null;
-
-            bool physicalReflect = primaryDef != null
-                && ReflectionRules.CanReflectIncoming(primaryDef, attackCards)
-                && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
-            bool magicReflect = physicalReflect;
-            bool immediateReflect = primaryDef != null
-                && ReflectionRules.CanReflectIncoming(primaryDef, attackCards)
-                && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
-            bool physicalBlock = primaryDef != null
-                && BlockingRules.CanUsePhysicalBlockingAgainstAttack(primaryDef, attackCards);
-            bool parry = primaryDef != null
-                && ParryRules.RequiresParryExclusiveLock(primaryDef, attackCards);
-
-            if (immediateReflect)
+        if (reactiveKind == ReactiveDefenseKind.Nullify)
+        {
+            if (attackerIsPlayer)
             {
-                if (attackerIsPlayer)
-                {
-                    await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
-                        battleManager, battleProcessor, handRefill,
-                        attackCards, primaryDef, attacker, cancellationToken);
-                }
-                else
-                {
-                    await ImmediateEffectReflectionFlow.RunPlayerInitiatedAsync(
-                        battleManager, battleProcessor, handRefill,
-                        attackCards, primaryDef, attacker, defender, cancellationToken);
-                }
-                attacker = ReferenceEquals(attacker, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                defender = ReferenceEquals(defender, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                attackerIsPlayer = ReferenceEquals(attacker, battleManager.GetPlayerStatus());
-                continue;
-            }
-
-            if (physicalReflect || magicReflect)
-            {
-                if (attackerIsPlayer)
-                {
-                    await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
-                        battleManager, battleProcessor, handRefill, enemyAI,
-                        attackCards, primaryDef, cancellationToken);
-                }
-                else
-                {
-                    await PhysicalReflectionFlow.RunPlayerInitiatedAsync(
-                        battleManager, battleProcessor, handRefill, enemyAI,
-                        attackCards, primaryDef, cancellationToken);
-                }
-                attacker = ReferenceEquals(attacker, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                defender = ReferenceEquals(defender, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                attackerIsPlayer = ReferenceEquals(attacker, battleManager.GetPlayerStatus());
-                continue;
-            }
-
-            if (parry)
-            {
-                if (attackerIsPlayer)
-                {
-                    await ParryFlow.RunEnemyDefenderParriesPlayerAttackAsync(
-                        battleManager, battleProcessor, handRefill, enemyAI,
-                        attackCards, primaryDef, cancellationToken);
-                }
-                else
-                {
-                    bool skipTail = await ParryFlow.RunPlayerInitiatedAsync(
-                        battleManager, battleProcessor, handRefill, enemyAI,
-                        attackCards, primaryDef, battleManager.Sequences,
-                        cancellationToken);
-                    if (skipTail) return;
-                }
-                attacker = ReferenceEquals(attacker, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                defender = ReferenceEquals(defender, battleManager.GetPlayerStatus())
-                    ? battleManager.GetEnemyStatus()
-                    : battleManager.GetPlayerStatus();
-                attackerIsPlayer = ReferenceEquals(attacker, battleManager.GetPlayerStatus());
-                continue;
-            }
-
-            if (physicalBlock)
-            {
-                if (attackerIsPlayer)
-                {
-                    await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
-                        battleManager, battleProcessor, handRefill,
-                        attackCards, primaryDef, cancellationToken);
-                }
-                else
-                {
-                    await BlockingNullifyFlow.RunPlayerInitiatedAsync(
-                        battleManager, attackCards, primaryDef, cancellationToken);
-                }
-                return;
-            }
-
-            var defHand = attackerIsPlayer ? battleManager.cpuHand : battleManager.playerHand;
-            if (defenseCards != null && defenseCards.Count > 1)
-            {
-                await battleProcessor.ResolvePostDeathDeadlyChainCombatAsync(
-                    attackCards, defenseCards, attacker, defender, defHand, effect, cancellationToken);
+                await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                    battleManager, battleProcessor, handRefill,
+                    attackCards, primaryDef, cancellationToken);
             }
             else
             {
-                await battleProcessor.ResolvePostDeathDeadlyChainCombatAsync(
-                    attackCards, primaryDef, attacker, defender, defHand, effect, cancellationToken);
+                await BlockingNullifyFlow.RunPlayerInitiatedAsync(
+                    battleManager, attackCards, primaryDef, cancellationToken);
             }
-
-            foreach (var defCard in defenseCards ?? new List<CardData>())
-            {
-                if (defCard == null) continue;
-                if (battleManager.IsOnlineMatch && defCard.cardType == CardType.Magic) continue;
-                if (attackerIsPlayer)
-                {
-                    handRefill?.RecordEnemyUse(defCard);
-                    battleProcessor.UseCard(defCard, battleManager.cpuHand);
-                }
-                else
-                {
-                    int slot = defCard.cardUI != null ? defCard.cardUI.transform.GetSiblingIndex() : -1;
-                    if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
-                    battleProcessor.UseCard(defCard, battleManager.playerHand);
-                }
-            }
-
             return;
+        }
+
+        var defHand = attackerIsPlayer ? battleManager.cpuHand : battleManager.playerHand;
+        await battleProcessor.ResolvePostDeathDeadlyChainCombatAsync(
+            attackCards, defenseCards, attacker, defender, defHand, effect, cancellationToken);
+
+        foreach (var defCard in defenseCards)
+        {
+            if (defCard == null) continue;
+            if (battleManager.IsOnlineMatch && defCard.cardType == CardType.Magic) continue;
+            if (attackerIsPlayer)
+            {
+                handRefill?.RecordEnemyUse(defCard);
+                battleProcessor.UseCard(defCard, battleManager.cpuHand);
+            }
+            else
+            {
+                int slot = defCard.cardUI != null ? defCard.cardUI.transform.GetSiblingIndex() : -1;
+                if (slot >= 0) handRefill?.RecordPlayerUseSlot(slot);
+                battleProcessor.UseCard(defCard, battleManager.playerHand);
+            }
         }
     }
 

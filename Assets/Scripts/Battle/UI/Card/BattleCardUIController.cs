@@ -610,38 +610,19 @@ public class BattleCardUIController : MonoBehaviour
     /// <summary>
     /// 反射で表示中の攻撃カードシートを、パネル間で横スライド（線形・既定500ms）する。
     /// </summary>
-    public Task SlideReflectionAttackSheetsAsync(
+    public async Task SlideReflectionAttackSheetsAsync(
         List<CardData> attackCards,
         bool slideTowardPlayer,
         float durationSec,
         CancellationToken cancellationToken = default)
     {
         if (attackCards == null || attackCards.Count == 0 || cardLayoutManager == null)
-            return Task.CompletedTask;
+            return;
 
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        StartCoroutine(CoSlideReflectionAttackSheets(attackCards, slideTowardPlayer, durationSec, cancellationToken, () =>
-        {
-            if (!tcs.Task.IsCompleted)
-                tcs.TrySetResult(true);
-        }));
-        return tcs.Task;
-    }
-
-    private IEnumerator CoSlideReflectionAttackSheets(
-        List<CardData> attackCards,
-        bool slideTowardPlayer,
-        float durationSec,
-        CancellationToken cancellationToken,
-        System.Action onComplete)
-    {
         Transform sourcePanel = slideTowardPlayer ? enemyCardDisplayPanel : playerCardDisplayPanel;
         Transform targetPanel = slideTowardPlayer ? playerCardDisplayPanel : enemyCardDisplayPanel;
         if (sourcePanel == null || targetPanel == null)
-        {
-            onComplete?.Invoke();
-            yield break;
-        }
+            return;
 
         var sheetsOrdered = new List<GameObject>();
         foreach (var ac in attackCards)
@@ -663,10 +644,7 @@ public class BattleCardUIController : MonoBehaviour
         }
 
         if (sheetsOrdered.Count == 0)
-        {
-            onComplete?.Invoke();
-            yield break;
-        }
+            return;
 
         var dstRt = targetPanel as RectTransform;
         if (cardLayoutManager != null && dstRt != null)
@@ -703,7 +681,8 @@ public class BattleCardUIController : MonoBehaviour
                 if (rt == null) continue;
                 rt.position = Vector3.Lerp(starts[i], ends[i], t);
             }
-            yield return null;
+            await Task.Yield();
+            if (this == null || targetPanel == null) return;
         }
 
         cardLayoutManager.SetSelectedCards(attackCards);
@@ -716,8 +695,6 @@ public class BattleCardUIController : MonoBehaviour
             go.GetComponent<CardSheetDisplay>()
                 ?.SetHitRateSheetContext(HitRateApplicability.SheetContext.ReflectedAttack);
         }
-
-        onComplete?.Invoke();
     }
 
     //==== 介入攻撃カードシート =====

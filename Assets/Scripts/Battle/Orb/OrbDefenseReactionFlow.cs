@@ -76,8 +76,7 @@ public static class OrbDefenseReactionFlow
                     int atkDisplay = battleProcessor.GetOrbCounterDisplayedAttackPower(
                         one, counterBase, originalDefender, originalAttacker);
                     bool totalAtkOnPlayer = ReferenceEquals(originalDefender, bm.GetPlayerStatus());
-                    bm.SetReflectionAttackTotalDisplayAfterSlide(
-                        one, totalAtkOnPlayer, originalDefender, originalAttacker, atkDisplay);
+                    bm.SetReflectionAttackTotalDisplay(one, totalAtkOnPlayer, atkDisplay);
                     if (ReferenceEquals(originalDefender, bm.GetPlayerStatus()))
                         bm.SetSuppressEnemyStaleAttackerInTotalByOrb(true);
                 }

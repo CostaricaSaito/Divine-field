@@ -464,6 +464,9 @@ public sealed class PlayerInputController
         if (_host.IsOnlineMatch)
             NetworkBattleBridge.SendDefenseSelection(selectedDefenseCards);
 
+        BattleUIManager.I?.ClearAllSelections();
+        _host.UpdateTotalATKDefDisplay();
+
         if (_host.CardSequenceManager != null)
         {
             _playerDefenseCombatResolving = true;

@@ -120,8 +120,9 @@ public static class AttackComboSelectionRules
     }
 
     /// <summary>
-    /// Attack + magic in one combo is allowed only when every magic and every physical attack
-    /// uses <see cref="AttackPhaseUseRule.Flexible"/> or <see cref="AttackPhaseUseRule.AddOn"/>.
+    /// Attack magic combo rules:
+    /// Primary attack magic — no physical, no other attack magic.
+    /// Flexible/AddOn attack magic — any physical OK; no Primary attack magic (multiple Flexible OK).
     /// </summary>
     public static bool ConflictsAttackMagicUseRuleMix(
         IReadOnlyList<CardData> currentSelection,
@@ -137,7 +138,8 @@ public static class AttackComboSelectionRules
             }
         }
         tentative.Add(adding);
-        return HasAttackMagicMix(tentative) && !IsValidAttackMagicUseRuleMix(tentative);
+        if (!ContainsAttackMagic(tentative)) return false;
+        return !IsValidAttackMagicCombo(tentative);
     }
 
     /// <summary>Legacy name; prefer <see cref="ConflictsAttackMagicUseRuleMix"/>.</summary>
@@ -197,8 +199,6 @@ public static class AttackComboSelectionRules
         if (role == SelectionRole.Addable)
         {
             if (HasRoleInSelection(selection, SelectionRole.Standalone))
-                return false;
-            if (card.cardType == CardType.Magic && HasMagicInSelection(selection))
                 return false;
         }
 
@@ -270,31 +270,48 @@ public static class AttackComboSelectionRules
         return IsValidAttackSelection(combo) ? combo : new List<CardData> { primary };
     }
 
-    private static bool HasAttackMagicMix(IReadOnlyList<CardData> cards)
+    private static bool ContainsAttackMagic(IReadOnlyList<CardData> cards)
     {
-        if (cards == null || cards.Count == 0) return false;
-        bool hasMagic = false;
-        bool hasPhysicalAttack = false;
+        if (cards == null) return false;
         for (int i = 0; i < cards.Count; i++)
         {
-            var c = cards[i];
-            if (c == null) continue;
-            if (IsComboMagicCard(c)) hasMagic = true;
-            if (IsComboPhysicalAttackCard(c)) hasPhysicalAttack = true;
+            if (IsComboMagicCard(cards[i])) return true;
         }
-        return hasMagic && hasPhysicalAttack;
+        return false;
     }
 
-    private static bool IsValidAttackMagicUseRuleMix(IReadOnlyList<CardData> cards)
+    private static bool IsValidAttackMagicCombo(IReadOnlyList<CardData> cards)
     {
         if (cards == null) return true;
+
+        bool hasPhysical = false;
+        int primaryAttackMagicCount = 0;
+        int flexibleAttackMagicCount = 0;
+
         for (int i = 0; i < cards.Count; i++)
         {
             var c = cards[i];
             if (c == null) continue;
-            if (IsComboMagicCard(c) && !IsFlexibleOrAddOnUseRule(c)) return false;
-            if (IsComboPhysicalAttackCard(c) && !IsFlexibleOrAddOnUseRule(c)) return false;
+            if (IsComboPhysicalAttackCard(c))
+                hasPhysical = true;
+            if (!IsComboMagicCard(c))
+                continue;
+
+            if (c.attackPhaseUseRule == AttackPhaseUseRule.Primary)
+                primaryAttackMagicCount++;
+            else if (IsFlexibleOrAddOnUseRule(c))
+                flexibleAttackMagicCount++;
+            else
+                return false;
         }
+
+        if (primaryAttackMagicCount > 0)
+        {
+            if (hasPhysical) return false;
+            if (flexibleAttackMagicCount > 0) return false;
+            if (primaryAttackMagicCount > 1) return false;
+        }
+
         return true;
     }
 
@@ -308,17 +325,6 @@ public static class AttackComboSelectionRules
         c != null
         && (c.attackPhaseUseRule == AttackPhaseUseRule.Flexible
             || c.attackPhaseUseRule == AttackPhaseUseRule.AddOn);
-
-    private static bool HasMagicInSelection(IReadOnlyList<CardData> selection)
-    {
-        for (int i = 0; i < (selection?.Count ?? 0); i++)
-        {
-            var c = selection[i];
-            if (c != null && c.cardType == CardType.Magic && !CardRules.IsRecoveryCard(c))
-                return true;
-        }
-        return false;
-    }
 
     private static bool HasRoleInSelection(IReadOnlyList<CardData> selection, SelectionRole role)
     {

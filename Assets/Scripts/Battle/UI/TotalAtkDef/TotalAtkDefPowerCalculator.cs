@@ -7,6 +7,8 @@ public class TotalAtkDefPowerCalculator
     public const string IfritBonusColorHex = "#E53935";
     public const string LeviathanSuppressColorHex = "#1E88E5";
     public const string GodRageAtkBaseGreenHex = "#33DD55";
+    /// <summary>括弧内訳の TMP リッチテキストサイズ（メイン ATK より一回り小さく）。</summary>
+    public const string AttackPowerBreakdownRichTextSize = "80%";
 
     private readonly TotalAtkDefDisplayState _state;
 
@@ -129,35 +131,217 @@ public class TotalAtkDefPowerCalculator
         return combatDefense.Count > 0 ? combatDefense : null;
     }
 
-    public string FormatReflectionAttackTotalLabel(BattleManager bm, PlayerStatus fallbackAttacker)
-    {
-        var rc = bm.GetReflectionAttackCardsForTotalDisplay();
-        if (rc == null || rc.Count == 0) return "";
-        if (bm.GetReflectionAttackDisplayStrengthOverride() is int ovr)
-        {
-            if (ovr <= 0) return "";
-            return $"ATK {ovr}";
-        }
-        var rAtk = bm.GetReflectionAttackBlessingAttacker();
-        var rDef = bm.GetReflectionAttackBlessingDefender();
-        if (rAtk != null && rDef != null)
-        {
-            if (GodrageRules.IsGodrageDoublingCombo(rc))
-                return FormatGodRageDoubledAttackPowerDisplayLabel(rc, rAtk, rDef);
-            return FormatAttackPowerDisplayLabel(rc, rAtk, rDef);
-        }
-        return FormatAttackPowerDisplayLabel(rc, fallbackAttacker);
-    }
-
     public string FormatAttackPowerDisplayLabel(
         List<CardData> cards,
         PlayerStatus attacker,
         PlayerStatus defenderForBlessingsOverride = null,
         bool forMeOnlyPostRampExcludeGodRageDouble = false)
     {
-        if (cards == null || cards.Count == 0 || attacker == null) return "";
+        if (!TryFormatAttackPowerDisplayLabel(
+                cards, attacker, defenderForBlessingsOverride, forMeOnlyPostRampExcludeGodRageDouble,
+                colorLeadingAtkGreen: false, out string richText))
+            return "";
+        return richText;
+    }
 
-        int rawCombo = CalculateTotalAttackPower(cards, attacker);
+    /// <summary>ゴッドレイジ成立時：先頭 ATK のみ緑。括弧内訳は 2 倍後の基礎＋加護式。</summary>
+    public string FormatGodRageDoubledAttackPowerDisplayLabel(List<CardData> cards, PlayerStatus attacker, PlayerStatus defender)
+    {
+        if (!TryFormatAttackPowerDisplayLabel(
+                cards, attacker, defender, forMeOnlyPostRampExcludeGodRageDouble: false,
+                colorLeadingAtkGreen: true, out string richText))
+            return "";
+        return richText;
+    }
+
+    /// <summary>ゴッドレイジ カウントアップ中に固定する括弧内訳（先頭 ATK 数字は含めない）。</summary>
+    public string GetAttackPowerParenthesesSuffix(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defender)
+    {
+        if (!TryBuildAttackPowerParenthesesSuffix(cards, attacker, defender, out string suffix))
+            return "";
+        return suffix;
+    }
+
+    /// <summary>ゴッドレイジ発動ランプ：合計 ATK と括弧内の基礎攻撃力を同期カウントアップ。</summary>
+    public string FormatGodRageRampStepLabel(
+        int atkValue,
+        int parensBase,
+        int netBlessing,
+        bool physical,
+        bool showKannadukiMul,
+        bool showWeakenHalf)
+    {
+        if (!TryBuildParenthesesSuffix(
+                parensBase, netBlessing, physical, showKannadukiMul, showWeakenHalf,
+                colorParensBaseGreen: true, out string parens))
+            return $"<color={GodRageAtkBaseGreenHex}>ATK {atkValue}</color>";
+
+        if (string.IsNullOrEmpty(parens))
+            return $"<color={GodRageAtkBaseGreenHex}>ATK {atkValue}</color>";
+
+        return $"<color={GodRageAtkBaseGreenHex}>ATK {atkValue}</color>{parens}";
+    }
+
+    /// <summary>括弧内訳があるとき、ランプ前後の基礎攻撃力（カード合計）。</summary>
+    public bool TryGetGodRageParenBaseRampRange(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        out int fromBase,
+        out int toBase,
+        out int netBlessing,
+        out bool physical,
+        out bool showKannadukiMul,
+        out bool showWeakenHalf)
+    {
+        fromBase = 0;
+        toBase = 0;
+        netBlessing = 0;
+        physical = false;
+        showKannadukiMul = false;
+        showWeakenHalf = false;
+
+        if (cards == null || attacker == null || !GodrageRules.IsGodrageDoublingCombo(cards))
+            return false;
+
+        if (!TryResolveAttackPowerDisplayValues(
+                cards, attacker, defender, forMeOnlyPostRampExcludeGodRageDouble: true,
+                out _, out int rawCombo, out netBlessing, out physical,
+                out showKannadukiMul, out showWeakenHalf, out _))
+            return false;
+
+        bool hasBreakdown = netBlessing != 0 || physical && (showKannadukiMul || showWeakenHalf);
+        if (!hasBreakdown)
+            return false;
+
+        fromBase = rawCombo;
+        toBase = rawCombo * 2;
+        return toBase != fromBase;
+    }
+
+    private bool TryFormatAttackPowerDisplayLabel(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defenderForBlessingsOverride,
+        bool forMeOnlyPostRampExcludeGodRageDouble,
+        bool colorLeadingAtkGreen,
+        out string richText)
+    {
+        richText = "";
+        if (!TryResolveAttackPowerDisplayValues(
+                cards, attacker, defenderForBlessingsOverride, forMeOnlyPostRampExcludeGodRageDouble,
+                out int finalAttack, out _, out int netBlessing, out bool physical,
+                out bool showKannadukiMul, out bool showWeakenHalf, out int parensComboBase))
+            return false;
+
+        if (!TryBuildParenthesesSuffix(parensComboBase, netBlessing, physical, showKannadukiMul, showWeakenHalf,
+                colorParensBaseGreen: false, out string parens))
+            return false;
+
+        var sb = new StringBuilder(64);
+        if (colorLeadingAtkGreen)
+            sb.Append("<color=").Append(GodRageAtkBaseGreenHex).Append(">");
+        sb.Append("ATK ").Append(finalAttack);
+        if (colorLeadingAtkGreen)
+            sb.Append("</color>");
+        if (!string.IsNullOrEmpty(parens))
+            sb.Append(parens);
+        richText = sb.ToString();
+        return true;
+    }
+
+    private bool TryBuildAttackPowerParenthesesSuffix(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defender,
+        out string suffix)
+    {
+        suffix = "";
+        if (!TryResolveAttackPowerDisplayValues(
+                cards, attacker, defender, forMeOnlyPostRampExcludeGodRageDouble: true,
+                out _, out _, out int netBlessing, out bool physical,
+                out bool showKannadukiMul, out bool showWeakenHalf, out int parensComboBase))
+            return false;
+
+        return TryBuildParenthesesSuffix(parensComboBase, netBlessing, physical, showKannadukiMul, showWeakenHalf,
+            colorParensBaseGreen: false, out suffix);
+    }
+
+    private static bool TryBuildParenthesesSuffix(
+        int parensBase,
+        int netBlessing,
+        bool physical,
+        bool showKannadukiMul,
+        bool showWeakenHalf,
+        bool colorParensBaseGreen,
+        out string suffix)
+    {
+        suffix = "";
+        bool showBlessing = netBlessing != 0;
+        bool showStatus = physical && (showKannadukiMul || showWeakenHalf);
+        if (!showBlessing && !showStatus)
+            return true;
+
+        var sb = new StringBuilder(48);
+        sb.Append(" <size=").Append(AttackPowerBreakdownRichTextSize).Append(">(");
+        if (colorParensBaseGreen)
+            sb.Append("<color=").Append(GodRageAtkBaseGreenHex).Append(">");
+        sb.Append(parensBase);
+        if (colorParensBaseGreen)
+            sb.Append("</color>");
+        if (showBlessing)
+            AppendNetBlessingSuffix(sb, netBlessing);
+        if (showKannadukiMul)
+            sb.Append("×2");
+        else if (showWeakenHalf)
+            sb.Append("/2");
+        sb.Append(")</size>");
+        suffix = sb.ToString();
+        return true;
+    }
+
+    private static void AppendNetBlessingSuffix(StringBuilder sb, int netBlessing)
+    {
+        if (netBlessing > 0)
+        {
+            sb.Append("<color=").Append(IfritBonusColorHex).Append(">+").Append(netBlessing).Append("</color>");
+            return;
+        }
+        if (netBlessing < 0)
+        {
+            int mag = -netBlessing;
+            sb.Append("<color=").Append(LeviathanSuppressColorHex).Append(">-").Append(mag).Append("</color>");
+        }
+    }
+
+    private bool TryResolveAttackPowerDisplayValues(
+        List<CardData> cards,
+        PlayerStatus attacker,
+        PlayerStatus defenderForBlessingsOverride,
+        bool forMeOnlyPostRampExcludeGodRageDouble,
+        out int finalAttack,
+        out int rawCombo,
+        out int netBlessing,
+        out bool physical,
+        out bool showKannadukiMul,
+        out bool showWeakenHalf,
+        out int parensComboBase)
+    {
+        finalAttack = 0;
+        rawCombo = 0;
+        netBlessing = 0;
+        physical = false;
+        showKannadukiMul = false;
+        showWeakenHalf = false;
+        parensComboBase = 0;
+
+        if (cards == null || cards.Count == 0 || attacker == null)
+            return false;
+
+        rawCombo = CalculateTotalAttackPower(cards, attacker);
         if (rawCombo <= 0 && MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards))
             rawCombo = MillionDollarBazookaRules.SumCardAttackPowerForMillionDollarBazookaCombo(cards, attacker);
         if (rawCombo <= 0)
@@ -165,8 +349,11 @@ public class TotalAtkDefPowerCalculator
             if (HammadnessRules.ContainsHammadness(cards) || TributeBloodRules.ContainsTributeBlood(cards)
                 || MillionDollarBazookaRules.ContainsMillionDollarBazooka(cards)
                 || GigaFlareRules.ContainsGigaFlare(cards))
-                return "ATK 0";
-            return "";
+            {
+                finalAttack = 0;
+                return true;
+            }
+            return false;
         }
 
         bool applyGodDouble = GodrageRules.IsGodrageDoublingCombo(cards) && !forMeOnlyPostRampExcludeGodRageDouble
@@ -179,65 +366,31 @@ public class TotalAtkDefPowerCalculator
             applyGodDouble = false;
         if (_state.SuppressHammadnessPredictionDuringSequenceReveal && HammadnessRules.ContainsHammadness(cards))
             applyGodDouble = false;
-        int baseForBlessings = applyGodDouble ? rawCombo * 2 : rawCombo;
 
-        int afterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, baseForBlessings);
-        int ifritDelta = afterIfrit - baseForBlessings;
-
+        int combatBlessingBase = applyGodDouble ? rawCombo * 2 : rawCombo;
         PlayerStatus defender = defenderForBlessingsOverride ?? GetDefenderForAttackDisplay(attacker);
-        int afterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(attacker, defender, cards, afterIfrit);
-        int leviDelta = afterIfrit - afterLevi;
 
-        int final = afterLevi;
-        if (!CardRules.IsMagicClassifiedAttackCombo(cards))
-            final = attacker.ApplyOutgoingDamageModifiers(afterLevi);
+        int displayAfterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, rawCombo);
+        int displayAfterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
+            attacker, defender, cards, displayAfterIfrit);
+        netBlessing = displayAfterLevi - rawCombo;
 
-        if (ifritDelta <= 0 && leviDelta <= 0)
-            return $"ATK {final}";
+        int combatAfterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, combatBlessingBase);
+        int combatAfterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(
+            attacker, defender, cards, combatAfterIfrit);
 
-        var sb = new StringBuilder(48);
-        sb.Append("ATK ").Append(baseForBlessings);
-        if (ifritDelta > 0)
-            sb.Append(" <color=").Append(IfritBonusColorHex).Append(">+").Append(ifritDelta).Append("</color>");
-        if (leviDelta > 0)
-            sb.Append(" <color=").Append(LeviathanSuppressColorHex).Append("> -").Append(leviDelta).Append("</color>");
-        if (final != afterLevi)
-            sb.Append(" → ").Append(final);
+        physical = !CardRules.IsMagicClassifiedAttackCombo(cards);
+        if (physical)
+        {
+            showKannadukiMul = attacker.HasKannadukiEffect();
+            showWeakenHalf = !showKannadukiMul && attacker.HasWeakenEffect();
+            finalAttack = attacker.ApplyOutgoingDamageModifiers(combatAfterLevi);
+        }
+        else
+            finalAttack = combatAfterLevi;
 
-        return sb.ToString();
-    }
-
-    public string FormatGodRageDoubledAttackPowerDisplayLabel(List<CardData> cards, PlayerStatus attacker, PlayerStatus defender)
-    {
-        if (cards == null || cards.Count == 0 || attacker == null || defender == null) return "";
-
-        int baseSum = ResolveCardSumForGodRageDisplay(cards, attacker);
-        if (baseSum <= 0) return "";
-
-        int doubledBase = baseSum * 2;
-        int afterIfrit = SummonPassiveBlessingApplier.ApplyAttackPowerBonus(attacker, cards, doubledBase);
-        int ifritDelta = afterIfrit - doubledBase;
-
-        int afterLevi = SummonPassiveBlessingApplier.ApplyDefenderOpponentAttackSuppression(attacker, defender, cards, afterIfrit);
-        int leviDelta = afterIfrit - afterLevi;
-
-        int final = afterLevi;
-        if (!CardRules.IsMagicClassifiedAttackCombo(cards))
-            final = attacker.ApplyOutgoingDamageModifiers(afterLevi);
-
-        if (ifritDelta <= 0 && leviDelta <= 0)
-            return $"<color={GodRageAtkBaseGreenHex}>ATK {final}</color>";
-
-        var sb = new StringBuilder(96);
-        sb.Append("<color=").Append(GodRageAtkBaseGreenHex).Append(">ATK ").Append(doubledBase).Append("</color>");
-        if (ifritDelta > 0)
-            sb.Append(" <color=").Append(IfritBonusColorHex).Append(">+").Append(ifritDelta).Append("</color>");
-        if (leviDelta > 0)
-            sb.Append(" <color=").Append(LeviathanSuppressColorHex).Append("> -").Append(leviDelta).Append("</color>");
-        if (final != afterLevi)
-            sb.Append(" → ").Append(final);
-
-        return sb.ToString();
+        parensComboBase = applyGodDouble ? rawCombo * 2 : rawCombo;
+        return true;
     }
 
     public int GetDisplayedAttackStrength(List<CardData> cards, PlayerStatus attacker) =>

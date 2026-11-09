@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 // 裏向きの「使用済み」カードをTurnEndで新カードに置き換えまで一括管理
-public class HandRefillService : MonoBehaviour
+public partial class HandRefillService : MonoBehaviour
 {
     [Header("依存関係（必須）")]
     [SerializeField] private Transform handPanel;

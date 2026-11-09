@@ -446,6 +446,11 @@ public class CardUI : MonoBehaviour
                 }
                 return false;
             }
+            if (LightningRodRules.CanNullifyIncoming(c, incoming))
+            {
+                label = "BLOCKING";
+                return true;
+            }
             return false;
         }
 

@@ -1120,38 +1120,12 @@ public class BattleDebugTools : MonoBehaviour
         return _cachedAllCardsFromResources;
     }
 
-    private static string ResolveCheatCardNetworkId(CardData template)
-    {
-        if (template == null) return "";
-        return string.IsNullOrEmpty(template.cardName) ? template.name : template.cardName;
-    }
-
     private void TryAddCheatCardToPlayerHand(CardData template)
     {
         if (!EnsurePlaying()) return;
         if (template == null)
         {
             Debug.LogWarning("[BattleDebugTools] テンプレートが null です");
-            return;
-        }
-
-        if (battleManager.IsOnlineMatch)
-        {
-            string id = ResolveCheatCardNetworkId(template);
-            bool targetIsHostPlayer = OnlineMatchContext.IsHost;
-            if (OnlineMatchContext.IsHost)
-            {
-                if (!battleManager.HostBroadcastOnlineDebugCardInject(id, targetIsHostPlayer))
-                    Debug.LogWarning("[BattleDebugTools] オンライン注入に失敗しました");
-            }
-            else if (!battleManager.RequestOnlineDebugCardInject(id, targetIsHostPlayer))
-            {
-                Debug.LogWarning("[BattleDebugTools] オンライン注入リクエストに失敗しました");
-            }
-            else
-            {
-                Debug.Log($"[BattleDebugTools] ホストへ注入リクエスト: {NameForCheatDisplay(template)}");
-            }
             return;
         }
 
@@ -1198,12 +1172,6 @@ public class BattleDebugTools : MonoBehaviour
             return;
         }
 
-        if (battleManager.IsOnlineMatch)
-        {
-            Debug.LogWarning("[BattleDebugTools] CPU 手札チートはオフライン対戦専用です");
-            return;
-        }
-
         if (battleManager.cpuHand == null)
         {
             Debug.LogWarning("[BattleDebugTools] cpuHand が null です");
@@ -1235,29 +1203,7 @@ public class BattleDebugTools : MonoBehaviour
 
     private void TryAddCheatCardToOpponentHandOnline(CardData template)
     {
-        if (!EnsurePlaying()) return;
-        if (template == null) return;
-        if (!battleManager.IsOnlineMatch)
-        {
-            Debug.LogWarning("[BattleDebugTools] 相手手札注入はオンライン対戦専用です");
-            return;
-        }
-
-        string id = ResolveCheatCardNetworkId(template);
-        bool targetIsHostPlayer = !OnlineMatchContext.IsHost;
-        if (OnlineMatchContext.IsHost)
-        {
-            if (!battleManager.HostBroadcastOnlineDebugCardInject(id, targetIsHostPlayer))
-                Debug.LogWarning("[BattleDebugTools] オンライン注入（相手）に失敗しました");
-        }
-        else if (!battleManager.RequestOnlineDebugCardInject(id, targetIsHostPlayer))
-        {
-            Debug.LogWarning("[BattleDebugTools] オンライン注入リクエスト（相手）に失敗しました");
-        }
-        else
-        {
-            Debug.Log($"[BattleDebugTools] ホストへ相手手札注入リクエスト: {NameForCheatDisplay(template)}");
-        }
+        TryAddCheatCardToCpuHand(template);
     }
 
 #endif

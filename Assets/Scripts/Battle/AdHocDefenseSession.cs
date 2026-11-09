@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 public enum AdHocDefenseKind
 {
     ReflectionChain = 0,
-    ParryRerun = 1,
     Intervention = 2,
     Disaster = 3,
     PostDeath = 4,

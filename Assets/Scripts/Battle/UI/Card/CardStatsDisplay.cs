@@ -553,29 +553,64 @@ public class CardStatsDisplay : MonoBehaviour
         _state.ClearMillionDollarBazookaPlayerAtkDisplayForGodRageRamp();
         _state.UnlockMillionDollarBazookaPreRamp();
         _state.ClearMagicalSwordRampAttackDisplayLock();
-        _state.ClearAttackModifierRevealSuppressions();
 
         var rampText = GetSequenceOwnerAtkDefText();
         if (rampText == null || totalDurationSec <= 0f)
         {
+            _state.ClearAttackModifierRevealSuppressions();
             _state.ClearGodRageAttackDisplayLock();
             UpdateDisplay();
             return;
         }
 
-        string lockLabel = _power.FormatGodRageDoubledAttackPowerDisplayLabel(attackCards, atk, def);
         if (from == to)
         {
-            _state.LockGodRagePlayerAtkDisplay(lockLabel);
+            _state.ClearAttackModifierRevealSuppressions();
+            string lockLabelInstant = _power.FormatGodRageDoubledAttackPowerDisplayLabel(attackCards, atk, def);
+            _state.LockGodRagePlayerAtkDisplay(lockLabelInstant);
             UpdateDisplay();
             return;
         }
 
-        rampText.richText = false;
-        rampText.color = new Color(0.2f, 0.85f, 0.35f);
+        string preLabel = _power.FormatAttackPowerDisplayLabel(attackCards, atk, def, forMeOnlyPostRampExcludeGodRageDouble: true);
+        rampText.richText = true;
+        rampText.text = preLabel;
+        rampText.color = Color.white;
         SoundEffectPlayer.I?.Play("Assets/SE/ロボット合体2.mp3");
-        await RunAtkCountUpRampAsync(rampText, from, to, totalDurationSec, cancellationToken, null);
 
+        if (_power.TryGetGodRageParenBaseRampRange(
+                attackCards, atk, def,
+                out int fromBase, out int toBase,
+                out int netBlessing, out bool physical,
+                out bool showKannadukiMul, out bool showWeakenHalf))
+        {
+            await RunGodRageDualCountUpRampAsync(
+                rampText,
+                from,
+                to,
+                fromBase,
+                toBase,
+                totalDurationSec,
+                cancellationToken,
+                (atkValue, baseValue) => _power.FormatGodRageRampStepLabel(
+                    atkValue, baseValue, netBlessing, physical, showKannadukiMul, showWeakenHalf));
+        }
+        else
+        {
+            string parensSuffix = _power.GetAttackPowerParenthesesSuffix(attackCards, atk, def);
+            await RunAtkCountUpRampAsync(
+                rampText,
+                from,
+                to,
+                totalDurationSec,
+                cancellationToken,
+                null,
+                parensSuffix,
+                TotalAtkDefPowerCalculator.GodRageAtkBaseGreenHex);
+        }
+
+        _state.ClearAttackModifierRevealSuppressions();
+        string lockLabel = _power.FormatGodRageDoubledAttackPowerDisplayLabel(attackCards, atk, def);
         _state.LockGodRagePlayerAtkDisplay(lockLabel);
         UpdateDisplay();
     }
@@ -669,25 +704,59 @@ public class CardStatsDisplay : MonoBehaviour
         BattleUIManager.I?.UpdateStatus(BattleManager.I?.GetPlayerStatus(), BattleManager.I?.GetEnemyStatus());
     }
 
+    private static async Task RunGodRageDualCountUpRampAsync(
+        TMP_Text rampText,
+        int fromAtk,
+        int toAtk,
+        int fromBase,
+        int toBase,
+        float totalDurationSec,
+        CancellationToken cancellationToken,
+        System.Func<int, int, string> formatLabel)
+    {
+        int lo = Mathf.Min(fromAtk, toAtk);
+        int hi = Mathf.Max(fromAtk, toAtk);
+        int span = hi - lo;
+        float stepSec = span > 0 ? totalDurationSec / span : 0f;
+        rampText.richText = true;
+        for (int v = lo; v <= hi; v++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int step = v - lo;
+            int baseVal = span > 0
+                ? fromBase + (toBase - fromBase) * step / span
+                : toBase;
+            rampText.text = formatLabel(v, baseVal);
+            if (v < hi && stepSec > 0f)
+                await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
+        }
+    }
+
     private static async Task RunAtkCountUpRampAsync(
         TMP_Text rampText,
         int fromTotal,
         int toTotal,
         float totalDurationSec,
         CancellationToken cancellationToken,
-        System.Action<int, float> onStep)
+        System.Action<int, float> onStep,
+        string parenthesesSuffixRichText = null,
+        string atkNumberColorHex = null)
     {
         int lo = Mathf.Min(fromTotal, toTotal);
         int hi = Mathf.Max(fromTotal, toTotal);
         int span = hi - lo;
         float stepSec = span > 0 ? totalDurationSec / span : 0f;
         float invSpan = span > 0 ? 1f / span : 0f;
+        rampText.richText = !string.IsNullOrEmpty(atkNumberColorHex) || !string.IsNullOrEmpty(parenthesesSuffixRichText);
         for (int v = lo; v <= hi; v++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             float t = (v - lo) * invSpan;
             onStep?.Invoke(v, t);
-            rampText.text = $"ATK {v}";
+            if (string.IsNullOrEmpty(atkNumberColorHex))
+                rampText.text = $"ATK {v}{parenthesesSuffixRichText ?? ""}";
+            else
+                rampText.text = $"<color={atkNumberColorHex}>ATK {v}</color>{parenthesesSuffixRichText ?? ""}";
             if (v < hi && stepSec > 0f)
                 await Task.Delay(TimeSpan.FromSeconds(stepSec), cancellationToken);
         }

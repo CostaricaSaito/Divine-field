@@ -340,6 +340,15 @@ public static class FreeMagicCastRules
         return false;
     }
 
+    private static bool ContainsAllInstances(IReadOnlyList<CardData> list, IReadOnlyList<CardData> cards)
+    {
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i] != null && !ContainsInstance(list, cards[i])) return false;
+        }
+        return true;
+    }
+
     /// <summary>
     /// 反射／パリィで攻撃カードをパネル間スライドするときの一覧（触媒含む）。
     /// 戦闘計算用の <paramref name="combatIncomingFallback"/> は ATK/DEF 用に触媒除外済みであること。
@@ -348,15 +357,17 @@ public static class FreeMagicCastRules
         BattleManager battleManager,
         IReadOnlyList<CardData> combatIncomingFallback)
     {
-        if (battleManager != null)
-        {
-            var full = battleManager.GetAttackCardsForReflectionSlide();
-            if (full != null && full.Count > 0)
-                return full;
-        }
-
         if (combatIncomingFallback == null || combatIncomingFallback.Count == 0)
             return new List<CardData>();
+
+        if (battleManager != null)
+        {
+            // Turn attack combo (with catalysts) only when it actually contains the incoming cards
+            // (orb counters, Deadly Chain, etc. bounce cards that are not the turn's attack).
+            var full = battleManager.GetAttackCardsForReflectionSlide();
+            if (full != null && full.Count > 0 && ContainsAllInstances(full, combatIncomingFallback))
+                return full;
+        }
 
         return OrderCardsForRevealSequence(combatIncomingFallback);
     }

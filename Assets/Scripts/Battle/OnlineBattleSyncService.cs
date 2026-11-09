@@ -17,10 +17,18 @@ public sealed class OnlineBattleSyncService
     private const int ResolveSyncTimeoutMs = 20000;
     private const int TurnSyncTimeoutMs = 45000;
 
+    private readonly HandRosterWatch _handRoster;
+
     public OnlineBattleSyncService(IOnlineBattleSyncHost host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _handRoster = new HandRosterWatch(host);
     }
+
+    /// <summary>Watch local hands and publish a roster once a change has settled.</summary>
+    public void TickHandRoster() => _handRoster.Tick();
+
+    public void DisposeHandRoster() => _handRoster.Dispose();
 
     public void RecordNearDeathConsumption(PlayerType ownerSide, string cardName)
     {

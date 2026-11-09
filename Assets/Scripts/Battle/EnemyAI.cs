@@ -705,6 +705,18 @@ public class EnemyAI
                     break;
                 }
             }
+
+            if (defenseCard == null)
+            {
+                foreach (var c in cpuHand)
+                {
+                    if (!IsEnemyHandCardSelectable(c)) continue;
+                    if (!LightningRodRules.CanNullifyIncoming(c, incomingForReflection)) continue;
+                    defenseCard = c;
+                    Debug.Log($"[EnemyAI] 避雷針で雷属性を無効化: {defenseCard.cardName}");
+                    break;
+                }
+            }
         }
 
         if (defenseCard == null)

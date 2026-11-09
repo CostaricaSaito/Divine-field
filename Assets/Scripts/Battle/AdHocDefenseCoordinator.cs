@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// Manages ad-hoc player defense sessions (reflection chain, parry rerun, intervention, disaster, post-death).
+/// Manages ad-hoc player defense sessions (reflection/parry chain, intervention, disaster, post-death).
 /// Extracted from <see cref="BattleManager"/> (PR-2).
 /// </summary>
 public sealed class AdHocDefenseCoordinator
@@ -37,10 +37,7 @@ public sealed class AdHocDefenseCoordinator
 
     public bool IsReflectionChainPending() => IsWaitActive(AdHocDefenseKind.ReflectionChain);
 
-    public bool IsParryRerunPending() => IsWaitActive(AdHocDefenseKind.ParryRerun);
-
-    public bool IsReactiveWaitActive()
-        => IsReflectionChainPending() || IsParryRerunPending();
+    public bool IsReactiveWaitActive() => IsReflectionChainPending();
 
     public BattleStep CurrentBattleStep
         => IsWaitActive() ? _session.ToBattleStep() : BattleStep.Unknown;
@@ -97,12 +94,6 @@ public sealed class AdHocDefenseCoordinator
         CancellationToken cancellationToken)
     {
         BeginAdHocPlayerDefense(AdHocDefenseKind.ReflectionChain, attackSnapshot);
-        return await WaitForSubmitAsync(cancellationToken);
-    }
-
-    public async Task<List<CardData>> WaitForParryRerunDefenseSubmitAsync(CancellationToken cancellationToken)
-    {
-        BeginAdHocPlayerDefense(AdHocDefenseKind.ParryRerun, null);
         return await WaitForSubmitAsync(cancellationToken);
     }
 
@@ -172,8 +163,6 @@ public sealed class AdHocDefenseCoordinator
 
         if (_session.AttackSnapshot != null && _session.AttackSnapshot.Count > 0)
             return new List<CardData>(_session.AttackSnapshot);
-        if (_session.Kind == AdHocDefenseKind.ParryRerun)
-            return _host.GetAttackCardsForCombat();
         return null;
     }
 
@@ -203,12 +192,6 @@ public sealed class AdHocDefenseCoordinator
                 _host.ClearStatsDisplaySequenceCards();
                 BattleUIManager.I?.SetHandClickable(true);
                 _host.RefreshReflectionChainInteractivity(attackSnapshot);
-                break;
-            case AdHocDefenseKind.ParryRerun:
-                _host.SetSelectedDefenseCard(null);
-                _host.ClearSelectedCards();
-                BattleUIManager.I?.SetHandClickable(true);
-                SoundEffectPlayer.I?.Play("Assets/SE/決定ボタンを押す13.mp3");
                 break;
             default:
                 BattleUIManager.I?.HidePlayerCardDetails();

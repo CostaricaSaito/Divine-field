@@ -42,6 +42,12 @@ public static class ProgressiveStatusApplicator
         if (target == null || type == StatusEffectType.None) return false;
         config ??= StatusProgressionConfig.GetRuntimeFallback();
 
+        if (type == StatusEffectType.Weaken && target.HasKannadukiEffect())
+            return false;
+
+        if (type == StatusEffectType.Kannaduki)
+            target.activeEffects.RemoveAll(e => e != null && e.EffectType == StatusEffectType.Weaken);
+
         foreach (var e in target.activeEffects)
         {
             if (e != null && e.EffectType == type)

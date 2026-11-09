@@ -6,7 +6,6 @@ using TMPro;
 
 public class BattleStatusUI : MonoBehaviour
 {
-    private const float FogFadeSeconds = 0.5f;
     private static readonly Color FogSummonTint = new Color(0.45f, 0.45f, 0.45f, 1f);
 
     [Header("UI参照（プレイヤー）")]
@@ -31,24 +30,13 @@ public class BattleStatusUI : MonoBehaviour
     [SerializeField] private GameObject ailmentIconPrefab;
     [SerializeField] private Vector2 ailmentIconSize = new Vector2(36f, 36f);
 
-    [Header("濃霧（視界）")]
-    [Tooltip("濃霧が「人間プレイヤー（player）」に付いているときだけ、そのプレイヤー視点の演出としてフェード。相手だけ濃霧のときは使わない。")]
-    [SerializeField] private Image fogStatusCloudOverlay;
-    [Tooltip("同上。人間プレイヤーが濃霧のときだけ背景用レイヤーをフェード。初期アルファ0。")]
-    [SerializeField] private Image fogBattleBackdrop;
-    [Tooltip("未設定で fogStatusCloudOverlay に Sprite が無いときに適用（Images/04_状態異常/雲 など）")]
-    [SerializeField] private Sprite fogCloudSprite;
-    [Tooltip("未設定で fogBattleBackdrop に Sprite が無いときに適用（Images/02_背景/霧状態 など）")]
-    [SerializeField] private Sprite fogBattleBackdropSprite;
-
     /// <summary>フェーズ1以降の UI やデバッグから参照。</summary>
     public StatusEffectIconSettings StatusEffectIconSettings => statusEffectIconSettings;
 
     private Color _playerSummonColorNatural = Color.white;
     private Color _enemySummonColorNatural = Color.white;
-    /// <summary>前フレームで「人間プレイヤー」が濃霧視点だったか（雲・背景フェード用）。敵のみ濃霧のときは常に false。</summary>
+    /// <summary>前フレームで「人間プレイヤー」が濃霧視点だったか。敵のみ濃霧のときは常に false。</summary>
     private bool _lastViewerUnderFogForFullScreenVfx;
-    private Coroutine _fogFadeCoroutine;
 
     /// <summary>濃霧付与ポップアップ表示中は true。内部ステータスは濃霧だが、背景・オーバーレイ・「？」表示はまだ行わない。</summary>
     private bool _deferFogVisionVisuals;
@@ -79,20 +67,6 @@ public class BattleStatusUI : MonoBehaviour
             _playerSummonColorNatural = playerSummonIcon.color;
         if (enemySummonIcon != null)
             _enemySummonColorNatural = enemySummonIcon.color;
-
-        if (fogStatusCloudOverlay != null)
-        {
-            if (fogStatusCloudOverlay.sprite == null && fogCloudSprite != null)
-                fogStatusCloudOverlay.sprite = fogCloudSprite;
-            fogStatusCloudOverlay.raycastTarget = false;
-        }
-
-        if (fogBattleBackdrop != null)
-        {
-            if (fogBattleBackdrop.sprite == null && fogBattleBackdropSprite != null)
-                fogBattleBackdrop.sprite = fogBattleBackdropSprite;
-            fogBattleBackdrop.raycastTarget = false;
-        }
     }
 
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, int playerHandCount = 0, int enemyHandCount = 0, bool snapHpmgpNumbers = false)
@@ -104,12 +78,8 @@ public class BattleStatusUI : MonoBehaviour
         if (viewerUnderFog != _lastViewerUnderFogForFullScreenVfx)
         {
             _lastViewerUnderFogForFullScreenVfx = viewerUnderFog;
-            if (_fogFadeCoroutine != null)
-            {
-                StopCoroutine(_fogFadeCoroutine);
-                _fogFadeCoroutine = null;
-            }
-            _fogFadeCoroutine = StartCoroutine(CoFadeFogVfx(viewerUnderFog));
+            if (BattleFogBackgroundPresenter.Instance != null)
+                BattleFogBackgroundPresenter.Instance.SetViewerFogBackgroundActive(viewerUnderFog);
         }
 
         _lastPlayerHandForStatusLine = playerHandCount;
@@ -198,46 +168,6 @@ public class BattleStatusUI : MonoBehaviour
         SummonRainbowFramePresenter.SetRainbowFrameActive(
             summonIcon,
             !viewerUnderFog && eligible);
-    }
-
-    private IEnumerator CoFadeFogVfx(bool toConcealed)
-    {
-        float dur = FogFadeSeconds;
-        float t = 0f;
-
-        float c0 = fogStatusCloudOverlay != null ? fogStatusCloudOverlay.color.a : 0f;
-        float c1 = toConcealed ? 1f : 0f;
-        float b0 = fogBattleBackdrop != null ? fogBattleBackdrop.color.a : 0f;
-        float b1 = toConcealed ? 1f : 0f;
-
-        while (t < dur)
-        {
-            t += Time.deltaTime;
-            float u = Mathf.Clamp01(t / dur);
-            SetFogCloudAlpha(Mathf.Lerp(c0, c1, u));
-            SetFogBackdropAlpha(Mathf.Lerp(b0, b1, u));
-            yield return null;
-        }
-
-        SetFogCloudAlpha(c1);
-        SetFogBackdropAlpha(b1);
-        _fogFadeCoroutine = null;
-    }
-
-    private void SetFogCloudAlpha(float a)
-    {
-        if (fogStatusCloudOverlay == null) return;
-        var c = fogStatusCloudOverlay.color;
-        c.a = Mathf.Clamp01(a);
-        fogStatusCloudOverlay.color = c;
-    }
-
-    private void SetFogBackdropAlpha(float a)
-    {
-        if (fogBattleBackdrop == null) return;
-        var c = fogBattleBackdrop.color;
-        c.a = Mathf.Clamp01(a);
-        fogBattleBackdrop.color = c;
     }
 
     /// <param name="grayTintIcons">濃霧視点のとき true。アイコンを消さず灰色で塗りつぶす。</param>

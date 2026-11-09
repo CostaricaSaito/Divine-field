@@ -44,6 +44,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
     private float _entryElapsedSeconds;
     private bool _sessionStarted;
     private bool _isSwitching;
+    private bool _playbackSuppressed;
     private CancellationTokenSource _sessionCts;
 
     private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
@@ -73,7 +74,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
     private void Update()
     {
-        if (!_sessionStarted || _resolvedPlaylist == null || _isSwitching)
+        if (_playbackSuppressed || !_sessionStarted || _resolvedPlaylist == null || _isSwitching)
             return;
 
         var entries = _resolvedPlaylist.Entries;
@@ -119,7 +120,9 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         EnsureDisplayFadeGroup();
         backgroundVideo.gameObject.SetActive(true);
 
-        _entryIndex = 0;
+        _entryIndex = PickRandomValidEntryIndex(entries, -1);
+        if (_entryIndex < 0)
+            _entryIndex = 0;
         _entryElapsedSeconds = 0f;
         _sessionStarted = true;
 
@@ -154,7 +157,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
     private void OnVideoLoopPointReached(VideoPlayer source)
     {
-        if (!_sessionStarted || _isSwitching || _resolvedPlaylist == null)
+        if (_playbackSuppressed || !_sessionStarted || _isSwitching || _resolvedPlaylist == null)
             return;
 
         if (!ShouldAdvanceOnLoopEnd())
@@ -184,19 +187,25 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
     private async Task AdvanceEntryAsync(CancellationToken ct)
     {
-        if (_isSwitching || _resolvedPlaylist == null)
+        if (_playbackSuppressed || _isSwitching || _resolvedPlaylist == null)
             return;
 
         var entries = _resolvedPlaylist.Entries;
         if (entries == null || entries.Length == 0)
             return;
 
-        int nextIndex = _entryIndex + 1;
-        if (nextIndex >= entries.Length)
+        int nextIndex;
+        if (_resolvedPlaylist.LoopPlaylist)
         {
-            if (!_resolvedPlaylist.LoopPlaylist)
+            nextIndex = PickRandomValidEntryIndex(entries, _entryIndex);
+            if (nextIndex < 0)
                 return;
-            nextIndex = 0;
+        }
+        else
+        {
+            nextIndex = _entryIndex + 1;
+            if (nextIndex >= entries.Length)
+                return;
         }
 
         if (nextIndex == _entryIndex)
@@ -289,6 +298,51 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// Picks a random valid playlist index. When <paramref name="excludeIndex"/> is valid, it is never chosen
+    /// unless it is the only valid entry.
+    /// </summary>
+    private static int PickRandomValidEntryIndex(BattleBackgroundVideoEntry[] entries, int excludeIndex)
+    {
+        if (entries == null || entries.Length == 0)
+            return -1;
+
+        int candidateCount = 0;
+        for (int i = 0; i < entries.Length; i++)
+        {
+            if (entries[i] == null || !entries[i].IsValid)
+                continue;
+            if (i == excludeIndex)
+                continue;
+            candidateCount++;
+        }
+
+        if (candidateCount == 0)
+        {
+            for (int i = 0; i < entries.Length; i++)
+            {
+                if (entries[i] != null && entries[i].IsValid)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        int pick = UnityEngine.Random.Range(0, candidateCount);
+        for (int i = 0; i < entries.Length; i++)
+        {
+            if (entries[i] == null || !entries[i].IsValid)
+                continue;
+            if (i == excludeIndex)
+                continue;
+            if (pick == 0)
+                return i;
+            pick--;
+        }
+
+        return -1;
+    }
+
     private void ApplyBlendMode(BattleBackgroundVideoBlendMode mode, float intensity)
     {
         if (backgroundVideo == null)
@@ -340,6 +394,8 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         while (elapsed < durationSeconds)
         {
             ct.ThrowIfCancellationRequested();
+            if (_playbackSuppressed)
+                return;
             elapsed += Time.unscaledDeltaTime;
             float alpha = Mathf.Lerp(start, targetAlpha, elapsed / durationSeconds);
             SetDisplayAlpha(alpha);
@@ -367,6 +423,55 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         EnsureDisplayFadeGroup();
         if (_displayFadeGroup != null)
             _displayFadeGroup.alpha = alpha;
+    }
+
+    /// <summary>Pause playlist advances and hides layers while dense fog owns the backdrop.</summary>
+    public void SetPlaybackSuppressedByFog(bool suppressed)
+    {
+        _playbackSuppressed = suppressed;
+        EnsureWired();
+
+        if (suppressed)
+        {
+            if (videoPlayer != null && videoPlayer.isPlaying)
+                videoPlayer.Pause();
+            if (backgroundVideo != null)
+            {
+                backgroundVideo.gameObject.SetActive(false);
+                SetDisplayAlpha(0f);
+            }
+            if (staticBackgroundImage != null)
+                staticBackgroundImage.enabled = false;
+            return;
+        }
+
+        if (staticBackgroundImage != null)
+            staticBackgroundImage.enabled = true;
+        if (backgroundVideo != null)
+            backgroundVideo.gameObject.SetActive(true);
+
+        SetDisplayAlpha(1f);
+        if (_sessionStarted)
+            PlayCurrentEntryMedia();
+    }
+
+    public bool IsPlaybackSuppressedByFog => _playbackSuppressed;
+
+    public Image GetStaticBackgroundImage()
+    {
+        EnsureWired();
+        return staticBackgroundImage;
+    }
+
+    /// <summary>Full-screen backdrop parent (canvas content or BackGroundImage).</summary>
+    public RectTransform GetBackdropRootRectTransform()
+    {
+        EnsureWired();
+        if (staticBackgroundImage != null)
+            return staticBackgroundImage.rectTransform.parent as RectTransform;
+        if (backgroundVideo != null)
+            return backgroundVideo.rectTransform.parent as RectTransform;
+        return null;
     }
 
     private void ConfigureVideoPlayer()

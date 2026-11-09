@@ -28,6 +28,11 @@ public class DamagePopup : MonoBehaviour
     [SerializeField] [Range(8f, 80f)] private float messageFontSizeMin = 22f;
     [SerializeField] [Range(40f, 200f)] private float messageFontSizeMax = 160f;
 
+    [Header("Message banner layout (360x150)")]
+    [Tooltip("Fixed rect for status names, reload, bounce, miss, etc. Height preserved; width via localScale.x.")]
+    [SerializeField] private Vector2 messageBannerExtents = new Vector2(360f, 150f);
+    [SerializeField] [Range(0.7f, 1f)] private float messageBannerWidthFill = 0.94f;
+
     [Header("Style (optional override)")]
     [Tooltip("未設定時は BattlePopupPresenter または Resources/DamagePopupSettings を参照。")]
     [SerializeField] private DamagePopupSettings settingsOverride;
@@ -198,15 +203,14 @@ public class DamagePopup : MonoBehaviour
                 SetupHandReloadFromEntry(entry, messageOverride);
                 return;
             default:
-                SetupStyledMessage(entry, messageOverride, statusAilmentAutoSize: false);
+                SetupStyledMessage(entry, messageOverride);
                 return;
         }
     }
 
     public void SetupStyledMessage(
         DamagePopupStyleEntry entry,
-        string messageOverride = null,
-        bool statusAilmentAutoSize = false)
+        string messageOverride = null)
     {
         ApplyBackground(entry);
         string text = string.IsNullOrEmpty(messageOverride) ? entry.message : messageOverride;
@@ -216,7 +220,7 @@ public class DamagePopup : MonoBehaviour
             return;
         }
 
-        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize);
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor);
     }
 
     private void SetupHandReloadFromEntry(DamagePopupStyleEntry entry, string messageOverride)
@@ -226,7 +230,7 @@ public class DamagePopup : MonoBehaviour
         var t = messageText != null ? messageText : valueText;
         if (t != null)
             t.richText = false;
-        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize: false);
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor);
         if (t != null)
         {
             if (t.fontSharedMaterial == null && t.font != null)
@@ -246,58 +250,56 @@ public class DamagePopup : MonoBehaviour
     }
 
     /// <summary>語句・状態異常・無傷など Message のみ。DamageValue／ラベルは隠す。</summary>
-    private void ShowMessageLayout(string text, Color fillColor, Color outlineColor, bool statusAilmentAutoSize)
+    private void ShowMessageLayout(string text, Color fillColor, Color outlineColor)
     {
-        if (labelText != null)
-            labelText.gameObject.SetActive(false);
-        if (valueText != null)
-            valueText.gameObject.SetActive(false);
-
         var target = messageText != null ? messageText : valueText;
         if (target == null) return;
-
-        target.gameObject.SetActive(true);
-        target.text = text ?? string.Empty;
-        ApplyFillAndOutline(target, fillColor, outlineColor);
-
-        if (messageText != null)
-        {
-            if (statusAilmentAutoSize)
-            {
-                // 状態異常名：1行を大きく（従来どおり折り返しなし）
-                target.enableWordWrapping = false;
-                target.overflowMode = TextOverflowModes.Overflow;
-                target.enableAutoSizing = true;
-                target.fontSizeMin = messageFontSizeMin;
-                target.fontSizeMax = messageFontSizeMax;
-                target.alignment = TextAlignmentOptions.Center;
-            }
-            else
-            {
-                // 病系・ミス・無傷など：Rect 内に収まるよう Auto Size
-                ApplyMessageAutoSizeForPopup(target);
-            }
-        }
-        else
-        {
-            // Message 未設定の旧プレハブ：valueText のみ
-            ApplyMessageAutoSizeForPopup(target);
-        }
+        ApplyFixedBannerMessageLayout(target, text, fillColor, outlineColor);
     }
 
     /// <summary>
-    /// <see cref="Setup(string, Color)"/> 等：プレハブの Message Rect 内に収まるよう TMP の Auto Size を使用。
+    /// 360x150 固定：縦は最大サイズを維持し、幅が足りないときだけ <see cref="RectTransform.localScale"/> の X を縮める。
     /// </summary>
-    private void ApplyMessageAutoSizeForPopup(TMP_Text target)
+    private void ApplyFixedBannerMessageLayout(TMP_Text target, string text, Color fill, Color outlineColor)
     {
-        if (target == null) return;
+        if (labelText != null)
+            labelText.gameObject.SetActive(false);
+        if (valueText != null && messageText != null && target != valueText)
+            valueText.gameObject.SetActive(false);
+        if (messageText != null && target != messageText)
+            messageText.gameObject.SetActive(false);
 
-        target.enableWordWrapping = true;
+        target.gameObject.SetActive(true);
+        target.text = text ?? string.Empty;
+        target.enableWordWrapping = false;
         target.overflowMode = TextOverflowModes.Overflow;
-        target.enableAutoSizing = true;
-        target.fontSizeMin = messageFontSizeMin;
-        target.fontSizeMax = messageFontSizeMax;
+        target.enableAutoSizing = false;
         target.alignment = TextAlignmentOptions.Center;
+        target.margin = Vector4.zero;
+        ApplyFillAndOutline(target, fill, outlineColor);
+
+        float fontSize = messageFontSizeMax;
+        target.fontSize = fontSize;
+
+        float maxH = messageBannerExtents.y * 0.98f;
+        Vector2 measured = target.GetPreferredValues(text, fontSize, 0f);
+        if (measured.y > maxH && measured.y > 0.001f)
+        {
+            fontSize *= maxH / measured.y;
+            target.fontSize = fontSize;
+        }
+
+        var rt = target.rectTransform;
+        rt.sizeDelta = messageBannerExtents;
+        rt.localRotation = Quaternion.identity;
+        rt.localScale = Vector3.one;
+
+        target.ForceMeshUpdate(true);
+
+        float maxW = messageBannerExtents.x * messageBannerWidthFill;
+        float prefW = target.preferredWidth;
+        if (prefW > 0.001f && prefW > maxW)
+            rt.localScale = new Vector3(maxW / prefW, 1f, 1f);
     }
 
     private void Start()
@@ -315,7 +317,7 @@ public class DamagePopup : MonoBehaviour
     /// <param name="fillColor">文字の塗りつぶし色（縁は ApplyFillAndOutline 参照）。</param>
     public void Setup(string message, Color fillColor)
     {
-        ShowMessageLayout(message, fillColor, ResolveDefaultSimpleOutline(), statusAilmentAutoSize: false);
+        ShowMessageLayout(message, fillColor, ResolveDefaultSimpleOutline());
     }
 
     /// <summary>
@@ -323,7 +325,7 @@ public class DamagePopup : MonoBehaviour
     /// </summary>
     public void Setup(string message, Color fillColor, Color outlineColor)
     {
-        ShowMessageLayout(message, fillColor, outlineColor, statusAilmentAutoSize: false);
+        ShowMessageLayout(message, fillColor, outlineColor);
     }
 
     /// <summary>
@@ -361,16 +363,11 @@ public class DamagePopup : MonoBehaviour
             string noDmgText = string.IsNullOrEmpty(nd.message) ? "無傷" : nd.message;
             if (messageText != null)
             {
-                ShowMessageLayout(noDmgText, nd.textColor, nd.outlineColor, statusAilmentAutoSize: false);
+                ShowMessageLayout(noDmgText, nd.textColor, nd.outlineColor);
             }
             else if (valueText != null)
             {
-                if (labelText != null)
-                    labelText.gameObject.SetActive(false);
-                valueText.gameObject.SetActive(true);
-                valueText.text = noDmgText;
-                ApplyMessageAutoSizeForPopup(valueText);
-                ApplyFillAndOutline(valueText, nd.textColor, nd.outlineColor);
+                ApplyFixedBannerMessageLayout(valueText, noDmgText, nd.textColor, nd.outlineColor);
             }
         }
     }
@@ -385,7 +382,7 @@ public class DamagePopup : MonoBehaviour
         SetupDamage(amount, damageHitsPlayer);
     }
 
-    /// <summary>状態異常付与表示：公式名をオートサイズで大きく表示。</summary>
+    /// <summary>状態異常付与表示：公式名をバナー枠内に大きく表示（縦維持・横詰め）。</summary>
     public void SetupStatusAilmentGrant(string ailmentDisplayName, StatusEffectPopupStyleEntry style)
     {
         ApplyBackground(new DamagePopupStyleEntry
@@ -399,27 +396,11 @@ public class DamagePopup : MonoBehaviour
             ? style.outlineColor
             : ResolveDefaultSimpleOutline();
 
+        string name = ailmentDisplayName ?? string.Empty;
         if (messageText != null)
-        {
-            ShowMessageLayout(
-                ailmentDisplayName ?? string.Empty,
-                style.textColor,
-                outline,
-                statusAilmentAutoSize: true);
-        }
+            ShowMessageLayout(name, style.textColor, outline);
         else if (valueText != null)
-        {
-            if (labelText != null)
-                labelText.gameObject.SetActive(false);
-            valueText.gameObject.SetActive(true);
-            valueText.text = ailmentDisplayName ?? string.Empty;
-            valueText.enableWordWrapping = false;
-            valueText.overflowMode = TextOverflowModes.Overflow;
-            valueText.enableAutoSizing = true;
-            valueText.fontSizeMin = messageFontSizeMin;
-            valueText.fontSizeMax = messageFontSizeMax;
-            ApplyFillAndOutline(valueText, style.textColor, outline);
-        }
+            ApplyFixedBannerMessageLayout(valueText, name, style.textColor, outline);
     }
 
     /// <summary>互換：呼び出し側で色を直接渡す場合。</summary>
@@ -453,14 +434,36 @@ public class DamagePopup : MonoBehaviour
         }, null);
     }
 
-    /// <summary>物理反射：赤背景・虹色文字の「弾き返す」。</summary>
+    /// <summary>物理反射：虹色背景（斜めグラデ）・直立の赤字・白縁の「弾き返す」。</summary>
     public void SetupReflectionBounce(string message = null)
     {
         var entry = ResolveSettings().GetEntryOrDefault(DamagePopupKind.ReflectionBounce);
-        ApplyBackground(entry);
-        SetupRainbowMessage(
-            string.IsNullOrEmpty(message) ? entry.message : message,
-            entry.outlineColor);
+        ApplyReflectionRainbowBackground();
+        string text = string.IsNullOrEmpty(message) ? entry.message : message;
+        var fill = entry.textColor.a > 0.001f
+            ? entry.textColor
+            : new Color(0.92f, 0.12f, 0.18f, 1f);
+        var outline = entry.outlineColor.a > 0.001f ? entry.outlineColor : Color.white;
+
+        var t = messageText != null ? messageText : valueText;
+        if (t == null) return;
+
+        t.richText = false;
+        ApplyFixedBannerMessageLayout(t, text, fill, outline);
+        if (t.font != null)
+            t.fontSharedMaterial = t.font.material;
+        float ow = t.outlineWidth >= 0.08f ? t.outlineWidth : 0.28f;
+        ApplyOutlinedMaterialInstance(t, outline, ow);
+    }
+
+    private void ApplyReflectionRainbowBackground()
+    {
+        if (_rootPanelImage == null) return;
+
+        var scroll = _rootPanelImage.GetComponent<RainbowGradientScrollImage>();
+        if (scroll == null)
+            scroll = _rootPanelImage.gameObject.AddComponent<RainbowGradientScrollImage>();
+        scroll.Begin(_rootPanelImage);
     }
 
     /// <summary>オーディン切り払い：銀背景・黒字・白縁の「弾き返す」。</summary>
@@ -469,7 +472,7 @@ public class DamagePopup : MonoBehaviour
         var entry = ResolveSettings().GetEntryOrDefault(DamagePopupKind.OrdinReflectionBounce);
         ApplyBackground(entry);
         string text = string.IsNullOrEmpty(message) ? entry.message : message;
-        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize: false);
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor);
         var t = messageText != null ? messageText : valueText;
         if (t != null)
         {
@@ -511,7 +514,7 @@ public class DamagePopup : MonoBehaviour
         var entry = ResolveSettings().GetEntryOrDefault(DamagePopupKind.BlockingNullify);
         ApplyBackground(entry);
         string text = string.IsNullOrEmpty(message) ? entry.message : message;
-        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize: false);
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor);
     }
 
     /// <summary>打ち払い：黄背景・白字・黒縁。</summary>
@@ -524,7 +527,7 @@ public class DamagePopup : MonoBehaviour
         if (t != null)
             t.richText = false;
 
-        ShowMessageLayout(text, entry.textColor, entry.outlineColor, statusAilmentAutoSize: false);
+        ShowMessageLayout(text, entry.textColor, entry.outlineColor);
         if (t != null)
         {
             if (t.fontSharedMaterial == null && t.font != null)

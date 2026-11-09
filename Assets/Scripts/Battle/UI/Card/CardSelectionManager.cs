@@ -183,7 +183,7 @@ public class CardSelectionManager : MonoBehaviour
             return false;
         }
 
-        // ===== 攻撃：魔法と物理攻撃の併用は Flexible/AddOn 同士のみ。違反時は既存を消して新カードへ差し替え =====
+        // ===== 攻撃：攻撃魔法ルール違反時は既存を消して新カードへ差し替え =====
         if (BattleManager.I != null
             && BattleManager.I.CurrentState == GameState.AttackPhase
             && BattleManager.I.CurrentTurnOwner == PlayerType.Player
@@ -413,7 +413,9 @@ public class CardSelectionManager : MonoBehaviour
                 {
                     ClearAllWithUI();
                 }
-                else if (newCard.cardType == CardType.Magic && HasMagicCards())
+                else if (newCard.cardType == CardType.Magic
+                    && !CardRules.IsRecoveryCard(newCard)
+                    && AttackComboSelectionRules.ConflictsAttackMagicUseRuleMix(selectedCards, newCard))
                 {
                     ClearAllWithUI();
                 }

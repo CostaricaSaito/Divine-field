@@ -23,8 +23,6 @@ public enum OrdinInterceptContext
 /// </summary>
 public static class OrdinSlashReflectFlow
 {
-    private const float SlideDurationSec = 0.5f;
-
     private static OrdinSlashReflectSettings _settings;
     private static OrdinSlashReflectSettings _fallbackInstance;
 
@@ -129,77 +127,32 @@ public static class OrdinSlashReflectFlow
     }
 
     /// <summary>
-    /// Reflection chain: player auto-bounce without card use. Returns true when handled.
+    /// Reflection chain: rolls Odin auto-bounce for the side about to defend. Consumes BattleRandom only when eligible.
     /// </summary>
-    public static async Task<bool> TryRunPlayerBounceInReflectionChainAsync(
-        BattleManager battleManager,
-        BattleProcessor battleProcessor,
-        List<CardData> incomingAttackCards,
-        int incomingPower,
-        PlayerStatus reflectionBlessingAttacker,
-        PlayerStatus reflectionBlessingDefender,
-        CancellationToken cancellationToken)
+    public static bool TryRollChainAutoBounce(
+        BattleManager bm,
+        PlayerStatus defender,
+        PlayerStatus attacker,
+        IReadOnlyList<CardData> incomingAttack)
     {
-        if (battleManager == null || incomingAttackCards == null || incomingAttackCards.Count == 0)
+        if (bm == null || defender == null || attacker == null || incomingAttack == null || incomingAttack.Count == 0)
             return false;
-
-        var player = battleManager.GetPlayerStatus();
-        var enemy = battleManager.GetEnemyStatus();
-        if (player == null || enemy == null)
+        if (!OrdinSlashReflectRules.CanTrigger(defender, attacker, incomingAttack, bm))
             return false;
-
-        if (!OrdinSlashReflectRules.CanTrigger(player, enemy, incomingAttackCards, battleManager))
-            return false;
-        if (!RollSuccess())
-            return false;
-
-        await RunOrdinBouncePresentationAsync(
-            player,
-            incomingAttackCards,
-            slideTowardPlayer: true,
-            incomingPower,
-            battleManager,
-            reflectionBlessingAttacker,
-            reflectionBlessingDefender,
-            cancellationToken);
-        return true;
+        return RollSuccess();
     }
 
-    /// <summary>
-    /// Reflection chain: enemy auto-bounce without card use. Returns true when handled.
-    /// </summary>
-    public static async Task<bool> TryRunEnemyBounceInReflectionChainAsync(
-        BattleManager battleManager,
-        BattleProcessor battleProcessor,
-        List<CardData> incomingAttackCards,
-        int incomingPower,
-        PlayerStatus reflectionBlessingAttacker,
-        PlayerStatus reflectionBlessingDefender,
-        CancellationToken cancellationToken)
+    /// <summary>Cut-in and bounce popup. The card slide is done by <see cref="ReactiveDefenseChain"/>.</summary>
+    public static async Task PlayAutoBouncePresentationAsync(PlayerStatus popupOwner, CancellationToken ct)
     {
-        if (battleManager == null || incomingAttackCards == null || incomingAttackCards.Count == 0)
-            return false;
+        await OrdinSlashReflectPresentation.RunCutInAsync(ct);
+        ct.ThrowIfCancellationRequested();
 
-        var player = battleManager.GetPlayerStatus();
-        var enemy = battleManager.GetEnemyStatus();
-        if (player == null || enemy == null)
-            return false;
-
-        if (!OrdinSlashReflectRules.CanTrigger(enemy, player, incomingAttackCards, battleManager))
-            return false;
-        if (!RollSuccess())
-            return false;
-
-        await RunOrdinBouncePresentationAsync(
-            enemy,
-            incomingAttackCards,
-            slideTowardPlayer: false,
-            incomingPower,
-            battleManager,
-            reflectionBlessingAttacker,
-            reflectionBlessingDefender,
-            cancellationToken);
-        return true;
+        float bounceSec = BattleUIManager.I != null
+            ? BattleUIManager.I.ShowOrdinReflectionBouncePopup(popupOwner)
+            : DamagePopup.DefaultFadeDurationIfUnknown;
+        if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
+        await DamagePopup.WaitAfterPopupLifetimeAsync(bounceSec, ct);
     }
 
     private static async Task RunPlayerOrdinReflectAsync(
@@ -208,47 +161,11 @@ public static class OrdinSlashReflectFlow
         OrdinInterceptContext context,
         CancellationToken ct)
     {
-        var player = bm.GetPlayerStatus();
-        var enemy = bm.GetEnemyStatus();
-        var processor = bm.battleProcessor;
-        if (processor == null || player == null || enemy == null)
-            return;
-
         bm.AdHocDefense?.Clear();
         SuppressPlayerDefenseInputForOrdinReflect(bm);
 
-        bm.ClearReflectionAttackTotalDisplay();
-        int incomingPower = processor.ComputeReflectionIncomingAttackPower(incomingAttack, enemy, player);
-
-        await RunOrdinBouncePresentationAsync(
-            player,
-            incomingAttack,
-            slideTowardPlayer: true,
-            incomingPower,
-            bm,
-            enemy,
-            enemy,
-            ct);
-
-        try
-        {
-            await PhysicalReflectionFlow.RunReflectionChainLoopAsync(
-                bm,
-                processor,
-                bm.HandRefill,
-                bm.GetEnemyAI(),
-                incomingAttack,
-                incomingPower,
-                PlayerType.Enemy,
-                sessionMagic: false,
-                ct,
-                enemy,
-                enemy);
-        }
-        finally
-        {
-            bm.ClearReflectionAttackTotalDisplay();
-        }
+        await ReactiveDefenseChain.RunAsync(
+            bm, incomingAttack, PlayerType.Enemy, ReactiveDefenseResponse.OrdinAutoBounce(), ct);
 
         await FinishAfterPlayerOrdinReflectAsync(bm, context, ct);
     }
@@ -259,78 +176,10 @@ public static class OrdinSlashReflectFlow
         OrdinInterceptContext context,
         CancellationToken ct)
     {
-        var player = bm.GetPlayerStatus();
-        var enemy = bm.GetEnemyStatus();
-        var processor = bm.battleProcessor;
-        if (processor == null || player == null || enemy == null)
-            return;
-
-        bm.ClearReflectionAttackTotalDisplay();
-        int incomingPower = processor.ComputeReflectionIncomingAttackPower(incomingAttack, player, enemy);
-
-        await RunOrdinBouncePresentationAsync(
-            enemy,
-            incomingAttack,
-            slideTowardPlayer: false,
-            incomingPower,
-            bm,
-            player,
-            player,
-            ct);
-
-        try
-        {
-            await PhysicalReflectionFlow.RunReflectionChainLoopAsync(
-                bm,
-                processor,
-                bm.HandRefill,
-                bm.GetEnemyAI(),
-                incomingAttack,
-                incomingPower,
-                PlayerType.Player,
-                sessionMagic: false,
-                ct,
-                player,
-                player);
-        }
-        finally
-        {
-            bm.ClearReflectionAttackTotalDisplay();
-        }
+        await ReactiveDefenseChain.RunAsync(
+            bm, incomingAttack, PlayerType.Player, ReactiveDefenseResponse.OrdinAutoBounce(), ct);
 
         await FinishAfterEnemyOrdinReflectAsync(bm, context, ct);
-    }
-
-    private static async Task RunOrdinBouncePresentationAsync(
-        PlayerStatus popupOwner,
-        List<CardData> incomingAttack,
-        bool slideTowardPlayer,
-        int incomingPower,
-        BattleManager bm,
-        PlayerStatus reflectionBlessingAttacker,
-        PlayerStatus reflectionBlessingDefender,
-        CancellationToken ct)
-    {
-        await OrdinSlashReflectPresentation.RunCutInAsync(ct);
-        if (ct.IsCancellationRequested) return;
-
-        float bounceSec = BattleUIManager.I != null
-            ? BattleUIManager.I.ShowOrdinReflectionBouncePopup(popupOwner)
-            : DamagePopup.DefaultFadeDurationIfUnknown;
-        if (bounceSec <= 0f) bounceSec = DamagePopup.DefaultFadeDurationIfUnknown;
-        await DamagePopup.WaitAfterPopupLifetimeAsync(bounceSec, ct);
-        if (ct.IsCancellationRequested) return;
-
-        if (BattleUIManager.I != null)
-            await BattleUIManager.I.SlideReflectionAttackSheetsAsync(
-                incomingAttack, slideTowardPlayer, SlideDurationSec, ct);
-        SoundEffectPlayer.I?.Play(CardDealAudio.NormalPath);
-        bm.SetReflectionAttackTotalDisplayAfterSlide(
-            incomingAttack,
-            totalAtkOnPlayerSide: slideTowardPlayer,
-            reflectionBlessingAttacker,
-            reflectionBlessingDefender,
-            incomingPower);
     }
 
     private static async Task FinishAfterPlayerOrdinReflectAsync(

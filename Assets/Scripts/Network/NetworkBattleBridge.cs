@@ -42,6 +42,7 @@ public static class NetworkBattleBridge
         ThiefHoodEffect = 19,        // host -> client : Thief's Hood steal payload
         OrbTempestDrawEffect = 20,   // host -> client : Orb of Tempest draw payload
         ShivaIceBarrierDrawEffect = 21, // host -> client : ice barrier draw presentation sync
+        HandRoster = 22,             // either -> peer : hand roster after a hand change settles
     }
 
     public enum RemoteEconomicKind : byte
@@ -55,6 +56,9 @@ public static class NetworkBattleBridge
 
     /// <summary>Remote peer confirmed a hand reload. Argument is hand indices in draw order.</summary>
     public static event Action<IReadOnlyList<int>> RemoteHandReloadReceived;
+
+    /// <summary>Either peer published the hand roster after a local hand change settled.</summary>
+    public static event Action<HandRosterSync> HandRosterReceived;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     /// <summary>Development only: both peers apply the same inject (cardName, host-player hand?).</summary>
@@ -113,6 +117,32 @@ public static class NetworkBattleBridge
         public bool DrawerIsHostPlayer;
         public bool Skipped;
         public string DrawnCardName;
+    }
+
+    /// <summary>One hand slot: name, face, and whether it was already used this turn.</summary>
+    public struct HandRosterSlot
+    {
+        public string Name;
+        public bool FaceUp;
+        public bool Used;
+    }
+
+    /// <summary>
+    /// Hand membership after a change settles.
+    /// Own* is the sender's player hand. Mirror* is the sender's copy of the opponent hand.
+    /// </summary>
+    public struct HandRosterSync
+    {
+        public bool HasOwn;
+        public int OwnRevision;
+        /// <summary>Bumps only when card names or order change. Face/used updates do not move this.</summary>
+        public int OwnIdentityRevision;
+        public List<HandRosterSlot> OwnSlots;
+        public bool HasMirror;
+        public int MirrorRevision;
+        /// <summary>Sender's last applied identity revision of the opponent's own hand.</summary>
+        public int ObservedPeerIdentityRevision;
+        public List<HandRosterSlot> MirrorSlots;
     }
 
     /// <summary>Host -> client: Shiva ice barrier transform presentation for one draw.</summary>
@@ -497,6 +527,30 @@ public static class NetworkBattleBridge
             writer.WriteValueSafe(handIndices[i]);
         Send(writer);
         Debug.Log($"[NetworkBattleBridge] Sent HandReload ({count} slots)");
+    }
+
+    /// <summary>Publish hand rosters that changed since the previous send. Parts that did not change are omitted.</summary>
+    public static void SendHandRoster(HandRosterSync sync)
+    {
+        using var writer = new FastBufferWriter(1024, Allocator.Temp, 65536);
+        writer.WriteValueSafe((byte)MsgType.HandRoster);
+        writer.WriteValueSafe(sync.HasOwn);
+        if (sync.HasOwn)
+        {
+            writer.WriteValueSafe(sync.OwnRevision);
+            writer.WriteValueSafe(sync.OwnIdentityRevision);
+            WriteHandRosterSlots(writer, sync.OwnSlots);
+        }
+
+        writer.WriteValueSafe(sync.HasMirror);
+        if (sync.HasMirror)
+        {
+            writer.WriteValueSafe(sync.MirrorRevision);
+            writer.WriteValueSafe(sync.ObservedPeerIdentityRevision);
+            WriteHandRosterSlots(writer, sync.MirrorSlots);
+        }
+
+        Send(writer);
     }
 
     /// <summary>Notify opponent that the local player forfeits (leaves battle).</summary>
@@ -1039,6 +1093,43 @@ public static class NetworkBattleBridge
         }
     }
 
+    static void WriteHandRosterSlots(FastBufferWriter writer, List<HandRosterSlot> slots)
+    {
+        int count = slots != null ? slots.Count : 0;
+        if (count > 18) count = 18;
+        writer.WriteValueSafe(count);
+        for (int i = 0; i < count; i++)
+        {
+            var slot = slots[i];
+            writer.WriteValueSafe(slot.Name ?? "");
+            byte flags = 0;
+            if (slot.FaceUp) flags |= 1;
+            if (slot.Used) flags |= 2;
+            writer.WriteValueSafe(flags);
+        }
+    }
+
+    static List<HandRosterSlot> ReadHandRosterSlots(FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out int count);
+        if (count < 0) count = 0;
+        if (count > 18) count = 18;
+        var list = new List<HandRosterSlot>(count);
+        for (int i = 0; i < count; i++)
+        {
+            reader.ReadValueSafe(out string name);
+            reader.ReadValueSafe(out byte flags);
+            list.Add(new HandRosterSlot
+            {
+                Name = name ?? "",
+                FaceUp = (flags & 1) != 0,
+                Used = (flags & 2) != 0,
+            });
+        }
+
+        return list;
+    }
+
     static void WriteStringList(FastBufferWriter writer, List<string> list)
     {
         int count = list != null ? list.Count : 0;
@@ -1485,6 +1576,29 @@ public static class NetworkBattleBridge
                 }
                 Debug.Log($"[NetworkBattleBridge] HandReload received ({count} slots)");
                 RemoteHandReloadReceived?.Invoke(indices);
+                break;
+            }
+
+            case MsgType.HandRoster:
+            {
+                var sync = new HandRosterSync();
+                reader.ReadValueSafe(out sync.HasOwn);
+                if (sync.HasOwn)
+                {
+                    reader.ReadValueSafe(out sync.OwnRevision);
+                    reader.ReadValueSafe(out sync.OwnIdentityRevision);
+                    sync.OwnSlots = ReadHandRosterSlots(reader);
+                }
+
+                reader.ReadValueSafe(out sync.HasMirror);
+                if (sync.HasMirror)
+                {
+                    reader.ReadValueSafe(out sync.MirrorRevision);
+                    reader.ReadValueSafe(out sync.ObservedPeerIdentityRevision);
+                    sync.MirrorSlots = ReadHandRosterSlots(reader);
+                }
+
+                HandRosterReceived?.Invoke(sync);
                 break;
             }
 

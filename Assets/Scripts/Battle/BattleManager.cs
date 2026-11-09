@@ -403,8 +403,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
 
     public bool IsReflectionChainDefensePending() => _adHocDefense.IsReflectionChainPending();
 
-    public bool IsParryRerunDefensePending() => _adHocDefense.IsParryRerunPending();
-
     public bool IsReactiveAdHocDefenseWaitActive() => _adHocDefense.IsReactiveWaitActive();
 
     public void BeginInterventionPlayerDefensePhase(List<CardData> attackCardsForElement)
@@ -432,9 +430,6 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
         List<CardData> attackSnapshot,
         CancellationToken cancellationToken)
         => _adHocDefense.WaitForReflectionChainDefenseAsync(attackSnapshot, cancellationToken);
-
-    public Task<List<CardData>> WaitForParryRerunDefenseSubmitAsync(CancellationToken cancellationToken)
-        => _adHocDefense.WaitForParryRerunDefenseSubmitAsync(cancellationToken);
 
     public void ClearInterventionDefenseWait() => _adHocDefense.ClearInterventionWait();
 
@@ -1342,8 +1337,14 @@ public partial class BattleManager : MonoBehaviour, IBattleContext, IBattlePhase
             this, battleProcessor, orbs, firstPhaseDamageB, originalAttacker, originalDefender, cancellationToken);
     }
 
+    private void LateUpdate()
+    {
+        _onlineSync?.TickHandRoster();
+    }
+
     private void OnDestroy()
     {
+        _onlineSync?.DisposeHandRoster();
         _battleExit?.Shutdown();
         _bootstrap.Shutdown(this);
         _phaseController?.Dispose();

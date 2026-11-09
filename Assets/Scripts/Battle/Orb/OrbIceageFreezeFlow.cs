@@ -78,8 +78,7 @@ public static class OrbIceageFreezeFlow
             break;
         }
 
-        if (await TryRunImmediateFullReflectionAsync(
-                bm, battleProcessor, handRefill, incoming, finalPick, orbOwner, playerVictim, ct))
+        if (await TryRunReflectionChainAsync(bm, incoming, finalPick, orbOwner, ct))
             return;
 
         ConsumePlayerDefensePick(bm, battleProcessor, handRefill, finalPick);
@@ -121,23 +120,8 @@ public static class OrbIceageFreezeFlow
             if (ct.IsCancellationRequested) return;
         }
 
-        if (pick != null
-            && ReflectionRules.CanReflectIncoming(pick, incoming)
-            && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(incoming))
-        {
-            await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, ct);
-            await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
-                bm,
-                battleProcessor,
-                handRefill,
-                incoming,
-                pick,
-                orbOwner,
-                ct);
-            EnemyDefenseSelectionHelper.ConsumeEnemyDefenseCards(
-                new List<CardData> { pick }, bm, battleProcessor, handRefill);
+        if (await TryRunReflectionChainAsync(bm, incoming, pick, orbOwner, ct))
             return;
-        }
 
         if (pick != null)
         {
@@ -149,30 +133,20 @@ public static class OrbIceageFreezeFlow
         await ApplyFreezeDirectAsync(battleProcessor, orb, orbOwner, enemyVictim, ct);
     }
 
-    private static async Task<bool> TryRunImmediateFullReflectionAsync(
+    private static async Task<bool> TryRunReflectionChainAsync(
         BattleManager bm,
-        BattleProcessor battleProcessor,
-        HandRefillService handRefill,
         List<CardData> incoming,
         CardData defensePick,
         PlayerStatus orbOwner,
-        PlayerStatus playerVictim,
         CancellationToken ct)
     {
         if (defensePick == null) return false;
-        if (!ReflectionRules.CanReflectIncoming(defensePick, incoming)) return false;
-        if (!ReflectionRules.ShouldUseImmediateEffectReflectionFlow(incoming)) return false;
+        var picks = new List<CardData> { defensePick };
+        if (!ReactiveDefenseRules.StartsChain(ReactiveDefenseRules.Classify(picks, incoming))) return false;
 
-        await ImmediateEffectReflectionFlow.RunPlayerInitiatedAsync(
-            bm,
-            battleProcessor,
-            handRefill,
-            incoming,
-            defensePick,
-            orbOwner,
-            playerVictim,
-            ct,
-            reflectionCardAlreadyConsumed: false);
+        var ownerSide = ReferenceEquals(orbOwner, bm.GetPlayerStatus()) ? PlayerType.Player : PlayerType.Enemy;
+        await ReactiveDefenseChain.RunAsync(
+            bm, incoming, ownerSide, ReactiveDefenseResponse.FromPicks(picks, alreadyConsumed: false), ct);
         return true;
     }
 

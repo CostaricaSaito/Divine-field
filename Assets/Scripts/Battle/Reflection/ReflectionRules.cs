@@ -56,7 +56,7 @@ public static class ReflectionRules
     }
 
     /// <summary>
-    /// 跳ね返し対象 incoming がダメージ戦闘反射（<see cref="PhysicalReflectionFlow"/>）か。
+    /// 跳ね返し対象 incoming がダメージ戦闘反射（<see cref="ReactiveDefenseChain"/>）か。
     /// false のときは即時効果反射（回復・状態異常・Special 単体等）。
     /// </summary>
     public static bool ShouldUseImmediateEffectReflectionFlow(IReadOnlyList<CardData> incomingAttack)

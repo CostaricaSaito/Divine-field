@@ -42,15 +42,12 @@ public sealed class EnemyDefenseResolver
 
     public async Task ResolveConfirmAsync()
     {
-        var defenseCardsToDisplay = GetDefenseCardsForCombat();
+        var defenseCardsForCombat = GetDefenseCardsForCombat();
         var atk = (_host.Attacker == PlayerType.Player) ? _host.PlayerStatus : _host.EnemyStatus;
         var def = (_host.Defender == PlayerType.Player) ? _host.PlayerStatus : _host.EnemyStatus;
         var defHand = (_host.Defender == PlayerType.Player) ? _host.PlayerHand : _host.CpuHand;
 
         List<CardData> attackCards = _host.GetAttackCardsForCombat();
-        var defenseCardsForCombat = defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0
-            ? defenseCardsToDisplay
-            : new List<CardData>();
         var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(defenseCardsForCombat);
         CardData enemyDefenseCard = combatDefenseCards.Count > 0 ? combatDefenseCards[0] : null;
 
@@ -87,121 +84,80 @@ public sealed class EnemyDefenseResolver
             }
         }
 
-        if (defenseCardsToDisplay != null && defenseCardsToDisplay.Count > 0)
+        if (defenseCardsForCombat.Count > 0)
+            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCardsForCombat);
+
+        var reactiveKind = _host.Defender == PlayerType.Enemy
+            ? ReactiveDefenseRules.Classify(combatDefenseCards, attackCards)
+            : ReactiveDefenseKind.Normal;
+        bool fullOnlyIncoming = attackCards != null && attackCards.Count > 0
+            && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards);
+
+        if (ReactiveDefenseRules.StartsChain(reactiveKind))
         {
-            await BattleUIManager.I?.ShowEnemyDefenseCardsPresentationSequenceAsync(defenseCardsToDisplay);
+            await ReactiveDefenseChain.RunAsync(
+                _host.Manager,
+                attackCards,
+                _host.Attacker,
+                ReactiveDefenseResponse.FromPicks(defenseCardsForCombat, alreadyConsumed: false),
+                phaseToken);
         }
-
-        bool enemyPhysicalReflect = enemyDefenseCard != null
-            && ReflectionRules.CanReflectIncoming(enemyDefenseCard, attackCards)
-            && !ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
-        bool enemyMagicReflect = enemyPhysicalReflect;
-        bool enemyImmediateReflect = enemyDefenseCard != null
-            && ReflectionRules.CanReflectIncoming(enemyDefenseCard, attackCards)
-            && ReflectionRules.ShouldUseImmediateEffectReflectionFlow(attackCards);
-        bool enemyPhysicalBlock = enemyDefenseCard != null
-            && BlockingRules.CanUsePhysicalBlockingAgainstAttack(enemyDefenseCard, attackCards);
-        bool enemyParry = enemyDefenseCard != null
-            && ParryRules.RequiresParryExclusiveLock(enemyDefenseCard, attackCards);
-
-        bool showYurusuDuringCombat =
-            _host.Defender == PlayerType.Enemy && defenseCardsForCombat.Count == 0 && BattleUIManager.I != null;
-        using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))
+        else if (reactiveKind == ReactiveDefenseKind.Nullify)
         {
-            if (attackCards != null && attackCards.Count > 0
-                && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards))
+            if (enemyDefenseCard.cardType == CardType.Magic && _host.CardSequenceManager != null)
+                await _host.CardSequenceManager.ApplyEnemyMagicDefenseFromHandOrPoolAsync(
+                    enemyDefenseCard, defenseCardsForCombat);
+            foreach (var extra in defenseCardsForCombat)
             {
-                if (enemyImmediateReflect)
+                if (extra == null || extra.cardType == CardType.Magic) continue;
+                if (_host.IsOnlineMatch) continue;
+                _host.HandRefill?.RecordEnemyUse(extra);
+                _host.BattleProcessor.UseCard(extra, defHand);
+            }
+            await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                _host.Manager,
+                _host.BattleProcessor,
+                _host.HandRefill,
+                attackCards,
+                enemyDefenseCard,
+                phaseToken,
+                defenseCardAlreadyConsumed: enemyDefenseCard.cardType == CardType.Magic);
+        }
+        else
+        {
+            bool showYurusuDuringCombat =
+                _host.Defender == PlayerType.Enemy && defenseCardsForCombat.Count == 0 && BattleUIManager.I != null;
+            using (YurusuDisplayScope.ShowIf(showYurusuDuringCombat))
+            {
+                if (fullOnlyIncoming)
                 {
-                    await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, phaseToken);
-                    await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
-                        _host.Manager,
-                        _host.BattleProcessor,
-                        _host.HandRefill,
-                        attackCards,
-                        enemyDefenseCard,
-                        atk,
-                        phaseToken);
+                    if (attackCards.Count == 1 && attackCards[0] != null)
+                    {
+                        await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, phaseToken);
+                        await _host.BattleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                    }
                 }
-                else if (enemyPhysicalReflect || enemyMagicReflect)
+                else if (defenseCardsForCombat.Count > 1)
                 {
-                    await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
-                        _host.Manager,
-                        _host.BattleProcessor,
-                        _host.HandRefill,
-                        _host.EnemyAI,
-                        attackCards,
-                        enemyDefenseCard,
-                        phaseToken);
+                    await _host.BattleProcessor.ResolveCombatAsync(attackCards, defenseCardsForCombat, atk, def, defHand);
                 }
-                else if (attackCards.Count == 1 && attackCards[0] != null)
+                else
                 {
-                    await Task.Delay(DamagePopup.PreImmediateEffectDelayMs, phaseToken);
-                    await _host.BattleProcessor.ResolveImmediateEffectAsync(attackCards[0], atk, def);
+                    CardData singleDef = defenseCardsForCombat.Count == 1 ? defenseCardsForCombat[0] : null;
+                    await _host.BattleProcessor.ResolveCombatAsync(attackCards, singleDef, atk, def, defHand);
                 }
             }
-            else if (enemyImmediateReflect)
+
+            if (!fullOnlyIncoming)
             {
-                await ImmediateEffectReflectionFlow.RunEnemyDefenderReflectsPlayerImmediateAsync(
-                    _host.Manager,
-                    _host.BattleProcessor,
-                    _host.HandRefill,
-                    attackCards,
-                    enemyDefenseCard,
-                    atk,
-                    phaseToken);
-            }
-            else if (enemyPhysicalReflect || enemyMagicReflect)
-            {
-                await PhysicalReflectionFlow.RunEnemyDefenderReflectsPlayerAttackAsync(
-                    _host.Manager,
-                    _host.BattleProcessor,
-                    _host.HandRefill,
-                    _host.EnemyAI,
-                    attackCards,
-                    enemyDefenseCard,
-                    phaseToken);
-            }
-            else if (enemyParry)
-            {
-                await ParryFlow.RunEnemyDefenderParriesPlayerAttackAsync(
-                    _host.Manager,
-                    _host.BattleProcessor,
-                    _host.HandRefill,
-                    _host.EnemyAI,
-                    attackCards,
-                    enemyDefenseCard,
-                    phaseToken);
-            }
-            else if (enemyPhysicalBlock)
-            {
-                if (enemyDefenseCard.cardType == CardType.Magic && _host.CardSequenceManager != null)
-                    await _host.CardSequenceManager.ApplyEnemyMagicDefenseFromHandOrPoolAsync(
-                        enemyDefenseCard, defenseCardsForCombat);
-                foreach (var extra in defenseCardsForCombat)
+                foreach (var defenseCardToUse in defenseCardsForCombat)
                 {
-                    if (extra == null || extra.cardType == CardType.Magic) continue;
-                    if (_host.IsOnlineMatch) continue;
-                    _host.HandRefill?.RecordEnemyUse(extra);
-                    _host.BattleProcessor.UseCard(extra, defHand);
+                    if (defenseCardToUse == null) continue;
+                    if (_host.IsOnlineMatch && defenseCardToUse.cardType == CardType.Magic)
+                        continue;
+                    _host.HandRefill?.RecordEnemyUse(defenseCardToUse);
+                    _host.BattleProcessor.UseCard(defenseCardToUse, defHand);
                 }
-                await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
-                    _host.Manager,
-                    _host.BattleProcessor,
-                    _host.HandRefill,
-                    attackCards,
-                    enemyDefenseCard,
-                    phaseToken,
-                    defenseCardAlreadyConsumed: enemyDefenseCard.cardType == CardType.Magic);
-            }
-            else if (defenseCardsForCombat.Count > 1)
-            {
-                await _host.BattleProcessor.ResolveCombatAsync(attackCards, defenseCardsForCombat, atk, def, defHand);
-            }
-            else
-            {
-                CardData singleDef = defenseCardsForCombat.Count == 1 ? defenseCardsForCombat[0] : null;
-                await _host.BattleProcessor.ResolveCombatAsync(attackCards, singleDef, atk, def, defHand);
             }
         }
 
@@ -213,21 +169,6 @@ public sealed class EnemyDefenseResolver
         _host.ClearTributeBloodHpPaidSnapshot();
         _host.ClearHammadnessRollSnapshot();
         BattleUIManager.I?.HideAllCardDetails();
-
-        bool skipPostCombatEnemyDefenseUse = enemyPhysicalReflect || enemyMagicReflect || enemyImmediateReflect || enemyParry
-            || enemyPhysicalBlock
-            || (attackCards != null && CardRules.IncomingRequiresFullOnlyReactiveDefense(attackCards));
-        if (defenseCardsForCombat.Count > 0 && !skipPostCombatEnemyDefenseUse)
-        {
-            foreach (var defenseCardToUse in defenseCardsForCombat)
-            {
-                if (defenseCardToUse == null) continue;
-                if (_host.IsOnlineMatch && defenseCardToUse.cardType == CardType.Magic)
-                    continue;
-                _host.HandRefill?.RecordEnemyUse(defenseCardToUse);
-                _host.BattleProcessor.UseCard(defenseCardToUse, defHand);
-            }
-        }
 
         _host.ClearCardStatsSequenceAndAttackLocks();
         _host.CurrentAttackCard = null;

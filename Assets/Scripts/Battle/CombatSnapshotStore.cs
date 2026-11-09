@@ -39,12 +39,9 @@ public sealed class CombatSnapshotStore
     private int _tributeBloodPlayerHpPaid;
     private int _tributeBloodEnemyHpPaid;
 
-    private bool _reflectionAtkTotalActive;
     private bool _reflectionAtkTotalOnPlayerSide;
-    private PlayerStatus _reflectionAtkBlessAttacker;
-    private PlayerStatus _reflectionAtkBlessDefender;
     private readonly List<CardData> _reflectionAtkCardsForTotalDisplay = new();
-    private int? _reflectionAtkDisplayStrengthOverride;
+    private int _reflectionAtkPower;
     private bool _suppressEnemyStaleAttackerInTotalByOrb;
 
     private List<CardData> _postDeathChainAttackDisplay;
@@ -372,47 +369,34 @@ public sealed class CombatSnapshotStore
         _ragnarokDisasterTriggeredThisAttack = false;
     }
 
-    public void SetReflectionAttackTotalDisplayAfterSlide(
-        List<CardData> attackCards,
-        bool totalAtkOnPlayerSide,
-        PlayerStatus reflectionBlessingsAttacker,
-        PlayerStatus reflectionBlessingsDefender,
-        int? displayStrengthOverride = null)
+    /// <summary>
+    /// Reflection / parry / orb counter: the attack lives on one panel only, with a fixed power.
+    /// </summary>
+    public void SetReflectionAttackTotalDisplay(List<CardData> attackCards, bool onPlayerSide, int attackPower)
     {
-        _reflectionAtkDisplayStrengthOverride = displayStrengthOverride;
         _reflectionAtkCardsForTotalDisplay.Clear();
         if (attackCards != null)
             _reflectionAtkCardsForTotalDisplay.AddRange(attackCards);
-        _reflectionAtkTotalActive = _reflectionAtkCardsForTotalDisplay.Count > 0;
-        _reflectionAtkTotalOnPlayerSide = totalAtkOnPlayerSide;
-        _reflectionAtkBlessAttacker = reflectionBlessingsAttacker;
-        _reflectionAtkBlessDefender = reflectionBlessingsDefender;
+        _reflectionAtkTotalOnPlayerSide = onPlayerSide;
+        _reflectionAtkPower = attackPower;
     }
 
     public void ClearReflectionAttackTotalDisplay()
     {
-        _reflectionAtkTotalActive = false;
         _reflectionAtkCardsForTotalDisplay.Clear();
-        _reflectionAtkBlessAttacker = null;
-        _reflectionAtkBlessDefender = null;
-        _reflectionAtkDisplayStrengthOverride = null;
+        _reflectionAtkPower = 0;
     }
-
-    public int? GetReflectionAttackDisplayStrengthOverride() => _reflectionAtkDisplayStrengthOverride;
 
     public bool IsSuppressingEnemyStaleAttackerInTotalByOrb() => _suppressEnemyStaleAttackerInTotalByOrb;
 
     public void SetSuppressEnemyStaleAttackerInTotalByOrb(bool value)
         => _suppressEnemyStaleAttackerInTotalByOrb = value;
 
-    public PlayerStatus GetReflectionAttackBlessingAttacker() => _reflectionAtkBlessAttacker;
-
-    public PlayerStatus GetReflectionAttackBlessingDefender() => _reflectionAtkBlessDefender;
-
-    public bool IsReflectionAttackTotalDisplayActive()
-        => _reflectionAtkTotalActive && _reflectionAtkCardsForTotalDisplay.Count > 0;
+    public bool IsReflectionAttackTotalDisplayActive() => _reflectionAtkCardsForTotalDisplay.Count > 0;
 
     public bool ReflectionAttackTotalOnPlayerSide => _reflectionAtkTotalOnPlayerSide;
+
+    public int ReflectionAttackPower => _reflectionAtkPower;
 
     public List<CardData> GetReflectionAttackCardsForTotalDisplay() => _reflectionAtkCardsForTotalDisplay;
 }

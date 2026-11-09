@@ -55,7 +55,16 @@ public static class BlockingRules
     /// </summary>
     public static bool RequiresBlockingExclusiveLock(CardData card, IReadOnlyList<CardData> incomingAttack)
     {
-        return CanUsePhysicalBlockingAgainstAttack(card, incomingAttack);
+        return ResolvesAsBlockingNullify(card, incomingAttack);
+    }
+
+    /// <summary>
+    /// Physical blocking, or Lightning Rod nullify against a thunder-element attack.
+    /// </summary>
+    public static bool ResolvesAsBlockingNullify(CardData defense, IReadOnlyList<CardData> incomingAttack)
+    {
+        return CanUsePhysicalBlockingAgainstAttack(defense, incomingAttack)
+            || LightningRodRules.CanNullifyIncoming(defense, incomingAttack);
     }
 
     /// <summary>反射用・無効化用・打ち払い用のいずれかで「防御1枚のみ」ロックが必要か。</summary>
