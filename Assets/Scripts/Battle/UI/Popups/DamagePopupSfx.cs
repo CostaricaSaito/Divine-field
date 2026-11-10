@@ -1,13 +1,10 @@
-/// <summary>ダメージポップアップ同時再生 SE（<see cref="SoundEffectPlayer"/> の Addressables キー）。</summary>
+/// <summary>ダメージポップ同伴 SE の閾値ほか（クリップは <see cref="SoundEffectCatalogSO"/>）。</summary>
 public static class DamagePopupSfx
 {
-    /// <summary>通常ヒット音（1〜29 ダメージ、および病系などの同伴 SE）。</summary>
-    public const string Slash = "Assets/SE/剣で斬る1.mp3";
+    /// <summary>この値以下で軽ダメージ SE（<see cref="SoundEffectCatalogSO"/> の <c>battleDamageLow</c>）。</summary>
+    public const int LowDamageMax = 5;
 
-    /// <summary>大ダメージ用（<see cref="HighDamageMin"/> 以上）。</summary>
-    public const string Explosion = "Assets/SE/爆発2.mp3";
-
-    /// <summary>この値以上の最終ダメージで <see cref="Explosion"/>、未満で <see cref="Slash"/>。</summary>
+    /// <summary>この値以上で大ダメージ SE（<c>battleDamageHigh</c>）。その間は <c>battleDamageMid</c>。</summary>
     public const int HighDamageMin = 30;
 
     /// <summary>HP 回復ポップ表示時。</summary>

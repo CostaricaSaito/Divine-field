@@ -238,6 +238,7 @@ public class MagicPanelPresenter : MonoBehaviour
         bool handBlocked = BattleUIManager.I != null && BattleUIManager.I.IsHandInputBlocked;
         var bm = BattleManager.I;
         bool allowMagicPanel = bm != null && !handBlocked && !bm.IsHandReloadPopupOpen
+            && !bm.IsExchangeProcessActive()
             && (
             (bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player)
             || (bm.CurrentState == GameState.DefensePhase && bm.DefenderPublic == PlayerType.Player)

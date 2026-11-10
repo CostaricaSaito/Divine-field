@@ -1,5 +1,12 @@
 ﻿using System;
+using TMPro;
 using UnityEngine;
+
+public enum MessagePopupTextHorizontalAlignment
+{
+    Center = 0,
+    Left = 1,
+}
 
 public enum MessagePopupBackgroundMode
 {
@@ -13,7 +20,9 @@ public enum MessagePopupBackgroundMode
 public struct MessagePopupStyleEntry
 {
     public MessagePopupKind kind;
-    [TextArea(1, 2)] public string message;
+    [TextArea(2, 6)]
+    [Tooltip("TMP rich text. Examples: \u75c5\u304c<br>\u4f53\u3092\u8755\u3080 | <color=#FF8800>\u91cd\u8981</color> | <i>\u5f37\u8abf</i> | <b>\u592a\u5b57</b>. Inspector \u6539\u884c\u2192<br>. Base fill is Text Color below.")]
+    public string message;
 
     [Header("Background")]
     public MessagePopupBackgroundMode backgroundMode;
@@ -25,6 +34,8 @@ public struct MessagePopupStyleEntry
     [Header("Text")]
     public Color textColor;
     public Color outlineColor;
+    [Tooltip("Alignment inside the 450px message banner rect (panel position stays centered).")]
+    public MessagePopupTextHorizontalAlignment horizontalAlignment;
 
     public bool UsesSpriteBackground =>
         backgroundMode == MessagePopupBackgroundMode.Sprite && backgroundSprite != null;
@@ -42,6 +53,12 @@ public sealed class MessagePopupSettings : ScriptableObject
 
     [Header("Motion / Timing")]
     [SerializeField] private PopupMotionTiming motion = PopupMotionTiming.MessageDefaults;
+
+    public static TextAlignmentOptions ResolveBannerTextAlignment(
+        MessagePopupTextHorizontalAlignment horizontalAlignment)
+        => horizontalAlignment == MessagePopupTextHorizontalAlignment.Left
+            ? TextAlignmentOptions.MidlineLeft
+            : TextAlignmentOptions.Center;
 
     public PopupMotionTiming MotionOrDefault => motion.WithDefaults(PopupMotionTiming.MessageDefaults);
 
@@ -115,8 +132,9 @@ public sealed class MessagePopupSettings : ScriptableObject
                 new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.85f, 1f), Color.black),
             Entry(MessagePopupKind.FreezeMelted, "\u6c37\u304c\u6eb6\u3051\u305f\uff01",
                 new Color(0.12f, 0.18f, 0.38f, 0.93f), new Color(0.55f, 0.85f, 1f), Color.black),
-            Entry(MessagePopupKind.DiseaseErodeBody, "\u75c5\u304c\u4f53\u3092\u8755\u3080",
-                new Color(0f, 0f, 0f, 0.94f), Color.white, Color.black),
+            Entry(MessagePopupKind.DiseaseErodeBody, "\u75c5\u304c<br>\u4f53\u3092\u8755\u3080",
+                new Color(0f, 0f, 0f, 0.94f), Color.white, Color.black,
+                MessagePopupTextHorizontalAlignment.Left),
             Entry(MessagePopupKind.DiseaseWorsened, "\u4f53\u8abf\u304c\u60aa\u304f\u306a\u3063\u305f",
                 new Color(0f, 0f, 0f, 0.94f), Color.white, Color.black),
             Entry(MessagePopupKind.DiseasePoisonFlipped, "\u6bd2\u304c\u88cf\u8fd4\u3063\u305f\uff1f\uff01",
@@ -176,7 +194,12 @@ public sealed class MessagePopupSettings : ScriptableObject
     }
 
     private static MessagePopupStyleEntry Entry(
-        MessagePopupKind kind, string message, Color bg, Color text, Color outline)
+        MessagePopupKind kind,
+        string message,
+        Color bg,
+        Color text,
+        Color outline,
+        MessagePopupTextHorizontalAlignment horizontalAlignment = MessagePopupTextHorizontalAlignment.Center)
     {
         return new MessagePopupStyleEntry
         {
@@ -187,6 +210,7 @@ public sealed class MessagePopupSettings : ScriptableObject
             backgroundSprite = null,
             textColor = text,
             outlineColor = outline,
+            horizontalAlignment = horizontalAlignment,
         };
     }
 

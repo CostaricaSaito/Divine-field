@@ -198,7 +198,7 @@ public class TotalAtkDefPanelResolver
             var currentAttackCard = battleManager.GetCurrentAttackCard();
             if (currentAttackCard != null)
             {
-                if (CardRules.IsImmediateAction(currentAttackCard)) return true;
+                if (CardRules.SkipsHitAndDefenseWhenSelfTarget(currentAttackCard)) return true;
                 var one = new List<CardData> { currentAttackCard };
                 if (_power.GetDisplayedAttackStrength(one, battleManager.GetEnemyStatus()) <= 0) return true;
                 return false;

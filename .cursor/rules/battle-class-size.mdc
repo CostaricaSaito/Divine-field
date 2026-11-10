@@ -23,7 +23,7 @@ alwaysApply: false
 BattleManager（ファサード・MonoBehaviour）
   ├── BattlePhaseController       … GameState 遷移
   ├── PlayerInputController       … プレイヤー入力
-  ├── EnemyTurnRunner / EnemyDefenseResolver
+  ├── Enemy/（EnemyTurnRunner, EnemyDefenseResolver, EnemyAI）
   ├── AdHocDefenseCoordinator     … 反射連鎖・介入・天変地異 ad-hoc
   ├── CombatSnapshotStore         … 戦闘中スナップショット
   ├── OnlineBattleSyncService / GameEndOrchestrator

@@ -52,6 +52,7 @@ public static class ReflectionRules
     {
         if (incomingAttack == null || incomingAttack.Count == 0) return false;
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack)) return false;
+        if (CardRules.IsStatusConduitMagicAttackCombo(incomingAttack)) return true;
         return CardRules.IsMagicClassifiedAttackCombo(incomingAttack);
     }
 
@@ -65,7 +66,7 @@ public static class ReflectionRules
         if (DeadlyChainRules.IsActivePostDeathIncoming(incomingAttack)) return false;
         if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack)) return false;
         if (IncomingHasReflectableCombatDamage(incomingAttack)) return false;
-        if (CardRules.IncomingIsSingleImmediateActionAttack(incomingAttack)) return true;
+        if (CardRules.IsStatusConduitMagicAttackCombo(incomingAttack)) return true;
         if (incomingAttack.Count == 1 && incomingAttack[0] != null && incomingAttack[0].cardType == CardType.Special)
             return true;
         return CardRules.IncomingRequiresFullOnlyReactiveDefense(incomingAttack);

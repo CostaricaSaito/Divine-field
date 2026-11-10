@@ -284,6 +284,21 @@ public class UseButtonPresenter : MonoBehaviour
         if (bm == null) return;
         if (bm.CurrentState != GameState.AttackPhase || bm.CurrentTurnOwner != PlayerType.Player)
             return;
+        if (bm.IsExchangeProcessActive())
+        {
+            var exchangeHand = bm.playerHand;
+            var exchangeSelected = BattleUIManager.I != null
+                ? BattleUIManager.I.GetSelectedCards()
+                : null;
+            if ((exchangeSelected == null || exchangeSelected.Count == 0)
+                && exchangeHand != null
+                && PrayerFlow.IsEligibleHand(exchangeHand))
+                SetUseButtonLabel("祈り");
+            else
+                SetUseButtonLabel("使用");
+            SetUseButtonInteractable(false);
+            return;
+        }
         if (bm.IsUseButtonLocked)
         {
             SetUseButtonLabel("使用");

@@ -180,6 +180,7 @@ public class HandReloadController : MonoBehaviour
             return false;
         if (BattleManager.I.IsUseButtonLocked) return false;
         if (BattleManager.I.IsGameEndTriggered) return false;
+        if (BattleManager.I.IsExchangeProcessActive()) return false;
         var hand = BattleManager.I.playerHand;
         if (hand == null || hand.Count < 3) return false;
         return CardDefinitionIdentity.HandHasAnyTripletOrMore(hand);

@@ -237,16 +237,15 @@ public static class DiseaseTurnEndProcessor
         float heavenMsgFade = ui.ShowStyledMessagePopup(attacker, MessagePopupKind.ParadiseHeavenState);
         await MessagePopup.WaitAfterPopupLifetimeAsync(heavenMsgFade, ct);
 
-        int oldHp = attacker.currentHP;
-        attacker.currentHP = Mathf.Min(attacker.maxHP, attacker.currentHP + s.paradiseHealAmount);
-        int healed = attacker.currentHP - oldHp;
-        float healFade = 0f;
-        if (healed > 0)
-            healFade = ui.ShowHealPopup(healed, "HP", attacker);
-
-        RefreshStatuses();
-        if (healed > 0)
-            await DamagePopup.WaitAfterPopupLifetimeAsync(healFade, ct);
+        if (s.paradiseHealAmount > 0)
+        {
+            if (BattleProcessor.I != null)
+                await BattleProcessor.I.ApplyFlatHpRecoveryAsync(attacker, s.paradiseHealAmount, ct);
+            else
+                RefreshStatuses();
+        }
+        else
+            RefreshStatuses();
     }
 
     /// <summary>絶頂（残りHP相当・被ダメ軽減なし）演出と死亡処理。①付与時・②エンドフェイズ10%の共通シーケンス。</summary>

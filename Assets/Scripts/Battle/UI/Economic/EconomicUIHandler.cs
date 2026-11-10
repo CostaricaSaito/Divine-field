@@ -67,7 +67,11 @@ public class EconomicUIHandler : MonoBehaviour
             if (BattleManager.I.IsSellProcessActive())
                 canSell = true;
             if (BattleManager.I.IsExchangeProcessActive())
-                canExchange = true;
+            {
+                canBuy = false;
+                canSell = false;
+                canExchange = BattleManager.I.IsExchangePopupOpen();
+            }
         }
 
         ApplyEconomicButton(buyButton, buyCooldownText, canBuy, EconomicAction.I.GetBuyCooldown());
@@ -99,6 +103,9 @@ public class EconomicUIHandler : MonoBehaviour
             BattleManager.I?.CancelCurrentEconomicAction();
             return;
         }
+
+        if (BattleManager.I != null && BattleManager.I.IsExchangeProcessActive())
+            return;
 
         if (BattleManager.I != null && !BattleManager.I.PlayerCanUseEconomicActions())
         {
@@ -136,6 +143,9 @@ public class EconomicUIHandler : MonoBehaviour
             BattleManager.I.CancelCurrentEconomicAction();
             return;
         }
+
+        if (BattleManager.I != null && BattleManager.I.IsExchangeProcessActive())
+            return;
 
         if (BattleManager.I != null && !BattleManager.I.PlayerCanUseEconomicActions())
         {

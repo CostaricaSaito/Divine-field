@@ -31,6 +31,9 @@ public class BattleCardUIController : MonoBehaviour
     private readonly List<GameObject> activeCardSheets = new();
     private bool isHandInputBlocked = false;
 
+    /// <summary>手札で選べないカードの CanvasGroup.alpha（小さいほどグレーアウトが強い）。</summary>
+    private const float HandDisabledAlpha = 0.32f;
+
     /// <summary>手札入力ブロック中か（ポップアップや反射解決中）。</summary>
     public bool IsHandInputBlocked => isHandInputBlocked;
 
@@ -395,7 +398,7 @@ public class BattleCardUIController : MonoBehaviour
 
         var cg = card.cardUI.GetComponent<CanvasGroup>();
         if (cg == null) cg = card.cardUI.gameObject.AddComponent<CanvasGroup>();
-        cg.alpha = interactable ? 1f : 0.5f;
+        cg.alpha = interactable ? 1f : HandDisabledAlpha;
         cg.blocksRaycasts = isHandInputBlocked ? false : interactable;
     }
 

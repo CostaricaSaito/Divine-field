@@ -6,13 +6,19 @@
 /// </summary>
 public sealed class YurusuDisplayScope : IDisposable
 {
+    private static int _activeDepth;
+
     private readonly bool _shown;
+
+    /// <summary>敵側「許す」表示スコープが1つ以上開いている。</summary>
+    public static bool IsActive => _activeDepth > 0;
 
     private YurusuDisplayScope(bool show)
     {
         _shown = show;
         if (_shown)
         {
+            _activeDepth++;
             SoundEffectCatalogSO.Get()?.PlayYurusu();
             BattleUIManager.I?.ShowYurusuDisplay();
         }
@@ -22,7 +28,8 @@ public sealed class YurusuDisplayScope : IDisposable
 
     public void Dispose()
     {
-        if (_shown)
-            BattleUIManager.I?.HideYurusuButton();
+        if (!_shown) return;
+        _activeDepth = Math.Max(0, _activeDepth - 1);
+        BattleUIManager.I?.HideYurusuButton();
     }
 }

@@ -264,7 +264,7 @@ public static class FreeMagicCastRules
     {
         var ctx = ResolvePlayerHandSelection(fullSelection);
         var combat = ExcludeCatalystsFromCombatStats(ctx);
-        if (combat.Count != 1 || !CardRules.IsImmediateAction(combat[0]))
+        if (combat.Count != 1 || !CardRules.SkipsHitAndDefenseWhenSelfTarget(combat[0]))
             return false;
         if (CardRules.IsRecoveryCard(combat[0]))
             return false;

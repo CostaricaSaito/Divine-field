@@ -244,7 +244,7 @@ public static class AttackComboSelectionRules
             return combo;
         if (ArchMagicRules.IsArchMagicCard(primary))
             return combo;
-        if (combo.Count == 1 && CardRules.IsImmediateAction(primary))
+        if (combo.Count == 1 && CardRules.SkipsHitAndDefenseWhenSelfTarget(primary))
             return combo;
 
         var allCandidates = new List<CardData>();

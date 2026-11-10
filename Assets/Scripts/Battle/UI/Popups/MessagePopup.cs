@@ -8,7 +8,7 @@ using TMPro;
 
 /// <summary>
 /// CardDisplayPanel-centered styled message popup (float up + fade).
-/// Text is single-line and horizontally compressed to fit <see cref="MaxTextWidthPx"/>.
+/// Text supports TMP rich tags (&lt;br&gt;, &lt;color&gt;, &lt;i&gt;, …) and is width-fitted within <see cref="MaxTextWidthPx"/>.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class MessagePopup : MonoBehaviour
@@ -100,7 +100,7 @@ public sealed class MessagePopup : MonoBehaviour
     {
         entry = MessagePopupSettings.ResolveRuntimeFields(entry);
         ApplyBackground(entry);
-        ApplyText(entry.message, entry.textColor, entry.outlineColor);
+        ApplyText(entry.message, entry.textColor, entry.outlineColor, entry.horizontalAlignment);
     }
 
     public void Setup(string message, Color backgroundColor, Color textColor, Color outlineColor)
@@ -110,7 +110,7 @@ public sealed class MessagePopup : MonoBehaviour
             backgroundMode = MessagePopupBackgroundMode.SolidColor,
             backgroundColor = backgroundColor,
         });
-        ApplyText(message, textColor, outlineColor);
+        ApplyText(message, textColor, outlineColor, MessagePopupTextHorizontalAlignment.Center);
     }
 
     private void ApplyBackground(MessagePopupStyleEntry entry)
@@ -137,12 +137,18 @@ public sealed class MessagePopup : MonoBehaviour
             : Color.white;
     }
 
-    private void ApplyText(string message, Color textColor, Color outlineColor)
+    private void ApplyText(
+        string message,
+        Color textColor,
+        Color outlineColor,
+        MessagePopupTextHorizontalAlignment horizontalAlignment)
     {
         if (messageText == null) return;
 
-        messageText.richText = false;
-        messageText.text = StripLineBreaks(message);
+        var align = MessagePopupSettings.ResolveBannerTextAlignment(horizontalAlignment);
+
+        messageText.richText = true;
+        messageText.text = PrepareRichTextMessage(message);
         messageText.fontStyle = FontStyles.Bold;
         messageText.color = textColor;
         messageText.outlineWidth = TmpOutlineMaterialHelper.DefaultBannerOutlineWidth;
@@ -150,22 +156,25 @@ public sealed class MessagePopup : MonoBehaviour
         messageText.enableWordWrapping = false;
         messageText.overflowMode = TextOverflowModes.Overflow;
         messageText.enableAutoSizing = false;
-        messageText.alignment = TextAlignmentOptions.Center;
+        messageText.alignment = align;
         messageText.margin = Vector4.zero;
 
         TmpOutlineMaterialHelper.ApplyBannerOutlineBeforeLayout(messageText, outlineColor);
-        ApplyFixedBannerLayout(messageText, messageBannerExtents, messageFontSizeMax, messageBannerWidthFill);
+        ApplyFixedBannerLayout(
+            messageText, messageBannerExtents, messageFontSizeMax, messageBannerWidthFill, align);
         TmpOutlineMaterialHelper.RetuneOutlineAfterHorizontalLayout(messageText, outlineColor);
     }
 
     /// <summary>
-    /// Fixed banner rect: keep vertical size at <paramref name="fontSizeMax"/>; squeeze width via <see cref="RectTransform.localScale"/> X only.
+    /// Fixed banner rect: fit height via font size; squeeze width via <see cref="RectTransform.localScale"/> X only (max width = bannerExtents.x).
+    /// Works with rich text and explicit &lt;br&gt; line breaks (word wrap stays off).
     /// </summary>
     public static void ApplyFixedBannerLayout(
         TMP_Text target,
         Vector2 bannerExtents,
         float fontSizeMax,
-        float widthFill = 0.94f)
+        float widthFill = 0.94f,
+        TextAlignmentOptions alignment = TextAlignmentOptions.Center)
     {
         if (target == null) return;
 
@@ -173,18 +182,24 @@ public sealed class MessagePopup : MonoBehaviour
         target.enableWordWrapping = false;
         target.overflowMode = TextOverflowModes.Overflow;
         target.enableAutoSizing = false;
-        target.alignment = TextAlignmentOptions.Center;
+        target.alignment = alignment;
         target.margin = Vector4.zero;
 
-        float fontSize = fontSizeMax;
-        target.fontSize = fontSize;
-
+        float maxW = bannerExtents.x * widthFill;
         float maxH = bannerExtents.y * 0.98f;
-        Vector2 measured = target.GetPreferredValues(text, fontSize, 0f);
-        if (measured.y > maxH && measured.y > 0.001f)
+        float fontSize = fontSizeMax;
+
+        for (int pass = 0; pass < 4; pass++)
         {
-            fontSize *= maxH / measured.y;
             target.fontSize = fontSize;
+            Vector2 measured = target.GetPreferredValues(text, fontSize, 0f);
+            if (measured.y > maxH && measured.y > 0.001f)
+                fontSize *= maxH / measured.y;
+
+            target.fontSize = fontSize;
+            measured = target.GetPreferredValues(text, fontSize, 0f);
+            if (measured.y <= maxH + 0.5f)
+                break;
         }
 
         var rt = target.rectTransform;
@@ -194,7 +209,6 @@ public sealed class MessagePopup : MonoBehaviour
 
         target.ForceMeshUpdate(true);
 
-        float maxW = bannerExtents.x * widthFill;
         float prefW = target.preferredWidth;
         if (prefW > 0.001f && prefW > maxW)
             rt.localScale = new Vector3(maxW / prefW, 1f, 1f);
@@ -303,6 +317,18 @@ public sealed class MessagePopup : MonoBehaviour
     {
         if (string.IsNullOrEmpty(message)) return string.Empty;
         return message.Replace("\r\n", string.Empty).Replace('\n', ' ').Replace('\r', ' ').Trim();
+    }
+
+    /// <summary>
+    /// Prepares inspector / SO message strings for <see cref="TMP_Text"/> rich text.
+    /// Literal newlines become &lt;br&gt;; existing tags (color, italic, bold, etc.) are preserved.
+    /// </summary>
+    public static string PrepareRichTextMessage(string message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+        message = message.Trim();
+        message = message.Replace("\r\n", "<br>").Replace("\n", "<br>").Replace("\r", "<br>");
+        return message;
     }
 
     private void Update()

@@ -14,6 +14,7 @@ public static class ShiningBarrierRules
     {
         if (incoming == null || incoming.Count == 0) return false;
         if (CardRules.IncomingRequiresFullOnlyReactiveDefense(incoming)) return false;
+        if (CardRules.IsStatusConduitMagicAttackCombo(incoming)) return false;
         if (incoming.Count == 1 && incoming[0] != null
             && EconomicActionNames.IsEconomicAttack(incoming[0].cardName))
             return false;

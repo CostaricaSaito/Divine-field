@@ -11,6 +11,31 @@ public static class BlockingRules
         return c != null && c.blockingKind == BlockingKind.Physical;
     }
 
+    public static bool IsMagicBlockingCard(CardData c)
+    {
+        return c != null && c.blockingKind == BlockingKind.Magic;
+    }
+
+    public static bool IsFullBlockingCard(CardData c)
+    {
+        return c != null && c.blockingKind == BlockingKind.Full;
+    }
+
+    /// <summary>状態異常通過魔法へ魔法／完全無効が通るか。</summary>
+    public static bool CanBlockMagicIncoming(IReadOnlyList<CardData> incomingAttack)
+    {
+        return CardRules.IsStatusConduitMagicAttackCombo(incomingAttack);
+    }
+
+    public static bool CanUseMagicBlockingAgainstAttack(CardData defense, IReadOnlyList<CardData> incomingAttack)
+    {
+        if (defense == null || incomingAttack == null || incomingAttack.Count == 0) return false;
+        if (GrandMagicRules.ContainsGrandMagicStyleAttack(incomingAttack)) return false;
+        if (IsFullBlockingCard(defense) && CanBlockMagicIncoming(incomingAttack)) return true;
+        if (!IsMagicBlockingCard(defense)) return false;
+        return CanBlockMagicIncoming(incomingAttack);
+    }
+
     /// <summary>物理無効が通る攻撃か（合算属性が無属性かつ魔法単体攻撃でない）。</summary>
     public static bool CanBlockPhysical(IReadOnlyList<CardData> incomingAttack)
     {
@@ -64,6 +89,7 @@ public static class BlockingRules
     public static bool ResolvesAsBlockingNullify(CardData defense, IReadOnlyList<CardData> incomingAttack)
     {
         return CanUsePhysicalBlockingAgainstAttack(defense, incomingAttack)
+            || CanUseMagicBlockingAgainstAttack(defense, incomingAttack)
             || LightningRodRules.CanNullifyIncoming(defense, incomingAttack);
     }
 
