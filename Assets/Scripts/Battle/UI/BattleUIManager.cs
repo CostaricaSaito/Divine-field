@@ -54,6 +54,7 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private EnemyCurrentMagicPopupPresenter enemyCurrentMagicPopupPresenter;
     [SerializeField] private BattlePopupPresenter popupPresenter;
     [SerializeField] private BattleCardUIController cardController;
+    [SerializeField] private DramaticScreenShakePresenter dramaticShakePresenter;
 
     [Header("ターン表示（Canvas の TurnCount / TurnCountText）")]
     [SerializeField] private GameObject turnCountRoot;
@@ -97,6 +98,11 @@ public class BattleUIManager : MonoBehaviour
 
         if (GetComponent<HandSortCoordinator>() == null)
             gameObject.AddComponent<HandSortCoordinator>();
+
+        if (dramaticShakePresenter == null)
+            dramaticShakePresenter = GetComponent<DramaticScreenShakePresenter>();
+        if (dramaticShakePresenter == null)
+            dramaticShakePresenter = gameObject.AddComponent<DramaticScreenShakePresenter>();
     }
 
     public Task SortPlayerHandAfterFaceDownUseAsync(CancellationToken ct = default)
@@ -157,6 +163,12 @@ public class BattleUIManager : MonoBehaviour
     public void HideYurusuButton() => useButtonPresenter?.HideYurusuDisplay();
 
     //==== パブリックAPI：ステータス表示 =====
+    /// <summary>
+    /// ステータス行を更新。HP/MP/GP の差分は原則カウント演出（<see cref="BattleHpmgpDisplayPolicy"/>）。
+    /// </summary>
+    /// <param name="snapHpmgpNumbers">
+    /// true で即時反映（演出なし）。通常のダメージ・回復では使わない。濃霧は UI 内部で処理。
+    /// </param>
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, bool snapHpmgpNumbers = false)
     {
         // 手札の枚数を取得（通常は現在の手札枚数を参照）
@@ -550,6 +562,14 @@ public class BattleUIManager : MonoBehaviour
 
     /// <summary>互換エイリアス。<see cref="RefreshUseButton"/> を呼ぶ。</summary>
     public void RefreshUseButtonForMpAndSelection() => RefreshUseButton();
+
+    public void PlayDramaticScreenShake() => dramaticShakePresenter?.Play();
+
+    public void PlayDramaticScreenShakeForDamage(int amount)
+        => dramaticShakePresenter?.PlayForDamage(amount);
+
+    public void PlayDramaticScreenShakeIfBigDamage(int amount)
+        => dramaticShakePresenter?.PlayForDamage(amount);
 
     /// <summary>反射の弾き返しと同じ全画面白フラッシュ（ミリ秒）。劣勢時レアドロー等からも利用。</summary>
     public void PlayFullscreenWhiteFlashMs(float durationMs) => effectPresenter?.PlayFullscreenWhiteFlashMs(durationMs);

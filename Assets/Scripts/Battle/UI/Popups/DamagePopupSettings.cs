@@ -48,6 +48,12 @@ public sealed class DamagePopupSettings : ScriptableObject
     [Tooltip("Beat before numeric damage popup appears.")]
     [SerializeField] private int preDamagePopupBeatMs = 500;
 
+    [Header("Numeric Damage Flourish")]
+    [Tooltip("SDF material with GLOW_ON. Instantiated per glyph at runtime. Do not assign the Font Asset material.")]
+    [SerializeField] private Material numericDamageGlowMaterial;
+
+    public Material NumericDamageGlowMaterial => numericDamageGlowMaterial;
+
     public PopupMotionTiming MotionOrDefault => motion.WithDefaults(PopupMotionTiming.DamageDefaults);
 
     public float FloatSpeed => MotionOrDefault.floatSpeed;

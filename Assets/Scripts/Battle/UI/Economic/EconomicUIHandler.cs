@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
@@ -270,6 +271,23 @@ public class EconomicUIHandler : MonoBehaviour
 
     /// <summary>ExchangeConfirmPopUP の Prefab を取得（ExchangeFeature から使用）</summary>
     public GameObject GetExchangeConfirmPopupPrefab() => exchangeConfirmPopupPrefab;
+
+    public void CollectShakeTargets(List<RectTransform> dest)
+    {
+        AddShakeTarget(dest, buyButton);
+        AddShakeTarget(dest, sellButton);
+        AddShakeTarget(dest, exchangeButton);
+    }
+
+    private static void AddShakeTarget(List<RectTransform> dest, Button button)
+    {
+        if (dest == null || button == null)
+            return;
+        var rt = button.transform as RectTransform;
+        if (rt == null || !rt.gameObject.activeInHierarchy)
+            return;
+        dest.Add(rt);
+    }
 
     /// <summary>ポップアップ用の Canvas を取得。未設定時は BattleUIManager の uiCanvas を返す。</summary>
     public Canvas GetResolvedPopupCanvas()

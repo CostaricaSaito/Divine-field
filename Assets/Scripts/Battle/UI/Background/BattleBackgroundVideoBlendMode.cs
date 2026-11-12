@@ -24,13 +24,16 @@ public sealed class BattleBackgroundVideoEntry
 
     [Header("Timing")]
     [Min(0f)]
-    [Tooltip("Seconds before switching to the next entry. 0 = video loop/end rules, or hold still image forever.")]
+    [Tooltip("Seconds before switching to the next entry. Also one pan/zoom cycle length for still images. 0 = video loop/end rules, or hold still image forever.")]
     public float durationSeconds = 30f;
 
     [Header("Composite")]
     public BattleBackgroundVideoBlendMode blendMode = BattleBackgroundVideoBlendMode.Additive;
     [Range(0f, 3f)]
     public float intensity = 1f;
+
+    [Header("Still Image Animation (ignored when Clip is set)")]
+    public BattleBackgroundStillAnimationMode stillAnimationMode = BattleBackgroundStillAnimationMode.Off;
 
     public bool IsVideo => clip != null;
     public bool IsStill => clip == null && stillImage != null;

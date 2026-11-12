@@ -48,6 +48,15 @@ public sealed class BattleFogBackgroundPresenter : MonoBehaviour
             Instance = null;
     }
 
+    public bool TryGetActiveShakeRect(out RectTransform rect)
+    {
+        rect = null;
+        if (!_fogActive || _fogRect == null || !_fogRect.gameObject.activeInHierarchy)
+            return false;
+        rect = _fogRect;
+        return true;
+    }
+
     /// <summary>Called when human player fog vision toggles (respects defer in BattleStatusUI).</summary>
     public void SetViewerFogBackgroundActive(bool active)
     {

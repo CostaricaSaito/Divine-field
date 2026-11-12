@@ -37,13 +37,19 @@ public class BattlePopupPresenter : MonoBehaviour
     [Tooltip("未設定時は Resources.Load(\"Prefab/OjyouPopup\") を試す")]
     [SerializeField] private GameObject ojyouPopupPrefab;
 
-    /// <returns>表示したポップアップが Destroy されるまでの秒数（<see cref="DamagePopup.fadeDuration"/>）。生成失敗時は 0。</returns>
+    /// <returns>ポップアップが破棄されるまでの秒数。通常ダメージは登場からフェード完了まで。生成失敗時は 0。</returns>
     public float ShowDamagePopup(int amount, PlayerStatus target)
     {
         if (amount > 0)
+        {
+            BattleUIManager.I?.PlayDramaticScreenShakeForDamage(amount);
             Debug.Log($"[BattlePopupPresenter] ダメージポップアップ表示: {amount}ダメージ 対象 {target?.DisplayName ?? "null"}");
+        }
         else
             Debug.Log($"[BattlePopupPresenter] ダメージポップアップ表示: 無傷 対象 {target?.DisplayName ?? "null"}");
+
+        if (amount > 0)
+            return ShowRuntimeNumericDamage(amount, target);
 
         var popup = SpawnPopupFor(target);
         if (popup == null)
@@ -63,6 +69,48 @@ public class BattlePopupPresenter : MonoBehaviour
 
         Debug.LogWarning("[BattlePopupPresenter] DamagePopup コンポーネントが見つかりません");
         return 0f;
+    }
+
+    /// <summary>通常ダメージ専用。プレハブを使わず、桁と "Damage" をランタイム生成する。</summary>
+    private float ShowRuntimeNumericDamage(int amount, PlayerStatus target)
+    {
+        Transform parent = ResolveNumericDamageParent(target);
+        if (parent == null)
+        {
+            Debug.LogWarning("[BattlePopupPresenter] Numeric damage popup parent is missing");
+            return 0f;
+        }
+
+        var go = new GameObject("NumericDamageFlourish", typeof(RectTransform), typeof(CanvasGroup));
+        go.layer = parent.gameObject.layer;
+        go.transform.SetParent(parent, false);
+        ApplyDamagePopupLayoutToPanelCenter(go.transform as RectTransform);
+
+        var flourish = go.AddComponent<NumericDamageFlourish>();
+        bool hitPlayer = BattleManager.I != null && target == BattleManager.I.GetPlayerStatus();
+        var kind = hitPlayer ? DamagePopupKind.DamageToPlayer : DamagePopupKind.DamageToEnemy;
+        var settings = ResolveDamagePopupSettings();
+        var style = settings.GetEntryOrDefault(kind);
+        float life = flourish.Play(
+            amount,
+            style.textColor,
+            style.outlineColor,
+            damagePopupPrefab,
+            settings.NumericDamageGlowMaterial);
+        Debug.Log($"[BattlePopupPresenter] 数値ダメージ演出: {amount} ダメージ ({life:0.00}s)");
+        return life;
+    }
+
+    private static Transform ResolveNumericDamageParent(PlayerStatus target)
+    {
+        var canvas = BattleUIManager.I != null ? BattleUIManager.I.GetMainUICanvas() : null;
+        if (canvas == null) return null;
+
+        bool isPlayer = target != null && BattleManager.I != null && target == BattleManager.I.GetPlayerStatus();
+        Transform parent = isPlayer
+            ? BattleUIManager.I.GetPlayerCardDisplayPanel()
+            : BattleUIManager.I.GetEnemyCardDisplayPanel();
+        return parent != null ? parent : canvas.transform;
     }
 
     /// <summary>大魔法 HP バリア被ダメ専用ポップアップ（BarriarDamage.prefab）。</summary>
@@ -148,6 +196,7 @@ public class BattlePopupPresenter : MonoBehaviour
     /// </summary>
     public float ShowReflectionBouncePopup(PlayerStatus target, bool magicReflection = false)
     {
+        BattleUIManager.I?.PlayDramaticScreenShake();
         BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
         SoundEffectPlayer.I?.Play(magicReflection ? ReflectionBounceAudio.Magic : ReflectionBounceAudio.Physical);
         var popup = SpawnPopupFor(target);
@@ -171,6 +220,7 @@ public class BattlePopupPresenter : MonoBehaviour
     /// <summary>オーディン切り払い「弾き返す」。白フラッシュ50ms・物理反射SE・銀背景ポップアップ。</summary>
     public float ShowOrdinReflectionBouncePopup(PlayerStatus target)
     {
+        BattleUIManager.I?.PlayDramaticScreenShake();
         BattleUIManager.I?.PlayFullscreenWhiteFlashMs(50f);
         SoundEffectPlayer.I?.Play(ReflectionBounceAudio.Physical);
         var popup = SpawnPopupFor(target);
@@ -248,6 +298,8 @@ public class BattlePopupPresenter : MonoBehaviour
     /// </summary>
     public float ShowDarkFollowupDamagePopup(int amount, PlayerStatus target)
     {
+        if (amount > 0)
+            BattleUIManager.I?.PlayDramaticScreenShakeForDamage(amount);
         Debug.Log($"[BattlePopupPresenter] 闇フォローダメージポップアップ: {amount} 対象 {target?.DisplayName ?? "null"}");
 
         var popup = SpawnPopupFor(target);

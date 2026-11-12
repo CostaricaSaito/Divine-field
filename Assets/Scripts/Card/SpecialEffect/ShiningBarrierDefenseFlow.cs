@@ -157,6 +157,29 @@ public static class ShiningBarrierDefenseFlow
         }
 
         var atk = bm.GetPlayerStatus();
+        var combatDefenseCards = FreeMagicCastRules.ExcludeCatalystsFromCombatStats(defensePicks);
+        var reactiveKind = ReactiveDefenseRules.Classify(combatDefenseCards, attackCards);
+
+        if (ReactiveDefenseRules.StartsChain(reactiveKind))
+        {
+            await ReactiveDefenseChain.RunAsync(
+                bm,
+                attackCards,
+                bm.AttackerPublic,
+                ReactiveDefenseResponse.FromPicks(defensePicks, alreadyConsumed: false),
+                ct);
+            return true;
+        }
+
+        if (reactiveKind == ReactiveDefenseKind.Nullify)
+        {
+            CardData primaryNullify = combatDefenseCards.Count > 0 ? combatDefenseCards[0] : null;
+            await BlockingNullifyFlow.RunEnemyDefenderNullifiesAsync(
+                bm, processor, handRefill, attackCards, primaryNullify, ct,
+                defenseCardAlreadyConsumed: primaryNullify != null && primaryNullify.cardType == CardType.Magic);
+            return true;
+        }
+
         bool showYurusu = defensePicks.Count == 0 && BattleUIManager.I != null;
         using (YurusuDisplayScope.ShowIf(showYurusu))
         {

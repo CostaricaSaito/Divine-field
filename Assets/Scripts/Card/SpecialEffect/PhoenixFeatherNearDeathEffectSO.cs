@@ -36,7 +36,7 @@ public sealed class PhoenixFeatherNearDeathEffectSO : NearDeathCardEffectSO
         {
             float healFade = ui.ShowHealPopup(targetHp, "HP", owner);
             SoundEffectPlayer.I?.Play(DamagePopupSfx.HealHp);
-            ui.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus(), snapHpmgpNumbers: true);
+            ui.UpdateStatus(battleManager.GetPlayerStatus(), battleManager.GetEnemyStatus());
             await DamagePopup.WaitAfterPopupLifetimeAsync(healFade, cancellationToken);
         }
         else

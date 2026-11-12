@@ -65,32 +65,13 @@ public class CardSelectionManager : MonoBehaviour
             }
         }
 
-        // ===== 防御：物理／魔法反射は攻撃に応じて他カードと併選不可 =====
+        // Defense: reflection / nullify / parry cannot stack with other defense cards — replace prior pick.
         if (BattleManager.I != null && BattleManager.I.IsPlayerDefenseInputActive() && IsDefenseCard(card)
             && !addingFreeCastCatalyst)
         {
             var incoming = BattleManager.I.GetIncomingAttackSnapshotForDefenseUi();
-
-            foreach (var sel in selectedCards)
-            {
-                if (sel == null) continue;
-                if (!BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
-                if (card.GetInstanceID() == sel.GetInstanceID()) continue;
-                BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射・無効化・打ち払いは他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
-                return false;
-            }
-
-            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(card, incoming) && !addingMagicOntoFreeCast)
-            {
-                foreach (var sel in selectedCards)
-                {
-                    if (sel == null) continue;
-                    if (BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
-                    if (FreeMagicCastRules.IsFreeMagicCastCard(sel)) continue;
-                    BattleUIManager.I?.ShowInfoPopupOnCardPanel("反射・無効化・打ち払いは他のカードと併用できません", new Color(0.85f, 0.25f, 0.2f));
-                    return false;
-                }
-            }
+            if (ShouldReplaceDefenseExclusiveSelection(card, incoming, addingMagicOntoFreeCast))
+                ClearAllWithUI();
         }
 
         // ===== 魔法カードの事前ガード =====
@@ -465,5 +446,37 @@ public class CardSelectionManager : MonoBehaviour
         if (bm == null) return false;
         if (bm.IsPlayerDefenseInputActive()) return false;
         return bm.CurrentState == GameState.AttackPhase && bm.CurrentTurnOwner == PlayerType.Player;
+    }
+
+    private bool ShouldReplaceDefenseExclusiveSelection(
+        CardData card,
+        IReadOnlyList<CardData> incoming,
+        bool addingMagicOntoFreeCast)
+    {
+        if (card == null || incoming == null || selectedCards.Count == 0) return false;
+
+        int newId = card.GetInstanceID();
+
+        foreach (var sel in selectedCards)
+        {
+            if (sel == null) continue;
+            if (sel.GetInstanceID() == newId) continue;
+            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming))
+                return true;
+        }
+
+        if (!BlockingRules.RequiresDefenseNullifyExclusiveLock(card, incoming) || addingMagicOntoFreeCast)
+            return false;
+
+        foreach (var sel in selectedCards)
+        {
+            if (sel == null) continue;
+            if (sel.GetInstanceID() == newId) continue;
+            if (BlockingRules.RequiresDefenseNullifyExclusiveLock(sel, incoming)) continue;
+            if (FreeMagicCastRules.IsFreeMagicCastCard(sel)) continue;
+            return true;
+        }
+
+        return false;
     }
 }

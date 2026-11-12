@@ -133,6 +133,24 @@ public class MagicPanelUI : MonoBehaviour
             slots[i]?.RefreshHitRateDisplay();
     }
 
+    public void CollectVisibleCardShakeTargets(List<RectTransform> dest)
+    {
+        if (dest == null || slots == null)
+            return;
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            if (slot == null || slot.GetCardData() == null)
+                continue;
+            var ui = slot.GetCardUI();
+            if (ui == null || !ui.gameObject.activeInHierarchy)
+                continue;
+            var rt = ui.transform as RectTransform;
+            if (rt != null)
+                dest.Add(rt);
+        }
+    }
+
     /// <summary>Sealed EXO-DION alt-win: jewel red flash on right-slot card art before Important popup.</summary>
     public async Task PlayRightSlotSealedExoRedTintAsync(float durationSeconds, CancellationToken ct)
     {

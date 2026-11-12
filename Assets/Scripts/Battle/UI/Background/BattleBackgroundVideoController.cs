@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -46,6 +47,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
     private bool _isSwitching;
     private bool _playbackSuppressed;
     private CancellationTokenSource _sessionCts;
+    private CancellationTokenSource _stillAnimCts;
 
     private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
 
@@ -64,6 +66,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopStillImageAnimation();
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
         if (Instance == this)
@@ -242,12 +245,16 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         if (entry == null || !entry.IsValid || backgroundVideo == null)
             return;
 
+        StopStillImageAnimation();
         ApplyBlendMode(entry.blendMode, entry.intensity);
 
         if (entry.IsVideo)
             ShowVideoEntry(entry);
         else
+        {
             ShowStillEntry(entry);
+            StartStillImageAnimationIfNeeded(entry);
+        }
     }
 
     private void ShowVideoEntry(BattleBackgroundVideoEntry entry)
@@ -255,6 +262,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         if (videoPlayer == null || entry.clip == null)
             return;
 
+        BattleBackgroundStillImageAnimation.ResetToFullScreen(backgroundVideo);
         videoPlayer.Stop();
         videoPlayer.clip = entry.clip;
         videoPlayer.isLooping = entry.loopClip;
@@ -271,9 +279,47 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
         if (videoPlayer != null)
             videoPlayer.Stop();
 
+        var viewport = GetBackdropRootRectTransform();
+        BattleBackgroundStillImageAnimation.ApplyLayout(
+            backgroundVideo,
+            viewport,
+            entry.stillImage,
+            entry.stillAnimationMode);
+
         backgroundVideo.texture = entry.stillImage.texture;
         var outerUv = UnityEngine.Sprites.DataUtility.GetOuterUV(entry.stillImage);
         backgroundVideo.uvRect = new Rect(outerUv.x, outerUv.y, outerUv.z - outerUv.x, outerUv.w - outerUv.y);
+    }
+
+    private void StartStillImageAnimationIfNeeded(BattleBackgroundVideoEntry entry)
+    {
+        if (entry == null || entry.IsVideo || entry.stillImage == null)
+            return;
+        if (entry.stillAnimationMode == BattleBackgroundStillAnimationMode.Off)
+            return;
+        if (backgroundVideo == null || _playbackSuppressed)
+            return;
+
+        var viewport = GetBackdropRootRectTransform();
+        if (viewport == null)
+            return;
+
+        _stillAnimCts = new CancellationTokenSource();
+        _ = BattleBackgroundStillImageAnimation.RunLoopAsync(
+            backgroundVideo,
+            viewport,
+            entry.stillAnimationMode,
+            entry.durationSeconds,
+            _stillAnimCts.Token);
+    }
+
+    private void StopStillImageAnimation()
+    {
+        if (_stillAnimCts == null)
+            return;
+        _stillAnimCts.Cancel();
+        _stillAnimCts.Dispose();
+        _stillAnimCts = null;
     }
 
     private void PlayCurrentEntryMedia()
@@ -433,6 +479,7 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
         if (suppressed)
         {
+            StopStillImageAnimation();
             if (videoPlayer != null && videoPlayer.isPlaying)
                 videoPlayer.Pause();
             if (backgroundVideo != null)
@@ -452,7 +499,12 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
 
         SetDisplayAlpha(1f);
         if (_sessionStarted)
+        {
             PlayCurrentEntryMedia();
+            var entries = _resolvedPlaylist?.Entries;
+            if (entries != null && _entryIndex >= 0 && _entryIndex < entries.Length)
+                StartStillImageAnimationIfNeeded(entries[_entryIndex]);
+        }
     }
 
     public bool IsPlaybackSuppressedByFog => _playbackSuppressed;
@@ -461,6 +513,23 @@ public sealed class BattleBackgroundVideoController : MonoBehaviour
     {
         EnsureWired();
         return staticBackgroundImage;
+    }
+
+    public void CollectShakeTargets(List<RectTransform> dest, bool includeStatic = true, bool includeVideo = true)
+    {
+        if (dest == null)
+            return;
+        EnsureWired();
+        if (includeStatic)
+            AddShakeTarget(dest, staticBackgroundImage != null ? staticBackgroundImage.rectTransform : null);
+        if (includeVideo)
+            AddShakeTarget(dest, backgroundVideo != null ? backgroundVideo.rectTransform : null);
+    }
+
+    private static void AddShakeTarget(List<RectTransform> dest, RectTransform rt)
+    {
+        if (rt != null && rt.gameObject.activeInHierarchy)
+            dest.Add(rt);
     }
 
     /// <summary>Full-screen backdrop parent (canvas content or BackGroundImage).</summary>

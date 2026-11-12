@@ -36,7 +36,8 @@ public static class ReflectionRules
         var bm = BattleManager.I;
         if (bm != null && bm.IncomingAttackForceNoneElement)
         {
-            if (CardRules.IsMagicOnlyAttackCombo(incomingAttack)) return false;
+            // Shining Barrier: original element stripped; only non-magic-classified physical attacks bounce.
+            if (CardRules.IsMagicClassifiedAttackCombo(incomingAttack)) return false;
             return true;
         }
 

@@ -69,6 +69,7 @@ public class BattleStatusUI : MonoBehaviour
             _enemySummonColorNatural = enemySummonIcon.color;
     }
 
+    /// <param name="snapHpmgpNumbers">通常の HP/MP/GP 変動では false。true は即時同期の例外用のみ。</param>
     public void UpdateStatus(PlayerStatus player, PlayerStatus enemy, int playerHandCount = 0, int enemyHandCount = 0, bool snapHpmgpNumbers = false)
     {
         // 濃霧の「視界」は人間プレイヤー（player）に付与されたときだけ。敵だけ濃霧なら見た目は一切変えない。

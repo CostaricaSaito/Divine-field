@@ -232,6 +232,12 @@ public class MagicPanelPresenter : MonoBehaviour
         return (c[0] + c[1] + c[2] + c[3]) * 0.25f;
     }
 
+    public void CollectShakeTargets(List<RectTransform> dest)
+    {
+        magicPanelUI?.CollectVisibleCardShakeTargets(dest);
+        enemyMagicPanelUI?.CollectVisibleCardShakeTargets(dest);
+    }
+
     public void RefreshMagicCardInteractivity(List<CardData> hand)
     {
         if (magicPanelUI == null) return;

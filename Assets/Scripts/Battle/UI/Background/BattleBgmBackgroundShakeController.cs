@@ -127,4 +127,16 @@ public sealed class BattleBgmBackgroundShakeController : MonoBehaviour
             _baseRotationsZ[i] = shakeTargets[i].localEulerAngles.z;
         }
     }
+
+    public bool Manages(RectTransform rt)
+    {
+        if (rt == null || shakeTargets == null)
+            return false;
+        for (int i = 0; i < shakeTargets.Length; i++)
+        {
+            if (shakeTargets[i] == rt)
+                return true;
+        }
+        return false;
+    }
 }

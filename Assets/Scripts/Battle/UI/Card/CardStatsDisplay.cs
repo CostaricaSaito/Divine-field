@@ -56,6 +56,21 @@ public class CardStatsDisplay : MonoBehaviour
         }
     }
 
+    public void CollectShakeTargets(List<RectTransform> dest)
+    {
+        AddShakeTarget(dest, totalATKDEFButton);
+        AddShakeTarget(dest, totalATKDEFButtonEnemy);
+    }
+
+    private static void AddShakeTarget(List<RectTransform> dest, GameObject go)
+    {
+        if (dest == null || go == null || !go.activeInHierarchy)
+            return;
+        var rt = go.transform as RectTransform;
+        if (rt != null)
+            dest.Add(rt);
+    }
+
     public void HideAllForGameEnd()
     {
         if (totalATKDEFButton != null)

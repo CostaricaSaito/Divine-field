@@ -906,7 +906,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "HP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play(DamagePopupSfx.HealHp);
-                UpdateStatusDisplay(snapHpmgp: true);
+                UpdateStatusDisplay();
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -925,7 +925,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "MP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play(DamagePopupSfx.HealMp);
-                UpdateStatusDisplay(snapHpmgp: true);
+                UpdateStatusDisplay();
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -944,7 +944,7 @@ public class BattleProcessor : MonoBehaviour
                     ? BattleUIManager.I.ShowHealPopup(actualRecovery, "GP", target)
                     : 0f;
                 SoundEffectPlayer.I?.Play(DamagePopupSfx.HealGp);
-                UpdateStatusDisplay(snapHpmgp: true);
+                UpdateStatusDisplay();
                 await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             }
         }
@@ -999,7 +999,7 @@ public class BattleProcessor : MonoBehaviour
                 ? BattleUIManager.I.ShowHealPopup(actual, "HP", target)
                 : 0f;
             SoundEffectPlayer.I?.Play(DamagePopupSfx.HealHp);
-            UpdateStatusDisplay(snapHpmgp: true);
+            UpdateStatusDisplay();
             await DamagePopup.WaitAfterPopupLifetimeAsync(fade, ct);
             return;
         }
@@ -1013,7 +1013,7 @@ public class BattleProcessor : MonoBehaviour
             ? BattleUIManager.I.ShowHealPopup(actualMp, "MP", target)
             : 0f;
         SoundEffectPlayer.I?.Play(DamagePopupSfx.HealMp);
-        UpdateStatusDisplay(snapHpmgp: true);
+        UpdateStatusDisplay();
         await DamagePopup.WaitAfterPopupLifetimeAsync(fadeMp, ct);
     }
 
@@ -1037,13 +1037,10 @@ public class BattleProcessor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// ステータス表示を更新する。
-    /// <paramref name="snapHpmgp"/> が true のとき HP/MP/GP 数値をポップアップと同時に即反映する（カウントアップ演出なし）。
-    /// </summary>
-    private void UpdateStatusDisplay(bool snapHpmgp = false)
+    /// <summary>ステータス表示を更新する（HP/MP/GP は <see cref="BattleStatusUI"/> のカウント演出）。</summary>
+    private void UpdateStatusDisplay()
     {
-        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus, snapHpmgp);
+        BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
     }
 
     /// <summary>命中後：0 は「ピコッ」、1 以上は <see cref="SoundEffectCatalogSO.PlayBattleDamage"/>。</summary>

@@ -276,7 +276,7 @@ public static class DiseaseTurnEndProcessor
     {
         var bm = BattleManager.I;
         if (bm == null || BattleUIManager.I == null) return;
-        BattleUIManager.I.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus(), snapHpmgpNumbers: true);
+        BattleUIManager.I.UpdateStatus(bm.GetPlayerStatus(), bm.GetEnemyStatus());
     }
 
     private static Task ShatterPlaceholderAsync(int durationMs, CancellationToken ct)

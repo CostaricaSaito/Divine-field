@@ -241,13 +241,13 @@ public static class ReactiveDefenseChain
                 else if (failedParryCard != null)
                 {
                     CardData pick = await ai.ExecuteParryRerunDefenseSelectAsync(
-                        _bm.cpuHand, ElementHelper.GetCombinedElement(_attackCards), _attackCards, failedParryCard);
+                        _bm.cpuHand, ElementHelper.GetIncomingAttackElement(_attackCards), _attackCards, failedParryCard);
                     picks = EnemyDefenseSelectionHelper.GetParryRerunDefensePicks(pick);
                 }
                 else
                 {
                     CardData pick = await ai.ExecuteDefenseSelectAsync(
-                        _bm.cpuHand, ElementHelper.GetCombinedElement(_attackCards), _attackCards);
+                        _bm.cpuHand, ElementHelper.GetIncomingAttackElement(_attackCards), _attackCards);
                     picks = EnemyDefenseSelectionHelper.GetDefensePicks(ai, pick);
                 }
             }

@@ -103,6 +103,19 @@ public class UseButtonPresenter : MonoBehaviour
     /// <summary>他の UI 要素でフォントを流用したいとき用。</summary>
     public TMP_FontAsset GetLabelFont() => useButtonLabelTMP != null ? useButtonLabelTMP.font : null;
 
+    public void CollectShakeTargets(List<RectTransform> dest)
+    {
+        AddShakeTarget(dest, useButton != null ? useButton.transform as RectTransform : null);
+        AddShakeTarget(dest, yurusuDisplay != null ? yurusuDisplay.transform as RectTransform : null);
+    }
+
+    private static void AddShakeTarget(List<RectTransform> dest, RectTransform rt)
+    {
+        if (dest == null || rt == null || !rt.gameObject.activeInHierarchy)
+            return;
+        dest.Add(rt);
+    }
+
     public void ShowYurusuDisplay()
     {
         if (yurusuDisplay == null) return;
