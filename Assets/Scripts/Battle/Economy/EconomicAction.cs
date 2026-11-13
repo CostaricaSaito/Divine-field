@@ -41,11 +41,23 @@ public class EconomicAction : MonoBehaviour
         Debug.Log($"[EconomicAction] クールダウン更新 - 買う: {buyCooldown}, 売る: {sellCooldown}, 両替: {exchangeCooldown}");
     }
 
+    private SummonTurnCounterState ResolveTurnCounters()
+        => BattleManager.I != null ? BattleManager.I.SummonTurnCounters : null;
+
+    /// <summary>買う／売るがターン条件で解放済みか。</summary>
+    public bool IsBuySellUnlocked()
+        => EconomicActionRules.IsBuySellUnlocked(ResolveTurnCounters());
+
+    /// <summary>買う／売る解放までの残り表示ターン（解放済みなら 0）。</summary>
+    public int GetBuySellTurnsUntilUnlock()
+        => EconomicActionRules.GetBuySellTurnsUntilUnlock(ResolveTurnCounters());
+
     /// <summary>
     /// 「買う」アクションが使用可能かチェック
     /// </summary>
     public bool CanBuy()
     {
+        if (!IsBuySellUnlocked()) return false;
         return buyCooldown <= 0;
     }
 
@@ -54,6 +66,7 @@ public class EconomicAction : MonoBehaviour
     /// </summary>
     public bool CanSell()
     {
+        if (!IsBuySellUnlocked()) return false;
         return sellCooldown <= 0;
     }
 

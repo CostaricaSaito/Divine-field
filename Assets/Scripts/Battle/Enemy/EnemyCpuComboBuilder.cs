@@ -48,7 +48,15 @@ public static class EnemyCpuComboBuilder
         if (!forbidNeutralMix || ComboPreservesElementIntent(combo))
             return combo;
 
-        return new List<CardData> { primary };
+        if (combo != null
+            && combo.Count > 0
+            && AttackComboSelectionRules.IsValidAttackSelection(combo))
+            return combo;
+
+        var single = new List<CardData> { primary };
+        return AttackComboSelectionRules.IsValidAttackSelection(single)
+            ? single
+            : new List<CardData>();
     }
 
     public static List<CardData> FilterHandForAttack(

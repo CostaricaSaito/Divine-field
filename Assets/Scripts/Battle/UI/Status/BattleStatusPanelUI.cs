@@ -200,6 +200,11 @@ public class BattleStatusUI : MonoBehaviour
                 img.preserveAspect = true;
                 img.color = grayTintIcons ? FogSummonTint : Color.white;
             }
+
+            var hold = iconGo.GetComponent<StatusEffectAilmentIconHoldButton>();
+            if (hold == null)
+                hold = iconGo.AddComponent<StatusEffectAilmentIconHoldButton>();
+            hold.Configure(types[i]);
         }
     }
 

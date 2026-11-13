@@ -75,8 +75,11 @@ public class EconomicUIHandler : MonoBehaviour
             }
         }
 
-        ApplyEconomicButton(buyButton, buyCooldownText, canBuy, EconomicAction.I.GetBuyCooldown());
-        ApplyEconomicButton(sellButton, sellCooldownText, canSell, EconomicAction.I.GetSellCooldown());
+        int buySellTurnLock = EconomicAction.I.GetBuySellTurnsUntilUnlock();
+        int buyCooldownDisplay = buySellTurnLock > 0 ? buySellTurnLock : EconomicAction.I.GetBuyCooldown();
+        int sellCooldownDisplay = buySellTurnLock > 0 ? buySellTurnLock : EconomicAction.I.GetSellCooldown();
+        ApplyEconomicButton(buyButton, buyCooldownText, canBuy, buyCooldownDisplay);
+        ApplyEconomicButton(sellButton, sellCooldownText, canSell, sellCooldownDisplay);
         ApplyEconomicButton(exchangeButton, exchangeCooldownText, canExchange, EconomicAction.I.GetExchangeCooldown());
     }
 

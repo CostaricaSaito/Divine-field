@@ -405,8 +405,46 @@ public static class EnemyCpuAttackPlanner
         }
 
         if (primaries.Count == 0) return null;
-        var primary = primaries[BattleRandom.Range(0, primaries.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, false);
+        return TryBuildFromPrimaryCandidates(primaries, hand, enemy, player, refill, false);
+    }
+
+    private static List<CardData> TryBuildFromPrimaryCandidates(
+        List<CardData> primaries,
+        List<CardData> hand,
+        PlayerStatus enemy,
+        PlayerStatus player,
+        HandRefillService refill,
+        bool forbidNeutralMix)
+    {
+        if (primaries == null || primaries.Count == 0) return null;
+
+        var firstAnchors = new List<CardData>();
+        var addOnOnly = new List<CardData>();
+        for (int i = 0; i < primaries.Count; i++)
+        {
+            var c = primaries[i];
+            if (c == null) continue;
+            if (AttackComboSelectionRules.CanSelectAsFirstAttackCard(c))
+                firstAnchors.Add(c);
+            else
+                addOnOnly.Add(c);
+        }
+
+        var tryOrder = new List<CardData>();
+        tryOrder.AddRange(firstAnchors);
+        tryOrder.AddRange(addOnOnly);
+        if (tryOrder.Count == 0) return null;
+
+        int start = BattleRandom.Range(0, tryOrder.Count);
+        for (int n = 0; n < tryOrder.Count; n++)
+        {
+            var primary = tryOrder[(start + n) % tryOrder.Count];
+            var combo = BuildSingle(primary, hand, enemy, player, refill, forbidNeutralMix);
+            if (combo != null && combo.Count > 0)
+                return combo;
+        }
+
+        return null;
     }
 
     private static bool IsElementalPrimary(CardData c, HandRefillService refill)
@@ -439,8 +477,7 @@ public static class EnemyCpuAttackPlanner
             if (IsElementalPrimary(hand[i], refill)) picks.Add(hand[i]);
         }
         if (picks.Count == 0) return null;
-        var primary = picks[BattleRandom.Range(0, picks.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, true);
+        return TryBuildFromPrimaryCandidates(picks, hand, enemy, player, refill, true);
     }
 
     private static bool IsPhysicalPrimary(CardData c, HandRefillService refill)
@@ -483,8 +520,7 @@ public static class EnemyCpuAttackPlanner
             }
         }
         if (picks.Count == 0) return null;
-        var primary = picks[BattleRandom.Range(0, picks.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, forbidNeutralMix);
+        return TryBuildFromPrimaryCandidates(picks, hand, enemy, player, refill, forbidNeutralMix);
     }
 
     private static bool HasStatusMagicOption(List<CardData> hand, PlayerStatus enemy, PlayerStatus player, HandRefillService refill)
@@ -521,8 +557,7 @@ public static class EnemyCpuAttackPlanner
         primaries.AddRange(handList);
         primaries.AddRange(poolStatus);
         if (primaries.Count == 0) return null;
-        var primary = primaries[BattleRandom.Range(0, primaries.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, false);
+        return TryBuildFromPrimaryCandidates(primaries, hand, enemy, player, refill, false);
     }
 
     private static bool IsStatusItem(CardData c, PlayerStatus enemy, PlayerStatus player, HandRefillService refill)
@@ -555,8 +590,7 @@ public static class EnemyCpuAttackPlanner
             if (IsStatusItem(hand[i], enemy, player, refill)) picks.Add(hand[i]);
         }
         if (picks.Count == 0) return null;
-        var primary = picks[BattleRandom.Range(0, picks.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, false);
+        return TryBuildFromPrimaryCandidates(picks, hand, enemy, player, refill, false);
     }
 
     private static bool IsOtherSpecial(CardData c, HandRefillService refill)
@@ -602,8 +636,7 @@ public static class EnemyCpuAttackPlanner
             picks.Add(c);
         }
         if (picks.Count == 0) return null;
-        var primary = picks[BattleRandom.Range(0, picks.Count)];
-        return BuildSingle(primary, hand, enemy, player, refill, false);
+        return TryBuildFromPrimaryCandidates(picks, hand, enemy, player, refill, false);
     }
 
     #endregion

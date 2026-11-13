@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 状態異常ポップアップ用の表示名・配色。配色は <see cref="StatusEffectPopupSettings"/>（Unity Inspector）。
+/// 状態異常UI用の表示名・配色・説明。配色は <see cref="StatusEffectPopupSettings"/>、説明は <see cref="StatusEffectDetailSettings"/>。
 /// </summary>
 public static class StatusEffectPresentation
 {
@@ -37,4 +37,8 @@ public static class StatusEffectPresentation
 
     public static StatusEffectPopupStyleEntry GetPopupStyle(StatusEffectType type) =>
         StatusEffectPopupSettings.GetRuntimeFallback().GetEntryOrDefault(type);
+
+    /// <summary>長押し詳細パネル用の説明文（<see cref="StatusEffectDetailSettings"/>）。</summary>
+    public static string GetDetailDescription(StatusEffectType type) =>
+        StatusEffectDetailSettings.GetRuntimeFallback().GetDescription(type);
 }

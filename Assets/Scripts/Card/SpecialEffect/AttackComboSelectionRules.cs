@@ -19,6 +19,10 @@ public static class AttackComboSelectionRules
         return n >= 1;
     }
 
+    /// <summary>攻撃フェーズで手札の「1枚目」として選べるか（AddOn / ゴッドレイジ等は false）。</summary>
+    public static bool CanSelectAsFirstAttackCard(CardData card) =>
+        CanPickAttackCardNow(card, System.Array.Empty<CardData>());
+
     /// <summary>
     /// Every card in the selection must be pickable given the other selected attack cards (AddOn needs a base).
     /// </summary>
@@ -239,6 +243,10 @@ public static class AttackComboSelectionRules
     {
         if (primary == null) return new List<CardData>();
 
+        if (!CanSelectAsFirstAttackCard(primary))
+            return BuildGreedyAttackComboWithAddOnPrimary(
+                handCandidates, extraCandidates, primary, attackerStatus, handOwner);
+
         var combo = new List<CardData> { primary };
         if (primary.attackPhaseUseRule == AttackPhaseUseRule.Standalone)
             return combo;
@@ -267,7 +275,55 @@ public static class AttackComboSelectionRules
             }
         }
 
-        return IsValidAttackSelection(combo) ? combo : new List<CardData> { primary };
+        return IsValidAttackSelection(combo) ? combo : new List<CardData>();
+    }
+
+    /// <summary>
+    /// AI: <paramref name="attachment"/>（AddOn 等）をメインにしたいとき、合法なベースカードへ後乗りするコンボを探す。
+    /// </summary>
+    private static List<CardData> BuildGreedyAttackComboWithAddOnPrimary(
+        IReadOnlyList<CardData> handCandidates,
+        IReadOnlyList<CardData> extraCandidates,
+        CardData attachment,
+        PlayerStatus attackerStatus,
+        PlayerType handOwner)
+    {
+        if (attachment == null) return new List<CardData>();
+
+        var allCandidates = new List<CardData>();
+        if (handCandidates != null) allCandidates.AddRange(handCandidates);
+        if (extraCandidates != null) allCandidates.AddRange(extraCandidates);
+
+        List<CardData> best = null;
+
+        for (int i = 0; i < allCandidates.Count; i++)
+        {
+            var baseCard = allCandidates[i];
+            if (baseCard == null || ReferenceEquals(baseCard, attachment)) continue;
+            if (baseCard.GetInstanceID() == attachment.GetInstanceID()) continue;
+            if (!CanSelectAsFirstAttackCard(baseCard)) continue;
+
+            var combo = BuildGreedyAttackCombo(handCandidates, extraCandidates, baseCard, attackerStatus, handOwner);
+            if (!IsValidAttackSelection(combo)) continue;
+
+            if (ContainsInstance(combo, attachment))
+            {
+                if (best == null || combo.Count > best.Count)
+                    best = combo;
+                continue;
+            }
+
+            if (!CanAddToAttackSelection(combo, attachment, attackerStatus, handOwner))
+                continue;
+
+            var withAttachment = new List<CardData>(combo) { attachment };
+            if (!IsValidAttackSelection(withAttachment)) continue;
+
+            if (best == null || withAttachment.Count > best.Count)
+                best = withAttachment;
+        }
+
+        return best ?? new List<CardData>();
     }
 
     private static bool ContainsAttackMagic(IReadOnlyList<CardData> cards)

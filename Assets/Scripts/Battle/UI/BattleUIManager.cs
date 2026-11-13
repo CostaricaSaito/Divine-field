@@ -52,6 +52,7 @@ public class BattleUIManager : MonoBehaviour
     [SerializeField] private RestraintHeavyOverlayPresenter restraintHeavyPresenter;
     [SerializeField] private MagicPanelPresenter magicPanelPresenter;
     [SerializeField] private EnemyCurrentMagicPopupPresenter enemyCurrentMagicPopupPresenter;
+    [SerializeField] private StatusEffectDetailPopupPresenter statusEffectDetailPopupPresenter;
     [SerializeField] private BattlePopupPresenter popupPresenter;
     [SerializeField] private BattleCardUIController cardController;
     [SerializeField] private DramaticScreenShakePresenter dramaticShakePresenter;
@@ -67,6 +68,8 @@ public class BattleUIManager : MonoBehaviour
 
     [Header("メイン Canvas")]
     [SerializeField] private Canvas uiCanvas;
+
+    public BattleStatusUI StatusUI => statusUI;
 
     private Coroutine _fogVisionAfterPopupCoroutine;
 
@@ -85,6 +88,12 @@ public class BattleUIManager : MonoBehaviour
             enemyCurrentMagicPopupPresenter = GetComponent<EnemyCurrentMagicPopupPresenter>();
         if (enemyCurrentMagicPopupPresenter == null)
             enemyCurrentMagicPopupPresenter = gameObject.AddComponent<EnemyCurrentMagicPopupPresenter>();
+
+        if (statusEffectDetailPopupPresenter == null)
+            statusEffectDetailPopupPresenter = GetComponent<StatusEffectDetailPopupPresenter>();
+        if (statusEffectDetailPopupPresenter == null)
+            statusEffectDetailPopupPresenter = gameObject.AddComponent<StatusEffectDetailPopupPresenter>();
+
         if (turnCountRoot != null)
             turnCountRoot.SetActive(false);
 
@@ -526,6 +535,7 @@ public class BattleUIManager : MonoBehaviour
         economicHandler?.DisableAllButtons();
 
         HideEnemyCurrentMagicPopup();
+        HideStatusEffectDetail();
 
         SetHandClickable(false);
 
@@ -717,6 +727,10 @@ public class BattleUIManager : MonoBehaviour
     public void ShowEnemyCurrentMagicPopup() => enemyCurrentMagicPopupPresenter?.TryShow();
 
     public void HideEnemyCurrentMagicPopup() => enemyCurrentMagicPopupPresenter?.Hide();
+
+    public void ShowStatusEffectDetail(StatusEffectType type) => statusEffectDetailPopupPresenter?.TryShow(type);
+
+    public void HideStatusEffectDetail() => statusEffectDetailPopupPresenter?.Hide();
 
     /// <summary>
     /// プレイヤー魔法の <see cref="CardData.cardUI"/> が MagicPanel スロットの CardUI か。

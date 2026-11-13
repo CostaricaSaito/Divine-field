@@ -130,6 +130,14 @@ public class MagicPanelPresenter : MonoBehaviour
             if (handPanel is RectTransform handPanelRt)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(handPanelRt);
         }
+        else if (handPanel != null)
+        {
+            // EXO-DION 等: 飛行 UI は破棄するが、手札レイアウトは必ず復帰する（無効のままだと直後のドローが画面外に出る）
+            if (handLayout != null)
+                handLayout.enabled = handLayoutWasOn;
+            if (handPanel is RectTransform handPanelRt)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(handPanelRt);
+        }
     }
 
     /// <summary>
