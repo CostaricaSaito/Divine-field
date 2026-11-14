@@ -31,6 +31,9 @@ public sealed class SoundEffectCatalogSO : ScriptableObject
     [SerializeField] private Entry battleDamageMid;
     [SerializeField] private Entry battleDamageHigh;
 
+    [Header("Battle notification banner")]
+    [SerializeField] private Entry battleNotification;
+
     private static SoundEffectCatalogSO _cached;
 
     public static SoundEffectCatalogSO Get()
@@ -61,6 +64,19 @@ public sealed class SoundEffectCatalogSO : ScriptableObject
             PlayEntry(battleDamageHigh, nameof(battleDamageHigh));
         else
             PlayEntry(battleDamageMid, nameof(battleDamageMid));
+    }
+
+    /// <summary>CardDisplayPanel notification banner SE (catalog default unless overridden).</summary>
+    public void PlayBattleNotification(AudioClip overrideClip = null, float overrideVolumeScale = 0f)
+    {
+        if (overrideClip != null)
+        {
+            float scale = overrideVolumeScale > 0f ? overrideVolumeScale : 1f;
+            SoundEffectPlayer.I?.Play(overrideClip, scale);
+            return;
+        }
+
+        PlayEntry(battleNotification, nameof(battleNotification));
     }
 
     private static void PlayEntry(Entry entry, string fieldName)

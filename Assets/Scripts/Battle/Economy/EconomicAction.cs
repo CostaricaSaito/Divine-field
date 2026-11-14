@@ -32,13 +32,26 @@ public class EconomicAction : MonoBehaviour
     /// ターン開始時の処理（クールダウンを1ターン減らす）
     /// プレイヤーのターン開始時のみ呼ばれる
     /// </summary>
-    public void OnTurnStart()
+    public BattleEconomyCooldownReady OnTurnStart()
     {
-        if (buyCooldown > 0) buyCooldown--;
-        if (sellCooldown > 0) sellCooldown--;
-        if (exchangeCooldown > 0) exchangeCooldown--;
+        bool buyReady = TickCooldown(ref buyCooldown);
+        bool sellReady = TickCooldown(ref sellCooldown);
+        bool exchangeReady = TickCooldown(ref exchangeCooldown);
 
         Debug.Log($"[EconomicAction] クールダウン更新 - 買う: {buyCooldown}, 売る: {sellCooldown}, 両替: {exchangeCooldown}");
+        return new BattleEconomyCooldownReady
+        {
+            Buy = buyReady,
+            Sell = sellReady,
+            Exchange = exchangeReady,
+        };
+    }
+
+    private static bool TickCooldown(ref int cooldown)
+    {
+        if (cooldown <= 0) return false;
+        cooldown--;
+        return cooldown == 0;
     }
 
     private SummonTurnCounterState ResolveTurnCounters()

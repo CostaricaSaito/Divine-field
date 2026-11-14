@@ -18,8 +18,9 @@ public sealed class BattleBootstrap
         RefreshStartupDisplays(host);
         host.EnsureBattleBgmController();
         SealedExoDionHandTracker.ClearBattle();
-        if (!host.IsOnlineMatch && host.Manager is BattleManager localBm)
-            localBm.ResetEnemyCpuEconomy();
+        BattleNotificationPresenter.ResetBattle();
+        if (host.Manager is BattleManager battleManager)
+            battleManager.ResetEnemyCpuEconomy();
         if (host.MagicPoolManager != null)
         {
             host.MagicPoolManager.ClearPool(PlayerType.Player);

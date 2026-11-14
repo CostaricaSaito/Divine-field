@@ -373,7 +373,9 @@ public class CardDealer : MonoBehaviour
         var instance = ScriptableObject.Instantiate(template);
         instance.name = template.name;
         instance.cardUI = null;
-        return ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
+        var drawn = ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
+        BattleNotificationPresenter.NotifyEnemySealedExoDionDrawn(drawn, forSide, this);
+        return drawn;
     }
 
     /// <summary>
@@ -406,7 +408,9 @@ public class CardDealer : MonoBehaviour
         }
 
         var instance = InstantiateCardFromTemplate(template);
-        return ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
+        var drawn = ShivaIceBarrierDrawFlow.ApplyAfterWeightedDraw(this, instance, forSide);
+        BattleNotificationPresenter.NotifyEnemySealedExoDionDrawn(drawn, forSide, this);
+        return drawn;
     }
 
     /// <summary>

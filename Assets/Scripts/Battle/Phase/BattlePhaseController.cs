@@ -187,18 +187,23 @@ public sealed class BattlePhaseController
             SoundEffectPlayer.I.Play("Assets/SE/決定ボタンを押す13.mp3");
 
         if (_host.CurrentTurnOwner == PlayerType.Player)
+        {
             _host.PlayerStatus.OnTurnStart();
+            BattleNotificationPresenter.ShowTurnStart(Side.Player);
+            var economyReady = EconomicAction.I != null
+                ? EconomicAction.I.OnTurnStart()
+                : default;
+            BattleNotificationPresenter.ShowEconomyReady(Side.Player, economyReady);
+            BattleUIManager.I?.UpdateEconomicActionButtons();
+        }
         else
         {
             _host.EnemyStatus.OnTurnStart();
-            if (!_host.Manager.IsOnlineMatch)
-                _host.Manager.EnemyCpuEconomy?.OnEnemyTurnStart();
-        }
-
-        if (_host.CurrentTurnOwner == PlayerType.Player)
-        {
-            EconomicAction.I?.OnTurnStart();
-            BattleUIManager.I?.UpdateEconomicActionButtons();
+            BattleNotificationPresenter.ShowTurnStart(Side.Enemy);
+            var economyReady = _host.Manager.EnemyCpuEconomy != null
+                ? _host.Manager.EnemyCpuEconomy.OnEnemyTurnStart()
+                : default;
+            BattleNotificationPresenter.ShowEconomyReady(Side.Enemy, economyReady);
         }
 
         BattleUIManager.I?.HideAllCardDetails();

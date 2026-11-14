@@ -47,6 +47,8 @@
 
         if (turnOwner == PlayerType.Player)
             _ultimateReadyTracker.NotifyLatchedAtStandBy();
+        else if (UltimateReadyRules.IsAvailable(self))
+            BattleNotificationPresenter.Show(Side.Enemy, BattleNotificationPresenter.UltimateReadyMessage);
 
         BattleUIManager.I?.UpdateStatus(playerStatus, enemyStatus);
         if (turnOwner == PlayerType.Player)

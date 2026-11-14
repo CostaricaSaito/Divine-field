@@ -67,6 +67,7 @@ public class RemotePlayerAgent : EnemyAI
                     remoteAttack.ExchangeAfterHp,
                     remoteAttack.ExchangeAfterMp,
                     remoteAttack.ExchangeAfterGp);
+                bm.EnemyCpuEconomy?.SetExchangeCooldown();
             }
             return null;
         }
@@ -103,6 +104,7 @@ public class RemotePlayerAgent : EnemyAI
                 return null;
             }
 
+            bm.EnemyCpuEconomy?.SetBuyCooldown();
             var dummy = EconomicActionNames.CreateBuyDummy();
             LastAttackSelection = new List<CardData> { dummy };
             Debug.Log($"[RemotePlayerAgent] Remote economic buy: {remoteAttack.EconomicCardName}");
@@ -119,6 +121,7 @@ public class RemotePlayerAgent : EnemyAI
                 return null;
             }
 
+            bm.EnemyCpuEconomy?.SetSellCooldown();
             var dummy = EconomicActionNames.CreateSellDummy();
             LastAttackSelection = new List<CardData> { dummy };
             Debug.Log($"[RemotePlayerAgent] Remote economic sell: {remoteAttack.EconomicCardName}");
